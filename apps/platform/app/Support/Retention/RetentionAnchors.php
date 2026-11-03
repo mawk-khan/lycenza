@@ -53,7 +53,7 @@ final class RetentionAnchors
         // Employees and Payroll per-employment configuration
         'employees' => [],
         'employment_records' => ['employee_id', 'ends_on', 'status', 'employee_category_id'],
-        'employee_assignments' => ['employment_record_id', 'campus_id', 'department_id', 'manager_assignment_id', 'position_id'],
+        'employee_assignments' => ['employment_record_id', 'campus_id', 'department_id', 'position_id'],
         'employee_personal_details' => ['employee_id'],
         'employee_documents' => ['employee_id'],
         'employee_compensation_assignments' => ['employment_record_id', 'salary_structure_id'],

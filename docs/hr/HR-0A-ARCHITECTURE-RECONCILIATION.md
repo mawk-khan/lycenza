@@ -243,7 +243,7 @@ Names follow repository conventions:
 | Qualification / Experience | `employee_qualifications`, `employee_certifications`, `employee_experience_records` | exists | — |
 | StaffDocument | `employee_documents` + Documents | exists | HR.2 (category catalogue) |
 | Bank / Payment Profile | — (Payroll-owned when allowed) | gated (HR-L5) | — |
-| ReportingRelationship | **`reporting_relationships`**: subordinate assignment, manager assignment, `kind` (primary / dotted), starts / ends, reason; replaces the live pointer | proposed (X-2) | HR.3 |
+| ReportingRelationship | **`reporting_relationships`**: subordinate assignment, manager assignment, `kind` (primary / dotted), starts / ends, reason; replaces the live pointer | **implemented (HR.3A) with a recorded deviation:** subordinate and manager **employments** (a transfer must not end the line), primary only (no `kind`); ADR 0028 HR.3A | HR.3 |
 | ReportingDelegation | **`reporting_delegations`** (delegator, delegate, decision family, window) | after the ADR 0065 §6 amendment | HR.3 / HR.11 |
 | WorkCalendar / Holiday | `staff_working_weekdays`, `staff_holidays` → **`work_calendars`** (School or Campus, versioned), **`work_calendar_rules`** (weekday, nth week), **`work_calendar_holidays`** (portion, optional, applicability) | proposed move | HR.4 |
 | Shift / ShiftRule / ShiftAssignment | **`shifts`**, **`shift_versions`** (sessions, local times, grace, early allowance, crosses midnight, work-hours type), **`shift_assignments`** (employment, shift, base / temporary, starts / ends) | gated (L2a) | HR.4 |
@@ -287,7 +287,7 @@ Names follow repository conventions:
 | Employment | dated | dated | per Employee, no two overlapping non-draft employments (S-10 database backstop) |
 | Employment category / type / staff type | in place | `employment_terms` | contiguous, non-overlapping, covering the employment |
 | Campus / department / designation | dated assignments | + `employee_placement_changes` | per employment, **at most one primary assignment on any date** (extends today's open-only unique index) |
-| Manager | live pointer | `reporting_relationships` | per subordinate assignment, one primary relationship per date; no cycle on any date |
+| Manager | live pointer | `reporting_relationships` | per subordinate **employment** (HR.3A deviation from "assignment"), one primary relationship per date; no cycle on any date |
 | Shift | — | `shift_assignments` | one base shift per employment per date; temporaries do not overlap each other and override the base |
 | Work calendar | School-wide, unversioned | `work_calendars` versions | one version per (School, Campus-or-NULL) per date; Campus wins over School |
 | Leave policy | versioned rows | + rule columns on the version | a used version is immutable (supersede, never edit) |

@@ -6,6 +6,7 @@ use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmployeePickerReadService;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Reporting\ReportingChangeReason;
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Application\Workforce\PlacementChangeKind;
 use App\Domain\HR\Application\Workforce\PlacementChangeReason;
@@ -181,7 +182,16 @@ class HrEmployeeAssignmentController extends Controller
         $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
         [$employeeModel, , $subordinate] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
-        $validated = $request->validate(['manager_assignment_id' => ['sometimes', 'nullable', 'uuid']], ['manager_assignment_id.*' => 'Choose a manager from the list.']);
+        // HR.3A: a dated, reasoned reporting-line change (assign / change / remove).
+        $validated = $request->validate([
+            'manager_assignment_id' => ['sometimes', 'nullable', 'uuid'],
+            'reason_code' => ['required', 'string', Rule::in(ReportingChangeReason::values())],
+            'effective_on' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+        ], [
+            'manager_assignment_id.*' => 'Choose a manager from the list.',
+            'reason_code.*' => 'Choose a reason.',
+            'effective_on.*' => 'Enter a valid date.',
+        ]);
 
         // ORG.7E-1: a Campus-scoped actor names only a current in-scope manager assignment.
         $manager = isset($validated['manager_assignment_id'])
@@ -193,7 +203,7 @@ class HrEmployeeAssignmentController extends Controller
         }
 
         try {
-            $service->setManager($subordinate, $manager, $context->actor());
+            $service->setManager($subordinate, $manager, $context->actor(), ReportingChangeReason::from($validated['reason_code']), $validated['effective_on'] ?? null);
         } catch (HrException $e) {
             throw ValidationException::withMessages(['manager_assignment_id' => [self::managerRefusal($e)]]);
         }
@@ -213,11 +223,9 @@ class HrEmployeeAssignmentController extends Controller
         ]);
     }
 
-    private static function managerRefusal(HrException $e): string
+    public static function managerRefusal(HrException $e): string
     {
         return match ($e->errorCode()) {
-            'HR_ASSIGNMENT_MANAGER_MISMATCH' => 'That manager could not be found in this School. Search again.',
-            'HR_SELF_REPORTING', 'HR_SAME_EMPLOYEE_REPORTING' => 'An Employee cannot report to themselves.',
             'HR_REPORTING_HIERARCHY_CYCLE' => 'That choice would make the reporting line loop back to this Employee. Choose another manager.',
             default => $e->getMessage(),
         };

@@ -181,41 +181,37 @@ class PlacementChangeServiceTest extends TestCase
     }
 
     #[Test]
-    public function the_manager_is_kept_and_direct_reports_follow_the_new_placement(): void
+    public function the_reporting_lines_of_the_employment_are_untouched_by_a_placement_change(): void
     {
-        [, $manager] = $this->placed();
+        // HR.3A: lines join employments, so a transfer keeps the mover's manager and reports.
+        [$managerEmployment] = $this->placed();
         [$employment, $source] = $this->placed();
-        [$reportEmployment, $report] = $this->placed();
-        $this->inSchool(function () use ($source, $manager, $report): void {
-            EmployeeAssignment::query()->whereKey($source->id)->update(['manager_assignment_id' => $manager->id]);
-            EmployeeAssignment::query()->whereKey($report->id)->update(['manager_assignment_id' => $source->id]);
-        });
+        [$reportEmployment] = $this->placed();
+        $this->setReportingLineFixture($employment, $managerEmployment);
+        $this->setReportingLineFixture($reportEmployment, $employment);
 
-        $new = $this->change($source, PlacementChangeKind::TRANSFER, '2026-11-01', $this->teacher, $this->b);
+        $this->change($source, PlacementChangeKind::TRANSFER, '2026-11-01', $this->teacher, $this->b);
 
-        $this->assertSame($manager->id, $new->manager_assignment_id);
-        $this->assertSame($new->id, $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($report->id)->value('manager_assignment_id')));
-        $this->assertSame($employment->employee_id, $this->inSchool(fn () => app(ReportingLine::class)->managerOf($this->school, $reportEmployment->id, '2026-11-15')));
+        $line = app(ReportingLine::class);
+        foreach (['2026-10-31', '2026-11-15'] as $day) {
+            $this->assertSame($managerEmployment->employee_id, $line->managerOf($this->school, $employment->id, $day));
+            $this->assertSame($employment->employee_id, $line->managerOf($this->school, $reportEmployment->id, $day));
+        }
     }
 
     #[Test]
-    public function a_future_change_of_someone_with_reports_waits_and_one_without_is_recorded(): void
+    public function a_future_change_of_someone_with_reports_is_recorded(): void
     {
-        [, $source] = $this->placed();
-        [, $report] = $this->placed();
-        $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($report->id)->update(['manager_assignment_id' => $source->id]));
+        // HR.1A refused this (`future_change_with_reports`) until lines were dated; HR.3A records it.
+        [$employment, $source] = $this->placed();
+        [$reportEmployment] = $this->placed();
+        $this->setReportingLineFixture($reportEmployment, $employment);
 
-        try {
-            $this->change($source, PlacementChangeKind::TRANSFER, '2026-12-01', $this->teacher, $this->b);
-            $this->fail('refused');
-        } catch (PlacementChangeConflictException $e) {
-            $this->assertSame('future_change_with_reports', $e->reason);
-        }
+        $new = $this->change($source, PlacementChangeKind::TRANSFER, '2026-12-01', $this->teacher, $this->b);
 
-        [$employment, $alone] = $this->placed();
-        $new = $this->change($alone, PlacementChangeKind::TRANSFER, '2026-12-01', $this->teacher, $this->b);
         $this->assertSame('2026-12-01', $new->starts_on->toDateString());
         $this->assertSame($this->a->id, app(WorkforceAsOfReader::class)->placementOn($this->school, $employment->employee_id, '2026-11-15')?->campusId, 'still Campus A today');
+        $this->assertSame($employment->employee_id, app(ReportingLine::class)->managerOf($this->school, $reportEmployment->id, '2026-12-15'));
     }
 
     #[Test]

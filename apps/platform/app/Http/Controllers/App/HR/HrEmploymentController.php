@@ -5,12 +5,17 @@ namespace App\Http\Controllers\App\HR;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\EmployeeCategoryNotFoundException;
+use App\Domain\HR\Application\Exceptions\HrException;
+use App\Domain\HR\Application\Reporting\ReportingChangeReason;
+use App\Domain\HR\Application\Reporting\ReportingRelationshipService;
 use App\Domain\HR\Application\Workforce\EmploymentTermsChangeReason;
 use App\Domain\HR\Application\Workforce\EmploymentTermsService;
 use App\Domain\HR\Application\Workforce\EmploymentType;
 use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
@@ -108,6 +113,48 @@ class HrEmploymentController extends Controller
             );
         } catch (EmployeeCategoryNotFoundException) {
             throw ValidationException::withMessages(['employee_category_id' => ['That Employee Category was not found.']]);
+        }
+
+        return redirect("/app/hr/employees/{$employeeModel->id}");
+    }
+
+    /**
+     * HR.3A: corrects a recorded reporting line of this employment -- voids it
+     * (kept, marked, as evidence) and, when a manager is chosen, records the
+     * corrected line over the same dates. Whole-School only (it rewrites
+     * history): the route's `capability:hr.employees.assignments.manage`
+     * floor, which a Campus grant never satisfies; the service re-checks.
+     */
+    public function correctReportingLine(Request $request, TenantContext $context, ReportingRelationshipService $service, string $employee, string $employment, string $line): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment) || ! Str::isUuid($line), 404);
+
+        $employeeModel = Employee::query()->findOrFail($employee);
+        $employmentModel = EmploymentRecord::query()->where('employee_id', $employeeModel->id)->findOrFail($employment);
+        $lineModel = ReportingRelationship::query()->where('subordinate_employment_id', $employmentModel->id)->findOrFail($line);
+
+        $validated = $request->validate([
+            'manager_assignment_id' => ['sometimes', 'nullable', 'uuid'],
+            'reason_code' => ['required', 'string', Rule::in(ReportingChangeReason::values())],
+        ], [
+            'manager_assignment_id.*' => 'Choose a manager from the list.',
+            'reason_code.*' => 'Choose a reason.',
+        ]);
+
+        $manager = null;
+        if (isset($validated['manager_assignment_id'])) {
+            $managerEmploymentId = EmployeeAssignment::query()->where('school_id', $school->id)->whereKey($validated['manager_assignment_id'])->value('employment_record_id');
+            $manager = $managerEmploymentId === null ? null : EmploymentRecord::query()->where('school_id', $school->id)->find($managerEmploymentId);
+            if ($manager === null) {
+                throw ValidationException::withMessages(['manager_assignment_id' => ['That manager could not be found in this School. Search again.']]);
+            }
+        }
+
+        try {
+            $service->correct($lineModel, $manager, ReportingChangeReason::from((string) $validated['reason_code']), $context->actor());
+        } catch (HrException $e) {
+            throw ValidationException::withMessages(['manager_assignment_id' => [HrEmployeeAssignmentController::managerRefusal($e)]]);
         }
 
         return redirect("/app/hr/employees/{$employeeModel->id}");

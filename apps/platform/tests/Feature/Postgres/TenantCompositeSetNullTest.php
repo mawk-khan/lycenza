@@ -27,7 +27,7 @@ class TenantCompositeSetNullTest extends TestCase
     private const KEYS = [
         'hr_departments_campus_id_school_id_foreign' => 'campus_id',
         'hr_departments_parent_department_id_school_id_foreign' => 'parent_department_id',
-        'employee_assignments_manager_assignment_id_school_id_foreign' => 'manager_assignment_id',
+        // HR.3A removed `employee_assignments.manager_assignment_id` (dated reporting lines replace it).
         'communication_messages_reply_to_message_id_school_id_foreign' => 'reply_to_message_id',
         'comm_attachments_message_school_foreign' => 'communication_message_id',
     ];
@@ -116,36 +116,6 @@ class TenantCompositeSetNullTest extends TestCase
         } catch (QueryException $e) {
             $this->assertStringContainsString('hr_departments_parent_department_id_school_id_foreign', $e->getMessage());
         }
-    }
-
-    #[Test]
-    public function deleting_a_manager_assignment_clears_only_the_reporting_line(): void
-    {
-        $this->inRolledBackAdminTransaction(function (Connection $admin): void {
-            [$school] = $this->adminSchoolAndUser($admin);
-            $position = (string) Str::uuid7();
-            $admin->table('positions')->insert(['id' => $position, 'school_id' => $school, 'name' => 'Teacher', 'code' => 'TCH', 'created_at' => now(), 'updated_at' => now()]);
-
-            $assignment = function (?string $manager) use ($admin, $school, $position): string {
-                $employee = (string) Str::uuid7();
-                $admin->table('employees')->insert(['id' => $employee, 'school_id' => $school, 'employee_number' => 'E'.Str::random(8), 'full_name' => 'Staff '.$employee, 'created_at' => now(), 'updated_at' => now()]);
-                $record = (string) Str::uuid7();
-                $admin->table('employment_records')->insert(['id' => $record, 'school_id' => $school, 'employee_id' => $employee, 'employment_type' => 'permanent', 'starts_on' => '2026-06-01', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
-                $id = (string) Str::uuid7();
-                $admin->table('employee_assignments')->insert(['id' => $id, 'school_id' => $school, 'employment_record_id' => $record, 'position_id' => $position, 'starts_on' => '2026-06-01', 'manager_assignment_id' => $manager, 'created_at' => now(), 'updated_at' => now()]);
-
-                return $id;
-            };
-            $manager = $assignment(null);
-            $report = $assignment($manager);
-
-            $admin->table('employee_assignments')->where('id', $manager)->delete();
-
-            $row = $admin->table('employee_assignments')->where('id', $report)->first();
-            $this->assertNotNull($row, 'the reporting assignment survives');
-            $this->assertNull($row->manager_assignment_id);
-            $this->assertSame($school, $row->school_id);
-        });
     }
 
     #[Test]

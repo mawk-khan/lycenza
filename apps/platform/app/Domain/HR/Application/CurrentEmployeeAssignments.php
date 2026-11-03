@@ -330,11 +330,13 @@ final class CurrentEmployeeAssignments
     }
 
     /**
-     * ORG.9C-1, HR-044: Employees with a CURRENT assignment whose manager is a
-     * CURRENT assignment of $managerEmployeeId. When $campusIds is given (a
-     * Campus reader's scope) BOTH ends must be on those Campuses -- the
-     * subordinate's assignment and the manager's -- so a Campus reader never
-     * learns of an out-of-scope (or NULL-Campus) assignment or reporting line.
+     * ORG.9C-1, HR-044 (HR.3A: over dated reporting lines): Employees with a
+     * CURRENT assignment whose employment reports, on the date, to a CURRENT
+     * employment of $managerEmployeeId (`reporting_relationships`). When
+     * $campusIds is given (a Campus reader's scope) BOTH people must be
+     * current on those Campuses -- the subordinate and the manager -- so a
+     * Campus reader never learns of an out-of-scope (or NULL-Campus) person
+     * or reporting line.
      *
      * MUST be called inside the target School's TenantContext.
      *
@@ -350,24 +352,28 @@ final class CurrentEmployeeAssignments
         }
         $date ??= $this->today($school);
 
-        // The manager's current assignments are a handful of ids: resolve them
-        // first, so the report set is filtered by literal ids -- never a nested
+        // The manager's current employment is one id: resolve it first, so
+        // the report set is filtered by a literal id -- never a nested
         // semi-join the planner may run as nested loops (ORG.9C-1 query review).
-        $managerAssignments = DB::table('employee_assignments as ma')
-            ->join('employment_records as mer', fn ($j) => $j->on('mer.id', '=', 'ma.employment_record_id')->on('mer.school_id', '=', 'ma.school_id'))
-            ->where('ma.school_id', $school->id)
-            ->where('mer.employee_id', $managerEmployeeId)
-            ->when($campusIds !== null, fn ($w) => $w->whereIn('ma.campus_id', $campusIds ?? []));
-        $managerAssignmentIds = $this->constrainToCurrent($managerAssignments, $date, 'ma')->pluck('ma.id')->all();
-        if ($managerAssignmentIds === []) {
+        $managerAssignments = DB::table('employee_assignments as ea')
+            ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
+            ->where('ea.school_id', $school->id)
+            ->where('er.employee_id', $managerEmployeeId)
+            ->when($campusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $campusIds ?? []));
+        $managerEmploymentIds = $this->constrainToCurrent($managerAssignments, $date)->distinct()->pluck('er.id')->all();
+        if ($managerEmploymentIds === []) {
             return $employees->whereRaw('1 = 0');
         }
 
         $reports = DB::table('employee_assignments as ea')
             ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
+            ->join('reporting_relationships as rr', fn ($j) => $j->on('rr.subordinate_employment_id', '=', 'er.id')->on('rr.school_id', '=', 'er.school_id'))
             ->where('ea.school_id', $school->id)
             ->when($campusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $campusIds ?? []))
-            ->whereIn('ea.manager_assignment_id', $managerAssignmentIds)
+            ->whereIn('rr.manager_employment_id', $managerEmploymentIds)
+            ->whereNull('rr.voided_at')
+            ->where('rr.starts_on', '<=', $date)
+            ->where(fn ($w) => $w->whereNull('rr.ends_on')->orWhere('rr.ends_on', '>=', $date))
             ->select('er.employee_id');
         $this->constrainToCurrent($reports, $date);
 

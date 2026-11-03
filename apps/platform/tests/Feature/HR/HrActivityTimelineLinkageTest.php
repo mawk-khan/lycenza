@@ -119,10 +119,10 @@ class HrActivityTimelineLinkageTest extends TestCase
         app(ReportingHierarchyService::class)->setManager($subordinateAssignment, $managerAssignment, $actor);
 
         $subordinateEntries = $this->entries($school, $subordinateEmployee->id, $actor);
-        $this->assertTrue(collect($subordinateEntries)->contains(fn ($e) => $e->eventType === 'hr.assignment.manager_changed'), 'The manager-changed event belongs to the SUBORDINATE\'s timeline.');
+        $this->assertTrue(collect($subordinateEntries)->contains(fn ($e) => $e->eventType === 'hr.reporting.assigned'), 'The manager-changed event belongs to the SUBORDINATE\'s timeline.');
 
         $managerEntries = $this->entries($school, $managerEmployee->id, $actor);
-        $this->assertFalse(collect($managerEntries)->contains(fn ($e) => $e->eventType === 'hr.assignment.manager_changed'), 'The manager-changed event must NOT appear on the MANAGER\'s own timeline.');
+        $this->assertFalse(collect($managerEntries)->contains(fn ($e) => $e->eventType === 'hr.reporting.assigned'), 'The manager-changed event must NOT appear on the MANAGER\'s own timeline.');
     }
 
     #[Test]

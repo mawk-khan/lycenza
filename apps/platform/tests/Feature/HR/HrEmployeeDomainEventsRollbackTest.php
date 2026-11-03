@@ -71,7 +71,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
             'assignment.started.v1' => ['assignment.started.v1', 'arrangeAssignmentStarted', 'actAssignmentStarted'],
             'assignment.ended.v1' => ['assignment.ended.v1', 'arrangeAssignmentEnded', 'actAssignmentEnded'],
             'assignment.primary_changed.v1' => ['assignment.primary_changed.v1', 'arrangeAssignmentPrimaryChanged', 'actAssignmentPrimaryChanged'],
-            'assignment.manager_changed.v1' => ['assignment.manager_changed.v1', 'arrangeAssignmentManagerChanged', 'actAssignmentManagerChanged'],
+            'employee.reporting_line_changed.v1' => ['employee.reporting_line_changed.v1', 'arrangeAssignmentManagerChanged', 'actAssignmentManagerChanged'],
         ];
     }
 

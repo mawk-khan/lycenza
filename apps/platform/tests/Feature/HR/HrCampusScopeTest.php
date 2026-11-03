@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
+use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
@@ -176,15 +177,15 @@ class HrCampusScopeTest extends TestCase
     public function a_multi_campus_employee_shows_only_the_in_scope_placement(): void
     {
         $hrA = $this->actor('hr_officer', [$this->a->id]);
-        $manager = $this->assignmentOn('onlyB', $this->b);
-        $this->inSchool(fn () => $this->assignmentOn('both', $this->b)->update(['manager_assignment_id' => $manager->id]));
+        // HR.3A: Chitra's employment reports to Bela, who works on South only.
+        $this->setReportingLineFixture($this->staff['both'], $this->staff['onlyB']);
 
         $row = collect($this->api($hrA)->getJson($this->url('/employees'))->json('data'))->firstWhere('display_name', 'Chitra Both');
         $this->assertSame($this->a->id, $row['campus_id']);
         $this->assertSame('North', $row['campus_name']);
         $this->assertSame('Teacher', $row['position_name']);
         $this->assertNull($row['department_name']);
-        $this->assertNull($row['manager_display_name'], 'the B assignment\'s manager is never shown');
+        $this->assertNull($row['manager_display_name'], 'a manager outside the scope is never shown');
         $json = json_encode($this->api($hrA)->getJson($this->url('/employees'))->json());
         $this->assertStringNotContainsString($this->b->id, (string) $json);
         $this->assertStringNotContainsString('South', (string) $json);
@@ -424,16 +425,17 @@ class HrCampusScopeTest extends TestCase
     }
 
     #[Test]
-    public function ending_an_assignment_never_clears_another_campus_reporting_line(): void
+    public function ending_an_assignment_never_touches_another_campus_reporting_line(): void
     {
+        // HR.3A: lines join employments, so an assignment end (here the North manager's)
+        // reaches no other Campus; the former M1 refusal has nothing left to guard.
         $hrA = $this->actor('hr_officer', [$this->a->id]);
         $managerA = $this->assignmentOn('onlyA', $this->a);
-        $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($this->assignmentOn('onlyB', $this->b)->id)->update(['manager_assignment_id' => $managerA->id]));
+        $line = $this->setReportingLineFixture($this->staff['onlyB'], $this->staff['onlyA']);
 
-        $this->api($hrA)->withHeader('Idempotency-Key', 'end-m-'.Str::random(8))->postJson($this->assignmentUrl('onlyA', $managerA, 'end'), ['ends_on' => $this->today])
-            ->assertStatus(422)->assertJsonPath('error.code', 'HR_ASSIGNMENT_UNAVAILABLE');
-        $this->assertSame($managerA->id, $this->assignmentOn('onlyB', $this->b)->manager_assignment_id, 'the B reporting line is untouched');
-        $this->assertNull($this->assignmentOn('onlyA', $this->a)->ends_on);
+        $this->api($hrA)->withHeader('Idempotency-Key', 'end-m-'.Str::random(8))->postJson($this->assignmentUrl('onlyA', $managerA, 'end'), ['ends_on' => $this->today])->assertOk();
+        $after = $this->inSchool(fn () => ReportingRelationship::query()->findOrFail($line->id));
+        $this->assertSame([null, null], [$after->ends_on, $after->ended_via], 'the B reporting line is untouched');
     }
 
     #[Test]
@@ -463,10 +465,8 @@ class HrCampusScopeTest extends TestCase
     public function a_reporting_manager_outside_the_scope_is_never_named(): void
     {
         $hrA = $this->actor('hr_officer', [$this->a->id]);
-        $managerOnB = $this->assignmentOn('onlyB', $this->b);
-        $managerOnA = $this->assignmentOn('aPlusWide', $this->a);
-        $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($this->assignmentOn('onlyA', $this->a)->id)->update(['manager_assignment_id' => $managerOnB->id]));
-        $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($this->assignmentOn('both', $this->a)->id)->update(['manager_assignment_id' => $managerOnA->id]));
+        $this->setReportingLineFixture($this->staff['onlyA'], $this->staff['onlyB']);
+        $this->setReportingLineFixture($this->staff['both'], $this->staff['aPlusWide']);
 
         $rows = collect($this->api($hrA)->getJson($this->url('/employees'))->json('data'))->keyBy('display_name');
         $this->assertNull($rows['Asha OnlyA']['manager_display_name']);
@@ -511,9 +511,16 @@ class HrCampusScopeTest extends TestCase
 
         $managerOnB = $this->assignmentOn('onlyB', $this->b);
         $managerOnA = $this->assignmentOn('aPlusWide', $this->a);
-        $this->api($hrA)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('onlyA', $this->assignmentOn('onlyA', $this->a), 'manager'), ['manager_assignment_id' => $managerOnB->id])->assertNotFound();
-        $this->api($hrA)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('onlyA', $this->assignmentOn('onlyA', $this->a), 'manager'), ['manager_assignment_id' => $managerOnA->id])
-            ->assertOk()->assertJsonPath('data.managerAssignmentId', $managerOnA->id);
+        $this->api($hrA)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('onlyA', $this->assignmentOn('onlyA', $this->a), 'manager'), ['manager_assignment_id' => $managerOnB->id, 'reason_code' => 'organisational_change'])->assertNotFound();
+        // HR.3A: a Campus actor records from today on, never history.
+        $yesterday = CarbonImmutable::parse($this->today)->subDay()->toDateString();
+        $this->api($hrA)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('onlyA', $this->assignmentOn('onlyA', $this->a), 'manager'), ['manager_assignment_id' => $managerOnA->id, 'reason_code' => 'organisational_change', 'effective_on' => $yesterday])
+            ->assertStatus(422)->assertJsonPath('error.code', 'HR_ASSIGNMENT_UNAVAILABLE');
+        $this->api($hrA)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('onlyA', $this->assignmentOn('onlyA', $this->a), 'manager'), ['manager_assignment_id' => $managerOnA->id, 'reason_code' => 'organisational_change'])
+            ->assertOk()->assertJsonPath('data.managerEmploymentId', $this->staff['aPlusWide']->id)->assertJsonPath('data.startsOn', $this->today);
+        // A subordinate who also works on South needs whole-School (or both-Campus) authority: the line is the whole employment's.
+        $this->api($hrA)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('both', $this->assignmentOn('both', $this->a), 'manager'), ['manager_assignment_id' => $managerOnA->id, 'reason_code' => 'organisational_change'])
+            ->assertForbidden()->assertJsonPath('error.code', 'HR_WHOLE_SCHOOL_AUTHORITY_REQUIRED');
 
         $hrAB = $this->actor('hr_officer', [$this->a->id, $this->b->id]);
         $this->api($hrAB)->withHeader('Idempotency-Key', $key())->postJson($this->assignmentUrl('both', $this->assignmentOn('both', $this->a), 'primary'))->assertOk();

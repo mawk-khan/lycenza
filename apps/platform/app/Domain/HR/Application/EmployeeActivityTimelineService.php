@@ -93,6 +93,13 @@ class EmployeeActivityTimelineService
         // HR.1A: dated terms changes and named placement changes (both carry employeeId).
         'hr.employment_terms.changed' => 'employment',
         'hr.placement.changed' => 'employment',
+        // HR.3A: dated reporting lines (on the SUBORDINATE's timeline; carry employeeId).
+        // `hr.assignment.manager_changed` stays for rows written before HR.3A.
+        'hr.reporting.assigned' => 'employment',
+        'hr.reporting.changed' => 'employment',
+        'hr.reporting.removed' => 'employment',
+        'hr.reporting.corrected' => 'employment',
+        'hr.reporting.ended' => 'employment',
 
         'hr.qualification.created' => 'professional',
         'hr.qualification.updated' => 'professional',

@@ -51,6 +51,9 @@ class EmployeeRetentionClassificationTest extends TestCase
             // HR.1A: the employment's own terms history and named placement changes (FK cascade with it).
             'employment_terms' => 'D9 evidence (8 y): employment history, goes with its employment (cascade)',
             'employee_placement_changes' => 'D9 evidence (8 y): employment history, goes with its employment (cascade)',
+            // HR.3A: one table, two references -- the employment's OWN lines (subordinate side, cascade, handled
+            // as `reporting_relationships.subordinate_employment_id`) and another Employee's lines naming it as manager.
+            'reporting_relationships' => 'own lines: D9 evidence, cascade; as MANAGER of another Employee: retained, blocks (NO ACTION, as the 8A.5 pointer did)',
             'employee_compensation_assignments' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
             'employee_statutory_identifiers' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
             'employee_tax_profile' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
@@ -66,7 +69,7 @@ class EmployeeRetentionClassificationTest extends TestCase
             'staff_attendance_records' => 'D9 evidence (8 y): Staff Attendance, purged by Staff Attendance first, corrections with their record (HRX.6, ADR 0065 §27)',
         ],
         'employee_assignments' => [
-            'employee_assignments' => 'retained, blocks: another Employee names it as manager (ON DELETE SET NULL would rewrite their history)',
+            // HR.3A: the 8A.5 manager pointer is gone (reporting lines join employments).
             // HR.1A: a placement change names its own employment's assignments (FK cascade with them).
             'employee_placement_changes' => 'D9 evidence (8 y): employment history, goes with its assignments (cascade)',
         ],

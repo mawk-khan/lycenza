@@ -54,6 +54,9 @@ interface Props {
     positions: Option[];
     departments: DepartmentOption[];
     campuses: Option[];
+    // HR.3A: reporting-line change reasons; the School-local today.
+    reportingReasons: { value: string; label: string }[];
+    today: string;
 }
 
 const props = defineProps<Props>();
@@ -111,7 +114,8 @@ function makePrimary(a: Assignment): void {
 
 // --- Reporting manager (picked by name, re-validated by the server) ---------
 const managingId = ref<string | null>(null);
-const managerForm = useForm({ manager_assignment_id: '' });
+// HR.3A: a dated, reasoned reporting line (a Campus actor records from today on).
+const managerForm = useForm({ manager_assignment_id: '', reason_code: '', effective_on: '' });
 const managerQuery = ref('');
 const managerOptions = ref<ManagerCandidate[]>([]);
 let managerDebounce: ReturnType<typeof setTimeout> | undefined;
@@ -119,6 +123,7 @@ function toggleManager(a: Assignment): void {
     managingId.value = managingId.value === a.id ? null : a.id;
     managerForm.reset();
     managerForm.clearErrors();
+    managerForm.effective_on = props.today;
     managerQuery.value = '';
     managerOptions.value = [];
 }
@@ -384,15 +389,59 @@ function placementLabel(a: Assignment): string {
                                 </button>
                             </li>
                         </ul>
+                        <div class="mt-2 flex flex-wrap gap-3">
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`manager-effective-${a.id}`"
+                                    >Effective from</label
+                                >
+                                <input
+                                    :id="`manager-effective-${a.id}`"
+                                    v-model="managerForm.effective_on"
+                                    type="date"
+                                    :min="today"
+                                    required
+                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`manager-reason-${a.id}`"
+                                    >Reason</label
+                                >
+                                <select
+                                    :id="`manager-reason-${a.id}`"
+                                    v-model="managerForm.reason_code"
+                                    required
+                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                >
+                                    <option value="" disabled>Select a reason</option>
+                                    <option
+                                        v-for="r in reportingReasons"
+                                        :key="r.value"
+                                        :value="r.value"
+                                    >
+                                        {{ r.label }}
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
                         <p class="mt-1 text-sm text-red-600">
-                            {{ managerForm.errors.manager_assignment_id }}
+                            {{
+                                managerForm.errors.manager_assignment_id ??
+                                managerForm.errors.reason_code ??
+                                managerForm.errors.effective_on
+                            }}
                         </p>
                         <div class="mt-2 flex gap-3">
                             <button
                                 type="button"
                                 :disabled="
                                     managerForm.processing ||
-                                    managerForm.manager_assignment_id === ''
+                                    managerForm.manager_assignment_id === '' ||
+                                    managerForm.reason_code === ''
                                 "
                                 class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                                 @click="submitManager(a)"
@@ -402,7 +451,8 @@ function placementLabel(a: Assignment): string {
                             <button
                                 v-if="a.managerName"
                                 type="button"
-                                class="text-sm underline"
+                                :disabled="managerForm.reason_code === ''"
+                                class="text-sm underline disabled:opacity-50"
                                 @click="clearManager(a)"
                             >
                                 Remove manager

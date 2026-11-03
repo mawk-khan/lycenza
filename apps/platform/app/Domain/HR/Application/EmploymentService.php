@@ -9,6 +9,7 @@ use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusTransitionException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentTermsException;
+use App\Domain\HR\Application\Reporting\ReportingRelationshipService;
 use App\Domain\HR\Application\Workforce\EmploymentType;
 use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Events\EmploymentEnded;
@@ -73,7 +74,7 @@ class EmploymentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
-        private readonly AssignmentClosureCascade $closureCascade,
+        private readonly ReportingRelationshipService $reportingLines,
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly HrEmployeeAccess $access,
         private readonly EmployeePlacementLock $placement,
@@ -295,6 +296,12 @@ class EmploymentService
                     throw new InvalidEmploymentEffectiveDateException($locked->id, $endsOn, 'before_employment_start');
                 }
 
+                // HR.3A: every reporting line of the employment (either side) ends
+                // with it, BEFORE its end is written (the database refuses an end
+                // a live line outlives). A manager's reports are left with no
+                // manager, never silently re-parented.
+                $this->reportingLines->closeForEmploymentEnd($school, $locked, $endsOn, $actor);
+
                 $locked->update(['ends_on' => $endsOn, 'status' => $status]);
 
                 $closedAssignmentIds = $locked->assignments()
@@ -302,8 +309,6 @@ class EmploymentService
                     ->pluck('id');
 
                 $locked->assignments()->whereNull('ends_on')->update(['ends_on' => $endsOn]);
-
-                $this->closureCascade->clearDanglingManagerReferences($closedAssignmentIds->all());
 
                 // S7 (ADR 0063 §47): authority the employment granted ends with it, in this transaction.
                 foreach ($this->endParticipants as $participant) {

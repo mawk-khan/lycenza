@@ -40,6 +40,7 @@ use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
+use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
 use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
@@ -829,6 +830,59 @@ trait CreatesTenancyFixtures
                 'position_id' => $position->id,
             ], $attributes)),
         );
+    }
+
+    /**
+     * HR.3A fixture: make $subordinate's employment report to $manager's (or to
+     * nobody) -- raw runtime-role writes, never the service (no actor, reason,
+     * audit or event). Every live line of the subordinate becomes the empty
+     * interval (as if never recorded), then one new line covers both
+     * employments' common dates (from $startsOn when given). Fixture only.
+     */
+    protected function setReportingLineFixture(EmploymentRecord|EmployeeAssignment $subordinate, EmploymentRecord|EmployeeAssignment|null $manager, ?string $startsOn = null): ?ReportingRelationship
+    {
+        $school = $subordinate->school;
+
+        return app(TenantContext::class)->withSchool($school, function () use ($subordinate, $manager, $startsOn): ?ReportingRelationship {
+            $sub = $subordinate instanceof EmploymentRecord ? $subordinate->fresh() : EmploymentRecord::query()->findOrFail($subordinate->employment_record_id);
+            ReportingRelationship::query()->where('subordinate_employment_id', $sub->id)->live()->get()
+                ->each(fn (ReportingRelationship $line) => $line->forceFill(['ends_on' => $line->starts_on->copy()->subDay()])->save());
+            if ($manager === null) {
+                return null;
+            }
+            $mgr = $manager instanceof EmploymentRecord ? $manager->fresh() : EmploymentRecord::query()->findOrFail($manager->employment_record_id);
+            $start = max($startsOn ?? '0000-01-01', $sub->starts_on->toDateString(), $mgr->starts_on->toDateString());
+            $ends = array_filter([$sub->ends_on?->toDateString(), $mgr->ends_on?->toDateString()]);
+            $line = new ReportingRelationship;
+            $line->forceFill([
+                'school_id' => $sub->school_id,
+                'subordinate_employment_id' => $sub->id,
+                'manager_employment_id' => $mgr->id,
+                'starts_on' => $start,
+                'ends_on' => $ends === [] ? null : min($ends),
+                'started_via' => 'backfill',
+            ])->save();
+
+            return $line;
+        });
+    }
+
+    /**
+     * HR.3A fixture: before a RAW employment end (a fixture that bypasses
+     * EmploymentService::end()), close the employment's live reporting lines on
+     * both sides to that date -- the database refuses an end a live line
+     * outlives (`trg_employment_records_reporting_bounds`). A line starting after
+     * the end becomes the empty interval. Raw, runtime role; fixture only.
+     */
+    protected function closeReportingLinesFixture(School|string $school, string $employmentId, string $endsOn): void
+    {
+        $school = $school instanceof School ? $school : School::query()->findOrFail($school);
+        app(TenantContext::class)->withSchool($school, fn () => DB::statement(
+            "UPDATE reporting_relationships SET ends_on = GREATEST(starts_on - 1, ?::date), updated_at = now()
+              WHERE school_id = ? AND voided_at IS NULL AND (ends_on IS NULL OR ends_on >= starts_on)
+                AND (subordinate_employment_id = ? OR manager_employment_id = ?) AND COALESCE(ends_on, 'infinity'::date) > ?::date",
+            [$endsOn, $school->id, $employmentId, $employmentId, $endsOn],
+        ));
     }
 
     // --- Phase 8A.6: Qualifications, Experience & Certifications -------

@@ -1722,6 +1722,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/employees/{employee}/rehire', [HrEmploymentController::class, 'rehire'])->middleware('capability:hr.employees.assignments.manage')->name('employees.rehire');
         // HR.1A: a dated, reasoned terms change (appended, never overwritten); whole-School.
         Route::post('/employees/{employee}/employment-records/{employment}/terms', [HrEmploymentController::class, 'changeTerms'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.terms.store');
+        // HR.3A: correct a recorded reporting line (void + replacement over the same dates); whole-School.
+        Route::post('/employees/{employee}/employment-records/{employment}/reporting-lines/{line}/correct', [HrEmploymentController::class, 'correctReportingLine'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.reporting-lines.correct');
 
         Route::post('/employees/{employee}/employment-records/{employment}/assignments', [HrEmployeeAssignmentController::class, 'store'])->name('employees.assignments.store');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [HrEmployeeAssignmentController::class, 'end'])->name('employees.assignments.end');

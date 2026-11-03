@@ -2,6 +2,7 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Reporting\ReportingAsOfReader;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
@@ -70,12 +71,10 @@ use Illuminate\Support\Collection;
  * Campus A never discloses their Campus B position, Department or manager.
  * Whole-School readers are unchanged.
  *
- * Manager projection is exactly ONE hop -- the current primary
- * Assignment's live `manager_assignment_id` pointer (8A.5), resolved
- * to that manager Assignment's own EmploymentRecord/Employee. No
- * recursive reporting-tree traversal, and no claim of historical
- * point-in-time accuracy -- this reflects 8A.5's live pointer exactly
- * as 8A.5 designed it, nothing more.
+ * Manager projection is exactly ONE hop -- HR.3A: the row's employment's
+ * reporting line live on the School-local date
+ * (ReportingAsOfReader::managerEmployeesOn(), one query), resolved to the
+ * manager's Employee. No recursive reporting-tree traversal.
  */
 class EmployeeDirectoryService
 {
@@ -87,6 +86,7 @@ class EmployeeDirectoryService
         private readonly TenantContext $context,
         private readonly CurrentEmployeeAssignments $current,
         private readonly HrEmployeeAccess $access,
+        private readonly ReportingAsOfReader $reporting,
     ) {}
 
     /**
@@ -214,11 +214,10 @@ class EmployeeDirectoryService
                 ->groupBy('employee_id')->map(fn (Collection $group) => $group->sortByDesc(fn (EmployeeAssignment $a) => (int) $a->is_primary)->first());
 
         // Security review L1: a scoped reader sees a reporting manager only when
-        // the manager's own assignment is current and in scope.
-        $visibleManagers = $scope->isWholeSchool() ? null
-            : $this->current->currentAmongOnCampuses($school, $assignmentByEmployeeId->pluck('manager_assignment_id')->filter()->unique()->values()->all(), $scope->campusIds(), $today);
+        // the manager is current on one of the reader's Campuses.
+        $managerByEmployment = $this->reporting->managerEmployeesOn($school, $assignmentByEmployeeId->pluck('employment_record_id')->unique()->values()->all(), $today, $scope->isWholeSchool() ? null : $scope->campusIds());
 
-        return $this->present($school, $employees, $assignmentByEmployeeId, $visibleManagers);
+        return $this->present($school, $employees, $assignmentByEmployeeId, $managerByEmployment);
     }
 
     /**
@@ -284,10 +283,10 @@ class EmployeeDirectoryService
     /**
      * @param  Collection<int, Employee>  $employees
      * @param  Collection<string, EmployeeAssignment>  $assignmentByEmployeeId
-     * @param  list<string>|null  $visibleManagers  null = every manager (whole School)
+     * @param  array<string, string>  $managerByEmployment  employment id => visible manager Employee id
      * @return Collection<int, EmployeeDirectoryEntry>
      */
-    private function present(School $school, Collection $employees, Collection $assignmentByEmployeeId, ?array $visibleManagers = null): Collection
+    private function present(School $school, Collection $employees, Collection $assignmentByEmployeeId, array $managerByEmployment): Collection
     {
         $departmentIds = $assignmentByEmployeeId->pluck('department_id')->filter()->unique()->all();
         $positionIds = $assignmentByEmployeeId->pluck('position_id')->filter()->unique()->all();
@@ -297,24 +296,7 @@ class EmployeeDirectoryService
         $positionsById = $positionIds === [] ? collect() : Position::query()->where('school_id', $school->id)->whereIn('id', $positionIds)->get()->keyBy('id');
         $campusesById = $campusIds === [] ? collect() : Campus::query()->where('school_id', $school->id)->whereIn('id', $campusIds)->get()->keyBy('id');
 
-        $managerAssignmentIds = $assignmentByEmployeeId->pluck('manager_assignment_id')->filter()->unique()
-            ->when($visibleManagers !== null, fn ($ids) => $ids->intersect($visibleManagers))->all();
-
-        $managerAssignmentsById = $managerAssignmentIds === [] ? collect() : EmployeeAssignment::query()
-            ->where('school_id', $school->id)
-            ->whereIn('id', $managerAssignmentIds)
-            ->get()
-            ->keyBy('id');
-
-        $managerEmploymentIds = $managerAssignmentsById->pluck('employment_record_id')->unique()->all();
-
-        $managerEmploymentsById = $managerEmploymentIds === [] ? collect() : EmploymentRecord::query()
-            ->where('school_id', $school->id)
-            ->whereIn('id', $managerEmploymentIds)
-            ->get()
-            ->keyBy('id');
-
-        $managerEmployeeIds = $managerEmploymentsById->pluck('employee_id')->unique()->all();
+        $managerEmployeeIds = array_values(array_unique($managerByEmployment));
 
         $managerEmployeesById = $managerEmployeeIds === [] ? collect() : Employee::query()
             ->where('school_id', $school->id)
@@ -325,7 +307,7 @@ class EmployeeDirectoryService
         return $employees->map(function (Employee $employee) use (
             $assignmentByEmployeeId,
             $departmentsById, $positionsById, $campusesById,
-            $managerAssignmentsById, $managerEmploymentsById, $managerEmployeesById,
+            $managerByEmployment, $managerEmployeesById,
         ) {
             $assignment = $assignmentByEmployeeId->get($employee->id);
 
@@ -333,9 +315,8 @@ class EmployeeDirectoryService
             $position = $assignment?->position_id ? $positionsById->get($assignment->position_id) : null;
             $campus = $assignment?->campus_id ? $campusesById->get($assignment->campus_id) : null;
 
-            $managerAssignment = $assignment?->manager_assignment_id ? $managerAssignmentsById->get($assignment->manager_assignment_id) : null;
-            $managerEmployment = $managerAssignment ? $managerEmploymentsById->get($managerAssignment->employment_record_id) : null;
-            $managerEmployee = $managerEmployment ? $managerEmployeesById->get($managerEmployment->employee_id) : null;
+            $managerEmployeeId = $assignment === null ? null : ($managerByEmployment[strtolower($assignment->employment_record_id)] ?? null);
+            $managerEmployee = $managerEmployeeId === null ? null : $managerEmployeesById->get($managerEmployeeId);
 
             return new EmployeeDirectoryEntry(
                 employeeId: $employee->id,

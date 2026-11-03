@@ -2,15 +2,16 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Reporting\ReportingAsOfReader;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -53,10 +54,9 @@ class EmployeeOperationalOverviewService
             $assignments = $assignmentsScope->isNone() ? null : $this->access->currentAssignments($school, $assignmentsScope, $employee->id);
             $all = $placement === null ? $assignments ?? new Collection : (new Collection([$placement]))->merge($assignments ?? []);
             // Security review L1: a scoped reader sees a manager only when the
-            // manager's own assignment is current on one of the reader's Campuses.
-            $visibleManagers = $view->isWholeSchool() ? null
-                : app(CurrentEmployeeAssignments::class)->currentAmongOnCampuses($school, $all->pluck('manager_assignment_id')->filter()->unique()->values()->all(), $view->campusIds());
-            $labels = $this->labels($school, $all, $visibleManagers);
+            // manager is current on one of the reader's Campuses (HR.3A: the
+            // employment's dated reporting line, today).
+            $labels = $this->labels($school, $all, $view->isWholeSchool() ? null : $view->campusIds());
 
             return [
                 'employee' => [
@@ -88,31 +88,29 @@ class EmployeeOperationalOverviewService
             'isPrimary' => (bool) $a->is_primary,
             'startsOn' => $a->starts_on->toDateString(),
             'endsOn' => $a->ends_on?->toDateString(),
-            'managerName' => $a->manager_assignment_id === null ? null : ($labels['managers'][$a->manager_assignment_id] ?? null),
+            'managerName' => $labels['managers'][strtolower($a->employment_record_id)] ?? null,
         ];
     }
 
     /**
      * Batch label lookups (a fixed number of queries, never one per row).
-     * The manager is one hop: the assignment's live manager pointer, by name.
+     * The manager is one hop: the employment's reporting line today, by name
+     * (employment id => name).
      *
      * @param  Collection<int, EmployeeAssignment>  $assignments
-     * @param  list<string>|null  $visibleManagers  null = every manager (whole School)
+     * @param  list<string>|null  $visibleOnCampuses  null = every manager (whole School)
      * @return array{positions: \Illuminate\Support\Collection<string, string>, departments: \Illuminate\Support\Collection<string, string>, campuses: \Illuminate\Support\Collection<string, string>, managers: array<string, string>}
      */
-    private function labels(School $school, Collection $assignments, ?array $visibleManagers = null): array
+    private function labels(School $school, Collection $assignments, ?array $visibleOnCampuses = null): array
     {
-        $managerIds = $assignments->pluck('manager_assignment_id')->filter()->unique()
-            ->when($visibleManagers !== null, fn ($ids) => $ids->intersect($visibleManagers))->values()->all();
+        $managerByEmployment = app(ReportingAsOfReader::class)->managerEmployeesOn($school, $assignments->pluck('employment_record_id')->unique()->values()->all(), SchoolTimezone::today($school), $visibleOnCampuses);
         $managers = [];
-        if ($managerIds !== []) {
-            $managerAssignments = EmployeeAssignment::query()->where('school_id', $school->id)->whereIn('id', $managerIds)->get(['id', 'employment_record_id']);
-            $employeeIdByEmployment = EmploymentRecord::query()->where('school_id', $school->id)->whereIn('id', $managerAssignments->pluck('employment_record_id'))->pluck('employee_id', 'id');
-            $names = Employee::query()->where('school_id', $school->id)->whereIn('id', $employeeIdByEmployment->values())->pluck('full_name', 'id');
-            foreach ($managerAssignments as $m) {
-                $name = $names[$employeeIdByEmployment[$m->employment_record_id] ?? ''] ?? null;
+        if ($managerByEmployment !== []) {
+            $names = Employee::query()->where('school_id', $school->id)->whereIn('id', array_values(array_unique($managerByEmployment)))->pluck('full_name', 'id');
+            foreach ($managerByEmployment as $employmentId => $employeeId) {
+                $name = $names[$employeeId] ?? null;
                 if ($name !== null) {
-                    $managers[(string) $m->id] = $name;
+                    $managers[$employmentId] = $name;
                 }
             }
         }

@@ -13,7 +13,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 // PHP processes race EmployeeImportService::import() for the SAME
 // School (and, in the same-User case, the same target User) against
 // real PostgreSQL -- not a sequential simulation. Mirrors
-// create-employee.php's/set-assignment-manager.php's identical pattern
+// create-employee.php's/hr-reporting-op.php's identical pattern
 // (8A.1/8A.5).
 //
 // Usage: php import-employee.php <schoolId> <actorId> <fullName> [<userId>]

@@ -6,7 +6,7 @@ use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\EmploymentService;
-use App\Domain\HR\Application\ReportingHierarchyService;
+use App\Domain\HR\Application\Reporting\ReportingRelationshipService;
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use PHPUnit\Framework\Attributes\Test;
 use ReflectionMethod;
@@ -50,6 +50,8 @@ class HrCampusArchitectureTest extends TestCase
         [EmploymentService::class, 'end'],
         [EmployeeLifecycleService::class, 'separate'],
         [EmployeeLifecycleService::class, 'rehire'],
+        // HR.3A: a reporting-line correction rewrites history.
+        [ReportingRelationshipService::class, 'correct'],
     ];
 
     /** Campus-aware HR service methods: scope resolved, guard built. */
@@ -58,7 +60,9 @@ class HrCampusArchitectureTest extends TestCase
         [EmployeeAssignmentService::class, 'create'],
         [EmployeeAssignmentService::class, 'end'],
         [EmployeeAssignmentService::class, 'setPrimary'],
-        [ReportingHierarchyService::class, 'setManager'],
+        // HR.3A: dated reporting lines (ReportingHierarchyService::setManager() only translates).
+        [ReportingRelationshipService::class, 'assign'],
+        [ReportingRelationshipService::class, 'remove'],
     ];
 
     private function body(string $class, string $method): string
@@ -117,7 +121,8 @@ class HrCampusArchitectureTest extends TestCase
         ];
         foreach (Finder::create()->files()->in([app_path(), base_path('routes')])->name('*.php') as $file) {
             $path = str_replace(base_path().'/', '', (string) $file->getRealPath());
-            if (preg_match('/->(createRecord|setPrimaryRecord)\(/', $file->getContents()) === 1) {
+            // HR.3A: closeForEmploymentEnd() ends reporting lines under the caller's (whole-School employment end) authority.
+            if (preg_match('/->(createRecord|setPrimaryRecord|closeForEmploymentEnd)\(/', $file->getContents()) === 1) {
                 $this->assertContains($path, $allowed, "{$path} calls an HR write primitive that carries no authorization of its own (ADR 0076 §43)");
             }
         }
@@ -127,7 +132,7 @@ class HrCampusArchitectureTest extends TestCase
     public function every_declared_whole_school_hr_operation_names_an_adopted_hr_key(): void
     {
         $hr = array_filter(CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS, fn (array $d) => str_starts_with($d['capability'], 'hr.'));
-        $this->assertCount(25, $hr, 'ORG.7E-1 declared 24 whole-School HR operations (ADR 0076 §43); HR.1A adds the employment terms change: update the report when this changes.');
+        $this->assertCount(26, $hr, 'ORG.7E-1 declared 24 whole-School HR operations (ADR 0076 §43); HR.1A adds the employment terms change and HR.3A the reporting-line correction: update the report when this changes.');
         foreach ($hr as $route => $declaration) {
             $this->assertSame('hr', CampusScopeCatalogue::ADOPTED[$declaration['capability']], "{$route} names an adopted HR key");
         }

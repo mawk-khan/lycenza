@@ -167,6 +167,31 @@ reservation.
 
 ### HR.3 — Reporting hierarchy
 
+> **HR.3A IMPLEMENTED (2026-11-03).** Delivered:
+> - `reporting_relationships`: dated, employment-to-employment, one
+>   primary line;
+> - database backstops for overlap, self and same-Employee lines, lines
+>   outside either employment, and date-aware loops (all serialized);
+> - named and reasoned assign, change, remove and correct operations, plus
+>   employment-end closure;
+> - `ReportingAsOfReader` (batch, chain, depth, tree, history);
+> - the 8A.5 pointer removed (Option A), with a conservative backfill.
+>   This deviates from item 3's "kept in sync for one release": a synced
+>   pointer would drift with future-dated lines (ADR 0028 HR.3A §2);
+> - the HR.1A `future_change_with_reports` refusal removed;
+> - X-2, S-10 (reporting) and S-14 (G-9) fixed.
+>
+> **Not built in HR.3A:**
+> - dotted, secondary and functional lines;
+> - delegation (ADR 0065 §6);
+> - the hierarchy tree UI with an as-of picker;
+> - the reporting-managers report.
+>
+> They need an owner decision or a later slice.
+>
+> Record: `docs/modules/HR.md` "Reporting relationships (HR.3A)"; ADR 0028
+> HR.3A amendment; CLAUDE.md rule 131.
+
 1. **Prerequisites:** HR.1. Delegation needs the ADR 0065 §6 amendment
    (owner).
 2. **Scope:** D4-04/05/07/11/12; D2-05; D20-10; S-10 (reporting); S-14

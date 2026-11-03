@@ -839,60 +839,52 @@ class HrRawIsolationTest extends TestCase
         $this->assertRuntimeDeleteRevoked('delete from employee_assignments where id = ?', [$assignmentB->id]);
     }
 
-    // --- Phase 8A.5: employee_assignments.manager_assignment_id -----------
+    // --- HR.3A: reporting_relationships (replaces the 8A.5 pointer) ---------
 
     #[Test]
-    public function raw_insert_of_an_assignment_with_a_cross_school_manager_is_rejected(): void
+    public function raw_insert_of_a_reporting_line_to_a_cross_school_manager_is_rejected(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
-        $employeeB = $this->createEmployee($schoolB);
-        $employmentB = $this->createEmploymentRecord($employeeB);
-        $positionB = $this->createPosition($schoolB);
-        $managerB = $this->createEmployeeAssignment($employmentB, $positionB);
-
-        $employeeA = $this->createEmployee($schoolA);
-        $employmentA = $this->createEmploymentRecord($employeeA);
-        $positionA = $this->createPosition($schoolA);
+        $employmentA = $this->createEmploymentRecord($this->createEmployee($schoolA), ['starts_on' => '2024-01-01']);
+        $employmentB = $this->createEmploymentRecord($this->createEmployee($schoolB), ['starts_on' => '2024-01-01']);
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $this->expectException(QueryException::class);
-
-        DB::connection('pgsql')->transaction(function () use ($schoolA, $employmentA, $positionA, $managerB): void {
-            DB::connection('pgsql')->insert(
-                'insert into employee_assignments (id, school_id, employment_record_id, position_id, manager_assignment_id, starts_on, created_at, updated_at) '.
-                'values (?, ?, ?, ?, ?, ?, now(), now())',
-                [(string) Str::orderedUuid(), $schoolA->id, $employmentA->id, $positionA->id, $managerB->id, '2026-01-01'],
-            );
-        });
+        try {
+            DB::connection('pgsql')->transaction(fn () => DB::connection('pgsql')->insert(
+                'insert into reporting_relationships (id, school_id, subordinate_employment_id, manager_employment_id, starts_on, started_via, created_at, updated_at) '.
+                "values (?, ?, ?, ?, '2025-01-01', 'backfill', now(), now())",
+                [(string) Str::orderedUuid(), $schoolA->id, $employmentA->id, $employmentB->id],
+            ));
+            $this->fail('A School A line named a School B manager.');
+        } catch (QueryException $e) {
+            $this->assertSame('23503', $e->getCode(), 'the composite same-School key');
+        }
     }
 
     #[Test]
-    public function raw_update_setting_a_cross_school_manager_is_rejected(): void
+    public function raw_insert_of_another_schools_reporting_line_is_refused_by_rls(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
-        $employeeA = $this->createEmployee($schoolA);
-        $employmentA = $this->createEmploymentRecord($employeeA);
-        $positionA = $this->createPosition($schoolA);
-        $subordinateA = $this->createEmployeeAssignment($employmentA, $positionA);
-
-        $employeeB = $this->createEmployee($schoolB);
-        $employmentB = $this->createEmploymentRecord($employeeB);
-        $positionB = $this->createPosition($schoolB);
-        $managerB = $this->createEmployeeAssignment($employmentB, $positionB);
+        $subB = $this->createEmploymentRecord($this->createEmployee($schoolB), ['starts_on' => '2024-01-01']);
+        $managerB = $this->createEmploymentRecord($this->createEmployee($schoolB), ['starts_on' => '2024-01-01']);
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $this->expectException(QueryException::class);
-
-        DB::connection('pgsql')->transaction(function () use ($subordinateA, $managerB): void {
-            DB::connection('pgsql')->update(
-                'update employee_assignments set manager_assignment_id = ? where id = ?',
-                [$managerB->id, $subordinateA->id],
-            );
-        });
+        try {
+            DB::connection('pgsql')->transaction(fn () => DB::connection('pgsql')->insert(
+                'insert into reporting_relationships (id, school_id, subordinate_employment_id, manager_employment_id, starts_on, started_via, created_at, updated_at) '.
+                "values (?, ?, ?, ?, '2025-01-01', 'backfill', now(), now())",
+                [(string) Str::orderedUuid(), $schoolB->id, $subB->id, $managerB->id],
+            ));
+            $this->fail('School A context wrote a School B reporting line.');
+        } catch (QueryException $e) {
+            // The guard trigger cannot see School B's employments under School A's RLS (23503) before WITH CHECK would refuse (42501).
+            $this->assertContains($e->getCode(), ['23503', '42501']);
+        }
+        $this->assertSame(0, (int) DB::connection('pgsql')->selectOne('select count(*) as c from reporting_relationships where school_id = ?', [$schoolB->id])->c, 'and School B rows are invisible from School A');
     }
 
     // --- Phase 8A.6: employee_qualifications -------------------------------

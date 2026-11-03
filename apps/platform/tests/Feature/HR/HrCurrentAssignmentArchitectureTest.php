@@ -38,7 +38,6 @@ class HrCurrentAssignmentArchitectureTest extends TestCase
         'app/Domain/HR/Application/EmployeeDirectoryService.php' => 'display summary (current primary placement) and its Department/Position filters; the Campus filter delegates to the canonical resolver',
         'app/Domain/HR/Application/EmployeeProfileWorkspaceService.php' => 'display summary of the current primary placement on the School-local date',
         'app/Domain/HR/Application/EmployeePickerReadService.php' => 'reporting-manager candidates (ORG.7E-1 will scope them)',
-        'app/Domain/HR/Application/ReportingLine.php' => 'the live reporting line on the caller\'s date (leave approval)',
         'app/Domain/HR/Application/Workforce/WorkforceAsOfReader.php' => 'HR.1A historical placement: the employment (any non-draft status), terms and PRIMARY assignment covering a date -- history, not operational currency (its currentPlacement() defers to CurrentEmployeeAssignments)',
     ];
 

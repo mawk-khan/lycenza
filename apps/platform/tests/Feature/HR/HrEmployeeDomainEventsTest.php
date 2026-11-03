@@ -140,7 +140,7 @@ class HrEmployeeDomainEventsTest extends TestCase
     }
 
     #[Test]
-    public function assignment_manager_changed_is_dispatched(): void
+    public function the_reporting_line_change_is_dispatched(): void
     {
         $school = $this->createSchool();
         $employeeA = $this->createEmployee($school);
@@ -156,7 +156,9 @@ class HrEmployeeDomainEventsTest extends TestCase
 
         app(ReportingHierarchyService::class)->setManager($subordinate, $manager, $actor);
 
-        $this->assertSame(1, $this->outboxCount($school->id, 'assignment.manager_changed.v1'));
+        // HR.3A: the employment-level reporting-line event replaces assignment.manager_changed.v1.
+        $this->assertSame(1, $this->outboxCount($school->id, 'employee.reporting_line_changed.v1'));
+        $this->assertSame(0, $this->outboxCount($school->id, 'assignment.manager_changed.v1'));
     }
 
     #[Test]

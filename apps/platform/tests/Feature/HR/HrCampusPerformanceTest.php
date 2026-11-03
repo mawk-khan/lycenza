@@ -45,9 +45,14 @@ class HrCampusPerformanceTest extends TestCase
         $last = null;
         for ($i = 0; $i < $count; $i++) {
             $employee = $this->createEmployee($this->school);
+            $previous = $last;
             $last = $this->createEmploymentRecord($employee, ['starts_on' => '2025-01-01', 'ends_on' => null, 'status' => 'active']);
-            $manager = $this->createEmployeeAssignment($last, $this->position, ['campus_id' => $this->b->id, 'is_primary' => true, 'starts_on' => '2025-01-01', 'ends_on' => null]);
-            $this->createEmployeeAssignment($last, $this->position, ['campus_id' => $this->a->id, 'starts_on' => '2025-01-01', 'ends_on' => null, 'manager_assignment_id' => $manager->id]);
+            $this->createEmployeeAssignment($last, $this->position, ['campus_id' => $this->b->id, 'is_primary' => true, 'starts_on' => '2025-01-01', 'ends_on' => null]);
+            $this->createEmployeeAssignment($last, $this->position, ['campus_id' => $this->a->id, 'starts_on' => '2025-01-01', 'ends_on' => null]);
+            // HR.3A: every Employee but the first reports to the previous one (a dated line).
+            if ($previous !== null) {
+                $this->setReportingLineFixture($last, $previous);
+            }
         }
 
         return $last;

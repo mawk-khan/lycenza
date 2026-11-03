@@ -173,6 +173,19 @@ interface WorkforceHistory {
         from: string | null;
         to: string;
     }[];
+    // HR.3A: the employment's reporting lines (voided corrections included, marked).
+    reporting: {
+        id: string;
+        managerName: string | null;
+        startsOn: string;
+        endsOn: string | null;
+        startedLabel: string;
+        startReasonLabel: string | null;
+        endedLabel: string | null;
+        endReasonLabel: string | null;
+        voided: boolean;
+        voidReasonLabel: string | null;
+    }[];
 }
 
 interface Props {
@@ -197,6 +210,7 @@ interface Props {
         termsReasons: CodeOption[];
         placementKinds: CodeOption[];
         placementReasons: CodeOption[];
+        reportingReasons: CodeOption[];
     };
     hasMfaFactor: boolean;
     linkedAccountName: string | null;
@@ -437,7 +451,8 @@ function makeAssignmentPrimary(a: Assignment): void {
 // UAT-C6 (UAT-HR-23): the manager is picked by name; the request still
 // carries the chosen Assignment, and the server re-validates everything.
 const managingAssignmentId = ref<string | null>(null);
-const managerForm = useForm({ manager_assignment_id: '' });
+// HR.3A: a dated, reasoned reporting line (effective date: blank = today).
+const managerForm = useForm({ manager_assignment_id: '', reason_code: '', effective_on: '' });
 const managerQuery = ref('');
 const managerOptions = ref<ManagerCandidate[]>([]);
 let managerDebounce: ReturnType<typeof setTimeout> | undefined;
@@ -483,6 +498,54 @@ function submitManager(a: Assignment): void {
 function clearManager(a: Assignment): void {
     managerForm.manager_assignment_id = '';
     submitManager(a);
+}
+
+// HR.3A: correct a recorded reporting line -- void it (kept, marked) and,
+// when a manager is chosen, record the corrected line over the same dates.
+// The manager search reuses an assignment of the same employment.
+const correctingLineId = ref<string | null>(null);
+const correctionForm = useForm({ manager_assignment_id: '', reason_code: '' });
+const correctionQuery = ref('');
+const correctionOptions = ref<ManagerCandidate[]>([]);
+let correctionDebounce: ReturnType<typeof setTimeout> | undefined;
+let correctionEmploymentId: string | null = null;
+function toggleCorrection(employmentId: string, lineId: string): void {
+    correctingLineId.value = correctingLineId.value === lineId ? null : lineId;
+    correctionEmploymentId = employmentId;
+    correctionForm.reset();
+    correctionForm.clearErrors();
+    correctionQuery.value = '';
+    correctionOptions.value = [];
+}
+watch(correctionQuery, (value) => {
+    const a = props.workspace.assignments.find(
+        (x) => x.employment_record_id === correctionEmploymentId,
+    );
+    clearTimeout(correctionDebounce);
+    if (!a || value.trim() === '') {
+        correctionOptions.value = [];
+        return;
+    }
+    correctionDebounce = setTimeout(async () => {
+        const response = await fetch(
+            `${managerUrl(a)}/manager-candidates?q=${encodeURIComponent(value)}`,
+        );
+        const body = response.ok
+            ? await response.json().catch(() => ({ candidates: [] }))
+            : { candidates: [] };
+        correctionOptions.value = body.candidates;
+    }, 250);
+});
+function pickCorrection(c: ManagerCandidate): void {
+    correctionForm.manager_assignment_id = c.assignmentId;
+    correctionOptions.value = [];
+    correctionQuery.value = c.label;
+}
+function submitCorrection(employmentId: string, lineId: string): void {
+    correctionForm.post(
+        `${base}/employment-records/${employmentId}/reporting-lines/${lineId}/correct`,
+        { preserveScroll: true, onSuccess: () => (correctingLineId.value = null) },
+    );
 }
 
 // --- Sign-in account link (UAT-C6, UAT-STF-05) ----------------------------
@@ -1448,6 +1511,99 @@ function removeNote(id: string): void {
                                 <span class="text-slate-500"> ({{ c.reasonLabel }})</span>
                             </li>
                         </ul>
+                        <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            Reporting lines
+                        </h4>
+                        <p
+                            v-if="(workforceHistory[e.id]?.reporting ?? []).length === 0"
+                            class="mt-1"
+                        >
+                            No reporting line recorded.
+                        </p>
+                        <ul v-else class="mt-1 space-y-2">
+                            <li
+                                v-for="r in workforceHistory[e.id]?.reporting ?? []"
+                                :key="r.id"
+                                :class="r.voided ? 'text-slate-400 line-through' : ''"
+                            >
+                                {{ r.startsOn }} – {{ r.endsOn ?? 'open' }}: reports to
+                                {{ r.managerName ?? '—' }}
+                                <span class="text-slate-500">
+                                    ({{ r.startedLabel
+                                    }}<template v-if="r.startReasonLabel"
+                                        >, {{ r.startReasonLabel }}</template
+                                    ><template v-if="r.endedLabel"
+                                        >; ended: {{ r.endedLabel }}</template
+                                    ><template v-if="r.voided"
+                                        >; voided: {{ r.voidReasonLabel }}</template
+                                    >)
+                                </span>
+                                <button
+                                    v-if="can.manageAssignments && !r.voided"
+                                    type="button"
+                                    class="ml-2 text-sm underline"
+                                    @click="toggleCorrection(e.id, r.id)"
+                                >
+                                    Correct
+                                </button>
+                                <form
+                                    v-if="correctingLineId === r.id"
+                                    class="mt-2 space-y-2 rounded bg-slate-50 p-3 no-underline"
+                                    @submit.prevent="submitCorrection(e.id, r.id)"
+                                >
+                                    <label
+                                        class="block text-sm text-slate-600"
+                                        :for="`correct-${r.id}`"
+                                        >Correct manager (leave blank to void the line)</label
+                                    >
+                                    <SearchCombobox
+                                        :id="`correct-${r.id}`"
+                                        v-model="correctionQuery"
+                                        placeholder="Search for the manager"
+                                        class="w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
+                                        :options="correctionOptions"
+                                        :option-key="(o) => o.assignmentId"
+                                        :error="correctionForm.errors.manager_assignment_id"
+                                        @select="pickCorrection"
+                                    >
+                                        <template #option="{ option }">{{ option.label }}</template>
+                                    </SearchCombobox>
+                                    <label
+                                        class="block text-sm text-slate-600"
+                                        :for="`correct-reason-${r.id}`"
+                                        >Reason</label
+                                    >
+                                    <select
+                                        :id="`correct-reason-${r.id}`"
+                                        v-model="correctionForm.reason_code"
+                                        required
+                                        class="rounded border border-slate-300 px-3 py-2 text-sm"
+                                    >
+                                        <option value="" disabled>Select a reason</option>
+                                        <option
+                                            v-for="o in workforceOptions.reportingReasons"
+                                            :key="o.value"
+                                            :value="o.value"
+                                        >
+                                            {{ o.label }}
+                                        </option>
+                                    </select>
+                                    <p class="text-sm text-red-600">
+                                        {{ correctionForm.errors.reason_code }}
+                                    </p>
+                                    <button
+                                        type="submit"
+                                        :disabled="
+                                            correctionForm.processing ||
+                                            correctionForm.reason_code === ''
+                                        "
+                                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                    >
+                                        Record correction
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
                     </details>
 
                     <!-- Assignments under this employment -->
@@ -1703,11 +1859,53 @@ function removeNote(id: string): void {
                                             }}</template>
                                         </SearchCombobox>
                                     </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`manager-effective-${a.id}`"
+                                            >Effective from (blank = today)</label
+                                        >
+                                        <input
+                                            :id="`manager-effective-${a.id}`"
+                                            v-model="managerForm.effective_on"
+                                            type="date"
+                                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`manager-reason-${a.id}`"
+                                            >Reason</label
+                                        >
+                                        <select
+                                            :id="`manager-reason-${a.id}`"
+                                            v-model="managerForm.reason_code"
+                                            required
+                                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option value="" disabled>Select a reason</option>
+                                            <option
+                                                v-for="r in workforceOptions.reportingReasons"
+                                                :key="r.value"
+                                                :value="r.value"
+                                            >
+                                                {{ r.label }}
+                                            </option>
+                                        </select>
+                                        <p class="mt-1 text-sm text-red-600">
+                                            {{
+                                                managerForm.errors.reason_code ??
+                                                managerForm.errors.effective_on
+                                            }}
+                                        </p>
+                                    </div>
                                     <button
                                         type="submit"
                                         :disabled="
                                             managerForm.processing ||
-                                            managerForm.manager_assignment_id === ''
+                                            managerForm.manager_assignment_id === '' ||
+                                            managerForm.reason_code === ''
                                         "
                                         class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                                     >
@@ -1715,7 +1913,9 @@ function removeNote(id: string): void {
                                     </button>
                                     <button
                                         type="button"
-                                        :disabled="managerForm.processing"
+                                        :disabled="
+                                            managerForm.processing || managerForm.reason_code === ''
+                                        "
                                         class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
                                         @click="clearManager(a)"
                                     >

@@ -187,6 +187,8 @@ final class TenantRetentionCatalog
             // HR.1A: the employment's terms history and named placement changes; they go with
             // their employment and assignments (cascade), removed by the evidence purge.
             'employment_terms', 'employee_placement_changes',
+            // HR.3A: the employment's own reporting lines (subordinate side) go with it (cascade).
+            'reporting_relationships',
         ]],
         'hr_ancillary' => [self::ADOPTED, 'D9: 2 y after final separation', [
             'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',

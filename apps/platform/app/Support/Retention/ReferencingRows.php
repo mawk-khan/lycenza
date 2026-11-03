@@ -89,7 +89,9 @@ final class ReferencingRows
      * identity reads none of the referencing tables itself.
      *
      * @param  list<string>  $ids
-     * @param  list<string>  $handled  tables the caller removes itself
+     * @param  list<string>  $handled  tables the caller removes itself, or
+     *                                 (HR.3A) one `table.column` reference of a table
+     *                                 whose other references to the parent still count
      */
     public function first(string $parent, string $schoolId, array $ids, array $handled = []): ?string
     {
@@ -108,7 +110,7 @@ final class ReferencingRows
         }
 
         foreach ($this->to($parent) as $reference) {
-            if (in_array($reference['table'], $handled, true)) {
+            if (in_array($reference['table'], $handled, true) || in_array($reference['table'].'.'.$reference['column'], $handled, true)) {
                 continue;
             }
 

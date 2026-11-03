@@ -60,11 +60,12 @@ try {
         'withdraw-own' => 'ok:'.$requests->withdrawOwn($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
         'cancel-own' => 'ok:'.$requests->cancelOwn($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
         'manager-approve' => 'ok:'.$requests->approveAsManager($school, $args[1], User::query()->findOrFail($args[2]))->status,
+        // HR.3A: a dated reporting line from today; prints the chosen manager assignment.
         'set-manager' => 'ok:'.($app->make(ReportingHierarchyService::class)->setManager(
             EmployeeAssignment::query()->findOrFail($args[1]),
             $args[2] === 'none' ? null : EmployeeAssignment::query()->findOrFail($args[2]),
             User::query()->findOrFail($args[3]),
-        )->manager_assignment_id ?? 'none'),
+        ) !== null ? $args[2] : ''),
         'close' => 'ok:'.$app->make(LeaveYearCloseService::class)->execute($school, $args[1], User::query()->findOrFail($args[2]))->item_count,
         'monday' => (function () use ($app, $school, $args) {
             $app->make(StaffCalendarService::class)->setWeeklyPattern($school, [1 => $args[1], 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], User::query()->findOrFail($args[2]));

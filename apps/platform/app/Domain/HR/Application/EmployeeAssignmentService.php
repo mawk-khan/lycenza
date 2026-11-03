@@ -62,7 +62,6 @@ class EmployeeAssignmentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
-        private readonly AssignmentClosureCascade $closureCascade,
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly ActiveCampus $activeCampus,
         private readonly HrEmployeeAccess $access,
@@ -186,9 +185,10 @@ class EmployeeAssignmentService
                 }
                 $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.end');
 
+                // HR.3A: reporting lines join employments, so ending one
+                // assignment (a transfer's source, a secondary role) never
+                // touches them.
                 $assignment->update(['ends_on' => $endsOn]);
-
-                $this->closureCascade->clearDanglingManagerReferences([$assignment->id]);
 
                 $employeeId = $assignment->employmentRecord->employee_id;
 

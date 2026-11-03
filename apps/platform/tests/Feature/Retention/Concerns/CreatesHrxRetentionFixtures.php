@@ -134,6 +134,7 @@ trait CreatesHrxRetentionFixtures
 
         foreach ($separations as $key => $separatedOn) {
             if ($separatedOn !== null) {
+                $this->closeReportingLinesFixture($w['school'], $leavers[$key]['employment']->id, $separatedOn);
                 $this->inSchool($w['school'], fn () => DB::table('employment_records')->where('id', $leavers[$key]['employment']->id)->update(['status' => 'separated', 'ends_on' => $separatedOn]));
             }
         }

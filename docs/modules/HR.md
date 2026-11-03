@@ -645,6 +645,12 @@ dependency on it surfaced during 8A.4.
 
 ## Reporting hierarchy strategy
 
+> **Superseded by HR.3A (2026-11-03).** The assignment-to-assignment
+> pointer below was removed. Reporting lines are now dated
+> employment-to-employment relationships; see "Reporting relationships
+> (HR.3A)" at the end of this document and the ADR 0028 HR.3A amendment.
+> This section and the next are kept as the 8A.5 record.
+
 **Decision: `employee_assignments.manager_assignment_id`**, not
 `manager_employee_id` and not a separate graph/hierarchy subsystem.
 
@@ -662,7 +668,7 @@ database CHECK can't express acyclicity), and a resolution
 helper/read-model for "who does X currently report to" and "who
 reports to X" queries. No separate hierarchy/graph table is introduced.
 
-## Reporting Hierarchy (8A.5, implemented)
+## Reporting Hierarchy (8A.5, implemented; superseded by HR.3A)
 
 **Architecture conflict, and resolution**: the 8A.5 checkpoint brief's
 own "preferred" design described a separate `employee_reporting_lines`
@@ -1192,7 +1198,7 @@ current primary Assignment; Employment #1's historical Position never
 resurfaces and never produces a duplicate row.
 
 **Manager projection — exactly one hop**: the current primary
-Assignment's live `manager_assignment_id` pointer (8A.5) is resolved to
+Assignment's live `manager_assignment_id` pointer (8A.5; since HR.3A, the employment's dated reporting line) is resolved to
 that manager Assignment's own EmploymentRecord and Employee, exposing
 only `manager_employee_id`/`manager_employee_number`/
 `manager_display_name` — no manager Restricted/Highly-Sensitive data,
@@ -1379,7 +1385,7 @@ Assignments remain visible but never overwrite the summary.
 field — manager disclosure lives exclusively on `summary`.
 
 **Reporting manager**: exactly one hop from the current primary
-Assignment's live `manager_assignment_id` pointer (8A.5), identical
+Assignment's live `manager_assignment_id` pointer (8A.5; since HR.3A, the employment's dated reporting line), identical
 reasoning to 8A.8 — no recursion, no historical-manager reconstruction
 claim, only Directory-tier manager identity exposed.
 
@@ -2563,6 +2569,10 @@ any write) — a partially-authorized rehire request never partially
 executes. No new capability.
 
 ### Assignment closure and reporting-hierarchy cleanup on separation
+
+> **HR.3A:** separation (through `EmploymentService::end()`) now ends the
+> employment's dated reporting lines on both sides instead of clearing
+> pointers; see "Reporting relationships (HR.3A)".
 
 100% reused from 8A.4/8A.5, exercised through the new command layer:
 every currently-open Assignment (primary and secondary) under the
@@ -3868,7 +3878,7 @@ ADR 0065 (HRX.0, docs only) is the contract for Leave and Staff Attendance.
   `App\Domain\StaffAttendance`) that depend on HR; HR never depends on
   them.
 - Leave policies attach to the **EmploymentRecord** (a rehire starts fresh);
-  manager approval reads `employee_assignments.manager_assignment_id`
+  manager approval reads `employee_assignments.manager_assignment_id` (HR.3A: the dated `reporting_relationships` line)
   fresh at decision time through HR; self-service resolves the actor only
   through `ActingEmployeeResolver`.
 - Leave and attendance rows are D9 employment evidence. They keep an
@@ -3925,7 +3935,7 @@ Application contracts, both identity-and-relationship answers that
 authorize nothing on their own.
 
 - **`ReportingLine`** gives the manager of an EmploymentRecord on a date,
-  read fresh from the live `manager_assignment_id` pointer:
+  read fresh from the live `manager_assignment_id` pointer (HR.3A: from the dated `reporting_relationships` line effective on the date):
   - the subordinate assignment is the one open that day (the `is_primary`
     one when several are open, none when several are open and none is
     primary);
@@ -4192,7 +4202,8 @@ are Campus-adopted through `App\Domain\HR\Application\HrEmployeeAccess`.
 - **G-9 (LOW):** changing a reporting manager while a manager-path Leave
   decision reads the same pair can deadlock; PostgreSQL aborts one side,
   everything rolls back and the user sees an error (retry is safe). HR
-  post-v1 hardening.
+  post-v1 hardening. **Fixed by HR.3A (S-14):** one dated line row is the
+  single lock point, taken last by writers.
 
 ## Directory filters and month reports (ORG.9C-1, 2026-10-23, ADR 0076 §69)
 
@@ -4297,12 +4308,12 @@ valid; `..2026-06-30` and `2026-06-30..` share a day and are refused.
   - It closes the source primary the day before the effective date and opens
     a new primary assignment on it, with the source's planned end. Both stay
     queryable.
-  - The new assignment keeps the mover's reporting manager, and the source's
-    open direct reports are re-pointed to it.
-  - A future-dated change of someone with direct reports is refused until
-    effective-dated reporting lines exist (HR.3).
+  - **HR.3A:** reporting lines join employments, so a placement change
+    never touches them. The mover keeps their manager and their reports
+    keep them, for a past, current or future-dated change. The HR.1A
+    re-pointing and its `future_change_with_reports` refusal are removed.
   - Campus-aware: a Campus actor needs every current Campus in scope, works
-    from today, needs an in-scope destination, and needs in-scope reports
+    from today and needs an in-scope destination
     (`HrEmployeeCampusGuard::beforePlacementChange()`).
 
 **Resolvers.**
@@ -4330,7 +4341,8 @@ valid; `..2026-06-30` and `2026-06-30..` share a day and are refused.
 - `hr.employment_terms.changed`: ids, the effective date, the reason, the
   changed field names, and the previous and new type and staff-type codes.
 - `hr.placement.changed`: ids, kind, reason, effective date, from and to
-  assignments, changed fields, and the count of re-pointed reports.
+  assignments, and changed fields (HR.3A removed the re-pointed report
+  count).
 - Plus the existing `hr.assignment.ended` / `created` / `primary_changed`
   events. Both new events appear in the Activity Timeline under employment.
 
@@ -4348,3 +4360,173 @@ valid; `..2026-06-30` and `2026-06-30..` share a day and are refused.
 **Retention:** both new tables are `hr_evidence`. They cascade with their
 employment and assignments and are handled by the evidence purge's blocker
 scan.
+
+## Reporting relationships (HR.3A, 2026-11-03)
+
+HR.3A replaces the 8A.5 live pointer with dated reporting lines. It amends
+ADR 0028 (HR.3A amendment) and CLAUDE.md rule 131. The contract is
+`docs/hr/HR-0A-ARCHITECTURE-RECONCILIATION.md` (X-2, S-14).
+
+**Model** (`reporting_relationships`, `ReportingRelationship`):
+- One row is one PRIMARY reporting line: a subordinate **employment**
+  reports to a manager **employment** over an inclusive date range.
+  - `ends_on` NULL means open.
+  - `ends_on = starts_on - 1` is a line cancelled before it started (the
+    empty interval, ADR 0078).
+- **Employment-level, not assignment-level.**
+  - A transfer, promotion or other new assignment of the same employment
+    never touches the line.
+  - Both employments bound it: a line lies within both employments' dates.
+- **No fixed depth.** There are no L1/L2/L3 columns. The "L0–L3" of the
+  reference pack is the depth of a person in the tree on a date, computed
+  by traversal.
+- **One primary line.** There is no secondary, dotted-line or functional
+  manager, and no delegation (ADR 0065 §6 still defers delegation).
+- **Correction** voids a row (`voided_at`, `voided_by_user_id`, closed
+  `void_reason`) and records a replacement (`started_via = corrected`).
+  Nothing is edited in place or deleted.
+
+**Database guarantees** (`trg_reporting_relationships_guard`, under the
+School's `hr.reporting:<school>` transaction advisory lock, so concurrent
+writers serialize and the second sees the first's committed lines):
+- at most one live line per subordinate employment on any day (23P01);
+- never oneself (CHECK) and never the same Employee through another
+  employment;
+- the line lies within both employments (the employment rows are read
+  FOR SHARE);
+- no loop on any day: a date-aware recursive walk of the managers' own
+  lines over the intersecting dates, depth-capped;
+- parties, start, start reason and starter are immutable; the end only
+  narrows; a void is final; a line is never created voided;
+- shape CHECKs: closed `started_via`/`ended_via`/reason codes; a person's
+  change names a reason and an actor, and only the cut-over backfill has
+  neither;
+- `trg_employment_records_reporting_bounds`: an employment's dates never
+  move so that a live line falls outside them;
+- composite same-School keys. The subordinate side cascades with its
+  employment. The manager side is NO ACTION: a line naming someone as
+  manager blocks their purge, as the 8A.5 pointer did. NO ACTION rather
+  than RESTRICT means a whole School's cascade is checked once, at the end
+  of the statement;
+- forced RLS; the runtime role holds no DELETE.
+
+**The one writer** is
+`App\Domain\HR\Application\Reporting\ReportingRelationshipService`:
+- `assign(subordinate, manager, effectiveOn, reason, actor)`:
+  - a past, today or future date;
+  - the subordinate's line covering that date (if any) ends the day before
+    (`changed`), and a new line starts;
+  - it ends with the earlier of both employments' planned ends.
+- `remove(subordinate, effectiveOn, reason, actor)`: no manager from that
+  day.
+- `correct(line, ?manager, reason, actor)`: void, plus an optional
+  replacement over the same dates. Whole-School only.
+- `closeForEmploymentEnd()`: called only inside `EmploymentService::end()`
+  (separation included), before the end is written.
+  - Every live line of the employment, on either side, ends with it.
+  - A line starting after the end is cancelled (the empty interval).
+  - A manager's departure leaves their reports with **no manager**. Nobody
+    is silently re-parented.
+- **Refused** (`InvalidReportingChangeException`, closed codes):
+  - `cross_school`, `same_employee`, `outside_employment`;
+  - `later_line_exists`: a change never rewrites a later line, so correct
+    or remove that line first;
+  - `unchanged`, `no_line_on_date`, `already_voided`;
+  - loops (`ReportingHierarchyCycleException`).
+- **Lock order:**
+  1. the Employee placement locks of both people, sorted;
+  2. the self-administration check;
+  3. the School's reporting advisory lock;
+  4. both employments FOR SHARE, sorted;
+  5. the subordinate's live lines FOR UPDATE.
+  - Employment end takes the employment FOR UPDATE and no advisory lock,
+    so it never deadlocks with a writer.
+- **Authorization** (`hr.employees.assignments.manage`):
+  - Campus-aware for assign and remove
+    (`HrEmployeeCampusGuard::beforeReportingChange()`):
+    - the subordinate is wholly in scope and currently employed by that
+      employment;
+    - a named manager is currently employed on an active in-scope Campus;
+    - the date is today or later.
+  - **Tighter than 8A.5,** which only needed the subordinate ASSIGNMENT in
+    scope: the line now belongs to the whole employment.
+  - Corrections are whole-School.
+  - Never a line one is on either side of (rule 95).
+  - A reporting line grants no capability and no data access.
+- `ReportingHierarchyService::setManager()` stays as the
+  assignment-addressed adapter for the Profile picker and the API route.
+  It translates both assignments to their employments and delegates.
+
+**Readers:**
+- `ReportingLine` keeps its signatures (`managerOf`, `holdManagerOf`,
+  `reportsOf`), now over dated lines.
+  - `holdManagerOf()` share-locks the line and the manager's employment,
+    so a concurrent change, removal, correction or manager employment end
+    waits for a Leave decision, or committed first and is seen.
+  - Leave's manager path uses the line effective on the decision date.
+- `App\Domain\HR\Application\Reporting\ReportingAsOfReader` is the
+  canonical historical reader. Every method takes a constant number of
+  queries:
+  - `managersOn()` / `managerEmployeesOn()`: a batch, optionally restricted
+    to managers current on a Campus reader's Campuses;
+  - `directReportsOn()`;
+  - `chainOn()` / `depthOn()`: recursive, depth-capped at 64, loop-safe;
+  - `treeOn()`;
+  - `historyOf()`: voided rows included.
+- The directory, the operational overview, the Profile summary and the
+  "reports to" filter (`CurrentEmployeeAssignments::whereReportingTo`) read
+  the line effective on the School-local date.
+- A Campus reader sees a manager only when that manager is current on one
+  of the reader's Campuses. A "reports to" match needs both people current
+  there.
+
+**HTTP:**
+- `POST …/assignments/{assignment}/manager` (web and API) now requires a
+  closed `reason_code`.
+  - It takes an optional `effective_on` (default: the School-local today).
+  - The API answers the line, no longer the assignment.
+- `POST …/employment-records/{employment}/reporting-lines/{line}/correct`
+  (web) is whole-School and declared in
+  `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS`.
+- The Profile's history panel lists each employment's lines, voided ones
+  struck through, with Correct.
+
+**Audit and events:**
+- One audit event per change, on the **subordinate's** Activity Timeline:
+  - `hr.reporting.assigned`, `.changed`, `.removed`, `.corrected` and
+    `.ended`;
+  - ids, dates and closed codes only.
+- One outbox event, `employee.reporting_line_changed.v1`. It is not
+  webhook-registered and replaces `assignment.manager_changed.v1`. Earlier
+  `hr.assignment.manager_changed` rows still show on the timeline.
+
+**Cut-over (migration `2027_01_26_090000`):**
+- For each employment, the manager the old pointer gave on each School's
+  local today becomes a `backfill` line starting that day. This uses
+  exactly the old reader's rule: the only open assignment, or the open
+  primary; the pointer must name an assignment open that day.
+- **Nothing earlier is reconstructed.** The pointer was overwritten in
+  place, so earlier history is unknown and is never fabricated.
+- **The migration refuses (nothing changed)** while legacy data is
+  ambiguous or unsafe:
+  - open assignments name conflicting managers;
+  - several open assignments and none primary;
+  - a future-starting assignment carries a pointer;
+  - a person reports to themselves;
+  - either person is not employed on the cut-over date.
+- `down()` restores the pointer from the lines current on the School-local
+  today, onto the subordinate's open primary. Dated history cannot be held
+  by the old schema and is lost on rollback (documented, deliberate).
+
+**Retention:**
+- `reporting_relationships` is `hr_evidence`.
+- The probe `retention_first_reference()` and `ReferencingRows` accept a
+  handled `table.column`. The HR and Payroll purges therefore treat
+  `reporting_relationships.subordinate_employment_id` as the employment's
+  own history (cascade), while a line naming it as manager still blocks.
+- The `employee_assignments` retention anchor no longer tracks the removed
+  column.
+- Starter, ender and voider are `RETAIN_REFERENCE` user references.
+
+**Verifier:** `hr_reporting_invariants` (both triggers enabled, forced RLS,
+the four indexes) in `platform:verify-database`.

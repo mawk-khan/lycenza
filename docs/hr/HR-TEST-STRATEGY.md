@@ -191,6 +191,16 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 | `tests/Feature/HR/Workforce/EmploymentTermsAndHistoryTest` | terms appended and answered on any date; projection follows; audit metadata; no rewrite of history or the future; ended employment keeps its terms; whole-School only and never one's own; staff type closed and never derived; starting statuses (S-8); a separated / future / draft / current employment answered correctly; batch query count constant; S-11 |
 | `tests/Feature/HR/Workforce/WorkforceWebTest` | terms and placement routes allow/deny/422/404; Profile history and catalogues only for the employment tier; every web path that starts an employment needs a staff type; API PATCH refuses terms and no future end over HTTP; account kind (S-15); future hire is pre-joining, never current (ORG10-D01); verifier `hr_workforce_invariants` |
 
+## 2b. Implemented suites (HR.3A)
+
+| Suite | Proves |
+|---|---|
+| `tests/Feature/HR/Reporting/ReportingRelationshipServiceTest` | a dated line answered from its date only; a mid-period change keeps both answers and is audited (ids and codes); future-dated change; removal; a change never rewrites a later line; both employments bound it; cross-School, self and same-Employee refused; A→B→A, A→B→C→A, five-node and later-starting loops refused, a reversal over disjoint dates allowed; depth 12 chain, depth, tree; constant-query batch lookup; transfer and assignment end leave lines alone; employment end closes both sides and cancels later lines (no re-parenting); correction voids and replaces over the same dates; unauthorized refused; no authorization table touched |
+| `tests/Feature/HR/Reporting/ReportingDatabaseInvariantsTest` | raw runtime writes: one line per day, adjacency, empty interval; self (CHECK) and same Employee (trigger); within both employments; composite same-School key; date-aware loops; immutable parties and start, narrowing end, final void, never created voided; shape CHECKs; employment dates never move past a live line; no runtime DELETE; RLS and fail-closed; pointer gone; verifier `hr_reporting_invariants` |
+| `tests/Feature/HR/Reporting/ReportingConcurrencyTest` | two real processes, contender proven blocked: two raw lines for one subordinate commit once (23P01); opposite raw lines never loop (23514); two service assignments serialize into one line per day; an assignment waiting on an employment end is refused; a manager employment end waiting on an assignment closes the new line; a reporting change waiting on a transfer lands on the unchanged employment |
+| `tests/Feature/HR/Reporting/ReportingMigrationTest` | cut-over backfill from the current pointer only (no fabricated history); conflicting pointers refuse and change nothing; rollback keeps current lines as pointers |
+| `tests/Feature/HR/Reporting/ReportingWebTest` | web set-manager needs a closed reason, takes an effective date, removes; API answers the line; correction is whole-School only (Campus and viewer refused, foreign line 404); Profile trail and reasons; Campus officer from today only |
+
 ## 3. Regression cadence
 
 - **Per phase:**

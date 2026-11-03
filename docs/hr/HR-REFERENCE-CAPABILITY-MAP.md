@@ -165,7 +165,7 @@ both mean HRX-L2.
 | D2-02 | Department transfer | `PlacementChangeService` department change (HR.1A) | IMP | H225 | — | HR | — | M | — |
 | D2-03 | Designation change | `PlacementChangeService` designation change (HR.1A) | IMP | H225 (reference edits in place) | — | HR | — | M | — |
 | D2-04 | Promotion | `PlacementChangeService` promotion (HR.1A) | IMP | — | — | HR | — | L | — |
-| D2-05 | Reporting-manager change | live pointer overwritten (X-2) | PART | H481–H482 | no effective-dated relationship | HR | HR.3 | M | — |
+| D2-05 | Reporting-manager change | dated, reasoned change through `ReportingRelationshipService::assign()` (HR.3A) | IMP | H481–H482 | — | HR | HR.3A | M | — |
 | D2-06 | Employment-category change | dated, reasoned `employment_terms` change (HR.1A) | IMP | H360 | — | HR | — | M | — |
 | D2-07 | Shift change | none | GATE | H286 | — | WorkSchedule | HR.4 | M | ADR 0065 §8, HRX-L2 (L2a) |
 | D2-08 | Payroll-entity change | — | NR | H174 | see D1-13 | — | — | — | — |
@@ -173,7 +173,7 @@ both mean HRX-L2.
 | D2-10 | Start / end dates | `starts_on`/`ends_on` + CHECK; primary overlap refused by the database (HR.1A) | IMP | H286 (effective date) | — | HR | — | M | — |
 | D2-11 | Reason | closed `PlacementChangeReason` / `EmploymentTermsChangeReason` (HR.1A) | IMP | H351 | — | HR | — | M | — |
 | D2-12 | Approving / acting actor | `recorded_by_user_id` on the change record + audit actor (HR.1A) | IMP | — | no approval step (only if HR.12 requires one) | HR | — | L | — |
-| D2-13 | Historical reporting (as of a date) | `WorkforceAsOfReader` (employment, terms, primary placement on any date) (HR.1A); manager history is HR.3 | IMP | H554 | — | HR | — | M | — |
+| D2-13 | Historical reporting (as of a date) | `WorkforceAsOfReader` (employment, terms, primary placement on any date) (HR.1A); manager on any date: `ReportingAsOfReader` (HR.3A) | IMP | H554 | — | HR | — | M | — |
 
 ### D3 — Organization ownership
 
@@ -193,17 +193,17 @@ both mean HRX-L2.
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
 | D4-01 | Designation hierarchy (L0–L3) | none on positions; the hierarchy is assignment → assignment | ALT | H160–H172, H191, H565–H580 | L0–L3 becomes a computed presentation (depth); never level columns | HR | HR.3 | L | — |
-| D4-02 | Manager assignment | `ReportingHierarchyService::setManager()` | IMP | H100, H481 | — | HR | — | — | — |
-| D4-03 | Reporting-manager hierarchy of arbitrary depth | pointer chain | IMP | H478–H480 | — | HR | — | — | — |
+| D4-02 | Manager assignment | `ReportingRelationshipService` (dated; HR.3A); `setManager()` kept as the assignment-addressed adapter | IMP | H100, H481 | — | HR | — | — | — |
+| D4-03 | Reporting-manager hierarchy of arbitrary depth | dated employment lines, arbitrary depth (HR.3A) | IMP | H478–H480 | — | HR | — | — | — |
 | D4-04 | Reporting-manager views | directory "reports to" filter, Leave approvals queue | PART | H565–H580 | tree / chain view, as-of date | HR | HR.3 | L | — |
-| D4-05 | Manager changes over time | none (X-2) | MISS | H481 | `reporting_relationships` (effective-dated) | HR | HR.3 | M | — |
-| D4-06 | Primary manager | one pointer per assignment | IMP | — | — | HR | — | — | — |
+| D4-05 | Manager changes over time | `reporting_relationships`, answered for any date (`ReportingAsOfReader`, HR.3A) | IMP | H481 | — | HR | HR.3A | M | — |
+| D4-06 | Primary manager | one live line per subordinate employment per day, database-enforced (HR.3A) | IMP | — | — | HR | — | — | — |
 | D4-07 | Dotted-line manager | none | MISS | — | relationship `kind` (primary / dotted); dotted never decides | HR | HR.3 | L | — |
 | D4-08 | Temporary delegation | none | DEF | — | ADR 0065 §6 amendment (delegation of a decision, not of data) | HR + Leave | HR.3 / HR.11 | H | ADR 0065 §6 |
 | D4-09 | School / Campus scope | same-School composite keys; Campus via `HrEmployeeAccess` | IMP | — | — | HR | — | — | — |
 | D4-10 | Department scope | directory filter only, never authority | ALT | H478 | — | HR | — | — | — |
-| D4-11 | Reporting-chain traversal | walked only inside the cycle check; `reportsOf()` is direct reports only | PART | — | chain and subtree readers with a depth bound | HR | HR.3 | M | — |
-| D4-12 | Cycle prevention (A→B→C→A impossible) | self-report CHECK; indirect cycles application-only under ordered locks | PART | — | database backstop (S-10) | HR | HR.3 | H | — |
+| D4-11 | Reporting-chain traversal | `ReportingAsOfReader::chainOn()` / `depthOn()` / `treeOn()` (recursive, depth-capped, HR.3A) | IMP | — | — | HR | HR.3A | M | — |
+| D4-12 | Cycle prevention (A→B→C→A impossible) | service check plus date-aware database trigger, two-process tested (HR.3A) | IMP | — | — | HR | HR.3A | H | — |
 | D4-13 | Hierarchy ≠ authorization | the manager path also needs `hr.leave.approve` | IMP | — | keep: a manager is never data access | HR | — | H | — |
 
 ### D5 — Work calendar and shifts
@@ -584,31 +584,36 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A (2026-11-03) |
-|---|---|---|
-| IMPLEMENTED | 96 | **110** (30.5 %) |
-| PARTIALLY_IMPLEMENTED | 40 | **29** |
-| MISSING | 90 | **87** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 |
-| DEFERRED | 16 | 16 |
-| BLOCKED_BY_GATE | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 |
-| **Total** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A (2026-11-03) | After HR.3A (2026-11-03) |
+|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | **114** (31.6 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | **26** |
+| MISSING | 90 | 87 | **86** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 | 8 |
+| DEFERRED | 16 | 16 | 16 |
+| BLOCKED_BY_GATE | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** |
 
 HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
 D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
 (ORG10-D01), which were already IMPLEMENTED. The per-section table below
 shows the HR.1A figures for D1, D2 and D18.
 
+HR.3A closed D2-05, D4-05, D4-11 and D4-12, and re-described D2-13, D4-02,
+D4-03 and D4-06 (already IMPLEMENTED) for dated lines. D4-01 (L-depth
+presentation), D4-04 and D20-10 (tree view) and D4-07 (dotted lines) stay
+open. The per-section table shows the HR.3A figures for D2 and D4.
+
 **Per section:**
 
 | Section | IMP | PART | MISS | ALT | XDOM | DEF | GATE | NR | Rows |
 |---|---|---|---|---|---|---|---|---|---|
 | D1 Workforce master | 18 | 2 | 1 | 2 | 1 | 4 | 4 | 3 | 35 |
-| D2 Assignments | 10 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 13 |
+| D2 Assignments | 11 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 13 |
 | D3 Organization | 6 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 8 |
-| D4 Hierarchy | 5 | 3 | 2 | 2 | 0 | 1 | 0 | 0 | 13 |
+| D4 Hierarchy | 8 | 1 | 1 | 2 | 0 | 1 | 0 | 0 | 13 |
 | D5 Calendar & shifts | 2 | 2 | 2 | 0 | 0 | 0 | 14 | 0 | 20 |
 | D6 Attendance events | 2 | 0 | 0 | 1 | 0 | 0 | 19 | 0 | 22 |
 | D7 Evaluation | 6 | 1 | 0 | 2 | 0 | 0 | 7 | 0 | 16 |
@@ -636,7 +641,7 @@ shows the HR.1A figures for D1, D2 and D18.
   - 2 are ADR 0036 statutory payroll;
   - 1 is HRX-L3;
   - 1 is D-11.
-- **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A.**
+- **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A; 132 (36.6 %) after HR.3A.**
 - **Buildable now without any gate:** the 90 MISSING and 40 PARTIAL rows.
   These are the substance of HR.1–HR.3 and HR.9–HR.14.
 

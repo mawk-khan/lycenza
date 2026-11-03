@@ -213,3 +213,57 @@ The three-table split (§2) stands. HR.1A adds the following.
   `btree_gist`.
 - Staff type on the Category: it would make a School label a classification
   rule.
+
+## HR.3A amendment (2026-11-03): effective-dated reporting relationships
+
+**Status:** accepted by the HR.3A checkpoint (owner-authorized HR
+programme; `docs/hr/HR-0A-ARCHITECTURE-RECONCILIATION.md` X-2 and S-14).
+
+**Supersedes:** the 8A.5 decision recorded in `docs/modules/HR.md` that a
+reporting line is a live, mutable
+`employee_assignments.manager_assignment_id` pointer whose history lives
+only in the audit trail.
+
+1. **A reporting line is a dated relationship between two EMPLOYMENTS**
+   (`reporting_relationships`), not an assignment pointer.
+   - **Why employment-level:** a transfer or promotion (a new assignment
+     of the same employment) must not end or rewrite the line. HR.1A had
+     to re-point reports on every placement change and refuse future-dated
+     changes of managers. Both workarounds are removed.
+   - **One primary line per subordinate per day.** The 8A.5 rationale for
+     "a manager per assignment" (different managers for different duties)
+     was never used by any reader: `ReportingLine` always took the primary
+     assignment's manager. Secondary or functional lines remain a future,
+     owner-decided addition.
+2. **The legacy pointer is removed (Option A), not kept as a projection.**
+   With future-dated lines, a "current" projection would drift as days
+   pass with no write to refresh it, and a daily job is speculative
+   infrastructure (CLAUDE.md rule 2). One source of truth remains.
+3. **The database enforces it.** One trigger, serialized by a per-School
+   transaction advisory lock, enforces:
+   - no overlap;
+   - never oneself or the same Employee;
+   - within both employments;
+   - a date-aware loop check;
+   - immutable parties and start, the end only narrowing, and final voids.
+
+   A second trigger refuses an employment date change that a live line
+   would outlive. `btree_gist` remains unused.
+4. **Changes are named and reasoned:** assign, change, remove, correct
+   (void + replacement) and employment-end closure. A change never rewrites
+   a later line.
+5. **The cut-over fabricates no history.** Each current pointer becomes a
+   line starting on the cut-over date, and ambiguous legacy data refuses the
+   migration. Rollback is lossy by design: only lines current at rollback
+   become pointers.
+6. **A manager's departure leaves the reports without a manager.** They are
+   never silently re-parented.
+
+**Alternatives rejected:**
+- A projection pointer kept in sync: it drifts with future-dated lines.
+- Assignment-level dated lines: a transfer would end the line.
+- `EXCLUDE USING gist`: the standing choice against `btree_gist`.
+- Fixed L1/L2/L3 manager columns: depth is a traversal, not a column.
+- Reconstructing pre-cut-over history from the audit trail: the audit
+  carries ids of overwritten pointers but not every period reliably. A
+  partial reconstruction would look authoritative and would not be.

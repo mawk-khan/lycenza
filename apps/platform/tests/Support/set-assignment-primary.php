@@ -14,7 +14,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 // non-blocking) so two real, independent PHP processes race
 // EmployeeAssignmentService::setPrimary() for TWO DIFFERENT
 // Assignments under the SAME EmploymentRecord -- not a sequential
-// simulation. Mirrors set-assignment-manager.php's identical pattern.
+// simulation. Mirrors hr-reporting-op.php's identical pattern.
 //
 // Usage: php set-assignment-primary.php <schoolId> <assignmentId> <actorId>
 // <actorId> is a User already holding hr.employees.assignments.manage

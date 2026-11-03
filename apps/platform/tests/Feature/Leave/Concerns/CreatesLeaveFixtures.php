@@ -85,10 +85,10 @@ trait CreatesLeaveFixtures
         return compact('user', 'employment', 'assignment');
     }
 
-    /** HRX.2: point the subordinate's assignment at the manager's (raw, fixture-only). */
+    /** HRX.2 (HR.3A: a dated reporting line): the subordinate's employment reports to the manager's (raw, fixture-only). */
     protected function reportTo(EmployeeAssignment $subordinate, ?EmployeeAssignment $manager): void
     {
-        $this->inSchool($subordinate->school, fn () => EmployeeAssignment::query()->whereKey($subordinate->id)->update(['manager_assignment_id' => $manager?->id]));
+        $this->setReportingLineFixture($subordinate, $manager);
     }
 
     protected function allocate(array $w, int $units = 24, ?LeaveYear $year = null, ?EmploymentRecord $employment = null): void

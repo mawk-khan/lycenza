@@ -6,6 +6,8 @@ use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\ReportingHierarchyService;
+use App\Domain\HR\Application\ReportingLine;
+use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
@@ -52,7 +54,7 @@ class HrEmployeeSeparationReportingTest extends TestCase
     }
 
     #[Test]
-    public function separating_a_manager_clears_subordinates_manager_pointer_but_leaves_the_subordinate_assignment_open(): void
+    public function separating_a_manager_ends_the_reporting_line_but_leaves_the_subordinate_assignment_open(): void
     {
         Carbon::setTestNow('2026-06-15');
         $school = $this->createSchool();
@@ -73,7 +75,11 @@ class HrEmployeeSeparationReportingTest extends TestCase
         app(TenantContext::class)->set($school);
         $freshSubordinate = $subordinateAssignment->fresh();
         $this->assertNull($freshSubordinate->ends_on, 'The subordinate Assignment must remain open -- separating the manager never closes it.');
-        $this->assertNull($freshSubordinate->manager_assignment_id, 'The now-dangling manager pointer must be cleared.');
+        // HR.3A: the dated line ends with the manager's employment; history keeps it.
+        $line = ReportingRelationship::query()->where('subordinate_employment_id', $subordinateAssignment->employment_record_id)->sole();
+        $this->assertSame(['2026-06-15', 'manager_employment_ended'], [$line->ends_on->toDateString(), $line->ended_via]);
+        $this->assertSame($manager->id, app(ReportingLine::class)->managerOf($school, $subordinateAssignment->employment_record_id, '2026-06-15'));
+        $this->assertNull(app(ReportingLine::class)->managerOf($school, $subordinateAssignment->employment_record_id, '2026-06-16'), 'no silent re-parenting');
         $this->assertSame('2026-06-15', $managerAssignment->fresh()->ends_on->toDateString());
     }
 
@@ -103,7 +109,7 @@ class HrEmployeeSeparationReportingTest extends TestCase
     }
 
     #[Test]
-    public function an_ended_assignments_own_historical_manager_pointer_is_left_untouched(): void
+    public function a_separated_subordinates_reporting_history_is_kept(): void
     {
         Carbon::setTestNow('2026-06-15');
         $school = $this->createSchool();
@@ -122,6 +128,8 @@ class HrEmployeeSeparationReportingTest extends TestCase
         app(EmployeeLifecycleService::class)->separate($subordinateEmployment, '2026-06-15', $actor);
 
         app(TenantContext::class)->set($school);
-        $this->assertSame($managerAssignment->id, $subordinateAssignment->fresh()->manager_assignment_id, 'Who the now-ended Assignment used to report to remains valid history.');
+        $line = ReportingRelationship::query()->where('subordinate_employment_id', $subordinateEmployment->id)->sole();
+        $this->assertSame(['2026-06-15', 'subordinate_employment_ended'], [$line->ends_on->toDateString(), $line->ended_via]);
+        $this->assertSame($manager->id, app(ReportingLine::class)->managerOf($school, $subordinateEmployment->id, '2026-06-15'), 'Who they reported to remains valid history.');
     }
 }

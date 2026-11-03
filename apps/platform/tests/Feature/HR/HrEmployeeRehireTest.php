@@ -10,6 +10,7 @@ use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
 use App\Domain\HR\Application\Exceptions\RehireRequiresEmploymentHistoryException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -163,7 +164,7 @@ class HrEmployeeRehireTest extends TestCase
         $assignments = $second->assignments()->get();
         $this->assertCount(1, $assignments);
         $this->assertTrue($assignments->first()->is_primary);
-        $this->assertNull($assignments->first()->manager_assignment_id, 'A brand new rehire Assignment never inherits a prior manager.');
+        $this->assertSame(0, ReportingRelationship::query()->where('subordinate_employment_id', $second->id)->count(), 'A brand new rehire employment never inherits a prior reporting line (HR.3A).');
     }
 
     #[Test]

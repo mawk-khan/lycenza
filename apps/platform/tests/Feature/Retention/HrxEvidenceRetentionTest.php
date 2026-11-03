@@ -199,6 +199,7 @@ class HrxEvidenceRetentionTest extends TestCase
         $w = $this->pastWorld();
         $leaver = $this->pastLeaver($w, '2019-06-30');
         $manager = $w['manager']['employment'];
+        $this->closeReportingLinesFixture($w['school'], $manager->id, '2016-04-30');
         $this->inSchool($w['school'], function () use ($manager): void {
             DB::table('employment_records')->where('id', $manager->id)->update(['status' => 'separated', 'ends_on' => '2016-04-30']);
             DB::table('employees')->where('id', $manager->employee_id)->update(['user_id' => null]);

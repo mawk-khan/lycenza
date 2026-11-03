@@ -112,6 +112,8 @@ final class UserReferenceCatalog
         'employee_notes' => ['author_user_id' => self::RETAIN_REFERENCE],
         // HR.1A: who recorded an employment-terms change and a named placement change (history, RESTRICT).
         'employee_placement_changes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.3A: who started, ended or voided a reporting line is HR evidence.
+        'reporting_relationships' => ['ended_by_user_id' => self::RETAIN_REFERENCE, 'started_by_user_id' => self::RETAIN_REFERENCE, 'voided_by_user_id' => self::RETAIN_REFERENCE],
         'employment_terms' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'employees' => ['user_id' => self::ACTIVE_PURPOSE_BLOCKER],
         'enrollment_rollover_plans' => ['created_by_user_id' => self::RETAIN_REFERENCE],

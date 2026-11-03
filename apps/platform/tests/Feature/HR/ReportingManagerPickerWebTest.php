@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\HR;
 
+use App\Domain\HR\Application\Reporting\ReportingAsOfReader;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -49,9 +51,12 @@ class ReportingManagerPickerWebTest extends TestCase
         return "/app/hr/employees/{$record->employee_id}/employment-records/{$record->id}/assignments/{$a->id}";
     }
 
+    /** HR.3A: the employment's reporting line today, answered as the manager's (only) fixture assignment. */
     private function managerOf(School $school, EmployeeAssignment $a): ?string
     {
-        return app(TenantContext::class)->withSchool($school, fn () => $a->fresh()->manager_assignment_id);
+        $managerEmployment = app(ReportingAsOfReader::class)->managerOn($school, $a->employment_record_id, SchoolTimezone::today($school));
+
+        return $managerEmployment === null ? null : app(TenantContext::class)->withSchool($school, fn () => EmployeeAssignment::query()->where('employment_record_id', $managerEmployment)->value('id'));
     }
 
     #[Test]
@@ -69,14 +74,14 @@ class ReportingManagerPickerWebTest extends TestCase
         $this->assertSame([['assignmentId' => $aisha->id, 'label' => 'Aisha Khan (EMP-000001) — Principal · Academics']], $candidates);
         $this->assertSame([$aisha->id], collect($this->getJson($this->url($school, $pooja).'/manager-candidates?q=000001')->json('candidates'))->pluck('assignmentId')->all(), 'employee number search');
 
-        $this->post($this->url($school, $pooja).'/manager', ['manager_assignment_id' => $aisha->id])->assertSessionHasNoErrors();
+        $this->post($this->url($school, $pooja).'/manager', ['manager_assignment_id' => $aisha->id, 'reason_code' => 'organisational_change'])->assertSessionHasNoErrors();
         $this->assertSame($aisha->id, $this->managerOf($school, $pooja));
 
         $page = $this->get('/app/hr/employees/'.app(TenantContext::class)->withSchool($school, fn () => $pooja->employmentRecord->employee_id))->assertOk();
         $this->assertSame('Aisha Khan', $page->viewData('page')['props']['workspace']['summary']['manager_display_name']);
 
         // "Remove manager" clears it.
-        $this->post($this->url($school, $pooja).'/manager', ['manager_assignment_id' => null])->assertSessionHasNoErrors();
+        $this->post($this->url($school, $pooja).'/manager', ['manager_assignment_id' => null, 'reason_code' => 'organisational_change'])->assertSessionHasNoErrors();
         $this->assertNull($this->managerOf($school, $pooja));
     }
 
@@ -117,19 +122,19 @@ class ReportingManagerPickerWebTest extends TestCase
         [, $b] = $this->staff($school, $position, 'Staff B', 'EMP-000202');
         $aSecond = $this->createEmployeeAssignment(app(TenantContext::class)->withSchool($school, fn () => $a->employmentRecord), $position, ['starts_on' => '2026-01-01']);
 
-        $this->post($this->url($school, $b).'/manager', ['manager_assignment_id' => $a->id])->assertSessionHasNoErrors();
+        $this->post($this->url($school, $b).'/manager', ['manager_assignment_id' => $a->id, 'reason_code' => 'organisational_change'])->assertSessionHasNoErrors();
 
         // A cycle (A -> B -> A).
-        $cycle = $this->post($this->url($school, $a).'/manager', ['manager_assignment_id' => $b->id]);
+        $cycle = $this->post($this->url($school, $a).'/manager', ['manager_assignment_id' => $b->id, 'reason_code' => 'organisational_change']);
         $cycle->assertSessionHasErrors(['manager_assignment_id' => 'That choice would make the reporting line loop back to this Employee. Choose another manager.']);
         $this->assertNull($this->managerOf($school, $a));
 
         // The same Employee's other assignment.
-        $this->post($this->url($school, $a).'/manager', ['manager_assignment_id' => $aSecond->id])
+        $this->post($this->url($school, $a).'/manager', ['manager_assignment_id' => $aSecond->id, 'reason_code' => 'organisational_change'])
             ->assertSessionHasErrors(['manager_assignment_id' => 'An Employee cannot report to themselves.']);
 
         // A stale or unknown choice.
-        $this->post($this->url($school, $a).'/manager', ['manager_assignment_id' => '01a00000-0000-7000-8000-000000000000'])
+        $this->post($this->url($school, $a).'/manager', ['manager_assignment_id' => '01a00000-0000-7000-8000-000000000000', 'reason_code' => 'organisational_change'])
             ->assertSessionHasErrors(['manager_assignment_id' => 'That manager could not be found in this School. Search again.']);
 
         foreach (session('errors')->getBag('default')->all() as $message) {
@@ -147,7 +152,7 @@ class ReportingManagerPickerWebTest extends TestCase
         [, $theirs] = $this->staff($foreign, $this->createPosition($foreign), 'Foreign Staff', 'EMP-000302');
 
         $this->assertSame([], $this->getJson($this->url($school, $mine).'/manager-candidates?q=foreign')->json('candidates'));
-        $this->post($this->url($school, $mine).'/manager', ['manager_assignment_id' => $theirs->id])
+        $this->post($this->url($school, $mine).'/manager', ['manager_assignment_id' => $theirs->id, 'reason_code' => 'organisational_change'])
             ->assertSessionHasErrors(['manager_assignment_id' => 'That manager could not be found in this School. Search again.']);
         $this->assertNull($this->managerOf($school, $mine));
 
@@ -189,7 +194,7 @@ class ReportingManagerPickerWebTest extends TestCase
 
         // Employee A with Employee B's employment / assignment.
         $this->getJson("/app/hr/employees/{$a->id}/employment-records/{$bRecord->id}/assignments/{$bAssignment->id}/manager-candidates?q=staff")->assertNotFound();
-        $this->post("/app/hr/employees/{$a->id}/employment-records/{$bRecord->id}/assignments/{$bAssignment->id}/manager", ['manager_assignment_id' => $aAssignment->id])->assertNotFound();
+        $this->post("/app/hr/employees/{$a->id}/employment-records/{$bRecord->id}/assignments/{$bAssignment->id}/manager", ['manager_assignment_id' => $aAssignment->id, 'reason_code' => 'organisational_change'])->assertNotFound();
         $this->assertNull($this->managerOf($school, $bAssignment));
     }
 
@@ -203,8 +208,8 @@ class ReportingManagerPickerWebTest extends TestCase
         [, $other] = $this->staff($school, $position, 'Staff Other', 'EMP-000602');
         app(TenantContext::class)->withSchool($school, fn () => $own->forceFill(['user_id' => $actor->id])->save());
 
-        $this->post($this->url($school, $ownAssignment).'/manager', ['manager_assignment_id' => $other->id])->assertSessionHasErrors('manager_assignment_id');
-        $this->post($this->url($school, $other).'/manager', ['manager_assignment_id' => $ownAssignment->id])->assertSessionHasErrors('manager_assignment_id');
+        $this->post($this->url($school, $ownAssignment).'/manager', ['manager_assignment_id' => $other->id, 'reason_code' => 'organisational_change'])->assertSessionHasErrors('manager_assignment_id');
+        $this->post($this->url($school, $other).'/manager', ['manager_assignment_id' => $ownAssignment->id, 'reason_code' => 'organisational_change'])->assertSessionHasErrors('manager_assignment_id');
         $this->assertNull($this->managerOf($school, $ownAssignment));
         $this->assertNull($this->managerOf($school, $other));
     }

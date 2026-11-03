@@ -19,7 +19,6 @@ use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
-use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -39,16 +38,14 @@ use Illuminate\Support\Facades\DB;
  *
  * In ONE transaction:
  * - lock order: Employee (forEmployeeWrite), the employment row (FOR NO KEY
- *   UPDATE), then the source and its open direct reports in sorted id order
- *   (the setPrimary() pattern; the set is re-checked under the locks);
+ *   UPDATE), then the source assignment (FOR UPDATE);
  * - the source must be the employment's primary assignment covering the
  *   effective date and starting before it; the kind must match what
  *   changes (PlacementChangeKind); something must change;
- * - the new assignment keeps the mover's own reporting manager, and the
- *   source's open direct reports are re-pointed to it (the same person
- *   manages them). A FUTURE-dated change of someone with direct reports is
- *   refused: those reports would lose their manager before the date, and
- *   effective-dated reporting lines are HR.3's;
+ * - reporting lines are untouched: since HR.3A they join EMPLOYMENTS, not
+ *   assignments (`reporting_relationships`), so the mover keeps their manager
+ *   and their direct reports keep them, for a past, current or future-dated
+ *   change alike (the HR.1A `future_change_with_reports` refusal is gone);
  * - the database refuses an overlapping primary
  *   (`trg_employee_assignments_primary_no_overlap`) and binds the change
  *   record to the employment (`trg_employee_placement_changes_guard`).
@@ -94,15 +91,13 @@ final class PlacementChangeService
             $this->placement->forEmployeeWrite($school, $employeeId);
             $employment = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($source->employment_record_id)->lock('for no key update')->firstOrFail();
 
-            [$locked, $reports] = $this->lockSourceAndReports($school->id, $source->id);
+            $locked = EmployeeAssignment::query()->where('school_id', $school->id)->whereKey($source->id)->lockForUpdate()->first()
+                ?? throw (new ModelNotFoundException)->setModel(EmployeeAssignment::class, [$source->id]);
             $this->selfAdministration->refuseOwnEmployee($actor, $employeeId, 'placement.change');
 
             $this->assertSourceIsThePrimaryOn($locked, $employment, $effectiveOn);
             [$changedFields] = $this->assertKindMatches($kind, $locked, $position, $campus, $department);
-            if ($reports !== [] && $effectiveOn > SchoolTimezone::today($school)) {
-                throw new PlacementChangeConflictException('future_change_with_reports', 'A future-dated change of someone with direct reports waits for dated reporting lines; record it on its effective date.');
-            }
-            $guard?->beforePlacementChange($locked, $effectiveOn, $campus?->id, $department, $reports);
+            $guard?->beforePlacementChange($locked, $effectiveOn, $campus?->id, $department);
 
             // 1. Close the source the day before (only narrows: never an overlap).
             $plannedEnd = $locked->ends_on?->toDateString();
@@ -120,7 +115,7 @@ final class PlacementChangeService
             //    active Campus, employment range: EmployeeAssignmentService::createRecord()).
             $new = $this->assignments->createRecord($employment, ['starts_on' => $effectiveOn, 'ends_on' => $plannedEnd], $position, $actor, $campus, $department);
             try {
-                $new->forceFill(['is_primary' => true, 'manager_assignment_id' => $locked->manager_assignment_id])->save();
+                $new->forceFill(['is_primary' => true])->save();
             } catch (QueryException $e) {
                 if (in_array($e->getCode(), ['23P01', '23505'], true)) {
                     throw new PlacementChangeConflictException('primary_overlap', 'Another primary assignment already covers part of this period.');
@@ -129,13 +124,7 @@ final class PlacementChangeService
             }
             event(new PrimaryAssignmentChanged($school->id, $employeeId, $employment->id, $new->id));
 
-            // 3. The same person keeps managing the source's direct reports.
-            if ($reports !== []) {
-                EmployeeAssignment::query()->where('school_id', $school->id)->whereIn('id', array_map(fn (EmployeeAssignment $r) => $r->id, $reports))
-                    ->update(['manager_assignment_id' => $new->id]);
-            }
-
-            // 4. The named, reasoned record.
+            // 3. The named, reasoned record.
             $change = EmployeePlacementChange::query()->create([
                 'school_id' => $school->id,
                 'employment_record_id' => $employment->id,
@@ -158,48 +147,10 @@ final class PlacementChangeService
                 'fromAssignmentId' => $locked->id,
                 'toAssignmentId' => $new->id,
                 'fields' => $changedFields,
-                'repointedReports' => count($reports),
             ]);
 
             return $new->fresh() ?? $new;
         }));
-    }
-
-    /**
-     * The source and its open direct reports, locked in sorted id order; the
-     * report set is re-read under the locks and must not have changed.
-     *
-     * @return array{0: EmployeeAssignment, 1: list<EmployeeAssignment>}
-     */
-    private function lockSourceAndReports(string $schoolId, string $sourceId): array
-    {
-        $reportIds = $this->openReportIds($schoolId, $sourceId);
-        $ids = array_values(array_unique([$sourceId, ...$reportIds]));
-        sort($ids);
-        $locked = EmployeeAssignment::query()->where('school_id', $schoolId)->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
-        $source = $locked->get($sourceId) ?? throw (new ModelNotFoundException)->setModel(EmployeeAssignment::class, [$sourceId]);
-
-        $current = $this->openReportIds($schoolId, $sourceId);
-        sort($current);
-        $expected = $reportIds;
-        sort($expected);
-        if ($current !== $expected) {
-            throw new PlacementChangeConflictException('reports_changed', 'The direct reports changed while this was being recorded; try again.');
-        }
-
-        $reports = [];
-        foreach ($reportIds as $id) {
-            $reports[] = $locked->get($id) ?? throw new PlacementChangeConflictException('reports_changed', 'The direct reports changed while this was being recorded; try again.');
-        }
-
-        return [$source, $reports];
-    }
-
-    /** @return list<string> */
-    private function openReportIds(string $schoolId, string $sourceId): array
-    {
-        return EmployeeAssignment::query()->where('school_id', $schoolId)->where('manager_assignment_id', $sourceId)->whereNull('ends_on')
-            ->pluck('id')->map(fn ($id) => (string) $id)->all();
     }
 
     private function assertSourceIsThePrimaryOn(EmployeeAssignment $source, EmploymentRecord $employment, string $effectiveOn): void

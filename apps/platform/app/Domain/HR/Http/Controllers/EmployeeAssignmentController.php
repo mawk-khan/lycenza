@@ -5,6 +5,7 @@ namespace App\Domain\HR\Http\Controllers;
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Reporting\ReportingChangeReason;
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
@@ -19,6 +20,7 @@ use App\Support\Authorization\Campus\CampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Phase 8A closure correction (item 3) -- HTTP mutation transport for
@@ -30,10 +32,9 @@ use Illuminate\Support\Str;
  * itself has no `employee_id` column to check against (see its own
  * docblock), so the nested-route ownership check belongs at this
  * transport layer. `setManager()` (reporting-hierarchy mutation) lives
- * here too, on the same `{assignment}` resource, rather than a separate
- * controller -- it is still fundamentally "mutate this Assignment's one
- * manager pointer," matching `ReportingHierarchyService`'s own single-
- * responsibility scope.
+ * here too, on the same `{assignment}` resource: HR.3A records it as a
+ * dated, reasoned reporting line between the two EMPLOYMENTS
+ * (`ReportingHierarchyService` -> `ReportingRelationshipService`).
  */
 class EmployeeAssignmentController extends Controller
 {
@@ -134,16 +135,29 @@ class EmployeeAssignmentController extends Controller
         $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
         [, , $subordinate] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
-        $validated = $request->validate(['manager_assignment_id' => ['sometimes', 'nullable', 'uuid']]);
+        // HR.3A: a dated, reasoned reporting-line change; the line joins the two employments.
+        $validated = $request->validate([
+            'manager_assignment_id' => ['sometimes', 'nullable', 'uuid'],
+            'reason_code' => ['required', 'string', Rule::in(ReportingChangeReason::values())],
+            'effective_on' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+        ]);
 
         // A Campus-scoped caller names only a current in-scope manager assignment (404 otherwise).
         $manager = isset($validated['manager_assignment_id'])
             ? $access->assignment($school, $scope, $validated['manager_assignment_id'])
             : null;
 
-        $updated = $service->setManager($subordinate, $manager, $request->user());
+        $line = $service->setManager($subordinate, $manager, $request->user(), ReportingChangeReason::from($validated['reason_code']), $validated['effective_on'] ?? null);
 
-        return response()->json(['data' => $this->present($updated)]);
+        return response()->json(['data' => [
+            'id' => $line->id,
+            'subordinateEmploymentId' => $line->subordinate_employment_id,
+            'managerEmploymentId' => $line->manager_employment_id,
+            'startsOn' => $line->starts_on->toDateString(),
+            'endsOn' => $line->ends_on?->toDateString(),
+            'startedVia' => $line->started_via,
+            'endedVia' => $line->ended_via,
+        ]]);
     }
 
     /**
@@ -186,7 +200,6 @@ class EmployeeAssignmentController extends Controller
             'positionId' => $assignment->position_id,
             'departmentId' => $assignment->department_id,
             'campusId' => $assignment->campus_id,
-            'managerAssignmentId' => $assignment->manager_assignment_id,
             'isPrimary' => $assignment->is_primary,
             'startsOn' => $assignment->starts_on->toDateString(),
             'endsOn' => $assignment->ends_on?->toDateString(),

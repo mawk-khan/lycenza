@@ -121,6 +121,7 @@ class EmploymentChainProductionPathTest extends TestCase
         $this->enterSchool($officer, $school);
         $this->post("/app/hr/employees/{$teacherEmployment->employee_id}/employment-records/{$teacherEmployment->id}/assignments/{$teacherAssignment->id}/manager", [
             'manager_assignment_id' => $principalAssignment->id,
+            'reason_code' => 'organisational_change',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         // 5. ActingEmployee resolves -- to exactly that identity.

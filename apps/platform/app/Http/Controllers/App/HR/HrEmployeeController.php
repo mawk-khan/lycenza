@@ -16,6 +16,7 @@ use App\Domain\HR\Application\Exceptions\EmployeeNumberConflictException;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\Exceptions\HrWholeSchoolAuthorityRequiredException;
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Reporting\ReportingChangeReason;
 use App\Domain\HR\Application\Workforce\EmploymentTermsChangeReason;
 use App\Domain\HR\Application\Workforce\EmploymentType;
 use App\Domain\HR\Application\Workforce\PlacementChangeKind;
@@ -32,6 +33,7 @@ use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Navigation\StaffNavigation;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -242,6 +244,8 @@ class HrEmployeeController extends Controller
                 'termsReasons' => EmploymentTermsChangeReason::options(),
                 'placementKinds' => PlacementChangeKind::options(),
                 'placementReasons' => PlacementChangeReason::options(),
+                // HR.3A: reporting-line change and correction reasons.
+                'reportingReasons' => ReportingChangeReason::options(),
             ],
             // SR.4 (ADR 0071 §26.7): registering a highly sensitive record needs a fresh code.
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
@@ -285,6 +289,9 @@ class HrEmployeeController extends Controller
             'positions' => ! $canAddAssignment ? [] : Position::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
             'departments' => ! $canAddAssignment ? [] : $access->departmentOptions($school, $assign),
             'campuses' => ! $canAddAssignment ? [] : $access->campusOptions($school, $assign),
+            // HR.3A: reporting-line change reasons (a Campus actor records from today on).
+            'reportingReasons' => ! $canManageAssignments ? [] : ReportingChangeReason::options(),
+            'today' => SchoolTimezone::today($school),
         ]);
     }
 

@@ -64,6 +64,8 @@ class DatabaseRoleVerifier
         'student_lifecycle_events', 'attendance_record_corrections',
         // HR.1A: employment terms and named placement changes are append-only; they go only with their employment.
         'employment_terms', 'employee_placement_changes',
+        // HR.3A: reporting lines are ended or voided, never deleted; they go only with their subordinate employment.
+        'reporting_relationships',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
@@ -210,6 +212,23 @@ class DatabaseRoleVerifier
         'trg_employee_placement_changes_immutable' => 'employee_placement_changes',
         'trg_employees_identity_guard' => 'employees',
         'trg_hr_departments_no_cycle' => 'hr_departments',
+    ];
+
+    /**
+     * HR.3A: the reporting-line backstops -- one line per subordinate per day,
+     * never oneself, within both employments, no loop on any day, immutable
+     * parties and start, the end only narrows; and an employment never ends
+     * while a live line outlives it. trigger => table.
+     */
+    public const HR_REPORTING_GUARDS = [
+        'trg_reporting_relationships_guard' => 'reporting_relationships',
+        'trg_employment_records_reporting_bounds' => 'employment_records',
+    ];
+
+    /** HR.3A: the indexes the reporting readers rely on (bounded lookups by subordinate, manager and date). */
+    public const HR_REPORTING_INDEXES = [
+        'reporting_relationships_subordinate_idx', 'reporting_relationships_manager_idx',
+        'reporting_relationships_school_date_idx', 'reporting_relationships_open_idx',
     ];
 
     /** E21-RH.6: the database guards against manufactured retention eligibility and the User-erasure hold boundary. */
@@ -371,6 +390,21 @@ class DatabaseRoleVerifier
             "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
         )->x === false, ARRAY_FILTER_USE_BOTH);
         $results[] = CheckResult::of('hr_workforce_invariants', $missingHr === [], $missingHr === [] ? '' : count($missingHr).' missing or disabled');
+
+        // HR.3A: the reporting-line backstops, the table's forced RLS and its indexes.
+        $missingReporting = array_keys(array_filter(self::HR_REPORTING_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
+            "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
+        )->x === false, ARRAY_FILTER_USE_BOTH));
+        $rls = DB::selectOne("select relrowsecurity and relforcerowsecurity as x from pg_class where oid = 'public.reporting_relationships'::regclass");
+        if ($rls === null || ! $rls->x) {
+            $missingReporting[] = 'rls';
+        }
+        foreach (self::HR_REPORTING_INDEXES as $index) {
+            if (! DB::selectOne("select exists (select 1 from pg_indexes where schemaname = 'public' and tablename = 'reporting_relationships' and indexname = ?) as x", [$index])->x) {
+                $missingReporting[] = $index;
+            }
+        }
+        $results[] = CheckResult::of('hr_reporting_invariants', $missingReporting === [], $missingReporting === [] ? '' : count($missingReporting).' missing or disabled');
 
         $defaults = DB::selectOne(
             "select bool_or(defaclobjtype = 'r' and defaclacl::text like '%' || ? || '=arwd/%') as tables,

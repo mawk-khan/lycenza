@@ -63,9 +63,9 @@ class HrDirectoryReportFiltersTest extends TestCase
         $this->staff['manager'] = $this->employee('Kiran Manager', [$this->a], starts: '2025-01-01');
         $this->staff['reportA'] = $this->employee('Lata ReportA', [$this->a], starts: '2025-01-01');
         $this->staff['reportB'] = $this->employee('Mohan ReportB', [$this->b], starts: '2025-01-01');
-        $managerAssignment = $this->assignmentOf('manager');
+        // HR.3A: dated, employment-level reporting lines.
         foreach (['reportA', 'reportB'] as $key) {
-            $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($this->assignmentOf($key)->id)->update(['manager_assignment_id' => $managerAssignment->id]));
+            $this->setReportingLineFixture($this->staff[$key], $this->staff['manager']);
         }
     }
 
@@ -188,16 +188,16 @@ class HrDirectoryReportFiltersTest extends TestCase
     }
 
     #[Test]
-    public function a_campus_reader_never_learns_an_out_of_scope_assignment_through_reports_to(): void
+    public function a_campus_reader_sees_a_reporting_line_only_when_both_people_are_on_its_campuses(): void
     {
-        // Nila works on North AND South; only her SOUTH assignment reports to the North manager.
+        // HR.3A: lines join employments. Nila works on North AND South and reports to the North-only manager.
         $nila = $this->employee('Nila Split', [$this->a, $this->b], starts: '2025-01-01');
-        $south = $this->inSchool(fn () => EmployeeAssignment::query()->where('employment_record_id', $nila->id)->where('campus_id', $this->b->id)->firstOrFail());
-        $this->inSchool(fn () => EmployeeAssignment::query()->whereKey($south->id)->update(['manager_assignment_id' => $this->assignmentOf('manager')->id]));
+        $this->setReportingLineFixture($nila, $this->staff['manager']);
         $manager = $this->staff['manager']->employee_id;
 
         $this->assertContains('Nila Split', $this->names($this->hr([null]), 'manager_id='.$manager));
-        $this->assertNotContains('Nila Split', $this->names($this->hr([$this->a->id]), 'manager_id='.$manager), 'From North, her South line to the North manager is never revealed.');
+        $this->assertContains('Nila Split', $this->names($this->hr([$this->a->id]), 'manager_id='.$manager), 'Both are current on North.');
+        $this->assertNotContains('Nila Split', $this->names($this->hr([$this->b->id]), 'manager_id='.$manager), 'From South, a line to a North manager is never revealed.');
     }
 
     #[Test]

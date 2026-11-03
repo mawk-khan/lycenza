@@ -2,6 +2,7 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Reporting\ReportingAsOfReader;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
@@ -62,9 +63,8 @@ use App\Support\Tenancy\TenantContext;
  * Batch-hydration for Assignments' Department/Position/Campus, exactly
  * like `EmployeeDirectoryService::hydrate()` -- a handful of `whereIn`
  * queries, never one query per Assignment. Manager resolution is
- * exactly one hop from the current primary Assignment's live
- * `manager_assignment_id` pointer (8A.5) -- no recursion, no
- * historical-manager reconstruction claim.
+ * exactly one hop: HR.3A, the current assignment's employment's dated
+ * reporting line on the School-local date (ReportingAsOfReader).
  *
  * Phase 8A.10 -- SECTION-LEVEL AUTHORIZATION (docs/modules/HR.md 8A.10
  * as-built): `build()` is the authoritative, production-facing entry
@@ -398,28 +398,14 @@ class EmployeeProfileWorkspaceService
         return $endsOn === null || $endsOn >= $today;
     }
 
+    /** HR.3A: the current assignment's employment's reporting line, today. */
     private function resolveManager(School $school, ?EmployeeAssignment $currentAssignment): ?Employee
     {
-        if ($currentAssignment === null || $currentAssignment->manager_assignment_id === null) {
+        if ($currentAssignment === null) {
             return null;
         }
+        $managerEmployeeId = app(ReportingAsOfReader::class)->managerEmployeesOn($school, [$currentAssignment->employment_record_id], SchoolTimezone::today($school))[strtolower($currentAssignment->employment_record_id)] ?? null;
 
-        $managerAssignment = EmployeeAssignment::query()
-            ->where('school_id', $school->id)
-            ->find($currentAssignment->manager_assignment_id);
-
-        if ($managerAssignment === null) {
-            return null;
-        }
-
-        $managerEmployment = EmploymentRecord::query()
-            ->where('school_id', $school->id)
-            ->find($managerAssignment->employment_record_id);
-
-        if ($managerEmployment === null) {
-            return null;
-        }
-
-        return Employee::query()->where('school_id', $school->id)->find($managerEmployment->employee_id);
+        return $managerEmployeeId === null ? null : Employee::query()->where('school_id', $school->id)->find($managerEmployeeId);
     }
 }

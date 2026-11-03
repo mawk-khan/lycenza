@@ -29,7 +29,10 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  *   new assignment                    the same, plus the CURRENT employment
  *                                     and an active in-scope destination
  *   per-assignment write (end,        that assignment current, on an active
- *   primary, manager)                 in-scope Campus
+ *   primary)                          in-scope Campus
+ *   reporting line (HR.3A)            the subordinate as for an identity
+ *                                     edit; a manager currently on an
+ *                                     active in-scope Campus
  *
  * An Employee the scope no longer reaches is NOT FOUND; a reachable one whose
  * placement exceeds the scope is HR_WHOLE_SCHOOL_AUTHORITY_REQUIRED; an
@@ -79,11 +82,9 @@ final class HrEmployeeCampusGuard
     /**
      * An end: today or later, never before the start, never later than an end
      * already set (only shortening) or the employment's own end; backdated
-     * corrections are whole-School (security review L2). Ending never
-     * reaches across Campuses: the reporting-line cascade would clear the
-     * manager of every open subordinate, so each of them must be in scope
-     * (security review M1; the locked row makes a concurrent setManager on it
-     * wait, or committed first and be seen here).
+     * corrections are whole-School (security review L2). Since HR.3A an
+     * assignment end never touches reporting lines (they join employments),
+     * so the former M1 subordinate check has nothing left to guard.
      */
     public function beforeAssignmentEnd(EmployeeAssignment $lockedAssignment, string $endsOn): void
     {
@@ -95,13 +96,6 @@ final class HrEmployeeCampusGuard
             || ($employmentEndsOn !== null && $endsOn > CarbonImmutable::parse($employmentEndsOn)->toDateString())) {
             throw new HrAssignmentUnavailableException;
         }
-        $subordinateCampuses = EmployeeAssignment::query()->where('school_id', $this->school->id)
-            ->where('manager_assignment_id', $lockedAssignment->id)->whereNull('ends_on')->pluck('campus_id');
-        foreach ($subordinateCampuses as $campusId) {
-            if (! is_string($campusId) || ! $this->scope->covers($campusId)) {
-                throw new HrAssignmentUnavailableException;
-            }
-        }
     }
 
     /**
@@ -111,13 +105,10 @@ final class HrEmployeeCampusGuard
      * needs everything both need: EVERY current Campus of the Employee in
      * scope (as for a new assignment), the source current on an active
      * in-scope Campus, an effective date of today or later (backdated
-     * placement is whole-School history, security review L2), an active
-     * in-scope destination, and every open direct report of the source in
-     * scope (they are re-pointed to the new placement).
-     *
-     * @param  iterable<EmployeeAssignment>  $lockedReports
+     * placement is whole-School history, security review L2) and an active
+     * in-scope destination. Reporting lines are not touched (HR.3A).
      */
-    public function beforePlacementChange(EmployeeAssignment $lockedSource, string $effectiveOn, ?string $destinationCampusId, ?Department $department, iterable $lockedReports): void
+    public function beforePlacementChange(EmployeeAssignment $lockedSource, string $effectiveOn, ?string $destinationCampusId, ?Department $department): void
     {
         $employeeId = (string) EmploymentRecord::query()->where('school_id', $this->school->id)->whereKey($lockedSource->employment_record_id)->value('employee_id');
         $this->assertCoversEveryCurrentCampus($employeeId);
@@ -127,11 +118,6 @@ final class HrEmployeeCampusGuard
             || ($department !== null && $department->campus_id !== null && $department->campus_id !== $destinationCampusId)
             || app(ActiveCampus::class)->find($this->school, $destinationCampusId) === null) {
             throw new HrAssignmentUnavailableException;
-        }
-        foreach ($lockedReports as $report) {
-            if (! is_string($report->campus_id) || ! $this->scope->covers($report->campus_id)) {
-                throw new HrAssignmentUnavailableException;
-            }
         }
     }
 
@@ -145,13 +131,34 @@ final class HrEmployeeCampusGuard
         }
     }
 
-    /** The reporting manager named for an in-scope assignment is itself current and in scope. */
-    public function beforeSetManager(EmployeeAssignment $lockedSubordinate, ?EmployeeAssignment $lockedManager): void
+    /**
+     * HR.3A: a reporting-line change (assign, change, remove) by a
+     * Campus-scoped actor, after the reporting lock and the employment share
+     * locks. The line belongs to the whole EMPLOYMENT, so the subordinate
+     * Employee must be wholly in scope (as for an identity edit) and
+     * currently employed by it; the manager, when named, must be currently
+     * employed on an active in-scope Campus; the effective date is today or
+     * later (dated history and corrections are whole-School, security review
+     * L2).
+     */
+    public function beforeReportingChange(EmploymentRecord $subordinate, ?EmploymentRecord $manager, string $effectiveOn): void
     {
-        $this->beforeAssignmentChange($lockedSubordinate);
-        if ($lockedManager !== null && ! $this->inScopeCurrent($lockedManager)) {
+        $this->assertCoversEveryCurrentCampus($subordinate->employee_id);
+        if ($this->current->currentEmployment($this->school, $subordinate->employee_id)?->id !== $subordinate->id
+            || CarbonImmutable::parse($effectiveOn)->toDateString() < $this->current->today($this->school)) {
             throw new HrAssignmentUnavailableException;
         }
+        if ($manager === null) {
+            return;
+        }
+        $managerCampuses = $this->current->currentEmployment($this->school, $manager->employee_id)?->id === $manager->id
+            ? $this->current->campusesFor($this->school, $manager->employee_id) : [];
+        foreach ($managerCampuses as $campusId) {
+            if ($this->scope->covers($campusId) && app(ActiveCampus::class)->find($this->school, $campusId) !== null) {
+                return;
+            }
+        }
+        throw new HrAssignmentUnavailableException;
     }
 
     private function assertCoversEveryCurrentCampus(string $employeeId): void

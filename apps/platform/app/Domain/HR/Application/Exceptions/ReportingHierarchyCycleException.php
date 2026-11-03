@@ -3,22 +3,18 @@
 namespace App\Domain\HR\Application\Exceptions;
 
 /**
- * Thrown when App\Domain\HR\Application\ReportingHierarchyService::setManager()
- * is asked to set a manager that would create a cycle in the
- * reporting chain (the subordinate Assignment appears in its own
- * would-be manager ancestry). Direct self-reporting is additionally
- * rejected by a database CHECK constraint as a backstop, but an
- * INDIRECT cycle (A -> B -> C -> A) cannot be expressed as a CHECK
- * constraint -- it is walked and rejected here, at the application
- * layer, after both involved Assignment rows are locked in
- * deterministic order (see ReportingHierarchyService's own docblock).
+ * The proposed reporting line would make an employment report (directly or
+ * through others) to itself on some day of the line. HR.3A: the reporting
+ * service walks the dated chain under the School's reporting lock, and the
+ * database trigger (`trg_reporting_relationships_guard`) refuses the same
+ * loop as a backstop.
  */
 class ReportingHierarchyCycleException extends HrException
 {
     public function __construct(
-        public readonly string $subordinateAssignmentId,
-        public readonly string $proposedManagerAssignmentId,
+        public readonly string $subordinateEmploymentId,
+        public readonly string $proposedManagerEmploymentId,
     ) {
-        parent::__construct(422, 'HR_REPORTING_HIERARCHY_CYCLE', "Setting Assignment {$subordinateAssignmentId}'s manager to {$proposedManagerAssignmentId} would create a cycle in the reporting hierarchy.");
+        parent::__construct(422, 'HR_REPORTING_HIERARCHY_CYCLE', 'This reporting line would create a loop in the reporting hierarchy.');
     }
 }
