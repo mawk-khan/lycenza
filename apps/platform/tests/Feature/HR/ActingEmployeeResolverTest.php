@@ -11,6 +11,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -167,7 +168,8 @@ class ActingEmployeeResolverTest extends TestCase
     {
         $school = $this->createSchool();
         [$user, $employee] = $this->staff($school);
-        app(TenantContext::class)->withSchool($school, fn () => $employee->update(['record_status' => 'archived']));
+        // HR.1A (S-11): record_status is never mass assignable.
+        app(TenantContext::class)->withSchool($school, fn () => $employee->forceFill(['record_status' => 'archived'])->save());
 
         $this->assertDenied(ActingEmployeeUnavailableException::EMPLOYEE_NOT_ACTIVE, $user, $school);
     }
@@ -252,10 +254,19 @@ class ActingEmployeeResolverTest extends TestCase
     {
         $school = $this->createSchool();
         [$user, $employee] = $this->staff($school);
-        // Corrupt/legacy data only: EmploymentService refuses this overlap.
-        $this->createEmploymentRecord($employee, ['starts_on' => '2026-06-01', 'status' => 'notice_period']);
 
-        $this->assertDenied(ActingEmployeeUnavailableException::AMBIGUOUS_EMPLOYMENT, $user, $school);
+        // HR.1A (S-10): the database now refuses the overlapping employment
+        // (trg_employment_records_no_overlap), so the resolver's fail-closed
+        // AMBIGUOUS_EMPLOYMENT branch is unreachable defense in depth.
+        try {
+            // A savepoint: the refused INSERT must not abort the test's own transaction.
+            DB::transaction(fn () => $this->createEmploymentRecord($employee, ['starts_on' => '2026-06-01', 'status' => 'notice_period']));
+            $this->fail('An overlapping employment must be refused by the database.');
+        } catch (QueryException $e) {
+            $this->assertSame('23P01', $e->getCode());
+        }
+
+        $this->assertSame($employee->id, $this->resolver()->resolve($user, $school)->employeeId);
     }
 
     #[Test]

@@ -653,18 +653,20 @@ final class DemoDataBuilder
             $allocator = app(EmployeeNumberAllocator::class);
             $formatter = app(EmployeeNumberFormatter::class);
             foreach ($staff as $key => [$name, $positionCode, $department, $category]) {
-                $employee = Employee::query()->create([
-                    'school_id' => $this->school->id,
+                // HR.1A (S-11): school_id and record_status are never mass assignable.
+                $employee = (new Employee([
                     'user_id' => null,
                     'employee_number' => $formatter->format($allocator->allocate($this->school)),
                     'full_name' => $name,
-                    'record_status' => 'active',
-                ]);
+                ]))->forceFill(['school_id' => $this->school->id, 'record_status' => 'active']);
+                $employee->save();
 
                 $record = EmploymentRecord::query()->create([
                     'school_id' => $this->school->id,
                     'employee_id' => $employee->id,
                     'employment_type' => 'permanent',
+                    // HR.1A: the closed staff classification, stated by the demo (never derived).
+                    'staff_type' => $category === $teaching ? 'teaching' : 'non_teaching',
                     'starts_on' => '2023-06-01',
                     'ends_on' => null,
                     'probation_ends_on' => null,

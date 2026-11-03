@@ -82,7 +82,7 @@ class WebDomainRefusalTest extends TestCase
         $page = "/app/hr/employees/{$employee->id}";
 
         $this->signedIn($user, $school)->from($page)
-            ->post("{$page}/employment-records", ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'])
+            ->post("{$page}/employment-records", ['employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => '2026-06-01'])
             ->assertRedirect($page);
         $overlap = $this->refusal();
         $this->assertStringContainsString('already has an employment that overlaps', $overlap);

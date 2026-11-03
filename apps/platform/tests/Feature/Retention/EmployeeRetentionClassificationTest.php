@@ -48,6 +48,9 @@ class EmployeeRetentionClassificationTest extends TestCase
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',
+            // HR.1A: the employment's own terms history and named placement changes (FK cascade with it).
+            'employment_terms' => 'D9 evidence (8 y): employment history, goes with its employment (cascade)',
+            'employee_placement_changes' => 'D9 evidence (8 y): employment history, goes with its employment (cascade)',
             'employee_compensation_assignments' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
             'employee_statutory_identifiers' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
             'employee_tax_profile' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
@@ -64,6 +67,8 @@ class EmployeeRetentionClassificationTest extends TestCase
         ],
         'employee_assignments' => [
             'employee_assignments' => 'retained, blocks: another Employee names it as manager (ON DELETE SET NULL would rewrite their history)',
+            // HR.1A: a placement change names its own employment's assignments (FK cascade with them).
+            'employee_placement_changes' => 'D9 evidence (8 y): employment history, goes with its assignments (cascade)',
         ],
         'employee_compensation_assignments' => [
             'compensation_assignment_values' => 'D9 evidence: append-only values follow their assignment by FK cascade',

@@ -1,7 +1,8 @@
 # HR reference capability map & gap matrix (HR.0A)
 
 Status: **authoritative WMSCB reference capability matrix and HR gap
-matrix** (HR.0A, 2026-11-03, baseline `7a4068fe`).
+matrix** (HR.0A, 2026-11-03, baseline `7a4068fe`; statuses updated by
+HR.1A, the same day).
 - This record closes the HR.EXP-0R pack gate: the pack is now complete,
   §1.
 - It fulfils the `HR-REFERENCE-CAPABILITY-MAP.md` that HR.EXP-0 reserved.
@@ -121,17 +122,17 @@ both mean HRX-L2.
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
 | D1-01 | Staff identity | `employees` (Employee ≠ User) | IMP | H134, H144 → `Employee` | — | HR | — | — | — |
-| D1-02 | Employee / staff code | `employee_number` `EMP-`+6, forward-only counter | IMP | H060 → `EmployeeNumberAllocator` | immutability Eloquent-only (S-11) | HR | HR.1 | L | — |
+| D1-02 | Employee / staff code | `employee_number` `EMP-`+6, forward-only counter; immutable in the database (`trg_employees_identity_guard`, HR.1A S-11) | IMP | H060 → `EmployeeNumberAllocator` | — | HR | — | L | — |
 | D1-03 | ERP / reference identifiers | none | MISS | H117, H134, H233 (Staff Ref, ERP, Branch codes) | a closed, School-unique `employee_reference_codes` (kind + value) for imports and integrations; never a second identity | HR | HR.1 | L | — |
 | D1-04 | Biometric identity | none (guards) | GATE | H106, H233, H373 | an attendance identity in StaffAttendance; never on Employee | StaffAttendance | HR.8 | H | HRX-L2 (L2b) |
 | D1-05 | Active / inactive state | `record_status` + employment status | IMP | H124, H127 → `EmployeeLifecycleService` | — | HR | — | — | — |
 | D1-06 | Joining date | `employment_records.starts_on` | IMP | H117, H323 | — | HR | — | — | — |
-| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); only `end()` transitions | PART | H322–H325, H483 | no notice/confirmation transitions; API accepts any status (S-8) | HR | HR.1 + HR.12 | M | — |
+| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); only `end()` transitions | PART | H322–H325, H483 | S-8 closed (HR.1A: closed starting statuses, no future end over HTTP); notice/confirmation transitions remain | HR | HR.12 | M | — |
 | D1-08 | Campus / School assignment | `employee_assignments.campus_id` (composite FK) | IMP | H174 → `CurrentEmployeeAssignments` | — | HR | — | — | — |
 | D1-09 | Department assignment | `employee_assignments.department_id` | IMP | H134 | — | HR | — | — | — |
 | D1-10 | Designation | `positions` via assignment | IMP | H134, H191 | — | HR | — | — | — |
-| D1-11 | Staff type (Teaching / Non-Teaching / Outsource) | School-configured `employee_categories` (free labels) | PART | H060, H124, H209 | no closed staff-type classification that rules (tasks, leave eligibility) can rely on | HR | HR.1 | M | — |
-| D1-12 | Employment category | `employment_records.employee_category_id`, mutable; `employment_type` free text | PART | H137, H166, H344 | not effective-dated (X-3); free text (S-12) | HR | HR.1 | M | — |
+| D1-11 | Staff type (Teaching / Non-Teaching / Outsource) | closed `StaffType` (teaching / non_teaching / outsourced) on the employment terms (HR.1A); never derived | IMP | H060, H124, H209 | legacy rows NULL until classified | HR | — | M | — |
+| D1-12 | Employment category | `employment_terms` (effective-dated, append-only); closed `EmploymentType` (HR.1A) | IMP | H137, H166, H344 | — | HR | — | M | — |
 | D1-13 | Payroll entity | — | NR | H284, H330 | the School is the employer of record (HR-089 DO_NOT_BUILD) | — | — | — | — |
 | D1-14 | Profile photograph | none | DEF | H113 (Change Profilepic) | governed media pipeline (rule 115) + photo privacy | HR + Documents | post-HR.16 | M | HR-L13 (not raised) |
 | D1-15 | Personal information | `employee_personal_details` (DOB, nationality, marital status, language) | IMP | H093, H144 | gender not modelled (see D10-07) | HR | — | — | — |
@@ -160,19 +161,19 @@ both mean HRX-L2.
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D2-01 | School / Campus transfer | end one assignment + create another (`HrEmployeeAccess`) | PART | H174–H178, H300 | no named transfer operation, reason or change kind (HR-083) | HR | HR.1 | M | — |
-| D2-02 | Department transfer | same mechanism | PART | H225 | same | HR | HR.1 | M | — |
-| D2-03 | Designation change | same mechanism | PART | H225 (reference edits in place) | same | HR | HR.1 | M | — |
-| D2-04 | Promotion | none as a kind | MISS | — | a closed change kind `promotion` on the transfer operation | HR | HR.1 | L | — |
+| D2-01 | School / Campus transfer | `PlacementChangeService` transfer: source closed the day before, new primary opened, named record (HR.1A) | IMP | H174–H178, H300 | — | HR | — | M | — |
+| D2-02 | Department transfer | `PlacementChangeService` department change (HR.1A) | IMP | H225 | — | HR | — | M | — |
+| D2-03 | Designation change | `PlacementChangeService` designation change (HR.1A) | IMP | H225 (reference edits in place) | — | HR | — | M | — |
+| D2-04 | Promotion | `PlacementChangeService` promotion (HR.1A) | IMP | — | — | HR | — | L | — |
 | D2-05 | Reporting-manager change | live pointer overwritten (X-2) | PART | H481–H482 | no effective-dated relationship | HR | HR.3 | M | — |
-| D2-06 | Employment-category change | in-place update (X-3) | PART | H360 | not effective-dated | HR | HR.1 | M | — |
+| D2-06 | Employment-category change | dated, reasoned `employment_terms` change (HR.1A) | IMP | H360 | — | HR | — | M | — |
 | D2-07 | Shift change | none | GATE | H286 | — | WorkSchedule | HR.4 | M | ADR 0065 §8, HRX-L2 (L2a) |
 | D2-08 | Payroll-entity change | — | NR | H174 | see D1-13 | — | — | — | — |
 | D2-09 | Temporary assignment | multiple dated, non-primary assignments | IMP | — | — | HR | — | — | — |
-| D2-10 | Start / end dates | `starts_on` / `ends_on` + CHECK | IMP | H286 (effective date) | overlapping primaries only partly constrained (open-row unique index) | HR | HR.1 | M | — |
-| D2-11 | Reason | none on assignments | MISS | H351 | a closed change-reason code | HR | HR.1 | M | — |
-| D2-12 | Approving / acting actor | actor in the audit event | PART | — | no approval step (owner: only if HR.12 requires one) | HR | HR.1 | L | — |
-| D2-13 | Historical reporting (as of a date) | assignments are answerable as of a date; category and manager are not | PART | H554 | as-of readers for category and manager | HR | HR.1, HR.3 | M | — |
+| D2-10 | Start / end dates | `starts_on`/`ends_on` + CHECK; primary overlap refused by the database (HR.1A) | IMP | H286 (effective date) | — | HR | — | M | — |
+| D2-11 | Reason | closed `PlacementChangeReason` / `EmploymentTermsChangeReason` (HR.1A) | IMP | H351 | — | HR | — | M | — |
+| D2-12 | Approving / acting actor | `recorded_by_user_id` on the change record + audit actor (HR.1A) | IMP | — | no approval step (only if HR.12 requires one) | HR | — | L | — |
+| D2-13 | Historical reporting (as of a date) | `WorkforceAsOfReader` (employment, terms, primary placement on any date) (HR.1A); manager history is HR.3 | IMP | H554 | — | HR | — | M | — |
 
 ### D3 — Organization ownership
 
@@ -183,7 +184,7 @@ both mean HRX-L2.
 | D3-03 | School | `schools` | IMP | — | — | Organization | — | — | — |
 | D3-04 | Campus | `campuses`, `ActiveCampus` | IMP | "Branch" throughout | — | Organization | — | — | — |
 | D3-05 | Location (state grouping of branches) | Network Regions / Zones | ALT | H021, H073 | governance, never HR authority (rule 113) | Organization | — | — | — |
-| D3-06 | Department | `hr_departments` (HR-owned, hierarchical, optional Campus) | IMP | H209–H211 | no department head (deferred); reparent cycle race (S-9) | HR | HR.1 | L | — |
+| D3-06 | Department | `hr_departments` (HR-owned, hierarchical, optional Campus); reparent cycle-safe under lock + trigger (HR.1A S-9) | IMP | H209–H211 | no department head (deferred) | HR | — | L | — |
 | D3-07 | Organisational units, with **no duplicate organization master** | `hr_departments` ≠ `academic_departments` (Subjects, documented) | IMP | — | none found | HR | — | — | — |
 | D3-08 | Designation / qualification masters | `positions`; qualifications per employee | ALT | H186–H191 (uncurated masters, inline "Add New") | no inline master creation from the profile form | HR | — | L | — |
 
@@ -484,10 +485,10 @@ both mean HRX-L2.
 | D18-02 | Joining | employment `starts_on` | IMP | H117 | — | HR | — | — | — |
 | D18-03 | Probation | `probation_ends_on` | PART | H175, H322 | no probation state or confirmation event (HR-090) | HR | HR.12 | L | — |
 | D18-04 | Confirmation | none | MISS | H117 | lifecycle event `confirmed` | HR | HR.12 | L | — |
-| D18-05 | Transfer | D2-01 | PART | H174–H178 | named operation | HR | HR.1 | M | — |
-| D18-06 | Promotion | none | MISS | — | D2-04 | HR | HR.1 | L | — |
-| D18-07 | Designation change | D2-03 | PART | H225 | — | HR | HR.1 | M | — |
-| D18-08 | Department change | D2-02 | PART | — | — | HR | HR.1 | M | — |
+| D18-05 | Transfer | named transfer (HR.1A) | IMP | H174–H178 | — | HR | — | M | — |
+| D18-06 | Promotion | named promotion (HR.1A) | IMP | — | — | HR | — | L | — |
+| D18-07 | Designation change | named designation change (HR.1A) | IMP | H225 | — | HR | — | M | — |
+| D18-08 | Department change | named department change (HR.1A) | IMP | — | — | HR | — | M | — |
 | D18-09 | Inactive status | `separated` / `terminated` / `retired` / `deceased` + archive | IMP | H127, H351 | — | HR | — | — | — |
 | D18-10 | Resignation | separation status | PART | H483 | no `resigned` reason (closed separation reason, HR-027) | HR | HR.12 | M | — |
 | D18-11 | Resignation request | none | MISS | H483–H487 | employee- or HR-initiated request on the shared approval foundation | HR | HR.12 | M | — |
@@ -537,7 +538,7 @@ both mean HRX-L2.
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D20-01 | Staff directory | `EmployeeDirectoryService` (paged, Campus-scoped, filters) | IMP | H060, H124 | ORG10-D01 (future hires in "Current") | HR | HR.1 | L | — |
+| D20-01 | Staff directory | `EmployeeDirectoryService` (paged, Campus-scoped, filters); date-aware employment state (HR.1A, ORG10-D01) | IMP | H060, H124 | — | HR | — | L | — |
 | D20-02 | Customizable staff-details report | none (HR-048) | PART | H546–H549 | registry report with server-decided columns | HR | HR.14 | H | D-11 for export |
 | D20-03 | Joiners | directory "joined from/to" (HR-056) | IMP | H562 | — | HR | — | — | — |
 | D20-04 | Inactive / leavers | directory employment filter (HR-040) | IMP | H560–H561 | — | HR | — | — | — |
@@ -583,24 +584,29 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | Count | Share |
+| Status | HR.0A baseline | After HR.1A (2026-11-03) |
 |---|---|---|
-| IMPLEMENTED | 96 | 26.6 % |
-| PARTIALLY_IMPLEMENTED | 40 | 11.1 % |
-| MISSING | 90 | 24.9 % |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 5.0 % |
-| CROSS_DOMAIN | 8 | 2.2 % |
-| DEFERRED | 16 | 4.4 % |
-| BLOCKED_BY_GATE | 87 | 24.1 % |
-| NOT_REQUIRED | 6 | 1.7 % |
-| **Total** | **361** | |
+| IMPLEMENTED | 96 | **110** (30.5 %) |
+| PARTIALLY_IMPLEMENTED | 40 | **29** |
+| MISSING | 90 | **87** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 |
+| DEFERRED | 16 | 16 |
+| BLOCKED_BY_GATE | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 |
+| **Total** | **361** | **361** |
+
+HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
+D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
+(ORG10-D01), which were already IMPLEMENTED. The per-section table below
+shows the HR.1A figures for D1, D2 and D18.
 
 **Per section:**
 
 | Section | IMP | PART | MISS | ALT | XDOM | DEF | GATE | NR | Rows |
 |---|---|---|---|---|---|---|---|---|---|
-| D1 Workforce master | 16 | 4 | 1 | 2 | 1 | 4 | 4 | 3 | 35 |
-| D2 Assignments | 2 | 7 | 2 | 0 | 0 | 0 | 1 | 1 | 13 |
+| D1 Workforce master | 18 | 2 | 1 | 2 | 1 | 4 | 4 | 3 | 35 |
+| D2 Assignments | 10 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 13 |
 | D3 Organization | 6 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 8 |
 | D4 Hierarchy | 5 | 3 | 2 | 2 | 0 | 1 | 0 | 0 | 13 |
 | D5 Calendar & shifts | 2 | 2 | 2 | 0 | 0 | 0 | 14 | 0 | 20 |
@@ -616,7 +622,7 @@ come from the status column of §4, read mechanically: one row per
 | D15 Comp-off | 0 | 0 | 8 | 1 | 0 | 0 | 2 | 0 | 11 |
 | D16 Permissions | 0 | 0 | 7 | 0 | 0 | 0 | 4 | 0 | 11 |
 | D17 Special windows | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 10 |
-| D18 Lifecycle | 6 | 7 | 5 | 1 | 1 | 1 | 0 | 0 | 21 |
+| D18 Lifecycle | 10 | 4 | 4 | 1 | 1 | 1 | 0 | 0 | 21 |
 | D19 Tasks | 0 | 0 | 26 | 0 | 0 | 0 | 0 | 0 | 26 |
 | D20 Reports & MIS | 12 | 5 | 2 | 0 | 6 | 3 | 10 | 1 | 39 |
 
@@ -630,7 +636,7 @@ come from the status column of §4, read mechanically: one row per
   - 2 are ADR 0036 statutory payroll;
   - 1 is HRX-L3;
   - 1 is D-11.
-- **Implemented or acceptably different: 114 (31.6 %).**
+- **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A.**
 - **Buildable now without any gate:** the 90 MISSING and 40 PARTIAL rows.
   These are the substance of HR.1–HR.3 and HR.9–HR.14.
 

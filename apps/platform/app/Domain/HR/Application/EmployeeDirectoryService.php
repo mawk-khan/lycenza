@@ -14,6 +14,7 @@ use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
@@ -156,7 +157,7 @@ class EmployeeDirectoryService
                     ->from('employment_records as ler')
                     ->whereColumn('ler.employee_id', 'employees.id')
                     ->where('ler.school_id', $school->id)
-                    ->whereIn('ler.status', EmployeeDirectoryQuery::EMPLOYMENT_FILTERS[(string) $query->employment])
+                    ->where(fn ($state) => $this->employmentState($state, (string) $query->employment, $today))
                     ->when($scoped, fn ($w) => $w->where('ler.starts_on', '<=', $today)->where(fn ($e) => $e->whereNull('ler.ends_on')->orWhere('ler.ends_on', '>=', $today)))
                     ->when(! $scoped, fn ($latest) => $latest->whereNotExists(fn ($later) => $later->selectRaw('1')
                         ->from('employment_records as ner')
@@ -218,6 +219,27 @@ class EmployeeDirectoryService
             : $this->current->currentAmongOnCampuses($school, $assignmentByEmployeeId->pluck('manager_assignment_id')->filter()->unique()->values()->all(), $scope->campusIds(), $today);
 
         return $this->present($school, $employees, $assignmentByEmployeeId, $visibleManagers);
+    }
+
+    /**
+     * ORG10-D01 (HR.1A): the employment-state filter judges the employment by
+     * its status AND the School-local date. A hire whose employment starts
+     * after today is `pre_joining` whatever status it was written with (every
+     * web path writes `active`), never `current`; `pre_joining` also keeps the
+     * explicit status. `ended` stays the terminal statuses.
+     *
+     * @param  Builder  $state  constrained on alias `ler`
+     */
+    private function employmentState($state, string $filter, string $today): void
+    {
+        $started = ['active', 'notice_period'];
+        match ($filter) {
+            'current' => $state->whereIn('ler.status', $started)->where('ler.starts_on', '<=', $today),
+            'notice_period' => $state->where('ler.status', 'notice_period')->where('ler.starts_on', '<=', $today),
+            'pre_joining' => $state->where('ler.status', 'pre_joining')
+                ->orWhere(fn ($future) => $future->whereIn('ler.status', $started)->where('ler.starts_on', '>', $today)),
+            default => $state->whereIn('ler.status', EmployeeDirectoryQuery::EMPLOYMENT_FILTERS[$filter] ?? []),
+        };
     }
 
     /**

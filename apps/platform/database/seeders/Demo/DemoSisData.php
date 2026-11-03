@@ -579,13 +579,15 @@ final class DemoSisData
             $category = EmployeeCategory::query()->create(['school_id' => $this->school->id, 'name' => 'Teaching', 'code' => 'TEACH', 'status' => 'active']);
             $department = Department::query()->create(['school_id' => $this->school->id, 'name' => 'Academics', 'code' => 'ACAD', 'status' => 'active']);
             $position = Position::query()->create(['school_id' => $this->school->id, 'name' => 'Primary Teacher', 'code' => 'PRT', 'status' => 'active']);
-            $employee = Employee::query()->create([
-                'school_id' => $this->school->id, 'user_id' => null,
+            // HR.1A (S-11): school_id and record_status are never mass assignable.
+            $employee = (new Employee([
+                'user_id' => null,
                 'employee_number' => app(EmployeeNumberFormatter::class)->format(app(EmployeeNumberAllocator::class)->allocate($this->school)),
-                'full_name' => 'Shalini Varma', 'record_status' => 'active',
-            ]);
+                'full_name' => 'Shalini Varma',
+            ]))->forceFill(['school_id' => $this->school->id, 'record_status' => 'active']);
+            $employee->save();
             $record = EmploymentRecord::query()->create([
-                'school_id' => $this->school->id, 'employee_id' => $employee->id, 'employment_type' => 'permanent', 'starts_on' => '2024-06-01',
+                'school_id' => $this->school->id, 'employee_id' => $employee->id, 'employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => '2024-06-01',
                 'ends_on' => null, 'probation_ends_on' => null, 'status' => 'active', 'employee_category_id' => $category->id,
             ]);
             EmployeeAssignment::query()->create([

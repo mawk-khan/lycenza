@@ -63,7 +63,7 @@ class HrEmployeeDomainEventsTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
 
-        app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
 
         $this->assertSame(1, $this->outboxCount($school->id, 'employment.started.v1'));
     }
@@ -74,7 +74,7 @@ class HrEmployeeDomainEventsTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
 
         app(EmploymentService::class)->end($employment, '2026-07-01', $actor);
 
@@ -87,10 +87,10 @@ class HrEmployeeDomainEventsTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
-        $firstEmployment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-01-01'], $actor);
+        $firstEmployment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-01-01'], $actor);
         app(EmploymentService::class)->end($firstEmployment, '2026-03-01', $actor);
 
-        app(EmployeeLifecycleService::class)->rehire($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        app(EmployeeLifecycleService::class)->rehire($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
 
         $this->assertSame(1, $this->outboxCount($school->id, 'employee.rehired.v1'));
     }
@@ -101,7 +101,7 @@ class HrEmployeeDomainEventsTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $position = $this->createPosition($school);
 
         app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01'], $position, $actor);
@@ -115,7 +115,7 @@ class HrEmployeeDomainEventsTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $position = $this->createPosition($school);
         $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01'], $position, $actor);
 
@@ -130,7 +130,7 @@ class HrEmployeeDomainEventsTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $position = $this->createPosition($school);
         $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01'], $position, $actor);
 
@@ -148,10 +148,10 @@ class HrEmployeeDomainEventsTest extends TestCase
         $actor = $this->fullHrActor($school);
         $position = $this->createPosition($school);
 
-        $employmentA = app(EmploymentService::class)->create($employeeA, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employmentA = app(EmploymentService::class)->create($employeeA, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $subordinate = app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-06-01'], $position, $actor);
 
-        $employmentB = app(EmploymentService::class)->create($employeeB, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employmentB = app(EmploymentService::class)->create($employeeB, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $manager = app(EmployeeAssignmentService::class)->create($employmentB, ['starts_on' => '2026-06-01'], $position, $actor);
 
         app(ReportingHierarchyService::class)->setManager($subordinate, $manager, $actor);

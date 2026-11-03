@@ -68,6 +68,24 @@ reservation.
 
 ### HR.1 — Workforce foundation
 
+> **HR.1A IMPLEMENTED (2026-11-03).** Delivered:
+> - `employment_terms` (effective-dated, append-only, with a
+>   database-maintained projection);
+> - the closed `StaffType` and `EmploymentType`;
+> - database overlap backstops for employments and primary assignments;
+> - named placement changes (`PlacementChangeService` +
+>   `employee_placement_changes`);
+> - `WorkforceAsOfReader`;
+> - S-8, S-9, S-10 (employment / primary), S-11, S-12 (type), S-15 and
+>   ORG10-D01.
+>
+> **Not built in HR.1A:**
+> - `employee_reference_codes` (D1-03), which moves to HR.2;
+> - the X-1 consumer rewiring, which stays in HR.15.
+>
+> Record: `docs/modules/HR.md` "Workforce foundation (HR.1A)"; ADR 0028 HR.1A
+> amendment; CLAUDE.md rule 130.
+
 1. **Prerequisites:** owner authorisation; E16 valid; the owner
    classifies staff types for demo categories.
 2. **Scope:**
@@ -117,6 +135,7 @@ reservation.
 1. **Prerequisites:** HR.1; OD-HR-3 (self access); OD-HR-13 (archive vs
    delete); OD-HR-9 (CSV import).
 2. **Scope:**
+   - D1-03 (`employee_reference_codes`, moved here from HR.1A);
    - D1-17/19/26/27/29;
    - S-3, S-16 (profile), S-12 (document category);
    - a stale-form token on profile edits;

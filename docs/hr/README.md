@@ -15,6 +15,7 @@ contract.
 | Test strategy | `HR-TEST-STRATEGY.md` | HR.0A |
 | HR.R1 final cross-ERP closure contract | `HR-R1-CLOSURE-CONTRACT.md` | reserved |
 | Demo plan | `HR-DEMO-PLAN.md` | draft |
+| HR.1A workforce foundation (implemented contract) | `docs/modules/HR.md` "Workforce foundation (HR.1A)" + ADR 0028 HR.1A amendment + CLAUDE.md rule 130 | implemented 2026-11-03 |
 
 **Module contracts** (the runtime source of truth):
 - `docs/modules/HR.md`;

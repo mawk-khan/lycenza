@@ -266,7 +266,8 @@ class HrUiTest extends TestCase
         ], $school);
 
         $this->post("/app/hr/employees/{$employee->id}/employment-records", [
-            'employment_type' => 'full_time',
+            'employment_type' => 'permanent',
+            'staff_type' => 'teaching',
             'starts_on' => '2026-06-01',
         ])->assertRedirect();
 

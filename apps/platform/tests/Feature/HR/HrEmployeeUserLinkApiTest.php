@@ -225,9 +225,14 @@ class HrEmployeeUserLinkApiTest extends TestCase
         $this->as($actor)->postJson("/api/v1/schools/{$school->id}/employees/{$employee->id}/employment-records", [
             'employment_type' => 'permanent', 'starts_on' => '2026-01-01', 'status' => 'employed',
         ])->assertUnprocessable()->assertJsonStructure(['error' => ['errors' => ['status']]]);
+        // HR.1A (S-8): a NEW employment never starts in notice or ended; draft/pre_joining/active only.
         $this->flushHeaders();
         $this->as($actor)->postJson("/api/v1/schools/{$school->id}/employees/{$employee->id}/employment-records", [
             'employment_type' => 'permanent', 'starts_on' => '2026-01-01', 'status' => 'notice_period',
+        ])->assertUnprocessable()->assertJsonPath('error.code', 'HR_INVALID_EMPLOYMENT_TERMS');
+        $this->flushHeaders();
+        $this->as($actor)->postJson("/api/v1/schools/{$school->id}/employees/{$employee->id}/employment-records", [
+            'employment_type' => 'permanent', 'starts_on' => '2026-01-01', 'status' => 'draft',
         ])->assertCreated();
     }
 

@@ -5,6 +5,10 @@ namespace App\Http\Controllers\App\HR;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\EmployeeCategoryNotFoundException;
+use App\Domain\HR\Application\Workforce\EmploymentTermsChangeReason;
+use App\Domain\HR\Application\Workforce\EmploymentTermsService;
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Http\Controllers\Controller;
@@ -30,7 +34,8 @@ class HrEmploymentController extends Controller
         $model = Employee::query()->findOrFail($employee);
 
         $validated = $request->validate([
-            'employment_type' => ['required', 'string', 'max:255'],
+            'employment_type' => ['required', 'string', Rule::in(EmploymentType::values())],
+            'staff_type' => ['required', 'string', Rule::in(StaffType::values())],
             'employee_category_id' => ['sometimes', 'nullable', 'uuid'],
             'starts_on' => ['required', 'date'],
             'probation_ends_on' => ['sometimes', 'nullable', 'date'],
@@ -45,7 +50,12 @@ class HrEmploymentController extends Controller
         return redirect("/app/hr/employees/{$model->id}");
     }
 
-    public function end(Request $request, TenantContext $context, EmploymentService $service, string $employee, string $employment): RedirectResponse
+    /**
+     * HR.1A (S-8): ending through the web is the separation command -- a
+     * future date is refused exactly as separate() refuses it; the permissive
+     * EmploymentService::end() primitive is not reachable over HTTP.
+     */
+    public function end(Request $request, TenantContext $context, EmployeeLifecycleService $service, string $employee, string $employment): RedirectResponse
     {
         $school = $context->requireSchool();
         // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
@@ -60,7 +70,45 @@ class HrEmploymentController extends Controller
             'status' => ['sometimes', Rule::in(['separated', 'terminated', 'retired', 'deceased'])],
         ]);
 
-        $service->end($employmentModel, $validated['ends_on'], $context->actor(), $validated['status'] ?? 'separated');
+        $service->separate($employmentModel, $validated['ends_on'], $context->actor(), $validated['status'] ?? 'separated');
+
+        return redirect("/app/hr/employees/{$employeeModel->id}");
+    }
+
+    /**
+     * HR.1A (X-3): a dated, reasoned change of an employment's terms --
+     * appended, never overwritten (EmploymentTermsService). A declared
+     * whole-School operation (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
+     */
+    public function changeTerms(Request $request, TenantContext $context, EmploymentTermsService $service, string $employee, string $employment): RedirectResponse
+    {
+        $context->requireSchool();
+        abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
+
+        $employeeModel = Employee::query()->findOrFail($employee);
+        $employmentModel = EmploymentRecord::query()->where('employee_id', $employeeModel->id)->findOrFail($employment);
+
+        $validated = $request->validate([
+            'effective_from' => ['required', 'date'],
+            'employment_type' => ['required', 'string', Rule::in(EmploymentType::values())],
+            'staff_type' => ['required', 'string', Rule::in(StaffType::values())],
+            'employee_category_id' => ['sometimes', 'nullable', 'uuid'],
+            'reason_code' => ['required', 'string', Rule::in(EmploymentTermsChangeReason::values())],
+        ]);
+
+        try {
+            $service->change(
+                $employmentModel,
+                (string) $validated['effective_from'],
+                EmploymentType::from((string) $validated['employment_type']),
+                StaffType::from((string) $validated['staff_type']),
+                isset($validated['employee_category_id']) && $validated['employee_category_id'] !== '' ? (string) $validated['employee_category_id'] : null,
+                EmploymentTermsChangeReason::from((string) $validated['reason_code']),
+                $context->actor(),
+            );
+        } catch (EmployeeCategoryNotFoundException) {
+            throw ValidationException::withMessages(['employee_category_id' => ['That Employee Category was not found.']]);
+        }
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }
@@ -95,7 +143,8 @@ class HrEmploymentController extends Controller
         $model = Employee::query()->findOrFail($employee);
 
         $validated = $request->validate([
-            'employment_type' => ['required', 'string', 'max:255'],
+            'employment_type' => ['required', 'string', Rule::in(EmploymentType::values())],
+            'staff_type' => ['required', 'string', Rule::in(StaffType::values())],
             'starts_on' => ['required', 'date'],
         ]);
 

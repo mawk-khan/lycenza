@@ -6,6 +6,7 @@ use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentTermsException;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
@@ -191,7 +192,7 @@ class EmploymentRecordTest extends TestCase
         $employment = $this->createEmploymentRecord($employeeA, ['employment_type' => 'permanent', 'starts_on' => '2026-01-01']);
 
         $updated = app(EmploymentService::class)->update($employment, [
-            'employment_type' => 'fixed_term',
+            'probation_ends_on' => '2026-06-30',
             'school_id' => $schoolB->id,
             'employee_id' => $employeeB->id,
             'starts_on' => '2020-01-01',
@@ -199,12 +200,31 @@ class EmploymentRecordTest extends TestCase
             'status' => 'terminated',
         ], $this->fullHrActor($schoolA));
 
-        $this->assertSame('fixed_term', $updated->employment_type);
+        // HR.1A (X-3): terms are never part of update(); they append as dated terms.
+        $this->assertSame('permanent', $updated->employment_type);
+        $this->assertSame('2026-06-30', $updated->probation_ends_on?->toDateString());
         $this->assertSame($schoolA->id, $updated->school_id);
         $this->assertSame($employeeA->id, $updated->employee_id);
         $this->assertSame('2026-01-01', $updated->starts_on->toDateString());
         $this->assertNull($updated->ends_on);
         $this->assertSame('active', $updated->status);
+    }
+
+    #[Test]
+    public function update_refuses_terms_fields_they_change_only_as_dated_terms(): void
+    {
+        $school = $this->createSchool();
+        $employment = $this->createEmploymentRecord($this->createEmployee($school), ['employment_type' => 'permanent', 'starts_on' => '2026-01-01']);
+
+        foreach (['employment_type' => 'contract', 'staff_type' => 'teaching', 'employee_category_id' => null] as $field => $value) {
+            try {
+                app(EmploymentService::class)->update($employment, [$field => $value], $this->fullHrActor($school));
+                $this->fail("{$field} must not be updated in place");
+            } catch (InvalidEmploymentTermsException $e) {
+                $this->assertSame('terms_change_required', $e->reason);
+            }
+        }
+        $this->assertSame('permanent', app(TenantContext::class)->withSchool($school, fn () => $employment->fresh()?->employment_type));
     }
 
     #[Test]

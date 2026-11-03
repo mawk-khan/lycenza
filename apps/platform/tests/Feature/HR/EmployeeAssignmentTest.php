@@ -16,7 +16,6 @@ use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\Uuid;
@@ -517,7 +516,10 @@ class EmployeeAssignmentTest extends TestCase
 
         app(TenantContext::class)->set($school);
 
-        $this->expectException(UniqueConstraintViolationException::class);
+        // HR.1A: the overlap trigger (any two primaries sharing a day) refuses it
+        // before the older open-primary unique index is even consulted.
+        $this->expectException(QueryException::class);
+        $this->expectExceptionMessage('hr_employee_assignments_primary_no_overlap');
 
         DB::transaction(function () use ($school, $employment, $position): void {
             EmployeeAssignment::query()->create([

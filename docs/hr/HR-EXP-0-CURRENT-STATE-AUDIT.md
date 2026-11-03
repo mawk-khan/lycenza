@@ -32,6 +32,16 @@ Companion records in `docs/hr/`:
   wave order follow from the complete pack.
 - **No screenshot finding is claimed in this audit.**
 
+> **HR.1A delta (2026-11-03).** Superseded points:
+> - §3: `employment_type` is now closed;
+> - §4: overlap and primary-overlap are database-enforced, and terms are
+>   effective-dated;
+> - §6: staff type is closed, and Department reparent is locked;
+> - §15 / S-15: the account kind is shown.
+>
+> Read `docs/modules/HR.md` "Workforce foundation (HR.1A)" for the current
+> contract.
+
 ## 1. Architecture
 
 **Domains.**

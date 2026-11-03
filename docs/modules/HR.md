@@ -392,6 +392,11 @@ suggested naming is overridden here in favor of repo consistency):
   (`employee_assignments_one_primary_open_per_employment`), the same
   database-enforced pattern as `academic_years_one_active_per_school`
   (rule 64), not an application-level check-then-update.
+- **HR.1A (2026-11-03) amends this rule:** the database now refuses two
+  PRIMARY assignments of one employment that share any day, open or
+  closed (`trg_employee_assignments_primary_no_overlap`, a trigger under
+  an advisory lock -- still no `btree_gist`). The partial unique index
+  stays. See "Workforce foundation (HR.1A)" below.
 - Overlap validation for *secondary* (non-primary) concurrent
   assignments is intentionally **not** database-constrained in 8A.4 (a
   teacher legitimately holds several simultaneous secondary
@@ -538,7 +543,11 @@ deceased).
   since a single-day engagement is a legitimate real case for
   employment.
 - **Overlap policy**: an Employee must not have two overlapping
-  EmploymentRecords at the same School. NOT database-constrained (no
+  EmploymentRecords at the same School. **HR.1A (2026-11-03): now ALSO
+  database-constrained** by `trg_employment_records_no_overlap` (a trigger
+  under a per-Employee advisory lock, inclusive dates, still no
+  `btree_gist`); the 8A.4 text below describes the service check, which
+  stays as the clean refusal. Originally NOT database-constrained (no
   `daterange`/`EXCLUDE USING gist` extension exists in or is introduced
   to this codebase) — enforced entirely by
   `App\Domain\HR\Application\EmploymentService::create()`, which locks
@@ -4218,3 +4227,124 @@ All of these are read-only and on existing authority. None adds a capability, a 
 - **Rule:** it mirrors `ActingEmployeeResolver`'s chain — active membership, enabled User, linked active Employee, and exactly one current employment (active or notice period, School-local today).
 - **Returns:** User ids only, never an HR field.
 - **Direction:** Communications → HR, read only.
+
+## Workforce foundation (HR.1A, 2026-11-03)
+
+HR.1A makes employment terms and primary placement effective-dated and
+database-protected. Contract: `docs/hr/HR-0A-ARCHITECTURE-RECONCILIATION.md`;
+amends ADR 0028 (HR.1A amendment).
+
+**Ranges are inclusive.** `..2026-06-30` and `2026-07-01..` are adjacent and
+valid; `..2026-06-30` and `2026-06-30..` share a day and are refused.
+
+**Employment terms** (`employment_terms`, `EmploymentTerm`):
+- Each row holds employment type, staff type and School category from
+  `effective_from` until the next row.
+- **First row:** created by the database with every employment
+  (`trg_employment_records_initial_terms`, reason `initial`).
+- **Later rows:** append only. They are strictly after the latest row and
+  within the employment (`trg_employment_terms_append_guard`). A row is
+  never updated, and the runtime role holds no UPDATE or DELETE.
+- **The one writer of a change:**
+  `App\Domain\HR\Application\Workforce\EmploymentTermsService::change()`.
+  - Authority: whole-School `hr.employees.assignments.manage`; never one's
+    own employment.
+  - Refused: an ended employment, an effective date after the School-local
+    today, a date not after the latest terms, a change that changes nothing.
+  - Reasons are closed (`EmploymentTermsChangeReason`); there is no free text.
+- **Projection.** `employment_records.employment_type`, `staff_type` and
+  `employee_category_id` are a database-maintained projection of the latest
+  term. A direct UPDATE of them is refused
+  (`trg_employment_records_terms_projection_guard`), so
+  `EmploymentService::update()` writes only `probation_ends_on`.
+- **Closed catalogues:**
+  - `EmploymentType`: permanent, probationary, fixed_term, part_time,
+    temporary, contract, consultant. It is the OpenAPI enum and is now
+    database-checked (S-12).
+  - `StaffType`: teaching, non_teaching, outsourced.
+    - It is never derived from a category, Department, Position or role, and
+      it grants nothing.
+    - Every web path that starts an employment requires it. API create and
+      rehire, and the JSON import, accept it optionally; NULL means "not
+      classified".
+
+**Starting statuses (S-8).**
+- A new employment starts `draft`, `pre_joining` (only with a start after
+  today) or `active`, never notice or terminal.
+- Over HTTP (web and API) an end goes through the separation command, so a
+  future end date is refused.
+
+**Overlap (S-10), all serialized by a transaction advisory lock in the trigger:**
+- an Employee never has two employments sharing a day
+  (`trg_employment_records_no_overlap`);
+- an employment never has two primary assignments sharing a day
+  (`trg_employee_assignments_primary_no_overlap`).
+
+**Named placement changes** (`employee_placement_changes`,
+`EmployeePlacementChange`) are append-only and bound to their employment by
+`trg_employee_placement_changes_guard`.
+- **Kinds:**
+  - `initial_placement`: an employment's first primary assignment;
+  - `transfer`: the Campus changes;
+  - `promotion` and `designation_change`: the Position changes;
+  - `department_change`: only the Department changes;
+  - `primary_correction`: a re-designation of which assignment is primary,
+    via `setPrimary()` (reason optional, default administrative correction).
+- **Reasons:** closed (`PlacementChangeReason`).
+- **The one writer of a dated change:**
+  `App\Domain\HR\Application\Workforce\PlacementChangeService::change()`
+  (web route `app.hr.employees.assignments.placement-change`).
+  - It closes the source primary the day before the effective date and opens
+    a new primary assignment on it, with the source's planned end. Both stay
+    queryable.
+  - The new assignment keeps the mover's reporting manager, and the source's
+    open direct reports are re-pointed to it.
+  - A future-dated change of someone with direct reports is refused until
+    effective-dated reporting lines exist (HR.3).
+  - Campus-aware: a Campus actor needs every current Campus in scope, works
+    from today, needs an in-scope destination, and needs in-scope reports
+    (`HrEmployeeCampusGuard::beforePlacementChange()`).
+
+**Resolvers.**
+- `App\Domain\HR\Application\Workforce\WorkforceAsOfReader` is the
+  historical answer. For any date it gives the employment (any status but
+  draft), its terms, and the primary assignment (Campus, Department,
+  Position, staff type). `placementsOn()` is a bounded batch.
+- `currentPlacement()` and `isCurrentlyEmployed()` defer to
+  `CurrentEmployeeAssignments`. That class remains the one
+  operational-currency rule; `CurrentStaffMembers` is unchanged.
+
+**Other fixes:**
+- **S-9:** Department reparent checks for a cycle inside the transaction,
+  under the per-School advisory lock that `trg_hr_departments_no_cycle`
+  also takes.
+- **S-11:** `Employee::$fillable` no longer carries `school_id` or
+  `record_status`. `trg_employees_identity_guard` freezes `employee_number`
+  and `school_id`.
+- **S-15:** the account-link picker shows each candidate's account kind
+  (staff, Guardian-only or member), never a role name.
+- **ORG10-D01:** the directory's employment state is date-aware. A future
+  start is "Pre-joining", never "Current".
+
+**Audit:**
+- `hr.employment_terms.changed`: ids, the effective date, the reason, the
+  changed field names, and the previous and new type and staff-type codes.
+- `hr.placement.changed`: ids, kind, reason, effective date, from and to
+  assignments, changed fields, and the count of re-pointed reports.
+- Plus the existing `hr.assignment.ended` / `created` / `primary_changed`
+  events. Both new events appear in the Activity Timeline under employment.
+
+**Cut-over (HR.1A backfill):**
+- One `backfill` term per existing employment, from its current values.
+- `staff_type` is set only where the category code is exactly TEACH,
+  TEACHING, NONTEACH, NON_TEACH, NONTEACHING, NON_TEACHING, NON-TEACHING,
+  OUTSOURCE or OUTSOURCED. Every other employment stays NULL (not
+  classified).
+- No placement-change history is fabricated. Earlier assignment rows remain
+  the history, without a named kind.
+- The migration refuses to run, changing nothing, while an employment type
+  is outside the catalogue or employments or primaries overlap.
+
+**Retention:** both new tables are `hr_evidence`. They cascade with their
+employment and assignments and are handled by the evidence purge's blocker
+scan.

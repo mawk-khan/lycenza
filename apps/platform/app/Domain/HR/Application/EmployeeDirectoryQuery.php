@@ -46,7 +46,10 @@ final class EmployeeDirectoryQuery
 
     /**
      * ORG.9C-1 (ADR 0076 §69), HR-040: the Employee's LATEST employment
-     * record's status, grouped (CURRENT STATE, never history).
+     * record's status, grouped (CURRENT STATE, never history). ORG10-D01
+     * (HR.1A): `current`/`notice_period` also need a start on or before the
+     * School-local today, and `pre_joining` includes a later start written as
+     * active (EmployeeDirectoryService::employmentState()).
      */
     public const array EMPLOYMENT_FILTERS = [
         'current' => ['active', 'notice_period'],

@@ -110,6 +110,9 @@ final class UserReferenceCatalog
         'email_suppressions' => ['released_by_user_id' => self::RETAIN_REFERENCE],
         'employee_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE],
         'employee_notes' => ['author_user_id' => self::RETAIN_REFERENCE],
+        // HR.1A: who recorded an employment-terms change and a named placement change (history, RESTRICT).
+        'employee_placement_changes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
+        'employment_terms' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'employees' => ['user_id' => self::ACTIVE_PURPOSE_BLOCKER],
         'enrollment_rollover_plans' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         // RES.3 (ADR 0068 §21): who locked a paper's marks.

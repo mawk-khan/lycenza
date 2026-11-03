@@ -174,3 +174,42 @@ the living operational reference, matching the `ACADEMIC-STRUCTURE.md`/
 - Phase 0E, whenever it is eventually built, inherits an explicit,
   written obligation (this ADR) to reconcile `employee_documents`
   rather than silently ignoring it or duplicating its concerns.
+
+## HR.1A amendment (2026-11-03): effective-dated workforce foundation
+
+**Status:** accepted by the HR.1A checkpoint (owner-authorized HR
+programme, `docs/hr/HR-0A-ARCHITECTURE-RECONCILIATION.md` HR-AD-01..03).
+
+The three-table split (§2) stands. HR.1A adds the following.
+
+1. **Employment terms are effective-dated and append-only** (`employment_terms`).
+   - The type, staff type and category columns on `employment_records`
+     become a database-maintained projection of the latest term. A direct
+     update of them is refused. Before HR.1A they were overwritten in place
+     (X-3).
+2. **Overlap is database-enforced** for employments of one Employee and for
+   primary assignments of one employment.
+   - Each check is a trigger serialized by a transaction advisory lock on
+     the owning key.
+   - This supersedes `docs/modules/HR.md`'s earlier "not database-constrained"
+     overlap policy.
+   - `btree_gist` remains unused.
+3. **A placement change is a named, dated, reasoned operation**
+   (`employee_placement_changes`).
+   - It closes the source primary assignment and opens a new one; it never
+     edits an assignment's placement.
+   - `setPrimary()` is reclassified as a primary-designation correction and
+     is recorded as such.
+4. **Staff type is a closed HR classification** on the employment's terms.
+   - It is distinct from Category, Department, Position and role.
+   - It grants nothing.
+
+**Alternatives rejected:**
+- Overwrite in place with audit-only history: the audit holds field names,
+  never values, so history would not be answerable.
+- Drop the projection columns: too disruptive for every reader and fixture,
+  for no integrity gain once a direct update is refused.
+- `EXCLUDE USING gist`: the repository's standing choice against
+  `btree_gist`.
+- Staff type on the Category: it would make a School label a classification
+  rule.

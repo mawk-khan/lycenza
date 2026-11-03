@@ -21,6 +21,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -155,12 +156,20 @@ class StaffAudienceTest extends TestCase
         $this->assertNotContains((string) $both->id, $this->staffIds());
         $this->assertSame([(string) $both->id], $this->staffIds($other));
 
+        // HR.1A (S-10): a second overlapping employment is now refused by the
+        // database (trg_employment_records_no_overlap), so the reader's
+        // fail-closed "two eligible employments" branch is unreachable defense.
         $employee = $this->inSchool(fn () => Employee::query()->where('user_id', $this->u['teacher']->id)->firstOrFail());
-        $this->inSchool(fn () => DB::table('employment_records')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'employee_id' => $employee->id,
-            'status' => 'active', 'starts_on' => '2026-01-01', 'ends_on' => null, 'created_at' => now(), 'updated_at' => now(),
-        ] + $this->employmentDefaults()));
-        $this->assertNotContains((string) $this->u['teacher']->id, $this->staffIds(), 'ambiguous current employment: excluded, never a tie-break');
+        try {
+            DB::transaction(fn () => $this->inSchool(fn () => DB::table('employment_records')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'employee_id' => $employee->id,
+                'status' => 'active', 'starts_on' => '2026-01-01', 'ends_on' => null, 'created_at' => now(), 'updated_at' => now(),
+            ] + $this->employmentDefaults())));
+            $this->fail('An overlapping employment must be refused by the database.');
+        } catch (QueryException $e) {
+            $this->assertSame('23P01', $e->getCode());
+        }
+        $this->assertContains((string) $this->u['teacher']->id, $this->staffIds(), 'the one current employment still counts');
     }
 
     /** Required columns of an employment row beyond the ones under test. */

@@ -165,7 +165,7 @@ class TimetableScheduleServiceTest extends TestCase
         ['school' => $school, 'offering' => $offering, 'section' => $section, 'teacher' => $teacher, 'room' => $room, 'period' => $period] = $this->buildContext();
         $actor = $this->fullTimetableActor($school);
 
-        app(TenantContext::class)->withSchool($school, fn () => $teacher->update(['record_status' => 'archived']));
+        app(TenantContext::class)->withSchool($school, fn () => $teacher->forceFill(['record_status' => 'archived'])->save());
 
         $this->expectException(TeacherNotAvailableException::class);
 
@@ -354,7 +354,7 @@ class TimetableScheduleServiceTest extends TestCase
         $entry = $this->service()->create($school, $offering, $section, $teacher, null, $period, 1, $actor);
         $this->service()->deactivate($entry, $actor);
 
-        app(TenantContext::class)->withSchool($school, fn () => $teacher->update(['record_status' => 'archived']));
+        app(TenantContext::class)->withSchool($school, fn () => $teacher->forceFill(['record_status' => 'archived'])->save());
 
         $this->assertSame('inactive', $entry->status, 'no cascade -- the entry itself is untouched');
 

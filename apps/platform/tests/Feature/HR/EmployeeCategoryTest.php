@@ -222,7 +222,7 @@ class EmployeeCategoryTest extends TestCase
         $category = $this->createEmployeeCategory($school, ['code' => 'TEACH']);
 
         $employment = app(EmploymentService::class)->create($employee, [
-            'employment_type' => 'full_time',
+            'employment_type' => 'permanent',
             'starts_on' => '2026-06-01',
             'employee_category_id' => $category->id,
         ], $this->fullHrActor($school));
@@ -244,7 +244,7 @@ class EmployeeCategoryTest extends TestCase
         $this->expectException(EmployeeCategoryNotFoundException::class);
 
         app(EmploymentService::class)->create($employee, [
-            'employment_type' => 'full_time',
+            'employment_type' => 'permanent',
             'starts_on' => '2026-06-01',
             'employee_category_id' => $foreignCategory->id,
         ], $this->fullHrActor($schoolA));
@@ -259,7 +259,7 @@ class EmployeeCategoryTest extends TestCase
         $this->expectException(EmployeeCategoryNotFoundException::class);
 
         app(EmploymentService::class)->create($employee, [
-            'employment_type' => 'full_time',
+            'employment_type' => 'permanent',
             'starts_on' => '2026-06-01',
             'employee_category_id' => (string) Str::orderedUuid(),
         ], $this->fullHrActor($school));
@@ -272,7 +272,7 @@ class EmployeeCategoryTest extends TestCase
         $employee = $this->createEmployee($school);
 
         $employment = app(EmploymentService::class)->create($employee, [
-            'employment_type' => 'full_time',
+            'employment_type' => 'permanent',
             'starts_on' => '2026-06-01',
         ], $this->fullHrActor($school));
 
@@ -296,7 +296,7 @@ class EmployeeCategoryTest extends TestCase
                 'school_id' => $schoolA->id,
                 'employee_id' => $employee->id,
                 'employee_category_id' => $foreignCategory->id,
-                'employment_type' => 'full_time',
+                'employment_type' => 'permanent',
                 'starts_on' => '2026-06-01',
                 'status' => 'active',
             ]);

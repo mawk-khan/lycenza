@@ -4,6 +4,8 @@ namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\EmployeeImportUnknownFieldException;
 use App\Domain\HR\Application\Exceptions\EmployeeImportValidationException;
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\StaffType;
 
 /**
  * Phase 8A.12 -- one normalized, validated, ALLOW-LISTED Employee
@@ -31,11 +33,9 @@ final class EmployeeImportRow
         'date_of_birth', 'nationality', 'marital_status', 'preferred_language',
         'personal_email', 'personal_phone', 'alternate_phone',
         'employment_type', 'employment_starts_on', 'probation_ends_on',
+        // HR.1A: optional; absent = the employment is recorded unclassified.
+        'staff_type',
         'position_code', 'department_code', 'campus_code', 'assignment_starts_on',
-    ];
-
-    private const array ALLOWED_EMPLOYMENT_TYPES = [
-        'permanent', 'probationary', 'fixed_term', 'part_time', 'temporary', 'contract', 'consultant',
     ];
 
     public function __construct(
@@ -55,6 +55,7 @@ final class EmployeeImportRow
         public readonly ?string $departmentCode,
         public readonly ?string $campusCode,
         public readonly ?string $assignmentStartsOn,
+        public readonly ?string $staffType = null,
     ) {}
 
     /**
@@ -90,6 +91,7 @@ final class EmployeeImportRow
             departmentCode: self::stringOrNull($data['department_code'] ?? null),
             campusCode: self::stringOrNull($data['campus_code'] ?? null),
             assignmentStartsOn: self::dateOrNull('assignment_starts_on', $data),
+            staffType: self::stringOrNull($data['staff_type'] ?? null),
         );
 
         $row->assertConsistent();
@@ -106,8 +108,13 @@ final class EmployeeImportRow
             throw new EmployeeImportValidationException('employment_type', 'employment_type and employment_starts_on must both be supplied together, or both omitted.');
         }
 
-        if ($hasEmploymentType && ! in_array($this->employmentType, self::ALLOWED_EMPLOYMENT_TYPES, true)) {
+        // HR.1A (S-12): the one closed catalogue (EmploymentType), shared with every write path.
+        if ($hasEmploymentType && EmploymentType::tryFrom((string) $this->employmentType) === null) {
             throw new EmployeeImportValidationException('employment_type', "employment_type '{$this->employmentType}' is not a supported value.");
+        }
+
+        if ($this->staffType !== null && (! $hasEmploymentType || StaffType::tryFrom($this->staffType) === null)) {
+            throw new EmployeeImportValidationException('staff_type', 'staff_type must be teaching, non_teaching or outsourced, and needs employment data.');
         }
 
         if ($this->positionCode !== null && ! $this->hasEmploymentData()) {
@@ -149,12 +156,13 @@ final class EmployeeImportRow
     }
 
     /**
-     * @return array{employment_type: string, starts_on: string, probation_ends_on: ?string}
+     * @return array{employment_type: string, starts_on: string, probation_ends_on: ?string, staff_type: ?string}
      */
     public function employmentAttributes(): array
     {
         return [
             'employment_type' => $this->employmentType,
+            'staff_type' => $this->staffType,
             'starts_on' => $this->employmentStartsOn,
             'probation_ends_on' => $this->probationEndsOn,
         ];

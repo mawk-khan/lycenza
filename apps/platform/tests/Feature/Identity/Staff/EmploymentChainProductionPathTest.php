@@ -72,7 +72,7 @@ class EmploymentChainProductionPathTest extends TestCase
         $this->enterSchool($officer, $school);
         $this->post('/app/hr/employees', ['full_name' => $name])->assertRedirect();
         $employee = $this->inSchool($school, fn () => Employee::query()->where('full_name', $name)->sole());
-        $this->post("/app/hr/employees/{$employee->id}/employment-records", ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'])
+        $this->post("/app/hr/employees/{$employee->id}/employment-records", ['employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => '2024-01-01'])
             ->assertRedirect()->assertSessionHasNoErrors();
         $employment = $this->inSchool($school, fn () => EmploymentRecord::query()->where('employee_id', $employee->id)->sole());
         $this->post("/app/hr/employees/{$employee->id}/employment-records/{$employment->id}/assignments", ['starts_on' => '2024-01-01', 'position_id' => $position->id])

@@ -130,7 +130,7 @@ class TenantCompositeSetNullTest extends TestCase
                 $employee = (string) Str::uuid7();
                 $admin->table('employees')->insert(['id' => $employee, 'school_id' => $school, 'employee_number' => 'E'.Str::random(8), 'full_name' => 'Staff '.$employee, 'created_at' => now(), 'updated_at' => now()]);
                 $record = (string) Str::uuid7();
-                $admin->table('employment_records')->insert(['id' => $record, 'school_id' => $school, 'employee_id' => $employee, 'employment_type' => 'full_time', 'starts_on' => '2026-06-01', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+                $admin->table('employment_records')->insert(['id' => $record, 'school_id' => $school, 'employee_id' => $employee, 'employment_type' => 'permanent', 'starts_on' => '2026-06-01', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
                 $id = (string) Str::uuid7();
                 $admin->table('employee_assignments')->insert(['id' => $id, 'school_id' => $school, 'employment_record_id' => $record, 'position_id' => $position, 'starts_on' => '2026-06-01', 'manager_assignment_id' => $manager, 'created_at' => now(), 'updated_at' => now()]);
 

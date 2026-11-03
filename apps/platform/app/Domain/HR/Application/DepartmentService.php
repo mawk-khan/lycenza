@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -129,11 +130,26 @@ class DepartmentService
         return $this->context->withSchool($school, function () use ($school, $department, $newParent, $actor) {
             if ($newParent !== null) {
                 $this->assertParentBelongsToSchool($school, $newParent);
-                $this->assertNoCycle($department, $newParent);
             }
 
             return DB::transaction(function () use ($school, $department, $newParent, $actor) {
-                $department->update(['parent_department_id' => $newParent?->id]);
+                // HR.1A (S-9): the cycle check runs INSIDE the transaction, after the
+                // School's Department-hierarchy lock -- the same advisory lock the
+                // backstop trigger trg_hr_departments_no_cycle takes -- so two opposite
+                // concurrent reparents serialize and the second sees the first.
+                DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['hr.departments:'.$school->id]);
+                if ($newParent !== null) {
+                    $this->assertNoCycle($department, $newParent);
+                }
+
+                try {
+                    $department->update(['parent_department_id' => $newParent?->id]);
+                } catch (QueryException $e) {
+                    if ($newParent !== null && str_contains($e->getMessage(), 'hr_departments_no_cycle')) {
+                        throw new DepartmentHierarchyCycleException($department->id, $newParent->id);
+                    }
+                    throw $e;
+                }
 
                 $this->audit->school($school, 'hr.department.reparented', actor: $actor, subject: $department, metadata: [
                     'newParentId' => $newParent?->id,
@@ -188,7 +204,7 @@ class DepartmentService
      */
     private function assertNoCycle(Department $department, Department $proposedParent): void
     {
-        $current = $proposedParent;
+        $current = Department::query()->find($proposedParent->id);
         $visited = [];
 
         while ($current !== null) {
@@ -201,6 +217,7 @@ class DepartmentService
             }
 
             $visited[] = $current->id;
+            // Fresh reads (never a cached relation): the walk must see the committed tree.
             $current = $current->parent_department_id !== null
                 ? Department::query()->find($current->parent_department_id)
                 : null;

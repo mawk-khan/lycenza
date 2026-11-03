@@ -939,6 +939,8 @@ final class SchoolRouteCoverage
             Coverage::campus('app.hr.employees.assignments.store', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'employment'),
             Coverage::campus('app.hr.employees.assignments.end', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
             Coverage::campus('app.hr.employees.assignments.set-primary', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
+            // HR.1A: the named placement change -- PlacementChangeService (Campus-aware, HrEmployeeCampusGuard::beforePlacementChange()).
+            Coverage::campus('app.hr.employees.assignments.placement-change', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
             Coverage::campus('app.hr.employees.assignments.set-manager', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
             Coverage::campus('app.hr.employees.assignments.manager-candidates', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
 

@@ -1827,3 +1827,15 @@ once several modules copy it.
      - **Authority is the single-Student authority:** `enrollments.manage`; a same-Campus Section change is whole-School; a Campus actor transfers only between two in-scope Campuses, today. No `bulk` capability.
      - **Preview** runs the primitives in a transaction that is always rolled back and commits nothing. **Execution** needs a signed, all-Ready preview, a fresh MFA code (after authority and signature, outside the transaction), re-reads authority fresh, share-locks every Student in id order before the moves, binds each row to the placement the preview saw, and rolls the whole batch back on any refusal. At most `MAX_STUDENTS` (100).
      - **History:** ordinary transfers only (movement register); per-Student audit carries the batch id plus one `student_enrollment.bulk_moved` with ids, codes and counts, never a name. No undo.
+130. **An employment's terms and primary placement are effective-dated history; the database forbids overlap and overwrite (HR.1A, ADR 0028 HR.1A amendment, `docs/modules/HR.md` "Workforce foundation").**
+     - **Ranges are inclusive.** An Employee never has two employments sharing a day. An employment never has two PRIMARY assignments sharing a day. Both are enforced by triggers under an advisory lock (no `btree_gist`).
+     - **Terms are append-only.**
+       - Type, staff type and category live in `employment_terms`, written only by `EmploymentTermsService` (whole-School, dated, closed reason, never one's own).
+       - `employment_records.employment_type/staff_type/employee_category_id` are a database-maintained projection. Never update them directly.
+     - **Closed catalogues:** `EmploymentType` and `StaffType` (teaching / non_teaching / outsourced).
+       - Staff type is never derived from a Category, Department, Position or role, and grants nothing.
+       - A new employment starts only `draft`, `pre_joining` (future) or `active`.
+     - **A move is a named change.**
+       - Transfer, promotion, designation or department change go only through `PlacementChangeService`: close the source the day before, open a new primary, record `employee_placement_changes` (kind + closed reason + actor). Never edit an assignment's placement.
+       - `setPrimary()` is a recorded primary correction.
+     - **History is read through `WorkforceAsOfReader`** (any date, from dated rows only). Operational currency stays `CurrentEmployeeAssignments` / `CurrentStaffMembers`.

@@ -62,6 +62,8 @@ class DatabaseRoleVerifier
         'payment_correction_requests',
         // ORG.8E (ADR 0076 §63): lifecycle and attendance-correction evidence is append-only; it leaves only with its parent.
         'student_lifecycle_events', 'attendance_record_corrections',
+        // HR.1A: employment terms and named placement changes are append-only; they go only with their employment.
+        'employment_terms', 'employee_placement_changes',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
@@ -113,6 +115,8 @@ class DatabaseRoleVerifier
         'student_mark_revisions',
         // ORG.7H-1R (ADR 0076 §55): the Inventory movement ledger is append-only.
         'stock_movements',
+        // HR.1A: an employment's terms and its named placement changes are never rewritten.
+        'employment_terms', 'employee_placement_changes',
     ];
 
     /**
@@ -186,6 +190,26 @@ class DatabaseRoleVerifier
         'email_suppressions',
         // SIS 11.5: which Documents an expiring application's pre-admission records name.
         'applicant_documents',
+    ];
+
+    /**
+     * HR.1A: the database backstops of the effective-dated workforce model --
+     * overlap (employments, primary assignments), append-only terms and
+     * placement history, the terms projection, Employee identity and the
+     * Department hierarchy. trigger => table; each must exist and be enabled.
+     */
+    public const HR_WORKFORCE_GUARDS = [
+        'trg_employment_records_no_overlap' => 'employment_records',
+        'trg_employment_records_initial_terms' => 'employment_records',
+        'trg_employment_records_terms_projection_guard' => 'employment_records',
+        'trg_employee_assignments_primary_no_overlap' => 'employee_assignments',
+        'trg_employment_terms_append_guard' => 'employment_terms',
+        'trg_employment_terms_immutable' => 'employment_terms',
+        'trg_employment_terms_project' => 'employment_terms',
+        'trg_employee_placement_changes_guard' => 'employee_placement_changes',
+        'trg_employee_placement_changes_immutable' => 'employee_placement_changes',
+        'trg_employees_identity_guard' => 'employees',
+        'trg_hr_departments_no_cycle' => 'hr_departments',
     ];
 
     /** E21-RH.6: the database guards against manufactured retention eligibility and the User-erasure hold boundary. */
@@ -340,6 +364,13 @@ class DatabaseRoleVerifier
             }
         }
         $results[] = CheckResult::of('runtime_destructive_privileges_restricted', $granted === [], $granted === [] ? '' : count($granted).' grant(s)');
+
+        // HR.1A: the workforce backstops are present and enabled (a disabled
+        // trigger would let the runtime role write overlapping or rewritten history).
+        $missingHr = array_filter(self::HR_WORKFORCE_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
+            "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
+        )->x === false, ARRAY_FILTER_USE_BOTH);
+        $results[] = CheckResult::of('hr_workforce_invariants', $missingHr === [], $missingHr === [] ? '' : count($missingHr).' missing or disabled');
 
         $defaults = DB::selectOne(
             "select bool_or(defaclobjtype = 'r' and defaclacl::text like '%' || ? || '=arwd/%') as tables,

@@ -88,6 +88,7 @@ class EmployeeOnboardingService
                     ], $actor);
                     $employment = $this->employments->createRecord($employee, [
                         'employment_type' => $data->employmentType,
+                        'staff_type' => $data->staffType,
                         'starts_on' => $startsOn,
                         'status' => 'active',
                     ], $actor);

@@ -66,7 +66,7 @@ try {
                 return 'ok';
             case 'onboard':
                 [$userId, $campusId, $positionId, $name] = $args;
-                $app->make(EmployeeOnboardingService::class)->onboard($school, new EmployeeOnboardingData($name, null, null, 'full_time', SchoolTimezone::today($school), $campusId, $positionId, null), User::query()->findOrFail($userId));
+                $app->make(EmployeeOnboardingService::class)->onboard($school, new EmployeeOnboardingData($name, null, null, 'permanent', 'teaching', SchoolTimezone::today($school), $campusId, $positionId, null), User::query()->findOrFail($userId));
 
                 return 'ok';
             case 'set-primary':

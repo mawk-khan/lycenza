@@ -2,8 +2,11 @@
 
 namespace App\Domain\HR\Http\Controllers;
 
+use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Http\Controllers\Controller;
@@ -33,7 +36,9 @@ class EmploymentController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
 
         $validated = $request->validate([
-            'employment_type' => ['required', 'string', 'max:255'],
+            // HR.1A (S-12): the closed catalogue; staff_type optional on the API (absent = unclassified).
+            'employment_type' => ['required', 'string', Rule::in(EmploymentType::values())],
+            'staff_type' => ['sometimes', 'nullable', 'string', Rule::in(StaffType::values())],
             'employee_category_id' => ['sometimes', 'nullable', 'uuid'],
             'starts_on' => ['required', 'date'],
             'ends_on' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_on'],
@@ -53,10 +58,17 @@ class EmploymentController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $employmentModel = $this->resolveOwned($employeeModel, $employment);
 
+        // HR.1A (X-3): terms are never overwritten in place; they change as dated,
+        // reasoned terms (the web terms change). Only probation_ends_on is editable here.
         $validated = $request->validate([
-            'employment_type' => ['sometimes', 'string', 'max:255'],
-            'employee_category_id' => ['sometimes', 'nullable', 'uuid'],
+            'employment_type' => ['prohibited'],
+            'staff_type' => ['prohibited'],
+            'employee_category_id' => ['prohibited'],
             'probation_ends_on' => ['sometimes', 'nullable', 'date'],
+        ], [
+            'employment_type.prohibited' => 'Employment terms change as dated terms with a reason, not by an update.',
+            'staff_type.prohibited' => 'Employment terms change as dated terms with a reason, not by an update.',
+            'employee_category_id.prohibited' => 'Employment terms change as dated terms with a reason, not by an update.',
         ]);
 
         $updated = $service->update($employmentModel, $validated, $request->user());
@@ -64,7 +76,11 @@ class EmploymentController extends Controller
         return response()->json(['data' => $this->present($updated)]);
     }
 
-    public function end(Request $request, School $school, string $employee, string $employment, EmploymentService $service): JsonResponse
+    /**
+     * HR.1A (S-8): ending over the API is the separation command -- a future
+     * date is refused exactly as separate() refuses it.
+     */
+    public function end(Request $request, School $school, string $employee, string $employment, EmployeeLifecycleService $service): JsonResponse
     {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
@@ -76,7 +92,7 @@ class EmploymentController extends Controller
             'status' => ['sometimes', Rule::in(['separated', 'terminated', 'retired', 'deceased'])],
         ]);
 
-        $ended = $service->end($employmentModel, $validated['ends_on'], $request->user(), $validated['status'] ?? 'separated');
+        $ended = $service->separate($employmentModel, $validated['ends_on'], $request->user(), $validated['status'] ?? 'separated');
 
         return response()->json(['data' => $this->present($ended)]);
     }
@@ -102,6 +118,7 @@ class EmploymentController extends Controller
             'employeeId' => $employment->employee_id,
             'employeeCategoryId' => $employment->employee_category_id,
             'employmentType' => $employment->employment_type,
+            'staffType' => $employment->staff_type,
             'startsOn' => $employment->starts_on->toDateString(),
             'endsOn' => $employment->ends_on?->toDateString(),
             'probationEndsOn' => $employment->probation_ends_on?->toDateString(),

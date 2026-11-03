@@ -63,7 +63,9 @@ class EmployeeAccountLinkWebTest extends TestCase
         // The work-email match only ranks (server-side): never returned, so it cannot be probed.
         $this->assertSame($pooja->id, $candidates[0]['userId'], 'the account matching the work email is listed first');
         foreach ($candidates as $candidate) {
-            $this->assertSame(['userId', 'name'], array_keys($candidate), 'names only -- no address, no match flag');
+            // S-15 (HR.1A): plus the account kind (staff/guardian/member), never a role name.
+            $this->assertSame(['userId', 'name', 'accountKind'], array_keys($candidate), 'names and kind only -- no address, no match flag');
+            $this->assertContains($candidate['accountKind'], ['staff', 'guardian', 'member']);
         }
         $this->assertNotContains($actor->id, collect($candidates)->pluck('userId'));
 

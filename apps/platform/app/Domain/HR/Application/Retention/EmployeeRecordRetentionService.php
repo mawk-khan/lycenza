@@ -134,6 +134,8 @@ final class EmployeeRecordRetentionService
                 foreach ([...self::ANCILLARY_TABLES, 'employee_personal_details', 'employee_documents'] as $table) {
                     DB::table($table)->where('employee_id', $employeeId)->delete();
                 }
+                // HR.1A: employment_terms and employee_placement_changes cascade with these
+                // rows (their own history; the retention identity holds no DELETE on them).
                 DB::table('employee_assignments')->whereIn('employment_record_id', $employments)->delete();
                 DB::table('employment_records')->where('employee_id', $employeeId)->delete();
                 DB::table('employees')->where('id', $employeeId)->delete();
@@ -163,8 +165,9 @@ final class EmployeeRecordRetentionService
         $employments = DB::table('employment_records')->where('employee_id', $employeeId)->pluck('id')->all();
         $assignments = DB::table('employee_assignments')->whereIn('employment_record_id', $employments)->pluck('id')->all();
 
-        return $this->references->first('employment_records', $schoolId, $employments, ['employee_assignments', ...$cleared])
-            ?? $this->references->first('employee_assignments', $schoolId, $assignments)
+        // HR.1A: an employment's terms and placement changes are its own history, removed with it.
+        return $this->references->first('employment_records', $schoolId, $employments, ['employee_assignments', 'employment_terms', 'employee_placement_changes', ...$cleared])
+            ?? $this->references->first('employee_assignments', $schoolId, $assignments, ['employee_placement_changes'])
             ?? $this->references->first('employee_personal_details', $schoolId, DB::table('employee_personal_details')->where('employee_id', $employeeId)->pluck('id')->all())
             ?? $this->references->first('employee_documents', $schoolId, DB::table('employee_documents')->where('employee_id', $employeeId)->pluck('id')->all())
             ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('employee', $employeeId));

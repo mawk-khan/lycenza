@@ -34,6 +34,12 @@ use Illuminate\Support\Carbon;
  * @property string $school_id
  * @property string $employee_id
  * @property string $employment_type permanent|probationary|fixed_term|part_time|temporary|contract|consultant
+ *                                   (HR.1A: the closed EmploymentType catalogue, database-checked)
+ * @property string|null $staff_type HR.1A: teaching|non_teaching|outsourced (StaffType); NULL = not yet
+ *                                   classified. `employment_type`, `staff_type` and `employee_category_id`
+ *                                   are the DATABASE-MAINTAINED projection of the latest EmploymentTerm:
+ *                                   a direct UPDATE of them is refused -- change them only through
+ *                                   App\Domain\HR\Application\Workforce\EmploymentTermsService.
  * @property string|null $employee_category_id Phase 8A closure correction -- nullable FK to
  *                                             `employee_categories(id, school_id)`.
  * @property Carbon $starts_on
@@ -64,6 +70,7 @@ class EmploymentRecord extends Model
         'school_id',
         'employee_id',
         'employment_type',
+        'staff_type',
         'employee_category_id',
         'starts_on',
         'ends_on',
@@ -95,6 +102,16 @@ class EmploymentRecord extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(EmployeeCategory::class, 'employee_category_id');
+    }
+
+    /**
+     * HR.1A: the effective-dated terms history, oldest first.
+     *
+     * @return HasMany<EmploymentTerm, $this>
+     */
+    public function terms(): HasMany
+    {
+        return $this->hasMany(EmploymentTerm::class)->orderBy('effective_from');
     }
 
     /** @return HasMany<EmployeeAssignment, $this> */

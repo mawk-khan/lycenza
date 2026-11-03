@@ -80,7 +80,7 @@ class HrActivityTimelineLinkageTest extends TestCase
         $employee = $this->createEmployee($school);
 
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-01-01'], $actor);
-        app(EmploymentService::class)->update($employment, ['employment_type' => 'contract'], $actor);
+        app(EmploymentService::class)->update($employment, ['probation_ends_on' => '2026-06-30'], $actor);
 
         $entries = $this->entries($school, $employee->id, $actor);
         $this->assertTrue(collect($entries)->contains(fn ($e) => $e->eventType === 'hr.employment.created'));

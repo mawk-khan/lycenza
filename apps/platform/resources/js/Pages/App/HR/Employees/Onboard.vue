@@ -14,10 +14,17 @@ interface DepartmentOption extends Option {
     campusId: string | null;
 }
 
+interface CodeOption {
+    value: string;
+    label: string;
+}
+
 interface Props {
     campuses: Option[];
     departments: DepartmentOption[];
     positions: Option[];
+    employmentTypes: CodeOption[];
+    staffTypes: CodeOption[];
 }
 
 const props = defineProps<Props>();
@@ -26,7 +33,8 @@ const form = useForm({
     full_name: '',
     work_email: '',
     work_phone: '',
-    employment_type: 'full_time',
+    employment_type: 'permanent',
+    staff_type: '',
     starts_on: '',
     campus_id: props.campuses.length === 1 ? props.campuses[0].id : '',
     position_id: '',
@@ -98,14 +106,32 @@ function submit(): void {
                 <label class="block text-sm text-slate-600" for="employment-type"
                     >Employment type</label
                 >
-                <input
+                <select
                     id="employment-type"
                     v-model="form.employment_type"
-                    type="text"
                     required
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                >
+                    <option v-for="t in employmentTypes" :key="t.value" :value="t.value">
+                        {{ t.label }}
+                    </option>
+                </select>
                 <p class="mt-1 text-sm text-red-600">{{ form.errors.employment_type }}</p>
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="staff-type">Staff type</label>
+                <select
+                    id="staff-type"
+                    v-model="form.staff_type"
+                    required
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                >
+                    <option value="" disabled>Select a staff type</option>
+                    <option v-for="t in staffTypes" :key="t.value" :value="t.value">
+                        {{ t.label }}
+                    </option>
+                </select>
+                <p class="mt-1 text-sm text-red-600">{{ form.errors.staff_type }}</p>
             </div>
             <div>
                 <label class="block text-sm text-slate-600" for="starts-on">Start date</label>

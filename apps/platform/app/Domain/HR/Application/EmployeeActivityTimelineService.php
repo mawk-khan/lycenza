@@ -90,6 +90,9 @@ class EmployeeActivityTimelineService
         'hr.assignment.ended' => 'employment',
         'hr.assignment.primary_changed' => 'employment',
         'hr.assignment.manager_changed' => 'employment',
+        // HR.1A: dated terms changes and named placement changes (both carry employeeId).
+        'hr.employment_terms.changed' => 'employment',
+        'hr.placement.changed' => 'employment',
 
         'hr.qualification.created' => 'professional',
         'hr.qualification.updated' => 'professional',

@@ -181,6 +181,16 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
   audited with field names only.
 - Evidence tables refuse runtime UPDATE and DELETE.
 
+## 2a. Implemented suites (HR.1A)
+
+| Suite | Proves |
+|---|---|
+| `tests/Feature/HR/Workforce/WorkforceDatabaseInvariantsTest` | raw runtime-role writes: inclusive adjacency vs one shared day; open + later employment refused; primary overlap refused while secondaries may overlap; the first terms created by the database; projection never written directly; terms append only; runtime has no UPDATE or DELETE on history; a placement change bound to its employment and dates; Employee number immutable; a Department cycle refused; history tenant-isolated (RLS + composite key) |
+| `tests/Feature/HR/Workforce/WorkforceConcurrencyTest` | two real processes, raw writes, contender proven blocked: overlapping employments commit once (23P01); overlapping primaries commit once (23P01); opposite reparents never cycle (23514) |
+| `tests/Feature/HR/Workforce/PlacementChangeServiceTest` | promotion + transfer keeps the old placement and history answers both dates for ever; kind must match what changes; department and designation changes; retroactive transfer; source must be the primary covering the date; manager kept and reports re-pointed; future change with reports refused; ended employment refused; self refused; unauthorized refused; Campus-scoped: in scope, from today only |
+| `tests/Feature/HR/Workforce/EmploymentTermsAndHistoryTest` | terms appended and answered on any date; projection follows; audit metadata; no rewrite of history or the future; ended employment keeps its terms; whole-School only and never one's own; staff type closed and never derived; starting statuses (S-8); a separated / future / draft / current employment answered correctly; batch query count constant; S-11 |
+| `tests/Feature/HR/Workforce/WorkforceWebTest` | terms and placement routes allow/deny/422/404; Profile history and catalogues only for the employment tier; every web path that starts an employment needs a staff type; API PATCH refuses terms and no future end over HTTP; account kind (S-15); future hire is pre-joining, never current (ORG10-D01); verifier `hr_workforce_invariants` |
+
 ## 3. Regression cadence
 
 - **Per phase:**

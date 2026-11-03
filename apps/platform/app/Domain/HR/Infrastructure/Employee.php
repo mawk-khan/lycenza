@@ -55,7 +55,13 @@ class Employee extends Model
 
     protected $table = 'employees';
 
-    protected $fillable = ['school_id', 'user_id', 'employee_number', 'full_name', 'work_email', 'work_phone', 'record_status'];
+    /**
+     * HR.1A (S-11): `school_id` and `record_status` are never mass assignable
+     * (the rule 118 pattern): EmployeeService sets them explicitly. The
+     * database also refuses any change of `employee_number` or `school_id`
+     * (`trg_employees_identity_guard`).
+     */
+    protected $fillable = ['user_id', 'employee_number', 'full_name', 'work_email', 'work_phone'];
 
     protected static function newFactory(): EmployeeFactory
     {

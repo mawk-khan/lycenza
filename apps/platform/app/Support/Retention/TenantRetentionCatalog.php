@@ -184,6 +184,9 @@ final class TenantRetentionCatalog
             'employees', 'employment_records', 'employee_assignments', 'employee_personal_details', 'employee_documents',
             'employee_compensation_assignments', 'compensation_assignment_values', 'employee_statutory_identifiers',
             'employee_tax_profile', 'employee_pf_status', 'employee_esi_coverage',
+            // HR.1A: the employment's terms history and named placement changes; they go with
+            // their employment and assignments (cascade), removed by the evidence purge.
+            'employment_terms', 'employee_placement_changes',
         ]],
         'hr_ancillary' => [self::ADOPTED, 'D9: 2 y after final separation', [
             'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',

@@ -2,9 +2,13 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\StaffType;
+use Illuminate\Validation\Rule;
+
 /**
  * ORG.7E-1 (ADR 0076 §43): the COMPLETE Campus onboarding field set -- core
- * work identity, the employment type and start date, and the first
+ * work identity, the employment type, staff type (HR.1A, closed) and start date, and the first
  * placement (Campus, Position, optional Department). Nothing else is
  * accepted: no account link, personal, contact, address, qualification,
  * document, note, category or pay field.
@@ -16,6 +20,7 @@ final class EmployeeOnboardingData
         public readonly ?string $workEmail,
         public readonly ?string $workPhone,
         public readonly string $employmentType,
+        public readonly string $staffType,
         public readonly string $startsOn,
         public readonly string $campusId,
         public readonly string $positionId,
@@ -29,7 +34,8 @@ final class EmployeeOnboardingData
             'full_name' => ['required', 'string', 'max:255'],
             'work_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'work_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'employment_type' => ['required', 'string', 'max:255'],
+            'employment_type' => ['required', 'string', Rule::in(EmploymentType::values())],
+            'staff_type' => ['required', 'string', Rule::in(StaffType::values())],
             'starts_on' => ['required', 'date'],
             'campus_id' => ['required', 'uuid'],
             'position_id' => ['required', 'uuid'],
@@ -45,6 +51,7 @@ final class EmployeeOnboardingData
             workEmail: isset($validated['work_email']) && $validated['work_email'] !== '' ? (string) $validated['work_email'] : null,
             workPhone: isset($validated['work_phone']) && $validated['work_phone'] !== '' ? (string) $validated['work_phone'] : null,
             employmentType: (string) $validated['employment_type'],
+            staffType: (string) $validated['staff_type'],
             startsOn: (string) $validated['starts_on'],
             campusId: strtolower((string) $validated['campus_id']),
             positionId: (string) $validated['position_id'],

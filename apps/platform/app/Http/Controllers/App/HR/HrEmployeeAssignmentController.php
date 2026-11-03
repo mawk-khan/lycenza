@@ -7,6 +7,9 @@ use App\Domain\HR\Application\EmployeePickerReadService;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Application\ReportingHierarchyService;
+use App\Domain\HR\Application\Workforce\PlacementChangeKind;
+use App\Domain\HR\Application\Workforce\PlacementChangeReason;
+use App\Domain\HR\Application\Workforce\PlacementChangeService;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
@@ -23,6 +26,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -100,16 +104,72 @@ class HrEmployeeAssignmentController extends Controller
         return redirect(self::employeePage($scope, $employeeModel->id));
     }
 
-    public function setPrimary(TenantContext $context, EmployeeAssignmentService $service, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): RedirectResponse
+    /**
+     * HR.1A: a re-designation of which assignment is primary is a recorded
+     * PRIMARY CORRECTION (its reason optional, default administrative
+     * correction); a dated move is changePlacement().
+     */
+    public function setPrimary(Request $request, TenantContext $context, EmployeeAssignmentService $service, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): RedirectResponse
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
         [$employeeModel, , $assignmentModel] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
+        $validated = $request->validate(['reason_code' => ['sometimes', 'nullable', 'string', Rule::in(PlacementChangeReason::values())]]);
+        $reason = isset($validated['reason_code']) && $validated['reason_code'] !== '' ? PlacementChangeReason::from((string) $validated['reason_code']) : null;
+
         try {
-            $service->setPrimary($assignmentModel, $context->actor());
+            $service->setPrimary($assignmentModel, $context->actor(), $reason);
         } catch (HrException $e) {
             throw ValidationException::withMessages(['assignment' => [$e->getMessage()]]);
+        }
+
+        return redirect(self::employeePage($scope, $employeeModel->id));
+    }
+
+    /**
+     * HR.1A: the named, dated, reasoned placement change of the primary
+     * assignment -- transfer, promotion, designation or department change
+     * (PlacementChangeService). The source assignment is closed the day
+     * before and a new primary placement opens on the effective date; both
+     * stay in the history. Campus-aware like every assignment write.
+     */
+    public function changePlacement(Request $request, TenantContext $context, PlacementChangeService $service, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [$employeeModel, , $assignmentModel] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
+
+        $validated = $request->validate([
+            'change_kind' => ['required', 'string', Rule::in(PlacementChangeKind::values())],
+            'effective_on' => ['required', 'date'],
+            'reason_code' => ['required', 'string', Rule::in(PlacementChangeReason::values())],
+            'position_id' => ['required', 'uuid'],
+            'campus_id' => ['sometimes', 'nullable', 'uuid'],
+            'department_id' => ['sometimes', 'nullable', 'uuid'],
+        ]);
+
+        try {
+            $position = Position::query()->findOrFail($validated['position_id']);
+            $campus = isset($validated['campus_id']) && $validated['campus_id'] !== '' ? Campus::query()->findOrFail($validated['campus_id']) : null;
+            $department = isset($validated['department_id']) && $validated['department_id'] !== '' ? Department::query()->findOrFail($validated['department_id']) : null;
+        } catch (ModelNotFoundException) {
+            throw ValidationException::withMessages(['position_id' => ['Choose the new placement from the lists.']]);
+        }
+
+        try {
+            $service->change(
+                $assignmentModel,
+                PlacementChangeKind::from((string) $validated['change_kind']),
+                (string) $validated['effective_on'],
+                PlacementChangeReason::from((string) $validated['reason_code']),
+                $position,
+                $context->actor(),
+                campus: $campus,
+                department: $department,
+            );
+        } catch (HrException $e) {
+            throw ValidationException::withMessages(['change_kind' => [$e->getMessage()]]);
         }
 
         return redirect(self::employeePage($scope, $employeeModel->id));

@@ -203,7 +203,7 @@ class HrSelfAdministrationTest extends TestCase
         $ownEmployee = $employees->create($school, ['full_name' => 'The Officer', 'user_id' => $officer->id], $peer);
         $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $employment->create($ownEmployee, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'], $officer)));
         $mine = $employment->create($ownEmployee, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'], $peer);
-        $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $employment->update($mine, ['employment_type' => 'contract'], $officer)));
+        $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $employment->update($mine, ['probation_ends_on' => '2024-06-30'], $officer)));
 
         $position = app(PositionService::class)->create($school, ['name' => 'Officer', 'code' => 'HRO'], $officer);
         $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $assignments->create($mine, ['starts_on' => '2024-01-01'], $position, $officer)));

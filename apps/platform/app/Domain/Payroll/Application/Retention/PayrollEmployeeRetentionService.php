@@ -66,7 +66,8 @@ final class PayrollEmployeeRetentionService
                 })),
             function (string $employeeId) use ($school, $employments): array {
                 $ids = $employments($employeeId);
-                $blocker = $this->references->first('employment_records', $school->id, $ids, ['employee_assignments', ...self::TABLES]);
+                // HR.1A: an employment's own terms and placement-change history go with it (cascade).
+                $blocker = $this->references->first('employment_records', $school->id, $ids, ['employee_assignments', 'employment_terms', 'employee_placement_changes', ...self::TABLES]);
                 if ($blocker !== null) {
                     return [$blocker];
                 }

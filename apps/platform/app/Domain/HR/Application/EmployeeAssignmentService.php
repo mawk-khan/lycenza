@@ -12,11 +12,14 @@ use App\Domain\HR\Application\Exceptions\AssignmentInactivePositionException;
 use App\Domain\HR\Application\Exceptions\AssignmentOutsideEmploymentRangeException;
 use App\Domain\HR\Application\Exceptions\AssignmentPositionMismatchException;
 use App\Domain\HR\Application\Exceptions\ConcurrentPrimaryAssignmentConflictException;
+use App\Domain\HR\Application\Exceptions\PlacementChangeConflictException;
+use App\Domain\HR\Application\Workforce\PlacementChangeReason;
 use App\Domain\HR\Events\AssignmentEnded;
 use App\Domain\HR\Events\AssignmentStarted;
 use App\Domain\HR\Events\PrimaryAssignmentChanged;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmployeePlacementChange;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
@@ -24,6 +27,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -231,13 +235,13 @@ class EmployeeAssignmentService
      * Proven with two real separate OS processes, not a sequential
      * simulation -- see `PrimaryAssignmentConcurrencyTest`.
      */
-    public function setPrimary(EmployeeAssignment $assignment, User $actor): EmployeeAssignment
+    public function setPrimary(EmployeeAssignment $assignment, User $actor, ?PlacementChangeReason $reason = null): EmployeeAssignment
     {
         $school = $assignment->school;
         $guard = $this->access->writeGuard($school, $this->authorizeCampusScopeFor($actor, 'hr.employees.assignments.manage', $school));
 
-        return $this->context->withSchool($school, function () use ($school, $assignment, $actor, $guard) {
-            return DB::transaction(function () use ($school, $assignment, $actor, $guard) {
+        return $this->context->withSchool($school, function () use ($school, $assignment, $actor, $guard, $reason) {
+            return DB::transaction(function () use ($school, $assignment, $actor, $guard, $reason) {
                 if ($guard !== null) {
                     // ORG.7E-1: never demote an assignment outside scope. The
                     // exclusive placement lock keeps every other primary change
@@ -259,7 +263,7 @@ class EmployeeAssignmentService
                     $this->placement->forPlacementChange($school, $assignment->employmentRecord->employee_id);
                 }
 
-                return $this->setPrimaryRecord($assignment, $actor);
+                return $this->setPrimaryRecord($assignment, $actor, $reason);
             });
         });
     }
@@ -270,7 +274,7 @@ class EmployeeAssignmentService
      * guard, audit and event. No authorization of its own; run inside the
      * caller's transaction and the School's TenantContext.
      */
-    public function setPrimaryRecord(EmployeeAssignment $assignment, User $actor): EmployeeAssignment
+    public function setPrimaryRecord(EmployeeAssignment $assignment, User $actor, ?PlacementChangeReason $reason = null): EmployeeAssignment
     {
         if (DB::transactionLevel() === 0) {
             throw new \LogicException('EmployeeAssignmentService::setPrimaryRecord() runs only inside the writing transaction.');
@@ -278,6 +282,27 @@ class EmployeeAssignmentService
         $school = $assignment->school;
 
         $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.primary');
+
+        $wasPrimary = (bool) EmployeeAssignment::query()->whereKey($assignment->id)->value('is_primary');
+        $otherPrimaries = EmployeeAssignment::query()
+            ->where('employment_record_id', $assignment->employment_record_id)
+            ->where('is_primary', true)
+            ->where('id', '!=', $assignment->id)
+            ->get(['id', 'starts_on', 'ends_on']);
+        $demotedId = $otherPrimaries->first(fn (EmployeeAssignment $a) => $a->ends_on === null)?->id;
+
+        // HR.1A: an EARLIER (closed) primary period that overlaps this one stays
+        // primary history; re-designating over it is refused (a dated move is a
+        // named placement change). The trigger trg_employee_assignments_primary_no_overlap
+        // is the backstop; this gives the clean refusal.
+        $first = $assignment->starts_on->toDateString();
+        $last = $assignment->ends_on?->toDateString();
+        foreach ($otherPrimaries as $other) {
+            $otherLast = $other->ends_on?->toDateString();
+            if ($other->id !== $demotedId && $other->starts_on->toDateString() <= ($last ?? '9999-12-31') && $first <= ($otherLast ?? '9999-12-31')) {
+                throw new PlacementChangeConflictException('primary_overlap', 'Another primary assignment already covers part of this period.');
+            }
+        }
 
         EmployeeAssignment::query()
             ->where('employment_record_id', $assignment->employment_record_id)
@@ -290,6 +315,29 @@ class EmployeeAssignmentService
             $assignment->update(['is_primary' => true]);
         } catch (UniqueConstraintViolationException) {
             throw new ConcurrentPrimaryAssignmentConflictException($assignment->employment_record_id);
+        } catch (QueryException $e) {
+            // A concurrent primary committed first (the trigger's advisory lock serialized us).
+            if ($e->getCode() === '23P01') {
+                throw new ConcurrentPrimaryAssignmentConflictException($assignment->employment_record_id);
+            }
+            throw $e;
+        }
+
+        // HR.1A: the named record. The first primary of an employment is its
+        // initial placement; any later re-designation is a primary correction
+        // (dated moves are PlacementChangeService's transfer/promotion/... kinds).
+        if (! $wasPrimary) {
+            $previousId = $demotedId ?? $otherPrimaries->sortByDesc(fn (EmployeeAssignment $a) => $a->starts_on->toDateString())->first()?->id;
+            EmployeePlacementChange::query()->create([
+                'school_id' => $school->id,
+                'employment_record_id' => $assignment->employment_record_id,
+                'change_kind' => $previousId === null ? 'initial_placement' : 'primary_correction',
+                'from_assignment_id' => $previousId,
+                'to_assignment_id' => $assignment->id,
+                'effective_on' => $assignment->starts_on->toDateString(),
+                'reason_code' => $previousId === null ? 'initial_placement' : ($reason ?? PlacementChangeReason::ADMINISTRATIVE_CORRECTION)->value,
+                'recorded_by_user_id' => $actor->id,
+            ]);
         }
 
         $employeeId = $assignment->employmentRecord->employee_id;

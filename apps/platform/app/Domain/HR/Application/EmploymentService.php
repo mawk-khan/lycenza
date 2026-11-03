@@ -8,13 +8,18 @@ use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusTransitionException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentTermsException;
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Events\EmploymentEnded;
 use App\Domain\HR\Events\EmploymentStarted;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Container\Attributes\Tag;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -53,6 +58,18 @@ class EmploymentService
      */
     private const array TERMINAL_STATUSES = ['separated', 'terminated', 'retired', 'deceased'];
 
+    /**
+     * HR.1A (S-8): the only statuses a NEW employment may start in. Terminal
+     * statuses arrive only through end(); `notice_period` only for an
+     * employment already running. `pre_joining` is for a start after the
+     * School-local today (there is no later pre_joining -> active transition,
+     * so a started pre_joining employment could never become current).
+     */
+    public const array CREATE_STATUSES = ['draft', 'pre_joining', 'active'];
+
+    /** HR.1A (X-3): the terms fields -- changed only by appending employment_terms. */
+    public const array TERMS_FIELDS = ['employment_type', 'staff_type', 'employee_category_id'];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -65,7 +82,7 @@ class EmploymentService
     ) {}
 
     /**
-     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null, employee_category_id?: string|null}  $attributes
+     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null, employee_category_id?: string|null, staff_type?: string|null}  $attributes
      */
     public function create(Employee $employee, array $attributes, User $actor): EmploymentRecord
     {
@@ -85,7 +102,13 @@ class EmploymentService
      * EmploymentStarted event. No authorization of its own; run inside the
      * caller's transaction and the School's TenantContext.
      *
-     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null, employee_category_id?: string|null}  $attributes
+     * HR.1A: `employment_type` must be an EmploymentType, `staff_type` (when
+     * given) a StaffType, and the status one of CREATE_STATUSES. The database
+     * creates the employment's first terms from these values
+     * (`trg_employment_records_initial_terms`) and refuses an overlapping
+     * employment of the same Employee (`trg_employment_records_no_overlap`).
+     *
+     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null, employee_category_id?: string|null, staff_type?: string|null}  $attributes
      */
     public function createRecord(Employee $employee, array $attributes, User $actor): EmploymentRecord
     {
@@ -103,6 +126,21 @@ class EmploymentService
         // enforces the same list: employment_records_status_check).
         if (! in_array($status, EmploymentRecord::STATUSES, true)) {
             throw new InvalidEmploymentStatusException($status);
+        }
+        // HR.1A (S-8): a new employment starts, it never begins ended or in notice.
+        if (! in_array($status, self::CREATE_STATUSES, true)) {
+            throw new InvalidEmploymentTermsException('status_not_a_start', 'A new employment starts as draft, pre-joining or active; it is ended only by ending it.');
+        }
+        if ($status === 'pre_joining' && CarbonImmutable::parse($startsOn)->toDateString() <= SchoolTimezone::today($school)) {
+            throw new InvalidEmploymentTermsException('pre_joining_not_future', 'A pre-joining employment starts after today.');
+        }
+        // HR.1A (S-12): the closed catalogues.
+        if (EmploymentType::tryFrom((string) $attributes['employment_type']) === null) {
+            throw new InvalidEmploymentTermsException('employment_type', 'The employment type is not one of the recognised types.');
+        }
+        $staffType = $attributes['staff_type'] ?? null;
+        if ($staffType !== null && StaffType::tryFrom($staffType) === null) {
+            throw new InvalidEmploymentTermsException('staff_type', 'The staff type is not one of the recognised types.');
         }
 
         // Lock the Employee row itself (not just existing EmploymentRecord
@@ -123,6 +161,7 @@ class EmploymentService
                 'school_id' => $school->id,
                 'employee_id' => $employee->id,
                 'employment_type' => $attributes['employment_type'],
+                'staff_type' => $staffType,
                 'employee_category_id' => $categoryId,
                 'starts_on' => $startsOn,
                 'ends_on' => $endsOn,
@@ -140,7 +179,9 @@ class EmploymentService
         $this->audit->school($school, 'hr.employment.created', actor: $actor, subject: $employment, metadata: [
             'employeeId' => $employee->id,
             'employmentType' => $employment->employment_type,
+            'staffType' => $employment->staff_type,
             'startsOn' => $startsOn,
+            'status' => $status,
         ]);
 
         event(new EmploymentStarted($school->id, $employee->id, $employment->id));
@@ -149,13 +190,16 @@ class EmploymentService
     }
 
     /**
-     * Simple-field update only (employment_type/probation_ends_on/
-     * employee_category_id) -- starts_on/ends_on/status changes each
-     * have their own reasoning: ends_on+status transition through
-     * end() (see below); starts_on is immutable once assignments may
-     * already depend on it falling within the Employment's interval,
-     * and no dedicated correction workflow is required by this
-     * checkpoint.
+     * Simple-field update only: `probation_ends_on`. starts_on/ends_on/status
+     * changes each have their own reasoning: ends_on+status transition through
+     * end() (see below); starts_on is immutable (the database's eligibility
+     * guard refuses it).
+     *
+     * HR.1A (X-3): the terms (`employment_type`, `staff_type`,
+     * `employee_category_id`) are never overwritten here -- they change only
+     * by appending dated, reasoned terms through
+     * App\Domain\HR\Application\Workforce\EmploymentTermsService, and the
+     * database refuses a direct update of them.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -165,22 +209,16 @@ class EmploymentService
         // ORG.7E-1: employment-level administration stays whole-School.
         $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
 
-        unset($attributes['school_id'], $attributes['employee_id'], $attributes['starts_on'], $attributes['ends_on'], $attributes['status']);
+        if (array_intersect(array_keys($attributes), self::TERMS_FIELDS) !== []) {
+            throw new InvalidEmploymentTermsException('terms_change_required', 'Employment type, staff type and category change only as dated terms with a reason.');
+        }
+        $attributes = array_intersect_key($attributes, ['probation_ends_on' => true]);
 
         return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $actor) {
             return DB::transaction(function () use ($school, $employment, $attributes, $actor) {
                 $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.update');
 
-                try {
-                    $employment->update($attributes);
-                } catch (QueryException $e) {
-                    $categoryId = $attributes['employee_category_id'] ?? null;
-                    if ($categoryId !== null && $this->violatesEmployeeCategoryForeignKey($e)) {
-                        throw new EmployeeCategoryNotFoundException($categoryId);
-                    }
-
-                    throw $e;
-                }
+                $employment->update($attributes);
 
                 $this->audit->school($school, 'hr.employment.updated', actor: $actor, subject: $employment, metadata: [
                     // Phase 8A.11: added so the Employee Activity Timeline

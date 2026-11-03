@@ -64,6 +64,9 @@ interface Employment {
 interface Assignment {
     id: string;
     employment_record_id: string;
+    position_id: string | null;
+    department_id: string | null;
+    campus_id: string | null;
     is_primary: boolean;
     starts_on: string;
     ends_on: string | null;
@@ -139,6 +142,39 @@ interface RefOption {
     name: string;
 }
 
+interface CodeOption {
+    value: string;
+    label: string;
+}
+
+// HR.1A: an employment's dated terms and named placement changes.
+interface WorkforceHistory {
+    currentTerms: {
+        employmentType: string;
+        employmentTypeLabel: string;
+        staffType: string | null;
+        staffTypeLabel: string;
+        categoryName: string | null;
+    } | null;
+    terms: {
+        id: string;
+        effectiveFrom: string;
+        employmentTypeLabel: string;
+        staffTypeLabel: string;
+        categoryName: string | null;
+        reasonLabel: string;
+    }[];
+    changes: {
+        id: string;
+        effectiveOn: string;
+        kind: string;
+        kindLabel: string;
+        reasonLabel: string;
+        from: string | null;
+        to: string;
+    }[];
+}
+
 interface Props {
     workspace: Workspace;
     can: {
@@ -153,6 +189,15 @@ interface Props {
     positions: RefOption[];
     departments: RefOption[];
     employeeCategories: RefOption[];
+    campuses: RefOption[];
+    workforceHistory: Record<string, WorkforceHistory>;
+    workforceOptions: {
+        employmentTypes: CodeOption[];
+        staffTypes: CodeOption[];
+        termsReasons: CodeOption[];
+        placementKinds: CodeOption[];
+        placementReasons: CodeOption[];
+    };
     hasMfaFactor: boolean;
     linkedAccountName: string | null;
 }
@@ -160,7 +205,15 @@ interface Props {
 interface AccountCandidate {
     userId: string;
     name: string;
+    // S-15 (HR.1A): staff / guardian / member -- shown, never a role name.
+    accountKind: 'staff' | 'guardian' | 'member';
 }
+
+const accountKindLabels: Record<AccountCandidate['accountKind'], string> = {
+    staff: 'staff account',
+    guardian: 'Guardian-only account',
+    member: 'no role yet',
+};
 
 interface ManagerCandidate {
     assignmentId: string;
@@ -253,7 +306,8 @@ function makeContactPrimary(id: string): void {
 
 const showEmploymentForm = ref(false);
 const employmentForm = useForm({
-    employment_type: 'full_time',
+    employment_type: 'permanent',
+    staff_type: '',
     employee_category_id: '',
     starts_on: '',
 });
@@ -277,7 +331,7 @@ function submitEndEmployment(id: string): void {
 }
 
 const showRehireForm = ref(false);
-const rehireForm = useForm({ employment_type: 'full_time', starts_on: '' });
+const rehireForm = useForm({ employment_type: 'permanent', staff_type: '', starts_on: '' });
 function submitRehire(): void {
     rehireForm.post(`${base}/rehire`, {
         preserveScroll: true,
@@ -285,7 +339,67 @@ function submitRehire(): void {
     });
 }
 
+// HR.1A: a dated, reasoned terms change (appended; earlier terms stay).
+const termsEmploymentId = ref<string | null>(null);
+const termsForm = useForm({
+    effective_from: '',
+    employment_type: 'permanent',
+    staff_type: '',
+    employee_category_id: '',
+    reason_code: '',
+});
+function openTerms(e: Employment): void {
+    if (termsEmploymentId.value === e.id) {
+        termsEmploymentId.value = null;
+        return;
+    }
+    const current = props.workforceHistory[e.id]?.currentTerms;
+    termsForm.reset();
+    termsForm.clearErrors();
+    termsForm.employment_type = current?.employmentType ?? e.employment_type;
+    termsForm.staff_type = current?.staffType ?? '';
+    termsEmploymentId.value = e.id;
+}
+function submitTerms(id: string): void {
+    termsForm.post(`${base}/employment-records/${id}/terms`, {
+        preserveScroll: true,
+        onSuccess: () => (termsEmploymentId.value = null),
+    });
+}
+
 // --- Assignments -----------------------------------------------------------
+
+// HR.1A: the named, dated placement change of the primary assignment.
+const placementAssignmentId = ref<string | null>(null);
+const placementForm = useForm({
+    change_kind: '',
+    effective_on: '',
+    position_id: '',
+    department_id: '',
+    campus_id: '',
+    reason_code: '',
+});
+function openPlacement(a: Assignment): void {
+    if (placementAssignmentId.value === a.id) {
+        placementAssignmentId.value = null;
+        return;
+    }
+    placementForm.reset();
+    placementForm.clearErrors();
+    placementForm.position_id = a.position_id ?? '';
+    placementForm.department_id = a.department_id ?? '';
+    placementForm.campus_id = a.campus_id ?? '';
+    placementAssignmentId.value = a.id;
+}
+function submitPlacement(a: Assignment): void {
+    placementForm.post(
+        `${base}/employment-records/${a.employment_record_id}/assignments/${a.id}/placement-change`,
+        {
+            preserveScroll: true,
+            onSuccess: () => (placementAssignmentId.value = null),
+        },
+    );
+}
 
 const assigningEmploymentId = ref<string | null>(null);
 const assignmentForm = useForm({
@@ -678,7 +792,12 @@ function removeNote(id: string): void {
                                 :error="accountForm.errors.account"
                                 @select="pickAccount"
                             >
-                                <template #option="{ option }">{{ option.name }}</template>
+                                <template #option="{ option }"
+                                    >{{ option.name }}
+                                    <span class="text-slate-500"
+                                        >({{ accountKindLabels[option.accountKind] }})</span
+                                    ></template
+                                >
                             </SearchCombobox>
                         </div>
                         <button
@@ -1078,7 +1197,16 @@ function removeNote(id: string): void {
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <p class="font-medium">
-                                {{ e.employment_type }}
+                                {{
+                                    workforceHistory[e.id]?.currentTerms?.employmentTypeLabel ??
+                                    e.employment_type
+                                }}
+                                <span
+                                    v-if="workforceHistory[e.id]?.currentTerms"
+                                    class="ml-1 text-slate-500"
+                                    >·
+                                    {{ workforceHistory[e.id]?.currentTerms?.staffTypeLabel }}</span
+                                >
                                 <span
                                     v-if="e.is_current"
                                     class="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
@@ -1099,6 +1227,14 @@ function removeNote(id: string): void {
                                 "
                             >
                                 {{ assigningEmploymentId === e.id ? 'Cancel' : '+ Assignment' }}
+                            </button>
+                            <button
+                                v-if="e.ends_on === null"
+                                type="button"
+                                class="underline"
+                                @click="openTerms(e)"
+                            >
+                                {{ termsEmploymentId === e.id ? 'Cancel' : 'Change terms' }}
                             </button>
                             <button
                                 v-if="e.ends_on === null"
@@ -1150,6 +1286,170 @@ function removeNote(id: string): void {
                         </div>
                     </form>
 
+                    <!-- HR.1A: dated terms change -->
+                    <form
+                        v-if="termsEmploymentId === e.id"
+                        class="mt-3 space-y-3 border-t border-slate-100 pt-3"
+                        @submit.prevent="submitTerms(e.id)"
+                    >
+                        <p class="text-slate-600">
+                            New terms take effect on the date below; earlier terms stay in the
+                            history.
+                        </p>
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`terms-from-${e.id}`"
+                                    >Effective from</label
+                                >
+                                <input
+                                    :id="`terms-from-${e.id}`"
+                                    v-model="termsForm.effective_from"
+                                    type="date"
+                                    required
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                />
+                                <p class="mt-1 text-sm text-red-600">
+                                    {{ termsForm.errors.effective_from }}
+                                </p>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`terms-type-${e.id}`"
+                                    >Employment type</label
+                                >
+                                <select
+                                    :id="`terms-type-${e.id}`"
+                                    v-model="termsForm.employment_type"
+                                    required
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                >
+                                    <option
+                                        v-for="t in workforceOptions.employmentTypes"
+                                        :key="t.value"
+                                        :value="t.value"
+                                    >
+                                        {{ t.label }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`terms-staff-${e.id}`"
+                                    >Staff type</label
+                                >
+                                <select
+                                    :id="`terms-staff-${e.id}`"
+                                    v-model="termsForm.staff_type"
+                                    required
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                >
+                                    <option value="" disabled>Select a staff type</option>
+                                    <option
+                                        v-for="t in workforceOptions.staffTypes"
+                                        :key="t.value"
+                                        :value="t.value"
+                                    >
+                                        {{ t.label }}
+                                    </option>
+                                </select>
+                                <p class="mt-1 text-sm text-red-600">
+                                    {{ termsForm.errors.staff_type }}
+                                </p>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`terms-cat-${e.id}`"
+                                    >Category (optional)</label
+                                >
+                                <select
+                                    :id="`terms-cat-${e.id}`"
+                                    v-model="termsForm.employee_category_id"
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                >
+                                    <option value="">None</option>
+                                    <option
+                                        v-for="c in employeeCategories"
+                                        :key="c.id"
+                                        :value="c.id"
+                                    >
+                                        {{ c.name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    :for="`terms-reason-${e.id}`"
+                                    >Reason</label
+                                >
+                                <select
+                                    :id="`terms-reason-${e.id}`"
+                                    v-model="termsForm.reason_code"
+                                    required
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                >
+                                    <option value="" disabled>Select a reason</option>
+                                    <option
+                                        v-for="r in workforceOptions.termsReasons"
+                                        :key="r.value"
+                                        :value="r.value"
+                                    >
+                                        {{ r.label }}
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <p class="text-sm text-red-600">
+                            {{ termsForm.errors.employment_type ?? termsForm.errors.reason_code }}
+                        </p>
+                        <button
+                            type="submit"
+                            :disabled="termsForm.processing"
+                            class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                            Record new terms
+                        </button>
+                    </form>
+
+                    <!-- HR.1A: terms history and named placement changes -->
+                    <details
+                        v-if="workforceHistory[e.id]"
+                        class="mt-3 border-t border-slate-100 pt-3 text-slate-600"
+                    >
+                        <summary class="cursor-pointer text-sm font-medium text-slate-700">
+                            Terms and placement history
+                        </summary>
+                        <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            Terms
+                        </h4>
+                        <ul class="mt-1 space-y-1">
+                            <li v-for="t in workforceHistory[e.id]?.terms ?? []" :key="t.id">
+                                From {{ t.effectiveFrom }}: {{ t.employmentTypeLabel }} ·
+                                {{ t.staffTypeLabel
+                                }}<template v-if="t.categoryName"> · {{ t.categoryName }}</template>
+                                <span class="text-slate-500"> ({{ t.reasonLabel }})</span>
+                            </li>
+                        </ul>
+                        <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                            Placement changes
+                        </h4>
+                        <p v-if="(workforceHistory[e.id]?.changes ?? []).length === 0" class="mt-1">
+                            No named placement change recorded.
+                        </p>
+                        <ul v-else class="mt-1 space-y-1">
+                            <li v-for="c in workforceHistory[e.id]?.changes ?? []" :key="c.id">
+                                {{ c.effectiveOn }} · {{ c.kindLabel }}:
+                                <template v-if="c.from">{{ c.from }} → </template>{{ c.to }}
+                                <span class="text-slate-500"> ({{ c.reasonLabel }})</span>
+                            </li>
+                        </ul>
+                    </details>
+
                     <!-- Assignments under this employment -->
                     <ul
                         v-if="workspace.assignments.some((a) => a.employment_record_id === e.id)"
@@ -1191,6 +1491,18 @@ function removeNote(id: string): void {
                                     class="flex flex-wrap items-center gap-3 text-sm"
                                 >
                                     <button
+                                        v-if="a.is_primary && a.ends_on === null"
+                                        type="button"
+                                        class="underline"
+                                        @click="openPlacement(a)"
+                                    >
+                                        {{
+                                            placementAssignmentId === a.id
+                                                ? 'Cancel'
+                                                : 'Change placement'
+                                        }}
+                                    </button>
+                                    <button
                                         v-if="!a.is_primary && a.ends_on === null"
                                         type="button"
                                         class="underline"
@@ -1220,6 +1532,151 @@ function removeNote(id: string): void {
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- HR.1A: transfer / promotion / designation / department change -->
+                            <form
+                                v-if="placementAssignmentId === a.id"
+                                class="mt-3 space-y-3 border-t border-slate-200 pt-3"
+                                @submit.prevent="submitPlacement(a)"
+                            >
+                                <p class="text-slate-600">
+                                    This placement ends the day before the effective date and a new
+                                    primary placement starts on it; both stay in the history.
+                                </p>
+                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`placement-kind-${a.id}`"
+                                            >Change</label
+                                        >
+                                        <select
+                                            :id="`placement-kind-${a.id}`"
+                                            v-model="placementForm.change_kind"
+                                            required
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option value="" disabled>Select the change</option>
+                                            <option
+                                                v-for="k in workforceOptions.placementKinds"
+                                                :key="k.value"
+                                                :value="k.value"
+                                            >
+                                                {{ k.label }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`placement-from-${a.id}`"
+                                            >Effective on</label
+                                        >
+                                        <input
+                                            :id="`placement-from-${a.id}`"
+                                            v-model="placementForm.effective_on"
+                                            type="date"
+                                            required
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`placement-campus-${a.id}`"
+                                            >Campus</label
+                                        >
+                                        <select
+                                            :id="`placement-campus-${a.id}`"
+                                            v-model="placementForm.campus_id"
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option value="">School-wide (no Campus)</option>
+                                            <option v-for="c in campuses" :key="c.id" :value="c.id">
+                                                {{ c.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`placement-dept-${a.id}`"
+                                            >Department</label
+                                        >
+                                        <select
+                                            :id="`placement-dept-${a.id}`"
+                                            v-model="placementForm.department_id"
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option value="">None</option>
+                                            <option
+                                                v-for="d in departments"
+                                                :key="d.id"
+                                                :value="d.id"
+                                            >
+                                                {{ d.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`placement-position-${a.id}`"
+                                            >Designation</label
+                                        >
+                                        <select
+                                            :id="`placement-position-${a.id}`"
+                                            v-model="placementForm.position_id"
+                                            required
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option
+                                                v-for="p in positions"
+                                                :key="p.id"
+                                                :value="p.id"
+                                            >
+                                                {{ p.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-sm text-slate-600"
+                                            :for="`placement-reason-${a.id}`"
+                                            >Reason</label
+                                        >
+                                        <select
+                                            :id="`placement-reason-${a.id}`"
+                                            v-model="placementForm.reason_code"
+                                            required
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option value="" disabled>Select a reason</option>
+                                            <option
+                                                v-for="r in workforceOptions.placementReasons"
+                                                :key="r.value"
+                                                :value="r.value"
+                                            >
+                                                {{ r.label }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-red-600">
+                                    {{
+                                        placementForm.errors.change_kind ??
+                                        placementForm.errors.position_id ??
+                                        placementForm.errors.effective_on
+                                    }}
+                                </p>
+                                <button
+                                    type="submit"
+                                    :disabled="placementForm.processing"
+                                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                >
+                                    Record change
+                                </button>
+                            </form>
 
                             <form
                                 v-if="managingAssignmentId === a.id"
@@ -1354,13 +1811,44 @@ function removeNote(id: string): void {
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Employment type</label>
-                        <input
+                        <label class="block text-sm text-slate-600" for="rehire-type"
+                            >Employment type</label
+                        >
+                        <select
+                            id="rehire-type"
                             v-model="rehireForm.employment_type"
-                            type="text"
                             required
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        >
+                            <option
+                                v-for="t in workforceOptions.employmentTypes"
+                                :key="t.value"
+                                :value="t.value"
+                            >
+                                {{ t.label }}
+                            </option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600" for="rehire-staff"
+                            >Staff type</label
+                        >
+                        <select
+                            id="rehire-staff"
+                            v-model="rehireForm.staff_type"
+                            required
+                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        >
+                            <option value="" disabled>Select a staff type</option>
+                            <option
+                                v-for="t in workforceOptions.staffTypes"
+                                :key="t.value"
+                                :value="t.value"
+                            >
+                                {{ t.label }}
+                            </option>
+                        </select>
+                        <p class="mt-1 text-sm text-red-600">{{ rehireForm.errors.staff_type }}</p>
                     </div>
                     <div>
                         <label class="block text-sm text-slate-600">Start date</label>
@@ -1388,13 +1876,46 @@ function removeNote(id: string): void {
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Employment type</label>
-                        <input
+                        <label class="block text-sm text-slate-600" for="employment-type"
+                            >Employment type</label
+                        >
+                        <select
+                            id="employment-type"
                             v-model="employmentForm.employment_type"
-                            type="text"
                             required
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        >
+                            <option
+                                v-for="t in workforceOptions.employmentTypes"
+                                :key="t.value"
+                                :value="t.value"
+                            >
+                                {{ t.label }}
+                            </option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600" for="employment-staff"
+                            >Staff type</label
+                        >
+                        <select
+                            id="employment-staff"
+                            v-model="employmentForm.staff_type"
+                            required
+                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        >
+                            <option value="" disabled>Select a staff type</option>
+                            <option
+                                v-for="t in workforceOptions.staffTypes"
+                                :key="t.value"
+                                :value="t.value"
+                            >
+                                {{ t.label }}
+                            </option>
+                        </select>
+                        <p class="mt-1 text-sm text-red-600">
+                            {{ employmentForm.errors.staff_type }}
+                        </p>
                     </div>
                     <div>
                         <label class="block text-sm text-slate-600">Category (optional)</label>

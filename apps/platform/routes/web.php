@@ -1720,10 +1720,14 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/employees/{employee}/employment-records/{employment}/end', [HrEmploymentController::class, 'end'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.end');
         Route::post('/employees/{employee}/employment-records/{employment}/separate', [HrEmploymentController::class, 'separate'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.separate');
         Route::post('/employees/{employee}/rehire', [HrEmploymentController::class, 'rehire'])->middleware('capability:hr.employees.assignments.manage')->name('employees.rehire');
+        // HR.1A: a dated, reasoned terms change (appended, never overwritten); whole-School.
+        Route::post('/employees/{employee}/employment-records/{employment}/terms', [HrEmploymentController::class, 'changeTerms'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.terms.store');
 
         Route::post('/employees/{employee}/employment-records/{employment}/assignments', [HrEmployeeAssignmentController::class, 'store'])->name('employees.assignments.store');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [HrEmployeeAssignmentController::class, 'end'])->name('employees.assignments.end');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/primary', [HrEmployeeAssignmentController::class, 'setPrimary'])->name('employees.assignments.set-primary');
+        // HR.1A: the named, dated placement change (transfer, promotion, designation or department change).
+        Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/placement-change', [HrEmployeeAssignmentController::class, 'changePlacement'])->name('employees.assignments.placement-change');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager', [HrEmployeeAssignmentController::class, 'setManager'])->name('employees.assignments.set-manager');
         // UAT-C6 (UAT-HR-23): manager picked by name, never a typed id.
         Route::get('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager-candidates', [HrEmployeeAssignmentController::class, 'managerCandidates'])->name('employees.assignments.manager-candidates');

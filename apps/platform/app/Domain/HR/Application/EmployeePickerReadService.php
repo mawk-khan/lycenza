@@ -16,6 +16,7 @@ use App\Support\Privacy\EmailNormalizer;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 /**
  * UAT-C6 (UAT-STF-05, UAT-HR-23; ADR 0075 section 19): the two search-and-
@@ -49,7 +50,15 @@ class EmployeePickerReadService
         private readonly CurrentEmployeeAssignments $current,
     ) {}
 
-    /** @return list<array{userId: string, name: string}> */
+    /**
+     * S-15 (HR.1A): each candidate carries its account kind -- `staff` (an
+     * active School-scope role grant: rule 25's meaning of staff), `guardian`
+     * (only Guardian-scope grants) or `member` (no active grant) -- so a
+     * Guardian-only account is never linked as an Employee by mistake. The
+     * kind is shown, never a role name; it decides nothing.
+     *
+     * @return list<array{userId: string, name: string, accountKind: string}>
+     */
     public function accountCandidates(School $school, Employee $employee, string $query, User $actor): array
     {
         // ORG.7E-1: account linking stays whole-School (a declared operation).
@@ -60,7 +69,7 @@ class EmployeePickerReadService
             $term = self::like($query);
             $workEmail = $employee->work_email === null ? null : EmailNormalizer::canonical($employee->work_email);
 
-            return SchoolMembership::query()
+            $memberships = SchoolMembership::query()
                 ->where('school_id', $school->id)
                 ->active()
                 ->where('user_id', '!=', $actor->id)
@@ -69,13 +78,30 @@ class EmployeePickerReadService
                     ->when($term !== null, fn ($w) => $w->where('name', 'ilike', $term)))
                 ->with('user:id,name,email')
                 ->limit(self::LIMIT)
+                ->get();
+
+            // One query for every candidate's active grant scopes.
+            $scopes = DB::table('membership_role_assignments as mra')
+                ->join('roles as r', 'r.id', '=', 'mra.role_id')
+                ->where('mra.school_id', $school->id)
+                ->whereIn('mra.school_membership_id', $memberships->pluck('id')->all())
+                ->whereNull('mra.revoked_at')
+                ->select(['mra.school_membership_id', 'r.scope'])
                 ->get()
+                ->groupBy('school_membership_id');
+
+            return $memberships
                 ->sortBy(fn (SchoolMembership $m) => ($workEmail !== null && EmailNormalizer::canonical((string) $m->user->email) === $workEmail ? '0' : '1')
                     .'|'.mb_strtolower($m->user->name).'|'.$m->user->id)
-                ->map(fn (SchoolMembership $m) => [
-                    'userId' => $m->user->id,
-                    'name' => $m->user->name,
-                ])
+                ->map(function (SchoolMembership $m) use ($scopes) {
+                    $held = collect($scopes->get($m->id, []))->pluck('scope');
+
+                    return [
+                        'userId' => $m->user->id,
+                        'name' => $m->user->name,
+                        'accountKind' => $held->contains('school') ? 'staff' : ($held->contains('guardian') ? 'guardian' : 'member'),
+                    ];
+                })
                 ->values()
                 ->all();
         });

@@ -16,6 +16,12 @@ use App\Domain\HR\Application\Exceptions\EmployeeNumberConflictException;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\Exceptions\HrWholeSchoolAuthorityRequiredException;
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Workforce\EmploymentTermsChangeReason;
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\PlacementChangeKind;
+use App\Domain\HR\Application\Workforce\PlacementChangeReason;
+use App\Domain\HR\Application\Workforce\StaffType;
+use App\Domain\HR\Application\Workforce\WorkforceHistoryReadService;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\EmployeeCategory;
 use App\Domain\HR\Infrastructure\Position;
@@ -225,6 +231,18 @@ class HrEmployeeController extends Controller
             'positions' => ! $canManageAssignments ? [] : Position::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
             'departments' => ! $canManageAssignments ? [] : Department::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
             'employeeCategories' => ! $canManageAssignments ? [] : EmployeeCategory::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
+            // HR.1A: the destination Campuses of a named placement change (whole-School: every active Campus).
+            'campuses' => ! $canManageAssignments ? [] : $access->campusOptions($school, $access->scopeOf($actor, 'hr.employees.assignments.manage', $school)),
+            // HR.1A: each employment's terms history and named placement changes (assignments-view tier).
+            'workforceHistory' => app(WorkforceHistoryReadService::class)->forEmployee($school, $workspace->summary->employeeId, $actor),
+            // HR.1A: the closed catalogues the forms offer (code-owned, never School-defined).
+            'workforceOptions' => [
+                'employmentTypes' => EmploymentType::options(),
+                'staffTypes' => StaffType::options(),
+                'termsReasons' => EmploymentTermsChangeReason::options(),
+                'placementKinds' => PlacementChangeKind::options(),
+                'placementReasons' => PlacementChangeReason::options(),
+            ],
             // SR.4 (ADR 0071 §26.7): registering a highly sensitive record needs a fresh code.
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
             // UAT-C6 (UAT-STF-05): the linked sign-in account, for an HR manager only.
@@ -361,6 +379,9 @@ class HrEmployeeController extends Controller
             'campuses' => $access->campusOptions($school, $assign),
             'departments' => $access->departmentOptions($school, $assign),
             'positions' => Position::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
+            // HR.1A: the closed catalogues (code-owned).
+            'employmentTypes' => EmploymentType::options(),
+            'staffTypes' => StaffType::options(),
         ]);
     }
 

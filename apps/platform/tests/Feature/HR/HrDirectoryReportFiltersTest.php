@@ -203,14 +203,16 @@ class HrDirectoryReportFiltersTest extends TestCase
     #[Test]
     public function a_campus_reader_is_judged_on_the_employment_in_force_today_only(): void
     {
-        // A planned re-hire: Indu is active today and has a future pre-joining record.
-        $indu = $this->inSchool(fn () => Employee::query()->findOrFail($this->staff['onlyA']->employee_id));
-        $this->createEmploymentRecord($indu, ['status' => 'pre_joining', 'starts_on' => '2027-01-01', 'ends_on' => null]);
+        // A planned re-hire: Pia is active today on a fixed-term employment and has a
+        // future pre-joining record after it (HR.1A: overlapping employments are refused).
+        $fixed = $this->employee('Pia FixedTerm', [$this->a], ['ends_on' => '2026-12-31'], starts: '2025-01-01');
+        $pia = $this->inSchool(fn () => Employee::query()->findOrFail($fixed->employee_id));
+        $this->createEmploymentRecord($pia, ['status' => 'pre_joining', 'starts_on' => '2027-01-01', 'ends_on' => null]);
         $north = $this->hr([$this->a->id]);
 
         $this->assertSame([], $this->names($north, 'employment=pre_joining'), 'A planned re-hire is never revealed to a Campus reader.');
-        $this->assertContains('Asha OnlyA', $this->names($north, 'employment=current'));
-        $this->assertContains('Asha OnlyA', $this->names($this->hr([null]), 'employment=pre_joining'), 'Whole School: the LATEST record decides.');
+        $this->assertContains('Pia FixedTerm', $this->names($north, 'employment=current'));
+        $this->assertContains('Pia FixedTerm', $this->names($this->hr([null]), 'employment=pre_joining'), 'Whole School: the LATEST record decides.');
 
         // The rehired Employee's earlier employment (2024) is history.
         $this->assertSame([], $this->names($north, 'joined_from=2024-01-01&joined_to=2024-12-31'));

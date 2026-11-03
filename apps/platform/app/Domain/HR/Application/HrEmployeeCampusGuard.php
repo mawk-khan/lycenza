@@ -104,6 +104,37 @@ final class HrEmployeeCampusGuard
         }
     }
 
+    /**
+     * HR.1A: a named placement change (transfer, promotion, designation or
+     * department change) by a Campus-scoped actor -- after forEmployeeWrite()
+     * and the row locks. It ends the source and opens a new placement, so it
+     * needs everything both need: EVERY current Campus of the Employee in
+     * scope (as for a new assignment), the source current on an active
+     * in-scope Campus, an effective date of today or later (backdated
+     * placement is whole-School history, security review L2), an active
+     * in-scope destination, and every open direct report of the source in
+     * scope (they are re-pointed to the new placement).
+     *
+     * @param  iterable<EmployeeAssignment>  $lockedReports
+     */
+    public function beforePlacementChange(EmployeeAssignment $lockedSource, string $effectiveOn, ?string $destinationCampusId, ?Department $department, iterable $lockedReports): void
+    {
+        $employeeId = (string) EmploymentRecord::query()->where('school_id', $this->school->id)->whereKey($lockedSource->employment_record_id)->value('employee_id');
+        $this->assertCoversEveryCurrentCampus($employeeId);
+        $this->beforeAssignmentChange($lockedSource);
+        if (CarbonImmutable::parse($effectiveOn)->toDateString() < $this->current->today($this->school)
+            || ! is_string($destinationCampusId) || ! $this->scope->covers($destinationCampusId)
+            || ($department !== null && $department->campus_id !== null && $department->campus_id !== $destinationCampusId)
+            || app(ActiveCampus::class)->find($this->school, $destinationCampusId) === null) {
+            throw new HrAssignmentUnavailableException;
+        }
+        foreach ($lockedReports as $report) {
+            if (! is_string($report->campus_id) || ! $this->scope->covers($report->campus_id)) {
+                throw new HrAssignmentUnavailableException;
+            }
+        }
+    }
+
     /** Setting primary never demotes an assignment outside scope (or a NULL-Campus one). */
     public function beforeSetPrimary(EmployeeAssignment $lockedAssignment, ?EmployeeAssignment $lockedOpenPrimary): void
     {

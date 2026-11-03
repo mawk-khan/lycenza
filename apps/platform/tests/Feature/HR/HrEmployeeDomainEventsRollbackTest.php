@@ -134,7 +134,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
     private function arrangeEmploymentEnded(School $school, User $actor): array
     {
         $employee = $this->createEmployee($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
 
         return ['employment' => $employment];
     }
@@ -142,7 +142,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
     private function arrangeEmployeeRehired(School $school, User $actor): array
     {
         $employee = $this->createEmployee($school);
-        $firstEmployment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-01-01'], $actor);
+        $firstEmployment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-01-01'], $actor);
         app(EmploymentService::class)->end($firstEmployment, '2026-03-01', $actor);
 
         return ['employee' => $employee];
@@ -151,7 +151,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
     private function arrangeAssignmentStarted(School $school, User $actor): array
     {
         $employee = $this->createEmployee($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $position = $this->createPosition($school);
 
         return ['employment' => $employment, 'position' => $position];
@@ -160,7 +160,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
     private function arrangeAssignmentEnded(School $school, User $actor): array
     {
         $employee = $this->createEmployee($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $position = $this->createPosition($school);
         $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01'], $position, $actor);
 
@@ -170,7 +170,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
     private function arrangeAssignmentPrimaryChanged(School $school, User $actor): array
     {
         $employee = $this->createEmployee($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $position = $this->createPosition($school);
         $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01'], $position, $actor);
 
@@ -183,10 +183,10 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
         $employeeB = $this->createEmployee($school);
         $position = $this->createPosition($school);
 
-        $employmentA = app(EmploymentService::class)->create($employeeA, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employmentA = app(EmploymentService::class)->create($employeeA, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $subordinate = app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-06-01'], $position, $actor);
 
-        $employmentB = app(EmploymentService::class)->create($employeeB, ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        $employmentB = app(EmploymentService::class)->create($employeeB, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
         $manager = app(EmployeeAssignmentService::class)->create($employmentB, ['starts_on' => '2026-06-01'], $position, $actor);
 
         return ['subordinate' => $subordinate, 'manager' => $manager];
@@ -212,7 +212,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
 
     private function actEmploymentStarted(array $ctx, User $actor): void
     {
-        app(EmploymentService::class)->create($ctx['employee'], ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        app(EmploymentService::class)->create($ctx['employee'], ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
     }
 
     private function actEmploymentEnded(array $ctx, User $actor): void
@@ -222,7 +222,7 @@ class HrEmployeeDomainEventsRollbackTest extends TestCase
 
     private function actEmployeeRehired(array $ctx, User $actor): void
     {
-        app(EmployeeLifecycleService::class)->rehire($ctx['employee'], ['employment_type' => 'full_time', 'starts_on' => '2026-06-01'], $actor);
+        app(EmployeeLifecycleService::class)->rehire($ctx['employee'], ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
     }
 
     private function actAssignmentStarted(array $ctx, User $actor): void

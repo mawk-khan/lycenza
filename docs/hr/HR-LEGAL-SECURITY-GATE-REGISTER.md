@@ -85,6 +85,34 @@ the timing half, though the legal risk sits in the biometric half.
 **Until decided:** HR.4–HR.8 stay design-only. HR.1–HR.3 do not depend on
 it.
 
+## 3a. Recorded direction for later Payroll and scheduling work (HR.1A)
+
+These are records of direction, not approvals. No gate changes.
+
+- **OD-HR-14: project-adopted architectural direction (2026-11-03).**
+  - **Split** scheduling and clock-time *policy* from biometric, device,
+    FR, GPS and provider-event *processing*.
+  - **WorkSchedule owns scheduling data:** shift start and end, grace
+    windows, scheduled working duration, week-offs and work calendars. That
+    data does not need biometric-device authorization merely because
+    biometrics may later consume it.
+  - **Biometric, device, FR, GPS and provider-event processing stays
+    separately gated (HRX-L2 / L2b).**
+  - **Not yet approved:**
+    - HRX-L2 itself remains OPEN. It is not marked approved or split by this
+      record.
+    - Building timing data (L2a) still needs the ADR 0065 §8 reopening and
+      the privacy note.
+- **OD-HR-1 / OD-HR-2: target contract for the Payroll-integrity slice.**
+  - A Payroll approver receives a **purpose-limited, immutable approval
+    snapshot**: the payroll inputs and results needed to make an informed
+    approval decision (totals, joiners and leavers, every override and
+    delta, and the compensation changes since the last run), under fresh
+    MFA and audited per view.
+  - The approver never gains general confidential HR-profile access.
+  - Implementation: the HR.15 Payroll-integrity slice. **Not implemented**
+    by HR.1A; S-1 stays OPEN.
+
 ## 4. Production effect summary
 
 - **Explicit production refusal in code:**
@@ -112,18 +140,18 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | S-5 | LOW | Fresh-MFA proof is optional at the Payroll service layer | open | with OD-HR-1 |
 | S-6 | LOW | Staff attendance correction: no window, MFA or second person; cached check | recorded decision; re-review at HRX-L4 activation | HR.7 |
 | S-7 | LOW | Leave adjustments and allocations need no fresh MFA; cached check | open | HR.10 |
-| S-8 | LOW | Employment create (API) accepts any status; `/end` accepts a future date | open | HR.1 |
-| S-9 | LOW | Department reparent checks for a cycle outside the transaction, without locks | open | HR.1 |
-| S-10 | LOW | "One current employment" and indirect reporting cycles are application-only | open | HR.1 (employment), HR.3 (reporting) |
-| S-11 | LOW | `Employee::$fillable` includes `school_id` / `record_status`; `employee_number` immutability is Eloquent-only | open | HR.1 |
-| S-12 | LOW | `employment_type` and document `category` are free text | open | HR.1 / HR.2 |
+| S-8 | LOW | Employment create (API) accepts any status; `/end` accepts a future date | **FIXED (HR.1A)**: create accepts draft / pre_joining (future) / active only; web and API `/end` go through the separation command (no future date) | — |
+| S-9 | LOW | Department reparent checks for a cycle outside the transaction, without locks | **FIXED (HR.1A)**: the check runs inside the transaction under the per-School advisory lock, with database backstop `trg_hr_departments_no_cycle`; two-process test | — |
+| S-10 | LOW | "One current employment" and indirect reporting cycles are application-only | **FIXED for employment and primary assignments (HR.1A)**: `trg_employment_records_no_overlap`, `trg_employee_assignments_primary_no_overlap`, with two-process tests. **Indirect reporting cycles remain application-only** | HR.3 (reporting) |
+| S-11 | LOW | `Employee::$fillable` includes `school_id` / `record_status`; `employee_number` immutability is Eloquent-only | **FIXED (HR.1A)**: `school_id` / `record_status` not fillable; `trg_employees_identity_guard` | — |
+| S-12 | LOW | `employment_type` and document `category` are free text | **`employment_type` FIXED (HR.1A)**: closed catalogue, database CHECK. Document category remains free text | HR.2 (documents) |
 | S-13 | LOW | `PayrollPostingService::post()` has no capability check; the demo posts as a user without the key | open | with OD-HR-1 |
 | S-14 | LOW | G-9 `setManager` / manager-path Leave deadlock returns a 500 | recorded | HR.3 |
-| S-15 | LOW | A Guardian-only account can be linked as an Employee and counts as current Staff | open | HR.1 (picker shows account kind) |
+| S-15 | LOW | A Guardian-only account can be linked as an Employee and counts as current Staff | **FIXED (HR.1A)**: the link picker shows the account kind (staff / Guardian-only / member) | — |
 | S-16 | LOW | Six ancillary profile tables and `staff_holidays` are hard-deleted at runtime | open (OD-HR-13) | HR.2 / HR.4 |
-| **X-1** | **LOW (new, HR.0A)** | **Cross-domain Employee reads without currency.** Timetable (`TimetableEntryController::searchTeachers()`, entry validation), Transport (driver assignment) and Visitor (host) read `App\Domain\HR\Infrastructure\Employee` directly (rule 4 drift). They filter at most on `record_status = 'active'`, so a **separated** but not archived Employee can be scheduled, assigned as a driver or named as a host. The Timetable picker also lists every non-archived Employee of the School to a Campus-scoped scheduler (names only). HR already provides `EmployeePickerReadService`, `EmploymentCoverage` and `CurrentEmployeeAssignments` | open; **not fixed in HR.0A** (§S of the brief) | HR.15 (minimal fix: route the three pickers and validations through HR's currency readers) |
+| **X-1** | **LOW (new, HR.0A)** | **Cross-domain Employee reads without currency.** Timetable (`TimetableEntryController::searchTeachers()`, entry validation), Transport (driver assignment) and Visitor (host) read `App\Domain\HR\Infrastructure\Employee` directly (rule 4 drift). They filter at most on `record_status = 'active'`, so a **separated** but not archived Employee can be scheduled, assigned as a driver or named as a host. The Timetable picker also lists every non-archived Employee of the School to a Campus-scoped scheduler (names only). HR already provides `EmployeePickerReadService`, `EmploymentCoverage` and `CurrentEmployeeAssignments` | **DECISION (HR.1A): not changed**. HR.1A does not change these consumers' behaviour, so there is no new regression. The compatibility read `WorkforceAsOfReader::isCurrentlyEmployed()` exists for the migration | HR.15 (route the three pickers and validations through HR's currency readers) |
 | **X-2** | **INFO (new)** | `employee_assignments.manager_assignment_id` is a live pointer. A manager change overwrites it, and history survives only in the audit ledger (field names, no values). Historical "who managed whom on date D" is not reconstructible | architecture gap (P1) | HR.3 |
-| **X-3** | **INFO (new)** | `employment_records.employment_type` and `employee_category_id` are updated in place (`EmploymentService::update()`). Category history is not effective-dated | architecture gap (P1) | HR.1 |
+| **X-3** | **INFO (new)** | `employment_records.employment_type` and `employee_category_id` are updated in place (`EmploymentService::update()`). Category history is not effective-dated | **FIXED (HR.1A)**: `employment_terms` is the append-only history; the projection is database-maintained and direct updates are refused | — |
 | M-1 | recorded production prerequisite | An unlinked staff parent is not detected by beneficiary refusals | recorded | owner policy |
 
 **HIGH: none.**

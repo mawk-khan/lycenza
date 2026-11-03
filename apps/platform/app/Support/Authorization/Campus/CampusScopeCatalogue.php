@@ -284,6 +284,7 @@ final class CampusScopeCatalogue
         'app.hr.employees.employment-records.end' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Ending employment is terminal and ends teaching ownership on every Campus.'],
         'app.hr.employees.employment-records.separate' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Separation is terminal and ends teaching ownership on every Campus.'],
         'app.hr.employees.rehire' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A former Employee has no current Campus: a Campus rehire would capture any former Employee.'],
+        'app.hr.employees.employment-records.terms.store' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'HR.1A: employment terms (type, staff type, category) are School-wide employment administration.'],
         'api.v1.schools.employees.employment-records.store' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A new employment for an existing Employee is School-wide employment administration.'],
         'api.v1.schools.employees.employment-records.update' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Employment terms (type, category, probation) are School-wide employment administration.'],
         'api.v1.schools.employees.employment-records.end' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Ending employment is terminal and ends teaching ownership on every Campus.'],

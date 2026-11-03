@@ -4,6 +4,8 @@ namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Workforce\EmploymentType;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -63,7 +65,9 @@ class EmployeeLifecycleController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
 
         $validated = $request->validate([
-            'employment_type' => ['required', 'string', 'max:255'],
+            // HR.1A (S-12): the closed catalogue; staff_type optional on the API (absent = unclassified).
+            'employment_type' => ['required', 'string', Rule::in(EmploymentType::values())],
+            'staff_type' => ['sometimes', 'nullable', 'string', Rule::in(StaffType::values())],
             'starts_on' => ['required', 'date'],
             'ends_on' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_on'],
             'probation_ends_on' => ['sometimes', 'nullable', 'date'],
@@ -77,6 +81,7 @@ class EmployeeLifecycleController extends Controller
 
         $employmentAttributes = [
             'employment_type' => $validated['employment_type'],
+            'staff_type' => $validated['staff_type'] ?? null,
             'starts_on' => $validated['starts_on'],
             'ends_on' => $validated['ends_on'] ?? null,
             'probation_ends_on' => $validated['probation_ends_on'] ?? null,

@@ -334,7 +334,7 @@ class HrCampusScopeTest extends TestCase
     {
         $hrA = $this->actor('hr_officer', [$this->a->id]);
         $this->withSchoolSession($hrA)->post('/app/hr/employees/onboard', [
-            'full_name' => 'Jaya New', 'work_email' => 'jaya@example.test', 'employment_type' => 'full_time',
+            'full_name' => 'Jaya New', 'work_email' => 'jaya@example.test', 'employment_type' => 'permanent', 'staff_type' => 'teaching',
             'starts_on' => $this->today, 'campus_id' => $this->a->id, 'position_id' => $this->teacher->id,
         ])->assertSessionHasNoErrors()->assertRedirect();
 
@@ -353,7 +353,7 @@ class HrCampusScopeTest extends TestCase
     {
         $hrA = $this->actor('hr_officer', [$this->a->id]);
         $before = $this->inSchool(fn () => Employee::query()->count());
-        $base = ['full_name' => 'Kavya X', 'employment_type' => 'full_time', 'starts_on' => $this->today, 'campus_id' => $this->a->id, 'position_id' => $this->teacher->id];
+        $base = ['full_name' => 'Kavya X', 'employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => $this->today, 'campus_id' => $this->a->id, 'position_id' => $this->teacher->id];
         $inactive = $this->createPosition($this->school, ['name' => 'Old', 'status' => 'inactive']);
         $existingEmail = $this->inSchool(function () {
             Employee::query()->whereKey($this->id('onlyB'))->update(['work_email' => 'bela@example.test']);
@@ -454,7 +454,7 @@ class HrCampusScopeTest extends TestCase
         $this->api($hrA)->withHeader('Idempotency-Key', 'shr-'.Str::random(8))->postJson($this->assignmentUrl('onlyA', $a, 'end'), ['ends_on' => $this->today])->assertOk();
 
         $this->withSchoolSession($hrA)->post('/app/hr/employees/onboard', [
-            'full_name' => 'Lata Back', 'employment_type' => 'full_time', 'starts_on' => $yesterday, 'campus_id' => $this->a->id, 'position_id' => $this->teacher->id,
+            'full_name' => 'Lata Back', 'employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => $yesterday, 'campus_id' => $this->a->id, 'position_id' => $this->teacher->id,
         ])->assertSessionHasErrors('employee');
         $this->assertFalse($this->inSchool(fn () => Employee::query()->where('full_name', 'Lata Back')->exists()));
     }

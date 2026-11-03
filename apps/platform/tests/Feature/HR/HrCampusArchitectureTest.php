@@ -112,6 +112,8 @@ class HrCampusArchitectureTest extends TestCase
             'app/Domain/HR/Application/EmploymentService.php',
             'app/Domain/HR/Application/EmployeeAssignmentService.php',
             'app/Domain/HR/Application/EmployeeOnboardingService.php',
+            // HR.1A: authorizes hr.employees.assignments.manage (Campus-aware) before createRecord().
+            'app/Domain/HR/Application/Workforce/PlacementChangeService.php',
         ];
         foreach (Finder::create()->files()->in([app_path(), base_path('routes')])->name('*.php') as $file) {
             $path = str_replace(base_path().'/', '', (string) $file->getRealPath());
@@ -125,7 +127,7 @@ class HrCampusArchitectureTest extends TestCase
     public function every_declared_whole_school_hr_operation_names_an_adopted_hr_key(): void
     {
         $hr = array_filter(CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS, fn (array $d) => str_starts_with($d['capability'], 'hr.'));
-        $this->assertCount(24, $hr, 'ORG.7E-1 declared 24 whole-School HR operations (ADR 0076 §43): update the report when this changes.');
+        $this->assertCount(25, $hr, 'ORG.7E-1 declared 24 whole-School HR operations (ADR 0076 §43); HR.1A adds the employment terms change: update the report when this changes.');
         foreach ($hr as $route => $declaration) {
             $this->assertSame('hr', CampusScopeCatalogue::ADOPTED[$declaration['capability']], "{$route} names an adopted HR key");
         }
