@@ -80,7 +80,12 @@ class CanaryProofTest(unittest.TestCase):
         git = ["git", "-C", str(repo), "-c", "user.name=canary", "-c", "user.email=canary@invalid"]
         subprocess.run([*git, "init", "-q"], check=True)
         historical = "k7Qm0bY4n2XcV9sLp1aZr8tWd3eF" + "h6gJu5iOy0PqRsT"  # assembled so this file is not itself a finding
-        fresh = "".join(secrets.choice("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(43))
+        # A fixed value, never committed anywhere else. It was random per run until
+        # 2026-11-03, when gitleaks' generic-api-key stopword filter dropped one
+        # draw: about 1 in 100 random values contains a stopword and is not a
+        # finding (measured 297/300), which failed `main` CI on 27547ab2. This
+        # value is a finding; assembled so this file is not itself one.
+        fresh = "X94YZqY6QFupLRSN4cQ8hs" + "ZW26CSsAx4RGbnWBX725R"
         commits = []
         for value in (historical, fresh):
             target.write_text(f"<?php\nclass DnsVerificationTest\n{{\n    private const TOKEN = '{value}';\n}}\n")
