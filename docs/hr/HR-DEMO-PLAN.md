@@ -1,6 +1,11 @@
 # HR demo plan (HR.EXP-0) — DRAFT
 
-Status: **draft, documentation only.** Nothing is seeded by HR.EXP-0.
+Status: **draft, documentation only.** Nothing is seeded by HR.EXP-0 or
+HR.0A.
+
+> **HR.0A note (2026-11-03):** §3's wave names are the superseded HR.EXP
+> waves. Map them to HR.1–HR.16 with `HR-EXPANSION-ROADMAP.md` §4. Each HR
+> phase brief restates its demo scenario under the §2 rules.
 
 ## 1. Current canonical HR demo
 

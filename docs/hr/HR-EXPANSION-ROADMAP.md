@@ -1,94 +1,502 @@
-# HR expansion roadmap (HR.EXP) — DRAFT
+# HR implementation roadmap (HR.1–HR.16, HR.R1)
 
-Status: **DRAFT, documentation only** (HR.EXP-0, 2026-10-30).
-- This draft is built from the repository audit
-  (`HR-EXP-0-CURRENT-STATE-AUDIT.md`).
-- **The wave order and P1 list are provisional** until the reference map is
-  built from the complete HR pack (owner decision: wait for the pack).
-- Nothing is authorised. Each wave needs the owner's explicit authorisation,
-  and decision-gated waves need their decision recorded first.
+Status: **authoritative roadmap, issued by HR.0A** (2026-11-03).
+- It supersedes the HR.EXP-0 draft waves (mapping in §4).
+- Nothing is authorised: each phase needs the owner's explicit
+  authorisation, and gated phases need their decision recorded first.
+- **Never auto-start a phase.**
 
-## 1. Principles
+Inputs:
+- `HR-0A-ARCHITECTURE-RECONCILIATION.md`;
+- `HR-REFERENCE-CAPABILITY-MAP.md` (capability ids `Dn-nn`);
+- `HR-LEGAL-SECURITY-GATE-REGISTER.md`;
+- `HR-TEST-STRATEGY.md`.
 
-These are the SIS.EXP rules, unchanged:
-- **One outcome per wave.**
+## 1. Principles (unchanged from SIS.EXP and HR.EXP)
+
+- **One outcome per phase.**
 - **Domain ownership** (`HR-DOMAIN-OWNERSHIP-MAP.md`).
-- **No new capability, role, Campus adoption, export or schema** unless the
-  wave's brief names it.
-- **Extend the canonical Organization demo**, never a separate HR world.
-- **Owner walkthrough** on a fresh reset.
-- **Independent security review.**
-- **Tenancy tests.**
-- **Exact scope and regression level.**
-- **Reference-map update.**
+- **Name it or don't add it.** No capability, role, Campus adoption, export
+  or schema unless the phase names it.
+- **Extend the canonical demo world**, never a separate HR world.
+- **Per phase:** owner walkthrough on a fresh `ddev demo-reset`;
+  independent security review; tenancy tests; capability-map update.
 - **Publication** through `integration/*` → exact-SHA `CI gate` →
-  `publication-check`.
+  `publication-check` (rule 96). Then delete the integration branch.
+- **Near a legal gate:** an explicit availability gate (the
+  `StudentCertificateAvailability` pattern), never "no role holds it".
 
-**Prefer an explicit availability gate.** For anything near a legal gate, use
-the `StudentCertificateAvailability` pattern rather than relying on "no role
-holds it".
+## 2. Execution order (evidence-adjusted)
 
-## 2. Prerequisites (before feature waves)
+The numbering follows the requested programme. **The execution order
+differs**, because HR.4–HR.8 depend on OD-HR-14 (the HRX-L2 split), and
+65 of their capabilities are gated:
 
-| Id | Prerequisite | Why | Gate |
-|---|---|---|---|
-| **OD-HR-1** | Payroll checker visibility (S-1). The options are (a) approve requires sensitive view, or (b) an approval-only review projection: totals, per-person change against the previous run above a threshold, every override and delta with amounts, under fresh MFA | the only P0: the checker approves what it cannot see | **owner decision**, then HR.HARDEN-0 |
-| OD-HR-2 | Re-review compensation maker-checker (S-2, ADR 0076 §60.8a) together with OD-HR-1 | S-2 compounds S-1 | owner decision |
-| OD-HR-3 | HR self-access scope (S-3; ADR 0071 §26.13, extended to qualifications verification, personal details, addresses, contacts) | SoD on one's own HR record | owner decision |
-| — | E16 successor | every publication from 2026-11-13 | owner (release) |
+```
+HR.1 → HR.2 → HR.3 → HR.9 → HR.10 → HR.11 (ungated parts) → HR.12 → HR.13 → HR.14
+      └─ OD-HR-14 decided? → HR.4 → HR.5 → HR.6 → HR.7 → HR.8 (L2b only)
+HR.15 Payroll-integrity slice may be pulled forward as soon as OD-HR-1/2 are decided
+HR.16 closes the implementation; HR.R1 closes HR after the wider ERP connects.
+```
 
-## 3. Proposed waves (provisional order)
+**Full regression** (rule 82, `HR-TEST-STRATEGY.md` §3): HR.1, HR.3,
+HR.6, HR.10, HR.12, HR.15 and HR.16. Every other phase also runs its
+exact-SHA `CI gate`.
 
-| Wave | Name | Outcome | Gate | Schema |
-|---|---|---|---|---|
-| **HR.HARDEN-0** | HR & Payroll integrity hardening | Implements OD-HR-1/2/3, plus: S-5 (proof required at the service layer); S-8 (closed create statuses, no future `/end`); S-9 (locked reparent); S-10 (DB exclusion for overlapping employments); S-11 (`Employee` fillable + number trigger); S-12 (closed `employment_type`; document category catalogue); S-13 (posting service authority + demo); ORG10-D01 (pre-joining presentation by date); the doc drift | OD-HR-1..3 | small (an exclusion constraint, a trigger) |
-| HR.EXP-1 | Staff 360 & directory | Whole-School Staff profile projecting each owner's summary: Leave balance and requests, attendance month, payslip list (own-tier), teaching assignments, documents count, credentials. Plus a stale-form token on profile edits, the account-kind indication in the link picker (S-15), and directory status by date | owner authorisation | none |
-| HR.EXP-2 | Organization structure | Department head (named Employee, never authority), designation grade/band if the pack shows a real need, a reporting-line history read | owner decision (head ≠ approver) | small |
-| HR.EXP-3 | Staff self-service expansion | Own profile view; a contact-change **request** reviewed by HR, never a direct write of identity; own documents (view) | owner decision on scope (OD-HR-4) | small |
-| HR.EXP-4 | Leave & calendar expansion | Accrual/proration, executed carry-forward expiry, Campus or staff calendars and shifts only if the pack proves need; Leave adjustment assurance (S-7) | owner decision; shifts and statutory leave are legal (HRX-L2/L3) | moderate |
-| HR.EXP-5 | Recruitment / applicant tracking | Vacancies, candidates, applications, interviews, offers, and a canonical candidate → Employee conversion through `EmployeeOnboardingService` | **owner decision** + **legal** (candidate retention, consent, public-form privacy, abuse protection) | new sub-domain |
-| HR.EXP-6 | Staff documents & credentials | Category catalogue, expiry reminders (no external send without the email layer), verification queue | owner decision | small |
-| HR.EXP-7 | Payroll expansion | Fix the run-page N+1; then, only with legal sign-off: statutory activation (S-4 first), bank details and disbursement files (new legal record) | legal (ADR 0036, E45, HRX-L4) + owner | moderate |
-| HR.EXP-8 | Performance / training | Only if the pack and the owner name a v1 need | owner decision; appraisal data privacy review | new |
-| HR.EXP-9 | HR reports & closure | Transactional HR reports in HR; workforce analytics to the Analytics gate; re-audit | after the chosen waves | none |
+## 3. Phases
 
-**Not proposed:**
-- disciplinary records (legal first);
-- biometric or RFID attendance (HRX-L2);
-- a generic skills ontology;
-- a Staff-import rewrite (the JSON import exists; a CSV adapter only if the
-  owner asks, and never a copy of the SIS importer's contract);
-- HR exports (D-11).
+Field order in each block:
+1. Prerequisites
+2. Scope
+3. Schema
+4. Service / domain
+5. UI
+6. Capability / authorization
+7. Audit
+8. Integrations
+9. Tests
+10. Migration / backfill
+11. Reporting
+12. Rollout gate
+13. Done when
 
-## 4. Test and regression plan (per wave)
+### HR.0 — Architecture & reconciliation
 
-| Wave | Required |
+**DONE: this checkpoint (HR.0A).** It produced the contract, the
+capability map, the gates, ownership, the test strategy and the HR.R1
+reservation.
+
+### HR.1 — Workforce foundation
+
+1. **Prerequisites:** owner authorisation; E16 valid; the owner
+   classifies staff types for demo categories.
+2. **Scope:**
+   - D1-02/07/11/12;
+   - D2-01…06, D2-10…13;
+   - D18-05…08;
+   - S-8, S-9, S-10 (employment), S-11, S-12 (`employment_type`), S-15;
+   - ORG10-D01.
+3. **Schema:**
+   - new: `employment_terms`, `employee_placement_changes`,
+     `employee_reference_codes`;
+   - `employee_categories.staff_type` (closed CHECK);
+   - triggers: no overlapping non-draft employments; at most one primary
+     assignment per date; `employee_number` immutable;
+   - remove `school_id` / `record_status` from `$fillable`.
+4. **Service / domain:**
+   - `EmploymentTermsService` (effective change, never in place);
+   - `PlacementChangeService` (one named operation that ends one
+     assignment and creates the next; lock `EmployeePlacementLock`
+     first);
+   - as-of readers on `CurrentEmployeeAssignments`;
+   - `EmploymentService::update()` no longer writes terms.
+5. **UI:**
+   - profile "Employment" shows terms history;
+   - a "Change placement" action (kind, reason, date);
+   - the directory shows status by date (pre-joining distinct);
+   - the link picker shows the account kind.
+6. **Capability / authorization:** existing keys only:
+   - `hr.employees.assignments.manage`;
+   - a Campus actor needs both Campuses in scope (rule 101);
+   - self-administration refused.
+7. **Audit:** `hr.employment_terms.changed` and
+   `hr.placement.changed` (ids, kind, reason code, field names).
+8. **Integrations:** `CurrentStaffMembers` unchanged; Payroll reads terms
+   through an HR reader, never the table.
+9. **Tests:** strategy §2.1 + two-process tests for each trigger; RLS;
+   allow/deny; as-of queries.
+10. **Migration / backfill:** terms from current columns; unmapped
+    `employment_type` values listed for the owner.
+11. **Reporting:** directory as-of date; joiners and leavers by date.
+12. **Rollout gate:** none (ungated).
+13. **Done when:** the D2 rows are IMP; X-3 and S-8…S-15 (as listed) are
+    closed; full regression green.
+
+### HR.2 — Staff profile & records
+
+1. **Prerequisites:** HR.1; OD-HR-3 (self access); OD-HR-13 (archive vs
+   delete); OD-HR-9 (CSV import).
+2. **Scope:**
+   - D1-17/19/26/27/29;
+   - S-3, S-16 (profile), S-12 (document category);
+   - a stale-form token on profile edits;
+   - Staff 360 (each owner's summary under its own capability, rule 118
+     pattern).
+3. **Schema:**
+   - archive columns on ancillary tables (no runtime DELETE);
+   - `employee_document_categories` closed catalogue (code-owned);
+   - document expiry date already exists.
+4. **Service / domain:**
+   - `EmployeeProfileVersion` (keyed);
+   - self-guard extended to notes, documents, personal, addresses,
+     contacts and verification;
+   - `StaffProfileSections` assembler outside every domain.
+5. **UI:** Staff 360; document categories; no bulk all-class grid
+   (D1-30 NR).
+6. **Capability / authorization:** existing section keys; sections are
+   absent when not authorized.
+7. **Audit:** field names only; document reads are already audited.
+8. **Integrations:** Leave, StaffAttendance, Payroll (own tier only) and
+   TeachingAssignments summaries via their readers.
+9. **Tests:** section absence; Campus viewer; stale form 409; constant
+   query budget.
+10. **Migration / backfill:** document categories mapped.
+11. **Reporting:** none new.
+12. **Rollout gate:** none.
+13. **Done when:** S-3, S-12 (documents) and S-16 (profile) are closed;
+    Staff 360 is live.
+
+### HR.3 — Reporting hierarchy
+
+1. **Prerequisites:** HR.1. Delegation needs the ADR 0065 §6 amendment
+   (owner).
+2. **Scope:** D4-04/05/07/11/12; D2-05; D20-10; S-10 (reporting); S-14
+   (G-9 deadlock); delegation only if amended.
+3. **Schema:**
+   - `reporting_relationships` (primary / dotted, dated, reason) with a
+     no-overlap trigger and a cycle trigger (bounded recursive check);
+   - `reporting_delegations` (if amended);
+   - the pointer kept in sync for one release, then dropped.
+4. **Service / domain:**
+   - `ReportingHierarchyService` writes relationships;
+   - `ReportingLine` reads them as of a date;
+   - chain and subtree readers (depth-bounded);
+   - L-depth presentation.
+5. **UI:** a hierarchy tree with an as-of date; manager change history;
+   no fixed-level columns.
+6. **Capability / authorization:** existing assignments keys; a manager
+   relationship grants nothing; decision keys unchanged.
+7. **Audit:** `hr.reporting.changed` (ids, kind, reason).
+8. **Integrations:** Leave manager path (decision-time reporting line).
+9. **Tests:** strategy §2.2, including the cycle race in two processes.
+10. **Migration / backfill:** from pointers (`backfilled`; earlier
+    history not reconstructible).
+11. **Reporting:** reporting-managers report as of a date.
+12. **Rollout gate:** none (delegation: ADR 0065 §6).
+13. **Done when:** D4 has no MISS / PART except DEF; full regression
+    green.
+
+### HR.4 — Work calendar & shifts
+
+1. **Prerequisites:** **OD-HR-14 decided (L2a)**; ADR 0065 §8 reopened;
+   HR-AD-05 accepted.
+2. **Scope:** D5 (all); D14-02…09/12; D2-07.
+3. **Schema:**
+   - `work_calendars`, `work_calendar_rules`, `work_calendar_holidays`;
+   - `shifts`, `shift_versions`, `shift_assignments`;
+   - the old calendar tables migrated.
+4. **Service / domain:**
+   - the WorkSchedule module;
+   - `WorkingDayCalculator` fed by the effective calendar (Campus over
+     School);
+   - shift resolver as of a date.
+5. **UI:** calendars per Campus; holiday publication; shift editor
+   (sessions, grace, early allowance, work-hours type); bulk assignment
+   with effective date.
+6. **Capability / authorization:** proposed `hr.work_schedule.view` /
+   `.manage` (catalogue release, rule 93).
+7. **Audit:** calendar, holiday and shift version events.
+8. **Integrations:** Leave (units), StaffAttendance (expected time),
+   Payroll (working days).
+9. **Tests:** strategy §2.3.
+10. **Migration / backfill:** calendar copy.
+11. **Reporting:** shift roster; Not-Assigned staff.
+12. **Rollout gate:** L2a availability gate.
+13. **Done when:** the D5 rows are IMP; Leave and attendance read the
+    WorkSchedule.
+
+### HR.5 — Attendance events
+
+1. **Prerequisites:** HR.4; OD-HR-14.
+2. **Scope:** D6-07…21 (manual and import sources first; device sources
+   wait for HR.8).
+3. **Schema:** `attendance_sources`, `attendance_events` (append-only;
+   unique provider id per source).
+4. **Service / domain:** the ingestion service (idempotent, TenantScoped
+   jobs, `ModuleExecutionGuard`); a manual punch entry as a source.
+5. **UI:** a source event log per employee and day (operator).
+6. **Capability / authorization:** a proposed operator key (catalogue
+   release).
+7. **Audit:** imports audited per batch (counts and ids).
+8. **Integrations:** none outward.
+9. **Tests:** strategy §2.4 (ingestion half).
+10. **Migration / backfill:** none (no fabricated events).
+11. **Reporting:** a movement register (L2a).
+12. **Rollout gate:** L2a.
+13. **Done when:** events are immutable, idempotent and tenant-isolated.
+
+### HR.6 — Attendance evaluation
+
+1. **Prerequisites:** HR.5.
+2. **Scope:** D7-07…13/16.
+3. **Schema:** `attendance_day_evaluations` (versioned).
+4. **Service / domain:** a pure evaluator (events + shift + calendar +
+   leave + permission + policy) → day result; re-evaluation is explicit
+   and deterministic.
+5. **UI:** day and month views with late / early / no-punch states.
+6. **Capability / authorization:** existing view keys.
+7. **Audit:** evaluation runs (ids, version).
+8. **Integrations:** Payroll HR inputs read evaluations (no money effect,
+   HRX-L4).
+9. **Tests:** strategy §2.4 (evaluation half); full regression.
+10. **Migration / backfill:** manual records evaluated as a manual source.
+11. **Reporting:** late / early reports (L2a).
+12. **Rollout gate:** L2a.
+13. **Done when:** the D7 rows are IMP or GATE (HRX-L4 only).
+
+### HR.7 — Attendance operations
+
+1. **Prerequisites:** HR.6. Manager correction needs the ADR 0065 §7
+   reopening.
+2. **Scope:** D8-03/04/10/13/14/15; S-6.
+3. **Schema:** `attendance_regularization_requests`,
+   `staff_attendance_period_locks`.
+4. **Service / domain:** regularization on the approval foundation;
+   lock / reopen with reason and fresh MFA; correction window.
+5. **UI:** regularization queue; month confirm and reopen.
+6. **Capability / authorization:** request (self) and decide
+   (manager-path decision keys, OD-HR-5).
+7. **Audit:** lock, reopen and decision events.
+8. **Integrations:** Payroll reads locked months only.
+9. **Tests:** locked-period refusal; reopen; maker/checker.
+10. **Migration / backfill:** none.
+11. **Reporting:** modified-attendance report.
+12. **Rollout gate:** none for the lock; L2a for timing-based
+    regularization.
+13. **Done when:** D8-10 is IMP; S-6 is closed.
+
+### HR.8 — Biometric / FR / GPS
+
+1. **Prerequisites:** **HRX-L2b legal / security determination**; device
+   provider review; Integration Hub family made available.
+2. **Scope:** D6-01/03/04/05; D9 (all); D20-19/27/28/38.
+3. **Schema:** `attendance_devices`, `attendance_identities`
+   (Highly Sensitive, encrypted where applicable).
+4. **Service / domain:** provider adapters (outbound calls in jobs, rule
+   38); never Staff identity.
+5. **UI:** device registry; code mapping.
+6. **Capability / authorization:** new keys + MFA (catalogue release).
+7. **Audit:** mapping changes (field names).
+8. **Integrations:** the Integration Hub provider (rule 116).
+9. **Tests:** uniqueness per School; replay; isolation.
+10. **Migration / backfill:** none.
+11. **Reporting:** biometric reports.
+12. **Rollout gate:** L2b + production availability gate.
+13. **Done when:** gated rows are opened only by the recorded decision.
+
+### HR.9 — Leave policy
+
+1. **Prerequisites:** HR.1 (staff type, terms). HR-L8 is needed only for
+   gender / marital rules.
+2. **Scope:** D10-03/09/10/11/13/14/15/16/20; D12-04/05; D14-11.
+3. **Schema:** rule columns on the policy version; `leave_eligibility_rules`.
+4. **Service / domain:** an eligibility resolution run (idempotent) →
+   policy assignments; request validation; a pure sandwich / prefix /
+   suffix unit calculator.
+5. **UI:** policy-version editor; eligibility; an "unassigned staff" view.
+6. **Capability / authorization:** `hr.leave.configure` (existing).
+7. **Audit:** policy-version and eligibility events.
+8. **Integrations:** none new.
+9. **Tests:** strategy §2.5 (policy half).
+10. **Migration / backfill:** existing policies get default rule values
+    (no behaviour change).
+11. **Reporting:** policy assignment list.
+12. **Rollout gate:** HRX-L3 (no statutory label).
+13. **Done when:** D10 has no MISS except DEF / GATE.
+
+### HR.10 — Leave ledger & accrual
+
+1. **Prerequisites:** HR.9.
+2. **Scope:** D10-05/19; D11-01/03/06/16; D12-01/03/08; S-7.
+3. **Schema:** ledger kinds `opening` and `accrual` (period key, unique);
+   `leave_accrual_runs`.
+4. **Service / domain:** monthly accrual (idempotent); proration;
+   in-year carried expiry executed; fresh MFA for adjustments.
+5. **UI:** monthly allocation grid (by joining cohort); ledger statement.
+6. **Capability / authorization:** existing `hr.leave.manage`.
+7. **Audit:** run events; adjustments.
+8. **Integrations:** none.
+9. **Tests:** strategy §2.5 (ledger half); full regression.
+10. **Migration / backfill:** none.
+11. **Reporting:** a statement that reproduces the balance identity.
+12. **Rollout gate:** none.
+13. **Done when:** D11 and D12 have no MISS / PART.
+
+### HR.11 — Leave, comp-off & permission workflows
+
+1. **Prerequisites:** HR.10. OD-HR-5 (manager approval). The ADR 0065 §6
+   amendment for delegation and multi-level. L2a for permission times.
+2. **Scope:** D15, D16, D17; D13-15…17/20; D11-09/10.
+3. **Schema:** `compensatory_off_requests`, `staff_permission_requests`,
+   `leave_special_windows` (+ periods), delegations.
+4. **Service / domain:** each registered in `ApprovalWorkflowRegistry`;
+   ledger postings; window resolution (most specific wins; ties refused).
+5. **UI:** request and approval queues; windows editor.
+6. **Capability / authorization:** request (self) and decide; catalogue
+   changes per OD-HR-5.
+7. **Audit:** decisions (closed codes).
+8. **Integrations:** StaffAttendance (permission impact; L2a).
+9. **Tests:** strategy §2.6; maker/checker.
+10. **Migration / backfill:** none.
+11. **Reporting:** comp-off and permission lists.
+12. **Rollout gate:** L2a for time windows.
+13. **Done when:** D15–D17 are IMP or GATE.
+
+### HR.12 — Workforce lifecycle
+
+1. **Prerequisites:** HR.1. HR-061 (separation approval) owner decision.
+2. **Scope:** D18-03/04/10…13/15…17/20/21; D1-07, D1-33 (non-recruitment
+   parts).
+3. **Schema:** `employment_lifecycle_events`, `separation_requests`,
+   `separation_clearance_items`.
+4. **Service / domain:**
+   - separation request / decide;
+   - closed `SeparationReason`;
+   - clearance asks each owner (Inventory, Library, Finance, Documents,
+     Timetable, Transport) through their readers;
+   - confirmation event;
+   - Identity suspension stays Identity's (rule 92).
+5. **UI:** exit workflow; clearance checklist; NOC document via HR
+   documents.
+6. **Capability / authorization:** existing assignments keys + a decision
+   key if HR-061 chooses approval.
+7. **Audit:** lifecycle events.
+8. **Integrations:** cross-owner clearance readers.
+9. **Tests:** offboarding end-to-end; rehire; no history loss; full
+   regression.
+10. **Migration / backfill:** separated employments get a backfilled
+    `separated` event.
+11. **Reporting:** leavers with reasons (closed codes).
+12. **Rollout gate:** none (health remarks HRX-L1 refused).
+13. **Done when:** D18 has no MISS / PART except DEF.
+
+### HR.13 — Staff tasks
+
+1. **Prerequisites:** HR.1 (staff type), HR.3 (reporting line).
+2. **Scope:** D19 (all), D20-26.
+3. **Schema:** `workforce_task_categories`, `_templates`, `_assignments`,
+   `_submissions`; Documents owner type `workforce_task`.
+4. **Service / domain:** the WorkforceTasks sub-domain (no Attendance or
+   Leave dependency); lazily generated occurrences.
+5. **UI:** my tasks; assigned by / to me; team tasks; monitor.
+6. **Capability / authorization:** proposed `hr.tasks.*` (catalogue
+   release); manager assignment needs the reporting line **and** the key.
+7. **Audit:** template, assignment and submission events.
+8. **Integrations:** Academic Structure readers (Section, SubjectOffering).
+9. **Tests:** occurrence determinism; isolation; no ratings.
+10. **Migration / backfill:** none.
+11. **Reporting:** task reports (operational counts only).
+12. **Rollout gate:** HR-L11 for any rating.
+13. **Done when:** the D19 rows are IMP.
+
+### HR.14 — Reports / MIS
+
+1. **Prerequisites:** the phases whose data they read; the D-11 extension
+   decided.
+2. **Scope:** D20-02/06/11/23/33; D8-15; D9-15; D11-16.
+3. **Schema:** none (reads); the export audit event.
+4. **Service / domain:** `HrReportRegistry` (code-owned; OPERATIONAL /
+   RESTRICTED columns; closed filters and sorts; as-of).
+5. **UI:** the HR reports hub; column selector; detail drawers.
+6. **Capability / authorization:** report authority = all of its data
+   capabilities; dataset export key (owner decision).
+7. **Audit:** `hr_report.exported`.
+8. **Integrations:** none.
+9. **Tests:** registry pins; column forgery 422; export ≤ screen;
+   isolation.
+10. **Migration / backfill:** none.
+11. **Reporting:** this phase *is* reporting; person-count analytics stays
+    with Analytics (ADR 0040).
+12. **Rollout gate:** D-11, ADR 0040.
+13. **Done when:** every non-gated D20 row is IMP, XDOM or DEF.
+
+### HR.15 — Cross-ERP integrations
+
+1. **Prerequisites:** OD-HR-1 / OD-HR-2 (Payroll integrity); HR-050 /
+   HR-055 (staff-child / fee) owner decisions; an Inventory custody
+   contract; Timetable substitution.
+2. **Scope:**
+   - **Payroll integrity slice:** S-1, S-2, S-4, S-5, S-13; the run-page
+     N+1; HRX-L4 evidence only. **May be pulled forward.**
+   - X-1 (Timetable, Transport, Visitor via HR readers);
+   - the Payroll `EmploymentRecord` coupling decision;
+   - D20-18/29/30/31/34/37.
+3. **Schema:** per owner (substitution in Timetable; custody in
+   Inventory).
+4. **Service / domain:** owners' services; HR exposes readers only.
+5. **UI:** owner pages.
+6. **Capability / authorization:** owners' keys.
+7. **Audit:** owners'.
+8. **Integrations:** this *is* integration.
+9. **Tests:** cross-domain allow/deny; isolation; full regression.
+10. **Migration / backfill:** none.
+11. **Reporting:** owner reports.
+12. **Rollout gate:** OD-HR-1; E47 for staff-child data.
+13. **Done when:** every XDOM row has an owner contract or a recorded
+    deferral.
+
+### HR.16 — Security / performance / closure
+
+1. **Prerequisites:** HR.1–HR.15 (or recorded deferrals).
+2. **Scope:**
+   - independent security review;
+   - query budgets on every HR page;
+   - load test with 1,000 staff (local);
+   - documentation drift (`HR.md`, HRX closure count of
+     `staff_self_service` keys);
+   - the capability map refreshed.
+3. **Schema:** none expected.
+4. **Service / domain:** fixes only.
+5. **UI:** accessibility pass.
+6. **Capability / authorization:** coverage guards.
+7. **Audit:** catalogue complete.
+8. **Integrations:** —
+9. **Tests:** full regression.
+10. **Migration / backfill:** rollback proofs for every HR migration.
+11. **Reporting:** —
+12. **Rollout gate:** production gates unchanged.
+13. **Done when:** **HR implementation-complete.** HR is not closed until
+    HR.R1.
+
+### HR.R1 — Final cross-ERP reconciliation & closure
+
+Reserved: `HR-R1-CLOSURE-CONTRACT.md`.
+
+## 4. Mapping from the superseded HR.EXP draft waves
+
+| HR.EXP wave | Now |
 |---|---|
-| HR.HARDEN-0 | payroll approval allow/deny with and without review visibility; two-process race for any new lock; DB constraint tests; self-administration deny cases; **full regression** (Payroll, HR and Leave cross-domain) |
-| HR.EXP-1 | section absent without its own capability; Campus-scoped viewer sees only allowed sections; foreign-School 404; query budget constant with data; stale-form token race; scoped suites |
-| HR.EXP-2 | hierarchy cycle and lock tests; head ≠ authority guard; RLS |
-| HR.EXP-3 | ownership (another Employee's id is a 404); request-review authority; no identity write by self |
-| HR.EXP-4 | ledger invariants unchanged (never negative); accrual determinism; calendar fail-closed; **full regression** |
-| HR.EXP-5 | public endpoint abuse (rate limit, idempotency, upload sniffing); candidate ≠ Employee until conversion; conversion atomic and audited; retention; **full regression** |
-| HR.EXP-6 | category closed list; expiry job tenant-scoped (rule 21) |
-| HR.EXP-7 | the N+1 budget test; legal-gated paths refused in production by an explicit gate; **full regression** |
-| HR.EXP-8 / 9 | per scope; HR.EXP-9 ends with a closure re-audit and the full regression |
+| HR.HARDEN-0 | split: S-8 / 9 / 10 / 11 / 12 (type) / 15 + ORG10-D01 → HR.1; S-3 / 16 / 12 (docs) → HR.2; S-14 → HR.3; S-6 → HR.7; S-7 → HR.10; S-1 / 2 / 4 / 5 / 13 → HR.15 Payroll-integrity slice |
+| HR.EXP-1 Staff 360 | HR.2 |
+| HR.EXP-2 Organization structure | HR.1 (staff type) + HR.3 (hierarchy history); department head stays deferred |
+| HR.EXP-3 Self-service | HR.2 (own profile) + HR.11 (requests) |
+| HR.EXP-4 Leave & calendar | HR.4 + HR.9 + HR.10 |
+| HR.EXP-5 Recruitment | **deferred** (OD-HR-6, HR-L9); outside HR.1–HR.16 |
+| HR.EXP-6 Documents & credentials | HR.2 |
+| HR.EXP-7 Payroll expansion | HR.15 (bank / disbursement stay gated: HR-L5) |
+| HR.EXP-8 Performance / training | **deferred** (OD-HR-7, HR-L11) |
+| HR.EXP-9 Reports & closure | HR.14 + HR.16 + HR.R1 |
 
-## 5. Owner decisions (open)
+## 5. Owner decisions
 
-| Id | Decision |
-|---|---|
-| OD-HR-1 | Payroll checker visibility |
-| OD-HR-2 | Compensation maker-checker |
-| OD-HR-3 | HR self-access to one's own record |
-| OD-HR-4 | Staff self-service scope |
-| OD-HR-5 | Manager authority: should line managers approve Leave (today only `school_admin`/`principal` hold `hr.leave.approve`)? |
-| OD-HR-6 | Recruitment in v1 |
-| OD-HR-7 | Performance/appraisal and training in v1 |
-| OD-HR-8 | Disciplinary workflow (legal first) |
-| OD-HR-9 | Staff import format (keep the JSON importer, or add a CSV adapter) |
-| OD-HR-10 | Contracts and e-signature (metadata only; no contract engine from a menu label) |
-| OD-HR-11 | Headcount and capacity features (Analytics gate) |
-| OD-HR-12 | Employee family and dependant data (legal) |
-| OD-HR-13 | Ancillary profile hard delete vs archive (S-16) |
-| M-1 | The unlinked staff parent (recorded production prerequisite) |
+| Id | Decision | Needed by |
+|---|---|---|
+| OD-HR-1 | Payroll checker visibility (recommendation: C + B, `HR-EXP-0R-REFERENCE-RECONCILIATION.md` §6) | HR.15 |
+| OD-HR-2 | Compensation maker-checker | HR.15 |
+| OD-HR-3 | HR self-access to one's own record | HR.2 |
+| OD-HR-4 | Staff self-service scope | HR.2 / HR.11 |
+| OD-HR-5 | Line managers approve leave (and comp-off, permission, regularization) | HR.7 / HR.11 |
+| OD-HR-6 | Recruitment in v1 | — (deferred) |
+| OD-HR-7 | Performance / appraisal / training | — (deferred) |
+| OD-HR-8 | Disciplinary workflow (legal first) | — (deferred) |
+| OD-HR-9 | Staff import format (CSV adapter?) | HR.2 |
+| OD-HR-10 | Contracts and e-signature | — |
+| OD-HR-11 | Headcount (Analytics gate) | Analytics |
+| OD-HR-12 | Family / dependants (legal) | — |
+| OD-HR-13 | Ancillary profile archive vs delete | HR.2 |
+| **OD-HR-14** | **Split HRX-L2 into L2a (timing) and L2b (biometric / device / GPS / FR)** | HR.4–HR.8 |
+| HR-050 / HR-055 | Staff-child and staff-ward fee reports | HR.15 |
+| HR-061 | Separation approval | HR.12 |
+| HR-083 | Named Campus transfer | HR.1 (proposed as HR-AD-02) |
+| HR-084 | Retirement date | HR.12 |
+| M-1 | Unlinked staff parent | HR.15 |

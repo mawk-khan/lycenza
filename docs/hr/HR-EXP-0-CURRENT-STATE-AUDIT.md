@@ -10,7 +10,15 @@ Companion records in `docs/hr/`:
 - `HR-DOMAIN-OWNERSHIP-MAP.md`;
 - `HR-EXPANSION-ROADMAP.md`;
 - `HR-DEMO-PLAN.md`;
-- `HR-REFERENCE-CAPABILITY-MAP.md` (**pending the reference pack**, §0).
+- `HR-REFERENCE-CAPABILITY-MAP.md` (pending at the time; **built by HR.0A**
+  on 2026-11-03 from the completed 602-screen pack).
+
+> **HR.0A (2026-11-03):** HR, Leave, StaffAttendance and Payroll code is
+> unchanged at `7a4068fe`, so this audit stands. Its §0 reflects
+> 2026-10-30. The programme contract is now
+> `HR-0A-ARCHITECTURE-RECONCILIATION.md`, and the §20 prerequisites are
+> distributed across HR.1, HR.2, HR.3, HR.7, HR.10 and HR.15
+> (`HR-EXPANSION-ROADMAP.md` §4).
 
 ## 0. Reference pack
 

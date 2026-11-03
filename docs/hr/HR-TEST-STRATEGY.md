@@ -1,0 +1,199 @@
+# HR test strategy (HR.0A)
+
+Status: **authoritative test strategy for HR.1–HR.16 and HR.R1** (HR.0A,
+2026-11-03). Each phase brief may tighten it, never loosen it.
+
+It applies CLAUDE.md rules 13, 14, 28, 78, 82 and 96 to HR. Nothing here
+is new infrastructure. Every suite runs on the existing harness:
+- real PostgreSQL (ADR 0024);
+- `apps/platform/bin/safe-test`;
+- `TestCase::purgeSchoolsAsAdmin()`;
+- two-process concurrency tests (the
+  `AcademicYearActivationConcurrencyTest` pattern);
+- the remote exact-SHA `CI gate` in shards (ADR 0072 §31).
+
+## 1. Layers required per phase
+
+| Layer | When required | Pattern to copy |
+|---|---|---|
+| Unit (pure) | every evaluator, calculator or traversal (shift evaluation, leave unit calculation, accrual, hierarchy depth) | `WorkingDayCalculator`, `CarryForwardCalculator` |
+| Domain / service | every Application service method | existing HR / Leave service tests |
+| Feature (web + API) | every route, **allow AND deny** (rule 13) | `tests/Feature/HR/*` |
+| Authorization coverage | every School route has a contract (rule 98) | `SchoolRouteCoverage`, `CoverageGuard` |
+| Campus scope | every Campus-adopted key: in-scope, out-of-scope 404, NULL-Campus whole-School only | `HrEmployeeAccess` tests, rule 101 |
+| Tenancy | School A cannot read or write School B: Eloquent **and** raw SQL/RLS; missing context fails closed (rule 28) | `tests/Feature/Postgres/RawIsolationTest.php` |
+| Database invariants | every CHECK, trigger, append-only guard and composite FK is tested by a raw write that must fail | Leave ledger guard tests |
+| Concurrency | every new lock or overlap rule: two real processes | `AcademicYearActivationConcurrencyTest`, placement-lock tests |
+| Idempotency | every retryable consequential mutation (rule 29); every allocation or import run | `leave_allocation_runs_once` tests, `EnsureIdempotent` |
+| Architecture guards | ownership, no-dependency, no-forbidden-column, catalogue pins | `AttendanceArchitectureGuardTest`, `ModuleCatalogueArchitectureTest`, `ApprovalWorkflowRegistryTest`, `StaffRoleCatalogueSnapshotTest` |
+| Retention | every new table declares its unit; purge and hold tests | E21 / ADR 0066 tests |
+| Query budget | every list, report and Staff 360 page: constant queries as data grows | `StudentProfile360Test` |
+| Demo | `ddev demo-reset` seeds through canonical services; pins updated (`CROSS-CUTTING-CHANGE-CHECKLIST.md`) | `DemoSisDataTest` |
+| Documentation guards | `--group repository-documents` | CI docs lane |
+
+## 2. Deterministic scenario catalogue
+
+Every scenario uses fixed dates (never "now" unless a clock is frozen),
+the School-local date (`SchoolTimezone::today()`), and fictional data.
+
+### 2.1 Workforce (HR.1, HR.2, HR.12)
+- An employee joins mid-year: `CurrentEmployeeAssignments` excludes them
+  before `starts_on`, and the directory "Current" never lists a future
+  hire (fixes ORG10-D01).
+- **Campus transfer** as one named operation:
+  - the old assignment ends yesterday and the new one starts today;
+  - a Campus actor needs both Campuses in scope;
+  - the reason and actor are recorded.
+- **Department transfer, designation change and promotion:** the same
+  mechanism, with a closed change kind and reason.
+- **Category or employment-type change** (X-3 fix): a new effective-dated
+  row. The as-of-date read returns the old value before the change.
+- **Inactive / separated:** assignments close and teaching ownership ends
+  (ADR 0063 §47). History is intact and nothing is deleted.
+- **Historical report as of date D** returns the assignment, category and
+  manager effective on D, never the current one.
+- **Rehire:**
+  - a new employment, same Employee and same number;
+  - the previous employment's history is untouched;
+  - two overlapping employments are refused by the database (S-10
+    backstop) and in two-process tests.
+
+### 2.2 Reporting hierarchy (HR.3)
+- Traversal at depths 1, 2, 5 and 12 (arbitrary depth, no fixed level
+  columns).
+- **Cycles:**
+  - A→B→C→A is refused at the service, by the database trigger, and
+    under a two-process race (each transaction sets one edge);
+  - A→A is refused by CHECK.
+- **Manager changes mid-period:**
+  - `managerOf(D)` returns the old manager before the change and the new
+    one after;
+  - a Leave decision uses the manager effective at decision time.
+- **Temporary delegation** (only after the ADR 0065 §6 amendment):
+  - it applies inside its window only;
+  - the delegate cannot decide their own request.
+- **Manager becomes inactive:** the reports surface as "no current
+  manager", never silently re-parented.
+- **Cross-School manager:** refused by the composite FK and by RLS (a raw
+  insert must fail).
+- **Reporting manager ≠ data access:** a manager without
+  `hr.employees.personal.view` sees no personal section of a report.
+
+### 2.3 Shifts and work calendar (HR.4; gated by HRX-L2a)
+- Normal day shift; overnight shift (22:00–06:00), attributed to the
+  shift's start date.
+- A temporary shift overrides the base shift inside its window only.
+- Week-off and holiday, at Campus level and at School level; Campus wins
+  where both exist.
+- A retroactive shift correction creates a new version, and affected days
+  are re-evaluated explicitly (never silently).
+- Overlapping shift assignments for one employment are refused (trigger
+  plus lock, the student-group no-overlap pattern; this project does not
+  use `btree_gist`).
+
+### 2.4 Attendance (HR.5–HR.7; clock evidence gated)
+- One in / one out; multiple punches (first-in / last-out); missing out;
+  missing in.
+- **Duplicate provider event:** the unique `(school_id, source_id,
+  provider_event_id)` key makes the second insert a no-op replay.
+- **Late-arriving import:** an event for an already evaluated day
+  triggers deterministic re-evaluation with a new evaluation version.
+- **Overnight attendance:** a 23:50 in and a 06:10 out belong to the
+  previous day's shift.
+- **Timezone boundary:** events are stored in UTC and evaluated in the
+  School timezone; a 23:30 local punch never moves to the next date.
+- **Classification:** late arrival and early leaving (threshold and
+  grace), permission-covered lateness, leave, holiday and week-off.
+- **Manual correction:** the source event is untouched; an append-only
+  correction row is written; the evaluation is recomputed.
+- **Locked period:** a correction inside a payroll-consumed period is
+  refused, or goes through the controlled reopening path.
+- **Recalculation idempotency:** evaluating the same inputs twice gives
+  identical results.
+
+### 2.5 Leave (HR.9–HR.11)
+- Balance:
+  - sufficient balance; insufficient balance (refused);
+  - unpaid leave (no balance tracked).
+- Accrual:
+  - monthly accrual;
+  - joining-date proration;
+  - **rerunning an accrual or allocation is idempotent** (unique run key,
+    no double credit).
+- Carry-forward: cap; in-year expiry (now executed).
+- Request timing:
+  - backdated request inside the window, and outside it (refused);
+  - a future request that violates notice (refused);
+  - maximum duration per request.
+- Attachments: a mandatory-attachment rule stays **BLOCKED_BY_GATE**
+  (HRX-L1). Its test asserts refusal, not acceptance.
+- Eligibility:
+  - department and category eligibility;
+  - gender and marital eligibility are tested **only if** HR-L8 is
+    decided; until then a guard test asserts no such field exists.
+- Holiday treatment: sandwich, prefix and suffix rules; holiday
+  inclusion.
+- Workflow and ledger:
+  - cancellation reverses the ledger;
+  - a rejection never debits;
+  - an approval debits once;
+  - a policy change after the request leaves the request's frozen units
+    unchanged;
+  - annual rollover;
+  - the identity `opening + credits − debits ± adjustments = closing`
+    holds per account and is reproduced from the ledger.
+
+### 2.6 Compensatory off (HR.11)
+- A credit requested for a worked holiday or week-off; the date must be a
+  non-working day for that employment.
+- Approval posts a `comp_off_credit` ledger entry; a rejection posts
+  nothing.
+- Expiry posts `comp_off_expiry`.
+- Use consumes like any leave.
+- Cancelling an unused credit is a reversal entry, never an edit.
+
+### 2.7 Security (every phase)
+- An employee cannot open another employee's confidential record: private
+  404, identical to an unknown id.
+- A manager sees only reports in scope, and only the columns their own
+  capabilities allow.
+- **A manager relationship never grants payroll, bank, family or health
+  data.**
+- HR permissions are Campus-scoped exactly as declared.
+- Exports and custom columns:
+  - an export needs its dataset capability;
+  - **column availability is decided on the server**, so a forged column
+    is a 422;
+  - an export never exceeds the screen.
+- Cross-tenant: id guessing across Schools, manager across Schools,
+  attendance, leave, reports, exports, biometric identity and staff ↔ SIS
+  links.
+- Direct-object id attacks on every `{id}` route.
+
+### 2.8 Audit (every phase)
+- Every significant change writes exactly one audit event:
+  - actor, event type, subject, request id;
+  - closed reason codes;
+  - **changed field names, never values**.
+- Before and after values live in the owning evidence table (corrections,
+  versions, ledger), never in audit metadata.
+- Sensitive changes (bank, compensation, biometric mapping, identity) are
+  audited with field names only.
+- Evidence tables refuse runtime UPDATE and DELETE.
+
+## 3. Regression cadence
+
+- **Per phase:**
+  - focused suites first (rule 14);
+  - then the relevant integration suites (Leave ↔ StaffAttendance ↔
+    Payroll for HR.6–HR.11);
+  - then the static gates (Pint, Larastan, vue-tsc, ESLint, Prettier,
+    build).
+- **Full regression:**
+  - the code-lane candidate's remote exact-SHA `CI gate` (rule 96);
+  - additionally a local `bin/safe-test` full run at every
+    cross-domain phase (HR.1, HR.3, HR.6, HR.10, HR.12, HR.15, HR.16).
+- **Environment-specific tests** (MinIO, real S3) are reported
+  separately, never skipped to make a run green.
+- **Baseline failures** are distinguished from new failures with
+  evidence: the same test red on `main` at the candidate's merge base.
