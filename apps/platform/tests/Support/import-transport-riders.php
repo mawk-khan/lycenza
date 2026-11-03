@@ -31,6 +31,13 @@ try {
     $import = $app->make(TransportRiderImport::class);
     $rows = $import->parse((string) base64_decode($csv));
     $preview = $import->preview($school, CampusScope::wholeSchool(), $actor, $rows);
+    if (! $preview['committable']) {
+        // The competing write committed BEFORE this preview ran: the preview
+        // already refuses (no signature is issued), so there is nothing to commit.
+        echo 'rejected:preview_not_committable';
+
+        return;
+    }
     $result = $import->commit($school, CampusScope::wholeSchool(), $actor, $rows, $preview['issuedAt'], $preview['signature']);
     echo 'committed:'.$result['created'].':'.$result['alreadyAssigned'];
 } catch (Throwable $e) {

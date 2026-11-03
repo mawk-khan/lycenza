@@ -108,7 +108,7 @@ class TransportRiderImportConcurrencyTest extends TestCase
         );
 
         $won = array_values(array_filter($outputs, fn ($o) => str_starts_with($o, 'committed:3:0')));
-        $lost = array_values(array_filter($outputs, fn ($o) => str_contains($o, 'TransportRiderImportNotCommittableException')));
+        $lost = array_values(array_filter($outputs, fn ($o) => $this->refusedWhole($o)));
         $this->assertCount(1, $won, json_encode($outputs));
         $this->assertCount(1, $lost, json_encode($outputs));
         $active = $this->active();
@@ -126,9 +126,19 @@ class TransportRiderImportConcurrencyTest extends TestCase
             $this->assertStringStartsWith('rejected:', $outputs[1], 'the single assignment finds R1 assigned');
             $this->assertSame(['R1' => 'ONE', 'R2' => 'ONE'], $active);
         } else {
-            $this->assertStringContainsString('TransportRiderImportNotCommittableException', $outputs[0], json_encode($outputs));
+            $this->assertTrue($this->refusedWhole($outputs[0]), json_encode($outputs));
             $this->assertSame('assigned', $outputs[1]);
             $this->assertSame(['R1' => 'TWO'], $active, 'the batch kept nothing, not even R2');
         }
+    }
+
+    /**
+     * The losing batch is refused whole either at commit (the re-evaluation
+     * under the locks) or, when the competing write committed before its
+     * preview ran, already at preview (no signature is issued).
+     */
+    private function refusedWhole(string $output): bool
+    {
+        return str_contains($output, 'TransportRiderImportNotCommittableException') || $output === 'rejected:preview_not_committable';
     }
 }
