@@ -5,6 +5,9 @@ namespace App\Http\Controllers\App\Leave;
 use App\Domain\HR\Application\DepartmentReference;
 use App\Domain\HR\Application\EmployeeCategoryReference;
 use App\Domain\HR\Application\Workforce\StaffType;
+use App\Domain\Leave\Application\Accrual\LeaveAccrualTiming;
+use App\Domain\Leave\Application\Accrual\LeaveEntitlementMethod;
+use App\Domain\Leave\Application\Accrual\LeaveStatementReader;
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveCapabilities;
@@ -25,6 +28,7 @@ use App\Domain\Leave\Infrastructure\LeaveRequest;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
@@ -79,6 +83,9 @@ class LeaveAdminController extends Controller
             'employeeCategories' => $context->withSchool($school, fn () => $categories->options($school)),
             'departments' => $context->withSchool($school, fn () => $departments->options($school)),
             'today' => SchoolTimezone::today($school),
+            // HR.10: the closed entitlement methods and accrual timings a version may use.
+            'entitlementMethods' => LeaveEntitlementMethod::options(),
+            'accrualTimings' => LeaveAccrualTiming::options(),
         ]);
     }
 
@@ -169,7 +176,7 @@ class LeaveAdminController extends Controller
         return $this->command(fn () => $calendar->removeHoliday($school, $staffHoliday, $request->user()), 'Staff holiday removed.');
     }
 
-    public function entitlements(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, LeaveLedgerService $ledger): Response
+    public function entitlements(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, LeaveLedgerService $ledger, LeaveStatementReader $statements, FreshMfaRequirement $mfa): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
@@ -195,6 +202,12 @@ class LeaveAdminController extends Controller
             'assignments' => $employmentId === null ? [] : $reads->assignments($school, $employmentId, $actor),
             'balances' => $employmentId === null || $yearId === null ? [] : $reads->balances($school, $employmentId, $yearId, $actor),
             'ledger' => $employmentId === null || $yearId === null ? [] : $reads->ledger($school, $employmentId, $yearId, $actor),
+            // HR.10 (D11-16): each funded type's statement -- the balance identity over every entry, from the server.
+            'statements' => $employmentId === null || $yearId === null ? [] : array_map(
+                fn (array $b) => $statements->statement($school, $employmentId, $b['leaveTypeId'], $yearId, $actor),
+                $reads->balances($school, $employmentId, $yearId, $actor),
+            ),
+            'mfaEnrolled' => $mfa->hasActiveFactor($actor),
             'adjustmentReasons' => LeaveLedgerEntry::ADJUSTMENT_REASONS,
             'runPreview' => $runPreview,
             'canManage' => $canManage,
@@ -225,15 +238,31 @@ class LeaveAdminController extends Controller
         return $this->command(fn () => $ledger->allocate($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user()), 'Allocation recorded.');
     }
 
-    public function adjust(Request $request, TenantContext $context, LeaveLedgerService $ledger): RedirectResponse
+    /** HR.10 (S-7): an adjustment needs `hr.leave.manage`, then a fresh MFA code (outside the transaction). */
+    public function adjust(Request $request, TenantContext $context, LeaveLedgerService $ledger, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $validated = $request->validate([
             'employment_record_id' => ['required', 'uuid'], 'leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid'],
             'direction' => ['required', Rule::in(['credit', 'debit'])], 'units' => ['required', 'integer', 'min:1', 'max:1000'], 'reason' => ['required', Rule::in(LeaveLedgerEntry::ADJUSTMENT_REASONS)],
+            'corrects_entry_id' => ['nullable', 'uuid'],
         ]);
+        $this->authorizeCapability(LeaveCapabilities::MANAGE, $school);
+        $mfa->requireForAction($request, $request->user());
 
-        return $this->command(fn () => $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user()), 'Adjustment recorded.');
+        return $this->command(fn () => $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user(),
+            isset($validated['corrects_entry_id']) ? strtolower((string) $validated['corrects_entry_id']) : null), 'Adjustment recorded.');
+    }
+
+    /** HR.10 (D11-01, S-7): a go-live opening balance -- `hr.leave.manage`, then a fresh MFA code. */
+    public function opening(Request $request, TenantContext $context, LeaveLedgerService $ledger, FreshMfaRequirement $mfa): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $validated = $request->validate(['employment_record_id' => ['required', 'uuid'], 'leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid'], 'units' => ['required', 'integer', 'min:1', 'max:1000']]);
+        $this->authorizeCapability(LeaveCapabilities::MANAGE, $school);
+        $mfa->requireForAction($request, $request->user());
+
+        return $this->command(fn () => $ledger->recordOpening($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user()), 'Opening balance recorded.');
     }
 
     public function executeRun(Request $request, TenantContext $context, LeaveLedgerService $ledger): RedirectResponse

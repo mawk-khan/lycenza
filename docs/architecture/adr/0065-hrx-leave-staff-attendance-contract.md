@@ -25,6 +25,11 @@
   rules and eligibility rules on the policy version, the eligibility
   resolution (applicability, draft preview, additive run). Sandwich /
   prefix / suffix counting stays out (OD-HR-15, §28.9).
+  **Amended by HR.10 — Leave ledger & accrual (2026-11-03, §29):** the
+  monthly entitlement method, the `opening` and `accrual` ledger kinds,
+  recoverable accrual runs, the account statement, fresh MFA for
+  adjustments (S-7). In-year expiry (OD-HR-16) and proration (OD-HR-17)
+  stay unbuilt.
 - Date: 2026-10-03
 - Programme: **HRX — Leave & staff attendance**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes",
@@ -2186,3 +2191,237 @@ supersedes nothing.
 | 9 | Attendance-period lock | D8-10 → HR.7 | §45 | HR.7 |
 | 10 | Special windows, comp-off, permissions | HR.11 | §48–§50 | HR.11 |
 | 11 | Roadmap "done when: D10 has no MISS" | — | — | D10-05 and D10-19 stay MISS; they belong to HR.10 |
+
+## 29. Amendment — HR.10 Leave ledger & accrual (2026-11-03)
+
+Recorded before coding at baseline `f82a75d0` (HR.9; main CI 41712330735
+green), on the owner's explicit HR.10 authorisation. Roadmap scope:
+D10-05/19, D11-01/03/06/16, D12-01/03/08, S-7. It **extends** §4.5 and
+§22.5; §22.2 (no automatic proration) and §23.8 (carried expiry recorded,
+not executed) stand.
+
+### 29.1 What stays exactly as it was
+- One append-only ledger, never negative (trigger), balance = sum of
+  entries. Every earlier kind keeps its meaning and sign.
+- No reservation at submission; approval consumes; cancellation reverses;
+  the year close carries and lapses; a closed year is sealed.
+- The annual allocation run and explicit allocation; working-half-day
+  counting; the Payroll HRX evidence (Payroll never reads balances, so no
+  credit, opening or adjustment can move a frozen Payroll basis).
+
+### 29.2 Entitlement method on the version (D11-03, D12-01)
+- `leave_policies.entitlement_method` is either `annual` or `monthly`.
+  - `annual` is the existing behaviour and the default for every existing
+    version.
+  - `monthly` has `annual_allocation_units = 0`, `monthly_accrual_units`
+    (1..62 half-day units) and `accrual_timing`:
+    - `period_start`: a month is postable from its first day;
+    - `period_end`: from the day after its last day.
+- The two methods are **exclusive alternatives, never added**:
+  - a CHECK on the version;
+  - `allocate()` refuses a monthly version (`LEAVE_POLICY_ACCRUES_MONTHLY`);
+  - the annual run skips accounts funded by accrual;
+  - the ledger trigger refuses an `allocation` and an `accrual` in the same
+    account (`leave_funding_conflict`).
+- Only monthly is supported. No other frequency was authorised.
+- Units are integer half-days. A whole-day type needs even units, so
+  nothing is ever rounded.
+
+### 29.3 Ledger kinds
+- `accrual`: one month's credit, keyed by `accrual_period` (the month's
+  first day) and carrying its run and assignment.
+  - Unique per employment × type × year × month
+    (`leave_ledger_entries_one_accrual`).
+  - The trigger checks the month lies inside the leave year, and that the
+    named assignment belongs to the same account, covers the WHOLE month,
+    and is a monthly version whose units equal the entry. Raw SQL cannot
+    credit a month the policy does not grant.
+- `opening`: the go-live opening balance (D11-01).
+  - One per account (`leave_ledger_entries_one_opening`), and only as the
+    account's first entry (`leave_opening_not_first`).
+- Both are credits (`LeaveLedgerEntry::CREDIT_KINDS`, mirrored by the
+  trigger). The sign convention now lives in one PHP place
+  (`LeaveLedgerEntry::signedUnitsSql()`), used by the read model and the
+  year close.
+
+### 29.4 Openings
+- `LeaveLedgerService::recordOpening()` records the exact units an
+  administrator specifies:
+  - `hr.leave.manage` plus a fresh MFA code (web and API);
+  - an employment planned or current in that year;
+  - never the actor's own;
+  - audited as `leave.opening.recorded`.
+- It is never derived from a current-state field. It is a controlled
+  migration fact with its own provenance.
+
+### 29.5 Accrual: who, which month, how much
+- **Eligibility for a month** (`LeaveAccrualCalculator`, one batch at a
+  time, a fixed number of queries per batch):
+  - the employment's dates span the WHOLE month, in any status but draft
+    (HR.1A dated facts, not today's status), through
+    `EmploymentCoverage::holdRecordsSpanning()`;
+  - exactly one assignment of the type covers the whole month;
+  - that assignment's version is monthly;
+  - the account has no annual allocation that year.
+- **Closed, disjoint outcomes** (`LeaveAccrualOutcome`; exactly one per
+  examined employment):
+  - `credited`, `already_credited`, `not_due`, `partial_period`,
+    `no_policy`, `assignment_not_whole_period`, `not_monthly_policy`,
+    `annual_allocation_exists`.
+- **Never prorated.** A joining or leaving month is `partial_period`. It is
+  listed for an administrator, who may grant exact units explicitly
+  (§22.2).
+- **The units are the ASSIGNED version's.** A supersession, a transfer or a
+  reclassification never re-prices a month or moves an assignment. HR.9
+  eligibility drift on the month's first day is flagged on the item
+  (`eligibility_drift`), never acted on.
+- **Policy-driven**, like the annual run (ORG.8D). The run covers every
+  eligible employment, the operator's own included, because nobody chooses
+  an amount.
+
+### 29.6 Runs: complete, recoverable, reconciled
+- **Population:** EVERY employment overlapping the month, by a complete,
+  id-ordered keyset traversal (`EmploymentRoster::pageOverlapping()`, page
+  size 250). There is no population cap.
+- **HR.9's silent 2,000-row cap is removed in the same change.**
+  `LeaveEligibilityResolver::completeRoster()` pages through every
+  employment. The applicability view returns complete counts with
+  server-paged rows (`total`, `page`, `perPage`; 100 rows per web page).
+- **Lifecycle:** `leave_accrual_runs` moves `processing` →
+  `completed` (final) or `failed` (resumable).
+  - At most one open run per month (partial unique index).
+  - The identity is immutable and the cursor and batch count only move
+    forward (trigger).
+  - A re-run of a completed month is a new run that credits only what is
+    still uncredited (normally nothing; §29.9a).
+- **Each batch is one transaction.** Lock order:
+  1. the month lock `leave.accrual:{school}:{type}:{year}:{month}`;
+  2. the run row;
+  3. HR employment rows (FOR SHARE);
+  4. assignment rows (FOR SHARE);
+  5. the year (shared);
+  6. the balance keys (sorted).
+
+  It writes one `leave_accrual_run_items` row per examined employment and
+  advances the cursor.
+- **Failure:** a batch that throws rolls back alone. The run is marked
+  `failed` with a closed code, and the next call resumes the same run from
+  its last committed batch.
+- **Reconciliation:** examined = the sum of the outcome counts (items,
+  unique per run × employment).
+- **Proven:**
+  - a 2,060-employment School (`LeaveAccrualLargeRosterTest`);
+  - two-process races with the contender observed blocked
+    (`LeaveAccrualConcurrencyTest`): two runs of a month, an employment end
+    inside the month, an assignment end inside the month, and a year close.
+- **Web:** a request processes 20 batches and shows the run; running it
+  again continues it. **API:** `max_batches`.
+- **Idempotency:** idempotent by construction (one open run, unique month
+  key, resumable). It deliberately avoids the generic `idempotent`
+  middleware, whose stored replay would return a stale run state
+  (rule 29 reviewed).
+
+### 29.7 Adjustments (S-7) and corrections
+- An adjustment needs `hr.leave.manage`, then a **fresh MFA code** checked
+  after the capability and outside the transaction (rule 95), on web and API.
+- It changes a funded account (allocation, accrual or opening).
+- It may name the entry of the same account it corrects
+  (`source_type = 'leave_ledger_entry'`, checked by the trigger as
+  `leave_adjustment_source_invalid`).
+- The original is never edited. A correction is a new adjustment.
+- A reversal remains only the undoing of a consumption (§4.8).
+
+### 29.8 Statement and grid (D11-16)
+- **`LeaveStatementReader::statement()`:** one account's entries in order,
+  with signed units, running balance and provenance (month, run, request,
+  close, corrected entry), and the totals opening + credits − debits =
+  closing.
+  - "Opening" means `opening` plus `carry_forward_in`.
+  - `identityHolds` checks the totals against the running sum.
+- **`grid()`:** a keyset page of employments × months of POSTED accrual. A
+  month with nothing posted is `null`, never 0. It also shows the annual
+  allocation and the balance.
+- Both are reads only, under `hr.leave.view`.
+
+### 29.9 Authorization, audit, retention, verification
+- **Capabilities:**
+  - `hr.leave.manage`: preview, run, opening, adjustment;
+  - `hr.leave.view`: runs, statement, grid.
+
+  These operations are whole-School and never Campus-adopted. There is no
+  new capability.
+- **Audit:**
+  - `leave.accrual_run.started` / `.resumed` / `.failed` / `.completed`
+    (ids, month, closed outcome counts);
+  - `leave.opening.recorded`;
+  - `leave.adjustment.recorded` with `correctsEntryId`.
+- **Retention:**
+  - runs: `leave_configuration` (tenant lifetime; no per-Employee amount;
+    starter RETAIN);
+  - items: `leave_evidence`, going with their employment (FK cascade), so
+    they never block an Employee purge;
+  - the ledger's new link `accrual_run_id` is tracked by the retention
+    anchor.
+- **Verification:** `leave_policy_invariants` now also checks the ledger
+  guard, both run triggers, forced RLS on both run tables and four more
+  constraints. The forced-RLS count is 236.
+
+### 29.9a Security review (HR.10) and recorded limits
+No HIGH findings.
+
+**Fixed:**
+- **MEDIUM:** a later, backdated end of a policy assignment could leave a
+  credited month without the coverage it was posted under. A new trigger,
+  `trg_leave_policy_assignments_accrual_bounds`, refuses shortening an
+  assignment past a month it funded (`LEAVE_ASSIGNMENT_ACCRUED`). A wrong
+  credited month is corrected by an adjustment that names it.
+- **LOW:** the ledger guard now binds an accrual to a `processing` run of its
+  own month.
+- **LOW:** preview paging normalizes ids.
+
+**Recorded, not changed:**
+- **A backdated EMPLOYMENT end** after a month was credited leaves that
+  credit in place. HR must never depend on Leave (DOMAIN-MAP), so HR's end
+  cannot consult the ledger. Correct the month with an adjustment. A
+  separation workflow that consults Leave through an event is HR.12 scope.
+  Residual R-HR10-1.
+- **An opening is a carried-in prior balance** (statement "opening", like
+  `carry_forward_in`). It stacks with this year's allocation or accrual by
+  design: go-live migrates the closing balance of the previous system,
+  never this year's entitlement.
+- **Switching the method mid-year** (annual ↔ monthly on one account) is not
+  funded automatically: funding stays exclusive per account. The remaining
+  months are granted by adjustment. A switch at a year boundary needs
+  nothing.
+- **An older employment that becomes eligible after a completed run's
+  cursor passed it** (a draft activated, a backdated start) is credited by
+  the month's NEXT run. A re-run credits exactly those months still
+  uncredited, never one twice.
+- **A run left `failed` because its year was closed** stays failed. The
+  year refuses every later accrual (`LEAVE_YEAR_CLOSED`).
+- **The trigger does not check that a month is due.** A school-local date
+  in the database would need the School's timezone. This is an
+  application rule (`not_due`); amounts, coverage, uniqueness, run month
+  and the closed year are enforced in the database.
+
+### 29.10 Not built (owner decisions; no dormant toggle)
+- **OD-HR-16 — in-year expiry of carried units (D11-06).**
+  - Expiring "unused carried units" needs a consumption order: which units
+    a leave consumed (carried first, current first, or pro rata). The
+    ledger is a sum per account, not per credit lot. Any of the three
+    changes balances and audit meaning.
+  - Recommended: carried-first (oldest grant first, the common
+    convention), executed as an `expiry` entry by the close's
+    reconciliation pattern.
+  - Until then `carried_expires_on` stays recorded, not enforced.
+- **OD-HR-17 — proration (D10-19, D12-03, D12-08).**
+  - §22.2 ("no automatic proration, anywhere") is a final owner decision.
+  - Monthly accrual already gives a joiner entitlement from their first
+    whole month. A part month is listed, never prorated.
+  - Options:
+    - keep §22.2 (recommended);
+    - day-based proration of a part month with an explicit half-day
+      rounding rule (needs a §22.2 amendment);
+    - first-period treatment on the version.
+- **Not in HR.10:** comp-off (HR.11); manager approval (OD-HR-5);
+  sandwich (OD-HR-15); HR-L8 eligibility; any clock, device or GPS data.

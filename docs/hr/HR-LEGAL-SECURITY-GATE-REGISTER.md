@@ -85,6 +85,38 @@ when a request is drafted.
 - **Then:** an ADR 0065 amendment, then a pure unit calculator and its
   tests. ADR 0065 §28.9 records the analysis.
 
+## 2b. Owner decisions (not legal) raised by HR.10
+
+**OD-HR-16 — consumption order for in-year expiry of carried units (D11-06).**
+- **Status:** not decided. Nothing is built; `carried_expires_on` stays
+  recorded, not enforced (ADR 0065 §23.8, §29.10).
+- **Ambiguity:** the ledger sums one balance per account; it does not track
+  credit lots. To expire "unused carried units", one must decide which units
+  each leave consumed.
+- **Options:**
+  1. **carried-first** (oldest grant first): recommended, the common
+     convention;
+  2. current-year-first;
+  3. pro rata.
+- **Implications:** each option changes balances on the expiry date and the
+  meaning of past consumption in reports. Payroll is unaffected (it reads
+  leave days, never balances). Migration: none; the expiry is posted
+  prospectively as an `expiry` entry with its own reconciliation.
+
+**OD-HR-17 — proration of a joining or leaving period (D10-19, D12-03, D12-08).**
+- **Status:** ADR 0065 §22.2 (*no automatic proration, anywhere*) is a final
+  owner decision and stands.
+- **What HR.10 already provides:** monthly accrual credits every WHOLE month
+  of employment. A part month is reported (`partial_period`), never
+  credited automatically. An administrator may grant exact units.
+- **Options:**
+  1. keep §22.2: recommended;
+  2. day-based proration of a part month, with an explicit half-day
+     rounding rule (needs a §22.2 amendment);
+  3. a per-version first-period rule (full / none / prorated).
+- **Implications:** no Payroll effect. Historical balances are never
+  recalculated, because any change is prospective.
+
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 
 **Problem.** HRX-L2 currently bundles two very different data classes:

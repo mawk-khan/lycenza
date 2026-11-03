@@ -29,6 +29,8 @@ class LeaveArchitectureGuardTest extends TestCase
         'leave_requests', 'leave_request_days', 'leave_decisions', 'leave_year_closes', 'leave_year_close_items', 'leave_year_close_reconciliations',
         // HR.9 (ADR 0065 §28)
         'leave_eligibility_rules', 'leave_eligibility_runs',
+        // HR.10 (ADR 0065 §29)
+        'leave_accrual_runs', 'leave_accrual_run_items',
     ];
 
     /**

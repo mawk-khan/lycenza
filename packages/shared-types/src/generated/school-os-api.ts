@@ -1448,6 +1448,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/leave/openings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HR.10 (D11-01): a go-live opening balance of exact units -- once per account and only as its first entry; never the caller's own employment. Requires hr.leave.manage and a fresh mfa_code (S-7). Idempotency-Key required. */
+        post: operations["recordLeaveOpening"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.10 (D11-16): one account's statement -- every entry with its signed units, running balance and provenance, and opening + credits - debits = closing. Requires hr.leave.view. */
+        get: operations["showLeaveStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/accruals/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.10: one month's accrual evaluation, read-only -- complete disjoint outcome counts over every employment overlapping the month, and one keyset page of rows. Requires hr.leave.manage. */
+        get: operations["previewLeaveAccrual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/accrual-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.10: the accrual runs of one leave type and year, newest month first. Requires hr.leave.view. */
+        get: operations["listLeaveAccrualRuns"];
+        put?: never;
+        /** HR.10: opens the month's run (or resumes its open one) and processes up to max_batches batches, each its own transaction. Idempotent by construction: one open run per month, one accrual per account and month, a resumable cursor -- a retry continues the same run. Requires hr.leave.manage. */
+        post: operations["executeLeaveAccrualRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/accrual-runs/{leaveAccrualRun}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.10: one run with its reconciled outcome counts (examined = their sum) and one page of its items, optionally of one outcome. Requires hr.leave.view. */
+        get: operations["showLeaveAccrualRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/accrual-grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.10: the monthly grid of one leave type and year -- a keyset page of employments, each month's POSTED accrual (null when nothing is posted), the annual allocation and the balance. Requires hr.leave.view. */
+        get: operations["showLeaveAccrualGrid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/leave/allocation-runs/preview": {
         parameters: {
             query?: never;
@@ -8527,6 +8630,11 @@ export interface components {
             /** @description HR.9: chargeable half-day units per request; null = no rule. */
             maxUnitsPerRequest?: number | null;
             eligibilityRules?: components["schemas"]["LeaveEligibilityRule"][];
+            /** @enum {string} */
+            entitlementMethod?: "annual" | "monthly";
+            monthlyAccrualUnits?: number | null;
+            /** @enum {string|null} */
+            accrualTiming?: "period_start" | "period_end" | null;
             /** Format: date-time */
             createdAt?: string | null;
             /** Format: date-time */
@@ -8640,6 +8748,10 @@ export interface components {
              * @description Preview only: an active version these rules would overlap (the create would be refused).
              */
             overlappingPolicyId?: string | null;
+            /** @description HR.10: rows matching the outcome filter (the counts always cover every employment). */
+            total?: number;
+            page?: number;
+            perPage?: number;
         };
         LeavePolicyCreateInput: {
             /** Format: uuid */
@@ -8654,6 +8766,14 @@ export interface components {
             min_notice_days?: number | null;
             max_backdate_days?: number | null;
             max_units_per_request?: number | null;
+            /**
+             * @description HR.10: exclusive alternatives (monthly needs annual_allocation_units 0).
+             * @enum {string}
+             */
+            entitlement_method?: "annual" | "monthly";
+            monthly_accrual_units?: number | null;
+            /** @enum {string|null} */
+            accrual_timing?: "period_start" | "period_end" | null;
             eligibility_rules?: components["schemas"]["LeaveEligibilityRuleInput"][];
         };
         StaffWeeklyPattern: {
@@ -8775,6 +8895,84 @@ export interface components {
             units: number;
             /** @enum {string} */
             reason: "entitlement_change" | "allocation_correction" | "administrative_correction";
+            /**
+             * Format: uuid
+             * @description HR.10: an entry of the same account this adjustment corrects.
+             */
+            corrects_entry_id?: string | null;
+            /** @description HR.10 (S-7): a current authentication code, re-verified now. */
+            mfa_code?: string;
+        };
+        LeaveOpeningInput: {
+            /** Format: uuid */
+            employment_record_id: string;
+            /** Format: uuid */
+            leave_type_id: string;
+            /** Format: uuid */
+            leave_year_id: string;
+            units: number;
+            mfa_code: string;
+        };
+        LeaveStatement: {
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            leaveTypeId: string;
+            /** Format: uuid */
+            leaveYearId: string;
+            /** @description opening + carry_forward_in units. */
+            opening: number;
+            credits: number;
+            debits: number;
+            /** @description opening + credits - debits. */
+            closing: number;
+            byKind?: {
+                [key: string]: number;
+            };
+            identityHolds: boolean;
+            lines: {
+                [key: string]: unknown;
+            }[];
+        };
+        LeaveAccrualRunInput: {
+            /** Format: uuid */
+            leave_type_id: string;
+            /** Format: uuid */
+            leave_year_id: string;
+            /**
+             * Format: date
+             * @description The first day of a month inside the leave year.
+             */
+            period_start: string;
+            max_batches?: number;
+        };
+        LeaveAccrualRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            leaveTypeId: string;
+            /** Format: uuid */
+            leaveYearId: string;
+            /** Format: date */
+            periodStart: string;
+            /** @enum {string} */
+            status: "processing" | "completed" | "failed";
+            batchCount: number;
+            failureCode?: string | null;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            /** @description Disjoint outcome counts; their sum is examined. */
+            counts?: {
+                [key: string]: number;
+            };
+            examined?: number;
+            items?: {
+                [key: string]: unknown;
+            }[];
+            /** Format: uuid */
+            nextAfter?: string | null;
         };
         LeaveLedgerEntry: {
             /** Format: uuid */
@@ -8785,8 +8983,11 @@ export interface components {
             leaveTypeId: string;
             /** Format: uuid */
             leaveYearId: string;
-            /** @enum {string} */
-            kind: "allocation" | "adjustment" | "consumption" | "reversal" | "carry_forward_in" | "carry_forward_out" | "expiry";
+            /**
+             * @description HR.10 adds opening and accrual (both credits); earlier kinds keep their meaning.
+             * @enum {string}
+             */
+            kind: "allocation" | "adjustment" | "consumption" | "reversal" | "carry_forward_in" | "carry_forward_out" | "expiry" | "opening" | "accrual";
             /** @enum {string|null} */
             direction?: "credit" | "debit" | null;
             units: number;
@@ -8801,6 +9002,20 @@ export interface components {
             yearCloseId?: string | null;
             /** Format: uuid */
             yearCloseReconciliationId?: string | null;
+            /**
+             * Format: date
+             * @description HR.10: the first day of the credited month (accrual only).
+             */
+            accrualPeriod?: string | null;
+            /** Format: uuid */
+            accrualRunId?: string | null;
+            /** Format: uuid */
+            leavePolicyAssignmentId?: string | null;
+            /**
+             * Format: uuid
+             * @description HR.10: the entry of the same account a correcting adjustment names.
+             */
+            correctsEntryId?: string | null;
             /** Format: date-time */
             createdAt?: string | null;
         };
@@ -15905,6 +16120,9 @@ export interface operations {
             query: {
                 leave_type_id: string;
                 date?: string;
+                outcome?: "assigned" | "eligible" | "ambiguous" | "no_matching_rule" | "employment_not_eligible" | "own_employment";
+                page?: number;
+                per_page?: number;
             };
             header?: never;
             path: {
@@ -16089,6 +16307,484 @@ export interface operations {
                 };
             };
             /** @description Validation failed; LEAVE_DATE_INVALID. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    recordLeaveOpening: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveOpeningInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveLedgerEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_OPENING_NOT_FIRST; LEAVE_YEAR_CLOSED; LEAVE_EMPLOYMENT_NOT_ELIGIBLE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    showLeaveStatement: {
+        parameters: {
+            query: {
+                employment_record_id: string;
+                leave_type_id: string;
+                leave_year_id: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveStatement"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    previewLeaveAccrual: {
+        parameters: {
+            query: {
+                leave_type_id: string;
+                leave_year_id: string;
+                period_start: string;
+                after?: string;
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_TYPE_INACTIVE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listLeaveAccrualRuns: {
+        parameters: {
+            query: {
+                leave_type_id: string;
+                leave_year_id: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveAccrualRun"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    executeLeaveAccrualRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveAccrualRunInput"];
+            };
+        };
+        responses: {
+            /** @description The run as it stands (completed, or processing -- call again to continue). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveAccrualRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_YEAR_CLOSED; LEAVE_ACCRUAL_PERIOD_NOT_DUE; LEAVE_TYPE_INACTIVE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    showLeaveAccrualRun: {
+        parameters: {
+            query?: {
+                outcome?: "credited" | "already_credited" | "not_due" | "partial_period" | "no_policy" | "assignment_not_whole_period" | "not_monthly_policy" | "annual_allocation_exists";
+                after?: string;
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveAccrualRun: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveAccrualRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    showLeaveAccrualGrid: {
+        parameters: {
+            query: {
+                leave_type_id: string;
+                leave_year_id: string;
+                after?: string;
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16300,7 +16996,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Validation failed. */
+            /** @description Validation failed, including a missing or invalid mfa_code (S-7). */
             422: {
                 headers: {
                     [name: string]: unknown;

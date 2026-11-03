@@ -394,6 +394,25 @@ reservation.
 
 ### HR.10 — Leave ledger & accrual
 
+> **HR.10 IMPLEMENTED (2026-11-03).** Contract: ADR 0065 §29. Delivered:
+> - the monthly entitlement method on the version (exclusive with annual);
+> - ledger kinds `accrual` (unique month key, DB-checked against the
+>   whole-month assignment) and `opening` (D11-01);
+> - recoverable accrual runs over the COMPLETE roster (`leave_accrual_runs`,
+>   per-employment `leave_accrual_run_items` with disjoint outcomes);
+> - the statement read model (D11-16) and the monthly grid;
+> - fresh MFA for adjustments and openings (S-7);
+> - HR.9's 2,000-row roster cap removed.
+>
+> **Not built:**
+> - in-year carried expiry (D11-06; owner decision **OD-HR-16**,
+>   consumption order);
+> - proration (D10-19 / D12-03 PART, D12-08 DEF; owner decision
+>   **OD-HR-17**; ADR 0065 §22.2 stands).
+>
+> "Done when" is met except D11-06 (OD-HR-16) and D11-09/10 (comp-off,
+> HR.11).
+
 1. **Prerequisites:** HR.9.
 2. **Scope:** D10-05/19; D11-01/03/06/16; D12-01/03/08; S-7.
 3. **Schema:** ledger kinds `opening` and `accrual` (period key, unique);

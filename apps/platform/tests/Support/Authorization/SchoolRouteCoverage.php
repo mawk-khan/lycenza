@@ -35,6 +35,7 @@ use App\Domain\Identity\Application\Staff\StaffInvitationService;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Inventory\Application\InventoryStockHistory;
+use App\Domain\Leave\Application\Accrual\LeaveAccrualService;
 use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
@@ -1148,6 +1149,10 @@ final class SchoolRouteCoverage
             Coverage::service('app.leave.allocations.store', LeaveLedgerService::class, 'allocate')->validatesFirst(),
             Coverage::service('app.leave.adjustments.store', LeaveLedgerService::class, 'adjust')->validatesFirst(),
             Coverage::service('app.leave.allocation-runs.store', LeaveLedgerService::class, 'executeRun')->validatesFirst(),
+            // HR.10 (ADR 0065 §29): opening (manage + MFA), the accrual workspace (view) and the run (manage).
+            Coverage::service('app.leave.openings.store', LeaveLedgerService::class, 'recordOpening')->validatesFirst(),
+            Coverage::gate('app.leave.accruals', 'hr.leave.view'),
+            Coverage::service('app.leave.accrual-runs.store', LeaveAccrualService::class, 'execute')->validatesFirst(),
             Coverage::gate('app.leave.requests', 'hr.leave.view'),
             Coverage::gate('app.leave.monthly', 'hr.leave.view'),
             Coverage::service('app.leave.requests.store', LeaveRequestService::class, 'submitOnBehalf')->validatesFirst(),

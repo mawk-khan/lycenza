@@ -5,9 +5,11 @@ use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Leave\Application\Accrual\LeaveAccrualService;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveLedgerService;
+use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Leave\Application\LeaveYearCloseService;
@@ -40,6 +42,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php leave-op.php eligibility-run <schoolId> <typeId> <asOf> <actorId>                          (HR.9: prints the assigned count)
 //   php leave-op.php version <schoolId> <typeId> <staffType|any> <supersedesPolicyId|none> <actorId> (HR.9: one-rule version)
 //   php leave-op.php end-employment <schoolId> <employmentId> <endsOn> <actorId>                   (HR: the employment ends)
+//   php leave-op.php accrue <schoolId> <typeId> <yearId> <periodStart> <actorId>                   (HR.10: prints status:credited)
+//   php leave-op.php end-assignment <schoolId> <assignmentId> <to> <actorId>                         (HR.10 race: a policy assignment ends)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -79,6 +83,14 @@ try {
         'version' => 'ok:'.$app->make(LeavePolicyService::class)->create($school, $args[1], [
             'name' => 'Raced', 'annual_allocation_units' => 24, 'carry_forward_allowed' => false, 'carry_forward_cap_units' => null, 'carry_forward_expiry_days' => null,
         ], $args[3] === 'none' ? null : $args[3], User::query()->findOrFail($args[4]), [new LeaveEligibilityCriteria($args[2] === 'any' ? null : StaffType::from($args[2]), null, null)])->status,
+        'accrue' => (function () use ($app, $school, $args) {
+            $accruals = $app->make(LeaveAccrualService::class);
+            $actor = User::query()->findOrFail($args[4]);
+            $run = $accruals->execute($school, $args[1], $args[2], $args[3], $actor);
+
+            return 'ok:'.$run->status.':'.$accruals->show($school, $run->id, $actor)['counts']['credited'];
+        })(),
+        'end-assignment' => 'ok:'.$app->make(LeavePolicyAssignmentService::class)->end($school, $args[1], $args[2], User::query()->findOrFail($args[3]))->effective_to->toDateString(),
         'end-employment' => 'ok:'.$app->make(EmploymentService::class)->end(EmploymentRecord::query()->findOrFail($args[1]), $args[2], User::query()->findOrFail($args[3]))->status,
         'close' => 'ok:'.$app->make(LeaveYearCloseService::class)->execute($school, $args[1], User::query()->findOrFail($args[2]))->item_count,
         'monday' => (function () use ($app, $school, $args) {

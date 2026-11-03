@@ -241,6 +241,11 @@ class DatabaseRoleVerifier
         'trg_leave_policies_rules_complete' => 'leave_policies',
         'trg_leave_eligibility_runs_immutable' => 'leave_eligibility_runs',
         'trg_leave_policies_immutable' => 'leave_policies',
+        // HR.10 (ADR 0065 §29): the accrual and opening checks live in the ledger guard; runs move forward only; run evidence is append-only.
+        'trg_leave_ledger_guard' => 'leave_ledger_entries',
+        'trg_leave_accrual_runs_guard' => 'leave_accrual_runs',
+        'trg_leave_accrual_run_items_guard' => 'leave_accrual_run_items',
+        'trg_leave_policy_assignments_accrual_bounds' => 'leave_policy_assignments',
     ];
 
     /**
@@ -459,13 +464,14 @@ class DatabaseRoleVerifier
         $missingLeavePolicy = array_keys(array_filter(self::LEAVE_POLICY_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
             "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
         )->x === false, ARRAY_FILTER_USE_BOTH));
-        foreach (['leave_eligibility_rules', 'leave_eligibility_runs'] as $table) {
+        foreach (['leave_eligibility_rules', 'leave_eligibility_runs', 'leave_accrual_runs', 'leave_accrual_run_items'] as $table) {
             $rls = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (\'public.\'||?)::regclass', [$table]);
             if ($rls === null || ! $rls->x) {
                 $missingLeavePolicy[] = "{$table}:rls";
             }
         }
-        foreach (['leave_policies_rules_check', 'leave_eligibility_rules_staff_type_check', 'leave_policy_assignments_provenance_check', 'leave_eligibility_runs_count_check'] as $constraint) {
+        foreach (['leave_policies_rules_check', 'leave_eligibility_rules_staff_type_check', 'leave_policy_assignments_provenance_check', 'leave_eligibility_runs_count_check',
+            'leave_policies_entitlement_check', 'leave_accrual_runs_shape_check', 'leave_accrual_run_items_shape_check', 'leave_ledger_entries_shape_check'] as $constraint) {
             if (! DB::selectOne('select exists (select 1 from pg_constraint where conname = ?) as x', [$constraint])->x) {
                 $missingLeavePolicy[] = $constraint;
             }

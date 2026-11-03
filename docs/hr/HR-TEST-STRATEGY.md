@@ -219,6 +219,15 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 | `tests/Feature/Leave/LeaveEligibilityApiTest`, `tests/Feature/App/LeaveEligibilityUiTest` | typed input (unknown rule keys and a `gender` key refused, 422), each operation's capability allowed and the others denied, `no-store`, the run replays on its Idempotency-Key and conflicts on a different payload, one tenant-safe 404, a timing refusal is a stable code; the editor's dimensions, a refusal as a form error, the JSON preview for configure only, the page for view and the run for manage |
 | `tests/Feature/Postgres/LeaveRlsIsolationTest` (extended), `LeaveArchitectureGuardTest` (extended), `LeaveOpenApiCoverageTest` (43 operations) | forced RLS and fail-closed reads on both new tables, cross-School rule / Category / run refused structurally; no HR-L8 column; the contract matches the live routes |
 
+## 2e. Implemented suites (HR.10)
+
+| Suite | Proves |
+|---|---|
+| `tests/Feature/Leave/LeaveAccrualTest` | the method is annual XOR monthly (service, CHECK, frozen); whole-month eligibility with disjoint outcomes (joiner and leaver = part month, never prorated; mid-month assignment; unassigned); preview writes nothing; provenance (month, run, assignment); a re-run credits nothing and reconciles; timing (in advance / arrears), future and invalid months; funding exclusivity (allocate refused, annual run skips, DB `leave_funding_conflict`); the DB checks units, month, year and duplicates; run evidence immutable, completed run final; a closed year receives nothing; dated facts for transfer (drift flagged, not acted on), supersession (assigned version prices), an ended employment and a rehire; policy-driven run includes the operator, opening never; accrued leave consumed, refused when insufficient, cancelled, statement identity; capability allow / deny, School isolation, audit keys; the grid shows posted months and never a fabricated zero |
+| `tests/Feature/Leave/LeaveOpeningAdjustmentTest` | an opening once, only first, never one's own, manage only; an adjustment needs a funded account, may name an entry of the SAME account, never edits it, never goes negative; web and API need a fresh MFA code after the capability (missing, wrong, viewer 403); Entitlements statements and the Accruals page render; approver-only denied |
+| `tests/Feature/Leave/LeaveAccrualLargeRosterTest` | 2,060 employments (above HR.9's former cap): HR.9 applicability counts and assigns all; an interrupted run (3 batches), a failing batch (rolled back alone, run `failed` with a code), a resume of the SAME run to completion; examined = the disjoint outcomes; every eligible employment credited exactly once; a re-run credits nothing |
+| `tests/Feature/Leave/LeaveAccrualConcurrencyTest` | two real processes, contender observed blocked: two runs of a month credit each account once; an employment end inside the month and an assignment end inside the month are never credited; a run waiting on a year close refuses (`LEAVE_YEAR_CLOSED`) and is marked failed |
+
 ## 3. Regression cadence
 
 - **Per phase:**

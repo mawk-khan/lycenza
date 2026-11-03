@@ -187,6 +187,40 @@ class EmploymentCoverage
         });
     }
 
+    /**
+     * HR.10 (ADR 0065 §29.6): for a batch writer (Leave's monthly accrual),
+     * which of these EmploymentRecords span the WHOLE of [from, to] by their
+     * dates, in any status but `draft` -- the dated facts decide (HR.1A): an
+     * employment that covered a past month is eligible for it even if it has
+     * ended since. The rows are read FOR SHARE in ONE statement, in id order,
+     * inside the caller's transaction, so a concurrent end, start change or
+     * status change commits wholly before (and is seen) or waits.
+     *
+     * @param  list<string>  $employmentRecordIds
+     * @return list<string> the ids that span the whole range
+     */
+    public function holdRecordsSpanning(School $school, array $employmentRecordIds, string $from, string $to): array
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('EmploymentCoverage::holdRecordsSpanning() must run inside a database transaction.');
+        }
+        if ($employmentRecordIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn (): array => EmploymentRecord::query()
+            ->where('school_id', $school->id)
+            ->whereIn('id', $employmentRecordIds)
+            ->orderBy('id')
+            ->sharedLock()
+            ->get(['id', 'status', 'starts_on', 'ends_on'])
+            ->filter(fn (EmploymentRecord $r) => $r->status !== 'draft' && $r->starts_on->toDateString() <= $from
+                && ($r->ends_on === null || $r->ends_on->toDateString() >= $to))
+            ->map(fn (EmploymentRecord $r) => (string) $r->id)
+            ->values()
+            ->all());
+    }
+
     private function holdRecordFor(School $school, string $employmentRecordId, string $from, ?string $to, bool $whole): string
     {
         if (DB::transactionLevel() === 0) {

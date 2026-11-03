@@ -108,6 +108,7 @@ use App\Http\Controllers\App\Integrations\ApiClientController;
 use App\Http\Controllers\App\InventoryItemController;
 use App\Http\Controllers\App\InventoryLocationController;
 use App\Http\Controllers\App\InventoryStockController;
+use App\Http\Controllers\App\Leave\LeaveAccrualPageController;
 use App\Http\Controllers\App\Leave\LeaveAdminController;
 use App\Http\Controllers\App\Leave\LeaveApprovalsController;
 use App\Http\Controllers\App\Leave\LeaveEligibilityPageController;
@@ -2008,6 +2009,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/allocations', [LeaveAdminController::class, 'allocate'])->name('allocations.store');
         Route::post('/adjustments', [LeaveAdminController::class, 'adjust'])->name('adjustments.store');
         Route::post('/allocation-runs', [LeaveAdminController::class, 'executeRun'])->name('allocation-runs.store');
+        // HR.10 (ADR 0065 §29): opening balances (manage + fresh MFA) and the monthly accrual workspace.
+        Route::post('/openings', [LeaveAdminController::class, 'opening'])->name('openings.store');
+        Route::get('/accruals', [LeaveAccrualPageController::class, 'show'])->name('accruals');
+        Route::post('/accrual-runs', [LeaveAccrualPageController::class, 'execute'])->name('accrual-runs.store');
 
         Route::get('/requests', [LeaveAdminController::class, 'requests'])->name('requests');
         // ORG.9C-1 (ADR 0076 §69), HR-042: month-wise leave taken, read-only (hr.leave.view).

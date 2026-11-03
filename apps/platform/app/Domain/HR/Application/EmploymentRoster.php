@@ -68,6 +68,30 @@ class EmploymentRoster
     }
 
     /**
+     * HR.10 (ADR 0065 §29.6): ONE PAGE of a COMPLETE traversal -- the
+     * employments (any status but `draft`) whose dates overlap [from, to],
+     * ordered by id, strictly after $afterId. Unlike on()/overlapping()
+     * there is no population cap: a caller pages until a page is shorter than
+     * $limit, so no employment is ever silently omitted. Labels only.
+     *
+     * @param  string  $from  School-local Y-m-d
+     * @param  string  $to  School-local Y-m-d
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
+     */
+    public function pageOverlapping(School $school, string $from, string $to, ?string $afterId, int $limit): array
+    {
+        $limit = max(1, min($limit, self::LIMIT));
+
+        return $this->context->withSchool($school, fn (): array => EmploymentRecord::query()->where('school_id', $school->id)
+            ->where('status', '<>', 'draft')->where('starts_on', '<=', $to)
+            ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $from))
+            ->when($afterId !== null, fn ($q) => $q->where('id', '>', $afterId))
+            ->orderBy('id')->limit($limit)
+            ->with('employee:id,employee_number,full_name,record_status')->get()
+            ->map(fn (EmploymentRecord $r) => self::row($r))->values()->all());
+    }
+
+    /**
      * The same labels for these EmploymentRecord ids of the School (another School's ids yield nothing).
      *
      * @param  list<string>  $employmentRecordIds
@@ -107,17 +131,23 @@ class EmploymentRoster
             $filter($query);
 
             return $query->with('employee:id,employee_number,full_name,record_status')->limit(self::LIMIT)->get()
-                ->map(fn (EmploymentRecord $r) => [
-                    'employmentRecordId' => $r->id,
-                    'employeeId' => $r->employee_id,
-                    'employeeNumber' => $r->employee?->employee_number,
-                    'fullName' => $r->employee?->full_name,
-                    'status' => $r->status,
-                    'current' => in_array($r->status, EmploymentCoverage::CURRENT_STATUSES, true) && $r->employee?->isActive() === true,
-                    // HR.9: whether the Employee itself is active (a planned employment of an inactive Employee is not assignable).
-                    'employeeActive' => $r->employee?->isActive() === true,
-                ])
+                ->map(fn (EmploymentRecord $r) => self::row($r))
                 ->sortBy(fn (array $row) => [$row['fullName'] ?? '', $row['employmentRecordId']])->values()->all();
         });
+    }
+
+    /** @return array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool} */
+    private static function row(EmploymentRecord $r): array
+    {
+        return [
+            'employmentRecordId' => $r->id,
+            'employeeId' => $r->employee_id,
+            'employeeNumber' => $r->employee?->employee_number,
+            'fullName' => $r->employee?->full_name,
+            'status' => $r->status,
+            'current' => in_array($r->status, EmploymentCoverage::CURRENT_STATUSES, true) && $r->employee?->isActive() === true,
+            // HR.9: whether the Employee itself is active (a planned employment of an inactive Employee is not assignable).
+            'employeeActive' => $r->employee?->isActive() === true,
+        ];
     }
 }

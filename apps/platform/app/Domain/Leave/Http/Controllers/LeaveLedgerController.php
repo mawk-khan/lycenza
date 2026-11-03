@@ -2,12 +2,14 @@
 
 namespace App\Domain\Leave\Http\Controllers;
 
+use App\Domain\Leave\Application\Accrual\LeaveStatementReader;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeaveReadService;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Idempotency\IdempotencyGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -109,7 +111,12 @@ class LeaveLedgerController extends Controller
         return response()->json($body, 201);
     }
 
-    public function adjust(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard): JsonResponse
+    /**
+     * HR.10 (S-7, ADR 0065 §29.7): an adjustment re-verifies a fresh MFA code
+     * (after the route's capability check, outside the transaction, rule 95)
+     * and may name the entry of the same account it corrects.
+     */
+    public function adjust(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate([
             'employment_record_id' => ['required', 'uuid'],
@@ -118,11 +125,14 @@ class LeaveLedgerController extends Controller
             'direction' => ['required', Rule::in(['credit', 'debit'])],
             'units' => ['required', 'integer', 'min:1', 'max:1000'],
             'reason' => ['required', Rule::in(LeaveLedgerEntry::ADJUSTMENT_REASONS)],
+            'corrects_entry_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
+        $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
 
         $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request) {
-            $entry = $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user());
+            $entry = $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user(),
+                isset($validated['corrects_entry_id']) ? strtolower((string) $validated['corrects_entry_id']) : null);
             $body = ['data' => LeaveReadService::entry($entry)];
             if ($record !== null) {
                 $guard->completeWithin($record, 201, $body, ['Content-Type' => 'application/json']);
@@ -132,6 +142,39 @@ class LeaveLedgerController extends Controller
         });
 
         return response()->json($body, 201);
+    }
+
+    /** HR.10 (D11-01, S-7): a go-live opening balance -- fresh MFA, idempotent, completed inside its transaction (rule 33). */
+    public function opening(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard, FreshMfaRequirement $mfa): JsonResponse
+    {
+        $validated = $request->validate([
+            'employment_record_id' => ['required', 'uuid'],
+            'leave_type_id' => ['required', 'uuid'],
+            'leave_year_id' => ['required', 'uuid'],
+            'units' => ['required', 'integer', 'min:1', 'max:1000'],
+        ]);
+        $mfa->requireForAction($request, $request->user());
+        $record = $request->attributes->get('idempotency_record');
+
+        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request) {
+            $entry = $ledger->recordOpening($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user());
+            $body = ['data' => LeaveReadService::entry($entry)];
+            if ($record !== null) {
+                $guard->completeWithin($record, 201, $body, ['Content-Type' => 'application/json']);
+            }
+
+            return $body;
+        });
+
+        return response()->json($body, 201);
+    }
+
+    /** HR.10 (D11-16): one account's statement -- the balance identity over every entry. */
+    public function statement(Request $request, School $school, LeaveStatementReader $statements): JsonResponse
+    {
+        $validated = $request->validate(['employment_record_id' => ['required', 'uuid'], 'leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid']]);
+
+        return response()->json(['data' => $statements->statement($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $request->user())]);
     }
 
     public function ledger(Request $request, School $school, LeaveReadService $reads): JsonResponse

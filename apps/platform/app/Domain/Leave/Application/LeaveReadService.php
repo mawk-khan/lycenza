@@ -204,14 +204,20 @@ class LeaveReadService
             'debits' => (int) $r->debits,
             'availableUnits' => (int) $r->credits - (int) $r->debits,
         ], DB::select(
-            "SELECT leave_type_id,
-                    coalesce(sum(units) FILTER (WHERE kind IN ('allocation', 'reversal', 'carry_forward_in') OR (kind = 'adjustment' AND direction = 'credit')), 0) AS credits,
-                    coalesce(sum(units) FILTER (WHERE kind IN ('consumption', 'carry_forward_out', 'expiry') OR (kind = 'adjustment' AND direction = 'debit')), 0) AS debits
+            'SELECT leave_type_id,
+                    coalesce(sum(units) FILTER (WHERE kind IN ('.self::creditKindsSql().") OR (kind = 'adjustment' AND direction = 'credit')), 0) AS credits,
+                    coalesce(sum(units) FILTER (WHERE kind NOT IN (".self::creditKindsSql().") AND NOT (kind = 'adjustment' AND direction = 'credit')), 0) AS debits
                FROM leave_ledger_entries
               WHERE school_id = ? AND employment_record_id = ? AND leave_year_id = ?
               GROUP BY leave_type_id ORDER BY leave_type_id",
             [$school->id, $employmentRecordId, $leaveYearId],
         )));
+    }
+
+    /** HR.10: the ledger's credit kinds as an SQL list (LeaveLedgerEntry::CREDIT_KINDS, the one sign convention). */
+    private static function creditKindsSql(): string
+    {
+        return implode(', ', array_map(fn (string $k) => "'{$k}'", LeaveLedgerEntry::CREDIT_KINDS));
     }
 
     /** @return array<string, mixed> */
@@ -246,6 +252,8 @@ class LeaveReadService
             'carryForwardExpiryDays' => $p->carry_forward_expiry_days, 'status' => $p->status, 'supersedesPolicyId' => $p->supersedes_policy_id,
             // HR.9 (ADR 0065 §28): the version's request-timing rules (NULL = none) and eligibility rules.
             'minNoticeDays' => $p->min_notice_days, 'maxBackdateDays' => $p->max_backdate_days, 'maxUnitsPerRequest' => $p->max_units_per_request,
+            // HR.10 (ADR 0065 §29.2): the entitlement method.
+            'entitlementMethod' => $p->entitlement_method, 'monthlyAccrualUnits' => $p->monthly_accrual_units, 'accrualTiming' => $p->accrual_timing,
             'eligibilityRules' => array_map(fn (LeaveEligibilityRule $r) => [
                 'id' => $r->id, 'staffType' => $r->staff_type, 'employeeCategoryId' => $r->employee_category_id, 'departmentId' => $r->department_id,
             ], $rules),
@@ -296,6 +304,9 @@ class LeaveReadService
             'id' => $e->id, 'employmentRecordId' => $e->employment_record_id, 'leaveTypeId' => $e->leave_type_id, 'leaveYearId' => $e->leave_year_id,
             'kind' => $e->kind, 'direction' => $e->direction, 'units' => $e->units, 'reasonCode' => $e->reason_code,
             'allocationRunId' => $e->allocation_run_id, 'reversesEntryId' => $e->reverses_entry_id,
+            // HR.10: the accrual month and run; the entry a correcting adjustment names.
+            'accrualPeriod' => $e->accrual_period?->toDateString(), 'accrualRunId' => $e->accrual_run_id, 'leavePolicyAssignmentId' => $e->leave_policy_assignment_id,
+            'correctsEntryId' => $e->source_type === 'leave_ledger_entry' ? $e->source_id : null,
             'leaveRequestId' => $e->leave_request_id, 'yearCloseId' => $e->year_close_id, 'yearCloseReconciliationId' => $e->year_close_reconciliation_id,
             'createdAt' => $e->created_at->toIso8601String(),
         ];

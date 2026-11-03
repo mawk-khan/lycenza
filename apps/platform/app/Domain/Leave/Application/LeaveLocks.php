@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\DB;
  * triggers take.
  *
  * Every writer acquires them in this order:
+ * 00. eligibility (HR.9) or accrual month (HR.10; a run's start and each batch);
+ *     then for an accrual batch: the run row, HR rows (FOR SHARE), assignment
+ *     rows (FOR SHARE), year (shared), balance keys (sorted);
  * 00. eligibility (HR.9; one leave type's rule set, exclusive, right after the School -- policy
  *     create/supersede/retire and the eligibility run; before any other row lock);
  * 0a. staff employment (HRX.5, shared for HRX writers; exclusive only for a
@@ -71,6 +74,17 @@ final class LeaveLocks
     public static function eligibility(School $school, string $leaveTypeId): void
     {
         self::take("leave.eligibility:{$school->id}:{$leaveTypeId}", shared: false);
+    }
+
+    /**
+     * HR.10 (ADR 0065 §29.6): one month's accrual for one leave type and year.
+     * Taken exclusively right after the School by a run's start and by each of
+     * its batches, so two runs (or two workers of one run) never interleave
+     * inside a month; the per-account unique key is the database backstop.
+     */
+    public static function accrual(School $school, string $leaveTypeId, string $leaveYearId, string $periodStart): void
+    {
+        self::take("leave.accrual:{$school->id}:{$leaveTypeId}:{$leaveYearId}:{$periodStart}", shared: false);
     }
 
     /** Exclusive for schedule writers (opening years, start-month changes); shared for readers that must see one schedule. */

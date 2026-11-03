@@ -4,7 +4,9 @@ import { router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import {
     ledgerKindLabels,
+    monthLabel,
     reasonLabels,
+    type LeaveStatement,
     typeName,
     units,
     type EmployeeLabel,
@@ -20,6 +22,11 @@ import { useLeaveError } from '../../../leave';
  * one per type and leave year; the annual run grants the policy's units to
  * everyone still without one. Corrections are adjustments with a closed
  * reason. The balance is always the sum of the ledger and never goes below zero.
+ *
+ * HR.10 (ADR 0065 §29): an adjustment or an opening balance needs a fresh
+ * authentication code (S-7). Each type's statement shows every entry with its
+ * running balance and the identity opening + credits − debits = closing, as
+ * the server computed it. A monthly policy is credited from the Accruals page.
  */
 interface YearRow {
     id: string;
@@ -59,6 +66,8 @@ interface Props {
         createdAt: string | null;
     }[];
     adjustmentReasons: string[];
+    statements: LeaveStatement[];
+    mfaEnrolled: boolean;
     runPreview: { candidateCount: number; leaveTypeId: string; error: string | null } | null;
     canManage: boolean;
 }
@@ -80,7 +89,28 @@ watch([employmentRecordId, leaveYearId], () => {
 
 const assignForm = useForm({ leave_policy_id: '', effective_from: '', effective_to: '' });
 const allocateForm = useForm({ leave_type_id: '', units: 0 });
-const adjustForm = useForm({ leave_type_id: '', direction: 'credit', units: 0, reason: '' });
+const adjustForm = useForm({
+    leave_type_id: '',
+    direction: 'credit',
+    units: 0,
+    reason: '',
+    corrects_entry_id: '',
+    mfa_code: '',
+});
+const openingForm = useForm({ leave_type_id: '', units: 0, mfa_code: '' });
+
+function recordOpening(): void {
+    openingForm
+        .transform((d) => ({
+            ...d,
+            employment_record_id: employmentRecordId.value,
+            leave_year_id: leaveYearId.value,
+        }))
+        .post('/app/leave/openings', {
+            preserveScroll: true,
+            onSuccess: () => openingForm.reset(),
+        });
+}
 const runForm = useForm({ leave_type_id: '' });
 const runTypeId = ref(props.runPreview?.leaveTypeId ?? '');
 
@@ -131,6 +161,7 @@ function adjust(): void {
             ...d,
             employment_record_id: employmentRecordId.value,
             leave_year_id: leaveYearId.value,
+            corrects_entry_id: d.corrects_entry_id || null,
         }))
         .post('/app/leave/adjustments', {
             preserveScroll: true,
@@ -217,16 +248,71 @@ const leaveError = useLeaveError();
                 </li>
             </ul>
 
-            <h2 class="mt-6 text-sm font-semibold">Ledger</h2>
-            <ul class="mt-2 text-sm">
-                <li v-for="e in ledger" :key="e.id">
-                    {{ ledgerKindLabels[e.kind] }}{{ e.direction ? ` (${e.direction})` : '' }} ·
-                    {{ e.units }} units
-                    <template v-if="e.reasonCode">· {{ reasonLabels[e.reasonCode] }}</template> ·
-                    {{ formatDateTime(e.createdAt) }}
-                </li>
-                <li v-if="ledger.length === 0" class="text-slate-500">None.</li>
-            </ul>
+            <h2 class="mt-6 text-sm font-semibold">Statements</h2>
+            <p v-if="statements.length === 0" class="mt-2 text-sm text-slate-500">
+                No ledger entries in this year.
+            </p>
+            <section
+                v-for="st in statements"
+                :key="st.leaveTypeId"
+                class="mt-3"
+                :aria-label="`Statement: ${typeName(types, st.leaveTypeId)}`"
+            >
+                <h3 class="text-sm font-medium">{{ typeName(types, st.leaveTypeId) }}</h3>
+                <p class="text-sm">
+                    Opening {{ units(st.opening) }} + credits {{ units(st.credits) }} − debits
+                    {{ units(st.debits) }} = closing {{ units(st.closing) }}
+                    <span v-if="!st.identityHolds" role="alert" class="text-red-700">
+                        (does not reconcile — report this)
+                    </span>
+                </p>
+                <table class="mt-1 w-full text-left text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-300">
+                            <th scope="col" class="py-1 pr-2">Entry</th>
+                            <th scope="col" class="py-1 pr-2">Units</th>
+                            <th scope="col" class="py-1 pr-2">Balance</th>
+                            <th scope="col" class="py-1 pr-2">Source</th>
+                            <th scope="col" class="py-1">Recorded</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="line in st.lines"
+                            :key="line.id"
+                            class="border-b border-slate-100"
+                        >
+                            <td class="py-1 pr-2">
+                                {{ ledgerKindLabels[line.kind] ?? line.kind
+                                }}{{ line.direction ? ` (${line.direction})` : '' }}
+                            </td>
+                            <td class="py-1 pr-2">
+                                {{ line.signedUnits > 0 ? '+' : '' }}{{ line.signedUnits }}
+                            </td>
+                            <td class="py-1 pr-2">{{ line.runningBalance }}</td>
+                            <td class="py-1 pr-2">
+                                <template v-if="line.accrualPeriod">{{
+                                    monthLabel(line.accrualPeriod)
+                                }}</template>
+                                <a
+                                    v-else-if="line.leaveRequestId"
+                                    class="underline"
+                                    :href="`/app/leave/requests/${line.leaveRequestId}`"
+                                    >Leave request</a
+                                >
+                                <template v-else-if="line.yearCloseId">Year close</template>
+                                <template v-else-if="line.reasonCode">{{
+                                    reasonLabels[line.reasonCode] ?? line.reasonCode
+                                }}</template>
+                                <template v-if="line.correctsEntryId">
+                                    · corrects an earlier entry</template
+                                >
+                            </td>
+                            <td class="py-1">{{ formatDateTime(line.createdAt) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
 
             <h2 class="mt-6 text-sm font-semibold">Policy assignments</h2>
             <ul class="mt-2 text-sm">
@@ -372,11 +458,102 @@ const leaveError = useLeaveError();
                             {{ reasonLabels[r] ?? r }}
                         </option>
                     </select>
+                    <label class="mt-2 block text-sm"
+                        >Corrects (optional)
+                        <select
+                            v-model="adjustForm.corrects_entry_id"
+                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        >
+                            <option value="">No earlier entry</option>
+                            <template
+                                v-for="st in statements.filter(
+                                    (x) => x.leaveTypeId === adjustForm.leave_type_id,
+                                )"
+                                :key="st.leaveTypeId"
+                            >
+                                <option v-for="line in st.lines" :key="line.id" :value="line.id">
+                                    {{ ledgerKindLabels[line.kind] ?? line.kind }}
+                                    {{ line.signedUnits }}
+                                    {{ line.accrualPeriod ? monthLabel(line.accrualPeriod) : '' }}
+                                </option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="mt-2 block text-sm"
+                        >Authentication code
+                        <input
+                            v-model="adjustForm.mfa_code"
+                            autocomplete="one-time-code"
+                            inputmode="numeric"
+                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        />
+                    </label>
+                    <p v-if="adjustForm.errors.mfa_code" role="alert" class="text-sm text-red-700">
+                        {{ adjustForm.errors.mfa_code }}
+                    </p>
                     <button type="submit" class="mt-2 underline" :disabled="adjustForm.processing">
                         Record
                     </button>
                 </form>
+                <form
+                    v-if="leaveYearId"
+                    class="rounded border border-slate-300 p-4"
+                    @submit.prevent="recordOpening"
+                >
+                    <h3 class="text-sm font-semibold">Opening balance (go-live)</h3>
+                    <p class="mt-1 text-xs text-slate-600">
+                        Exact units carried over from the School's previous records. Only as the
+                        account's first entry, once.
+                    </p>
+                    <label class="mt-2 block text-sm"
+                        >Leave type
+                        <select
+                            v-model="openingForm.leave_type_id"
+                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        >
+                            <option value="">Select a leave type</option>
+                            <option
+                                v-for="t in types.filter((x) => x.tracksBalance)"
+                                :key="t.id"
+                                :value="t.id"
+                            >
+                                {{ t.name }} ({{ t.code }})
+                            </option>
+                        </select>
+                    </label>
+                    <label class="mt-2 block text-sm"
+                        >Units (half-days)
+                        <input
+                            v-model.number="openingForm.units"
+                            type="number"
+                            min="1"
+                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        />
+                    </label>
+                    <label class="mt-2 block text-sm"
+                        >Authentication code
+                        <input
+                            v-model="openingForm.mfa_code"
+                            autocomplete="one-time-code"
+                            inputmode="numeric"
+                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        />
+                    </label>
+                    <p v-if="openingForm.errors.mfa_code" role="alert" class="text-sm text-red-700">
+                        {{ openingForm.errors.mfa_code }}
+                    </p>
+                    <button type="submit" class="mt-2 underline" :disabled="openingForm.processing">
+                        Record opening balance
+                    </button>
+                </form>
             </div>
+            <p v-if="canManage && !mfaEnrolled" class="mt-2 text-sm text-amber-900">
+                Adjustments and opening balances need a current authentication code: enroll a factor
+                under Account security first.
+            </p>
+            <p class="mt-2 text-sm">
+                <a class="underline" href="/app/leave/accruals">Monthly accrual →</a>
+            </p>
         </template>
 
         <section v-if="canManage && leaveYearId" class="mt-8 rounded border border-slate-300 p-4">

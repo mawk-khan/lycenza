@@ -4795,3 +4795,34 @@ Leave):
 
 None of these undermines a prerequisite HR.9 relies on: HR.9 reads no
 document, profile record or reference code.
+
+## Leave accrual and the HR facts it reads (HR.10, 2026-11-03)
+
+The contract is ADR 0065 §29. HR changes:
+
+- **`EmploymentRoster::pageOverlapping()`** (new) is one keyset page of a
+  COMPLETE traversal of employments overlapping a range. It has no
+  population cap. Leave's eligibility resolver now uses it too, so the old
+  2,000-row cap of `on()` / `overlapping()` no longer truncates HR.9.
+  `on()` / `overlapping()` keep their cap for their existing directory
+  consumers (Staff Attendance registers); that is unchanged and recorded as
+  a residual.
+- **`EmploymentCoverage::holdRecordsSpanning()`** (new) answers which of a
+  batch of employments span a whole range by their DATES, in any status but
+  draft. The rows are read FOR SHARE in one statement, in id order, so an
+  employment end waits for, or is seen by, a monthly accrual batch.
+- A transfer, promotion or reclassification never moves a leave assignment
+  or balance. Accrual flags HR.9 drift on the month's first day and never
+  acts on it.
+
+**Residual risks carried forward (HR.2A and HR.9; not closed by HR.10):**
+
+| # | Residual | Owner | Disposition |
+|---|---|---|---|
+| 1 | Legacy path-only HR documents | HR + Documents | pre-staging inventory |
+| 2 | HR.2A loss-prone rollback | HR | pre-production: forward-fix only once evidence exists |
+| 3 | Highly Sensitive Documents API needs MFA-assured tokens | Identity + Documents | pre-staging API client note |
+| 4 | No automated axe audit (HR.2A profile; HR.9 / HR.10 Leave pages) | HR (UI) | pre-staging accessibility pass |
+| 5 | No logged-in browser walkthrough of HR.9 / HR.10 pages | HR (UI) | owner DDEV walkthrough |
+| 6 | `EmploymentRoster::on()` / `overlapping()` keep a 2,000-row cap for Staff Attendance registers | StaffAttendance | before a School above 2,000 staff (HR.5–HR.7) |
+| — | OD-HR-15 (sandwich), OD-HR-16 (expiry order), OD-HR-17 (proration), OD-HR-5 (manager approval), OD-HR-14 (clock / biometric), HR-L8 | owner / legal | open |

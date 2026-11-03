@@ -217,7 +217,7 @@ class LeaveYearCloseService
     {
         $balances = DB::table('leave_ledger_entries')->where('school_id', $school->id)->where('leave_year_id', $year->id)
             ->groupBy('employment_record_id', 'leave_type_id')->orderBy('employment_record_id')->orderBy('leave_type_id')
-            ->selectRaw("employment_record_id, leave_type_id, coalesce(sum(CASE WHEN kind IN ('allocation', 'reversal', 'carry_forward_in') OR (kind = 'adjustment' AND direction = 'credit') THEN units ELSE -units END), 0) as balance")
+            ->selectRaw('employment_record_id, leave_type_id, coalesce(sum('.LeaveLedgerEntry::signedUnitsSql().'), 0) as balance')
             ->get();
 
         $plan = [];

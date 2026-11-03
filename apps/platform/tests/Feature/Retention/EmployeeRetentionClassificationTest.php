@@ -68,6 +68,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'leave_ledger_entries' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
             'leave_requests' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
             'leave_year_close_items' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
+            // HR.10 (ADR 0065 §29.9): accrual-run processing evidence goes with its employment (FK cascade), never blocking.
+            'leave_accrual_run_items' => 'D9 evidence (8 y): accrual-run outcomes, go with their employment (cascade)',
             'staff_attendance_records' => 'D9 evidence (8 y): Staff Attendance, purged by Staff Attendance first, corrections with their record (HRX.6, ADR 0065 §27)',
         ],
         'employee_assignments' => [

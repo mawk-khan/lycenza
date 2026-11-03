@@ -91,7 +91,15 @@ class LeavePolicyAssignmentService
             if ($to < $from || ($current !== null && $to > $current)) {
                 throw LeaveException::invalid('LEAVE_ASSIGNMENT_DATES_INVALID', 'Ending may shorten an assignment, never extend it or end it before it starts.');
             }
-            $assignment->forceFill(['effective_to' => $to, 'ended_at' => now(), 'ended_by_user_id' => $actor->id])->save();
+            try {
+                $assignment->forceFill(['effective_to' => $to, 'ended_at' => now(), 'ended_by_user_id' => $actor->id])->save();
+            } catch (QueryException $e) {
+                // HR.10 (ADR 0065 §29.7): never shortened past a month it already funded by accrual.
+                if (str_contains($e->getMessage(), 'leave_assignment_accrued')) {
+                    throw LeaveException::conflict('LEAVE_ASSIGNMENT_ACCRUED', 'This assignment already funded a later month by accrual; end it after the last credited month (correct a credited month with an adjustment).');
+                }
+                throw $e;
+            }
             $this->audit->school($school, 'leave.policy.assignment_ended', actor: $actor, subject: $assignment, metadata: ['effectiveTo' => $to]);
 
             return $assignment;

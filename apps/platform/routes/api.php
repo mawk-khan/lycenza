@@ -64,6 +64,7 @@ use App\Domain\HR\Http\Controllers\PositionController;
 use App\Domain\Inventory\Http\Controllers\InventoryItemController;
 use App\Domain\Inventory\Http\Controllers\InventoryLocationController;
 use App\Domain\Inventory\Http\Controllers\InventoryStockController;
+use App\Domain\Leave\Http\Controllers\LeaveAccrualController;
 use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
 use App\Domain\Leave\Http\Controllers\LeaveEligibilityController;
 use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
@@ -2460,6 +2461,14 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 Route::get('/eligibility', [LeaveEligibilityController::class, 'show'])->middleware($view)->name('eligibility.show');
                 Route::post('/eligibility/preview', [LeaveEligibilityController::class, 'preview'])->middleware(['private-no-store', 'capability:hr.leave.configure'])->name('eligibility.preview');
                 Route::post('/eligibility-runs', [LeaveEligibilityController::class, 'executeRun'])->middleware([...$manage, 'idempotent'])->name('eligibility-runs.store');
+                // HR.10 (ADR 0065 §29): opening balances (manage + fresh MFA, idempotent), the account statement, monthly accrual.
+                Route::post('/openings', [LeaveLedgerController::class, 'opening'])->middleware([...$manage, 'idempotent'])->name('openings.store');
+                Route::get('/statement', [LeaveLedgerController::class, 'statement'])->middleware($view)->name('statement.show');
+                Route::get('/accruals/preview', [LeaveAccrualController::class, 'preview'])->middleware(['private-no-store', 'capability:hr.leave.manage'])->name('accruals.preview');
+                Route::post('/accrual-runs', [LeaveAccrualController::class, 'execute'])->middleware($manage)->name('accrual-runs.store');
+                Route::get('/accrual-runs', [LeaveAccrualController::class, 'index'])->middleware($view)->name('accrual-runs.index');
+                Route::get('/accrual-runs/{leaveAccrualRun}', [LeaveAccrualController::class, 'show'])->middleware($view)->name('accrual-runs.show');
+                Route::get('/accrual-grid', [LeaveAccrualController::class, 'grid'])->middleware($view)->name('accrual-grid.show');
                 Route::get('/ledger', [LeaveLedgerController::class, 'ledger'])->middleware($view)->name('ledger.index');
                 Route::get('/balances', [LeaveLedgerController::class, 'balances'])->middleware($view)->name('balances.index');
 

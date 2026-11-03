@@ -59,6 +59,8 @@ interface Props {
     employeeCategories: ReferenceOption[];
     departments: ReferenceOption[];
     today: string;
+    entitlementMethods: Option[];
+    accrualTimings: Option[];
 }
 
 const props = defineProps<Props>();
@@ -105,6 +107,9 @@ const policyForm = useForm({
     min_notice_days: null as number | null,
     max_backdate_days: null as number | null,
     max_units_per_request: null as number | null,
+    entitlement_method: 'annual',
+    monthly_accrual_units: null as number | null,
+    accrual_timing: '',
     eligibility_rules: [] as RuleInput[],
 });
 const weekForm = useForm({
@@ -163,6 +168,9 @@ function startReplacing(p: LeavePolicyRow): void {
     policyForm.min_notice_days = p.minNoticeDays;
     policyForm.max_backdate_days = p.maxBackdateDays;
     policyForm.max_units_per_request = p.maxUnitsPerRequest;
+    policyForm.entitlement_method = p.entitlementMethod;
+    policyForm.monthly_accrual_units = p.monthlyAccrualUnits;
+    policyForm.accrual_timing = p.accrualTiming ?? '';
     policyForm.eligibility_rules = p.eligibilityRules.map((r) => ({
         staff_type: r.staffType ?? '',
         employee_category_id: r.employeeCategoryId ?? '',
@@ -179,6 +187,11 @@ function submitPolicy(): void {
             min_notice_days: nullableNumber(d.min_notice_days),
             max_backdate_days: nullableNumber(d.max_backdate_days),
             max_units_per_request: nullableNumber(d.max_units_per_request),
+            annual_allocation_units:
+                d.entitlement_method === 'monthly' ? 0 : d.annual_allocation_units,
+            monthly_accrual_units:
+                d.entitlement_method === 'monthly' ? nullableNumber(d.monthly_accrual_units) : null,
+            accrual_timing: d.entitlement_method === 'monthly' ? d.accrual_timing || null : null,
             eligibility_rules: rulesPayload(d.eligibility_rules),
         }))
         .post('/app/leave/policies', {
@@ -417,7 +430,16 @@ const leaveError = useLeaveError();
                             >Current</span
                         >
                         <div>
-                            {{ units(p.annualAllocationUnits) }} a year ·
+                            <template v-if="p.entitlementMethod === 'monthly'"
+                                >{{ units(p.monthlyAccrualUnits ?? 0) }} a month ({{
+                                    p.accrualTiming === 'period_start'
+                                        ? 'in advance'
+                                        : 'in arrears'
+                                }}) ·</template
+                            >
+                            <template v-else
+                                >{{ units(p.annualAllocationUnits) }} a year ·</template
+                            >
                             {{
                                 p.carryForwardAllowed
                                     ? `carry up to ${units(p.carryForwardCapUnits ?? 0)}`
@@ -520,6 +542,41 @@ const leaveError = useLeaveError();
                 <fieldset class="flex flex-wrap items-end gap-2">
                     <legend class="text-sm font-medium">Entitlement and carry-forward</legend>
                     <label class="text-sm"
+                        >Funded by
+                        <select
+                            v-model="policyForm.entitlement_method"
+                            class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                        >
+                            <option v-for="m in entitlementMethods" :key="m.value" :value="m.value">
+                                {{ m.label }}
+                            </option>
+                        </select>
+                    </label>
+                    <template v-if="policyForm.entitlement_method === 'monthly'">
+                        <label class="text-sm"
+                            >Units each whole month (half-days)
+                            <input
+                                v-model.number="policyForm.monthly_accrual_units"
+                                type="number"
+                                min="1"
+                                max="62"
+                                class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                            />
+                        </label>
+                        <label class="text-sm"
+                            >Credited
+                            <select
+                                v-model="policyForm.accrual_timing"
+                                class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                            >
+                                <option value="">Choose…</option>
+                                <option v-for="t in accrualTimings" :key="t.value" :value="t.value">
+                                    {{ t.label }}
+                                </option>
+                            </select>
+                        </label>
+                    </template>
+                    <label v-if="policyForm.entitlement_method === 'annual'" class="text-sm"
                         >Annual allocation (half-day units)
                         <input
                             v-model.number="policyForm.annual_allocation_units"

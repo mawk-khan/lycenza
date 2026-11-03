@@ -1872,3 +1872,22 @@ once several modules copy it.
      - **Drift is shown, never acted on.** A transfer or reclassification never moves an assignment or a balance.
      - **No draft status.** Preview is server-side and writes nothing.
      - **No sandwich, prefix or suffix counting,** and no dormant toggle, until owner decision OD-HR-15 and an ADR 0065 amendment.
+134. **Leave accrual is one more credit on the one ledger: whole months, exclusive with annual allocation, complete, recoverable and reconciled (HR.10, ADR 0065 §29).**
+     - **Method on the version:** `entitlement_method` is `annual` (existing) XOR `monthly` (`monthly_accrual_units`, `accrual_timing`).
+       - Never both in one account: CHECK, `allocate()`, the annual run and the `leave_funding_conflict` trigger.
+       - Only monthly exists; another frequency is a reviewed change.
+     - **Kinds:**
+       - `accrual`: one per account × month, checked by the trigger against the whole-month monthly assignment and its units;
+       - `opening`: once, only as the account's first entry, fresh MFA, never one's own.
+       - Every older kind keeps its meaning. The sign convention lives in `LeaveLedgerEntry::CREDIT_KINDS` / `signedUnitsSql()` and the trigger, nowhere else.
+     - **Eligibility for a month:** the employment's DATES span the whole month (HR.1A facts, `EmploymentCoverage::holdRecordsSpanning()`), and exactly one assignment covers it. Units are the ASSIGNED version's.
+       - A part month is `partial_period`, never prorated (§22.2, OD-HR-17).
+       - Drift is flagged, never acted on.
+     - **Runs:**
+       - Only `LeaveAccrualService` posts accruals.
+       - The population is the complete keyset traversal (`EmploymentRoster::pageOverlapping()`), never a capped reader.
+       - Each batch is one transaction in the documented lock order.
+       - One open run per month; `failed` resumes from the cursor; examined = the sum of the disjoint outcomes.
+       - Never a generic `idempotent` replay for a run.
+     - **Adjustments and openings** need `hr.leave.manage` then a fresh MFA code (S-7). A correction is a new adjustment naming an entry of the same account; nothing is edited.
+     - **Not built until decided:** in-year carried expiry (OD-HR-16) and proration (OD-HR-17).

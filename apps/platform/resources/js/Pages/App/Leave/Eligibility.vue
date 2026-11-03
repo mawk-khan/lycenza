@@ -65,9 +65,20 @@ function executeRun(): void {
 const versionNames = computed(() =>
     Object.fromEntries((props.result?.versions ?? []).map((v) => [v.policyId, v.name])),
 );
-const rows = computed(() =>
-    (props.result?.rows ?? []).filter((r) => props.outcome === '' || r.outcome === props.outcome),
+// HR.10: the server filters by outcome and pages (100 rows); the counts cover every employment.
+const rows = computed(() => props.result?.rows ?? []);
+const pages = computed(() =>
+    props.result?.total === undefined || props.result.perPage === undefined
+        ? 1
+        : Math.max(1, Math.ceil(props.result.total / props.result.perPage)),
 );
+function goToPage(page: number): void {
+    router.get(
+        '/app/leave/eligibility',
+        { ...filters.value, outcome: filters.value.outcome || undefined, page },
+        { preserveScroll: true },
+    );
+}
 const eligibleCount = computed(() => props.result?.counts.eligible ?? 0);
 const driftCount = computed(
     () => (props.result?.rows ?? []).filter((r) => r.assignedMatchesRules === false).length,
@@ -179,8 +190,9 @@ function factsText(r: {
                     </li>
                 </ul>
                 <p v-if="driftCount > 0" class="mt-1 text-sm text-amber-900">
-                    {{ driftCount }} assigned employment(s) no longer match the current rules. An
-                    assignment is never moved automatically: end it and assign again if needed.
+                    On this page, {{ driftCount }} assigned employment(s) no longer match the
+                    current rules. An assignment is never moved automatically: end it and assign
+                    again if needed.
                 </p>
 
                 <div v-if="canManage" class="mt-3">
@@ -281,6 +293,31 @@ function factsText(r: {
                         </tr>
                     </tbody>
                 </table>
+                <nav
+                    v-if="pages > 1"
+                    aria-label="Employment pages"
+                    class="mt-3 flex items-center gap-3 text-sm"
+                >
+                    <button
+                        type="button"
+                        class="underline"
+                        :disabled="(result.page ?? 1) <= 1"
+                        @click="goToPage((result.page ?? 1) - 1)"
+                    >
+                        Previous
+                    </button>
+                    <span
+                        >Page {{ result.page ?? 1 }} of {{ pages }} ({{ result.total }} rows)</span
+                    >
+                    <button
+                        type="button"
+                        class="underline"
+                        :disabled="(result.page ?? 1) >= pages"
+                        @click="goToPage((result.page ?? 1) + 1)"
+                    >
+                        Next
+                    </button>
+                </nav>
             </section>
         </template>
     </main>

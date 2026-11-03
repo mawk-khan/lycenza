@@ -3185,6 +3185,9 @@ paths:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: leave_type_id, in: query, required: true, schema: { type: string, format: uuid } }
         - { name: date, in: query, required: false, schema: { type: string, format: date } }
+        - { name: outcome, in: query, required: false, schema: { type: string, enum: [assigned, eligible, ambiguous, no_matching_rule, employment_not_eligible, own_employment] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500 } }
       responses:
         "200":
           description: OK
@@ -3285,6 +3288,272 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: Validation failed; LEAVE_DATE_INVALID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/openings:
+    post:
+      operationId: recordLeaveOpening
+      summary: >
+        HR.10 (D11-01): a go-live opening balance of exact units -- once per account and only as its first entry; never the caller's own employment. Requires hr.leave.manage and a fresh mfa_code (S-7). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveOpeningInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveLedgerEntry" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_OPENING_NOT_FIRST; LEAVE_YEAR_CLOSED; LEAVE_EMPLOYMENT_NOT_ELIGIBLE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/statement:
+    get:
+      operationId: showLeaveStatement
+      summary: >
+        HR.10 (D11-16): one account's statement -- every entry with its signed units, running balance and provenance, and opening + credits - debits = closing. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: employment_record_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: leave_type_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: leave_year_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveStatement" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/accruals/preview:
+    get:
+      operationId: previewLeaveAccrual
+      summary: >
+        HR.10: one month's accrual evaluation, read-only -- complete disjoint outcome counts over every employment overlapping the month, and one keyset page of rows. Requires hr.leave.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leave_type_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: leave_year_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: period_start, in: query, required: true, schema: { type: string, format: date } }
+        - { name: after, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: per_page, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, additionalProperties: true } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_TYPE_INACTIVE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/accrual-runs:
+    get:
+      operationId: listLeaveAccrualRuns
+      summary: >
+        HR.10: the accrual runs of one leave type and year, newest month first. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leave_type_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: leave_year_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LeaveAccrualRun" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: executeLeaveAccrualRun
+      summary: >
+        HR.10: opens the month's run (or resumes its open one) and processes up to max_batches batches, each its own transaction. Idempotent by construction: one open run per month, one accrual per account and month, a resumable cursor -- a retry continues the same run. Requires hr.leave.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveAccrualRunInput" }
+      responses:
+        "201":
+          description: The run as it stands (completed, or processing -- call again to continue).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveAccrualRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_YEAR_CLOSED; LEAVE_ACCRUAL_PERIOD_NOT_DUE; LEAVE_TYPE_INACTIVE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/accrual-runs/{leaveAccrualRun}:
+    get:
+      operationId: showLeaveAccrualRun
+      summary: >
+        HR.10: one run with its reconciled outcome counts (examined = their sum) and one page of its items, optionally of one outcome. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveAccrualRun, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: outcome, in: query, required: false, schema: { type: string, enum: [credited, already_credited, not_due, partial_period, no_policy, assignment_not_whole_period, not_monthly_policy, annual_allocation_exists] } }
+        - { name: after, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: per_page, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveAccrualRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/accrual-grid:
+    get:
+      operationId: showLeaveAccrualGrid
+      summary: >
+        HR.10: the monthly grid of one leave type and year -- a keyset page of employments, each month's POSTED accrual (null when nothing is posted), the annual allocation and the balance. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leave_type_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: leave_year_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: after, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: per_page, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, additionalProperties: true } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3404,7 +3673,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Validation failed.
+          description: Validation failed, including a missing or invalid mfa_code (S-7).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -17190,6 +17459,9 @@ components:
         maxBackdateDays: { type: integer, nullable: true, minimum: 0, maximum: 366, description: "HR.9: calendar days a request may start in the past; 0 = never; null = no rule." }
         maxUnitsPerRequest: { type: integer, nullable: true, minimum: 1, maximum: 734, description: "HR.9: chargeable half-day units per request; null = no rule." }
         eligibilityRules: { type: array, items: { $ref: "#/components/schemas/LeaveEligibilityRule" } }
+        entitlementMethod: { type: string, enum: [annual, monthly] }
+        monthlyAccrualUnits: { type: integer, nullable: true }
+        accrualTiming: { type: string, enum: [period_start, period_end], nullable: true }
         createdAt: { type: string, format: date-time, nullable: true }
         retiredAt: { type: string, format: date-time, nullable: true }
     LeaveEligibilityRule:
@@ -17277,6 +17549,9 @@ components:
         rows: { type: array, items: { $ref: "#/components/schemas/LeaveEligibilityRow" } }
         counts: { type: object, additionalProperties: { type: integer } }
         overlappingPolicyId: { type: string, format: uuid, nullable: true, description: "Preview only: an active version these rules would overlap (the create would be refused)." }
+        total: { type: integer, description: "HR.10: rows matching the outcome filter (the counts always cover every employment)." }
+        page: { type: integer }
+        perPage: { type: integer }
     LeavePolicyCreateInput:
       type: object
       required: [leave_type_id, name, annual_allocation_units, carry_forward_allowed]
@@ -17291,6 +17566,9 @@ components:
         min_notice_days: { type: integer, minimum: 1, maximum: 366, nullable: true }
         max_backdate_days: { type: integer, minimum: 0, maximum: 366, nullable: true }
         max_units_per_request: { type: integer, minimum: 1, maximum: 734, nullable: true }
+        entitlement_method: { type: string, enum: [annual, monthly], description: "HR.10: exclusive alternatives (monthly needs annual_allocation_units 0)." }
+        monthly_accrual_units: { type: integer, minimum: 1, maximum: 62, nullable: true }
+        accrual_timing: { type: string, enum: [period_start, period_end], nullable: true }
         eligibility_rules: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/LeaveEligibilityRuleInput" } }
     StaffWeeklyPattern:
       type: object
@@ -17397,6 +17675,56 @@ components:
         direction: { type: string, enum: [credit, debit] }
         units: { type: integer, minimum: 1, description: "Integer half-day units (2 = one full day)." }
         reason: { type: string, enum: [entitlement_change, allocation_correction, administrative_correction] }
+        corrects_entry_id: { type: string, format: uuid, nullable: true, description: "HR.10: an entry of the same account this adjustment corrects." }
+        mfa_code: { type: string, description: "HR.10 (S-7): a current authentication code, re-verified now." }
+    LeaveOpeningInput:
+      type: object
+      required: [employment_record_id, leave_type_id, leave_year_id, units, mfa_code]
+      properties:
+        employment_record_id: { type: string, format: uuid }
+        leave_type_id: { type: string, format: uuid }
+        leave_year_id: { type: string, format: uuid }
+        units: { type: integer, minimum: 1, maximum: 1000 }
+        mfa_code: { type: string }
+    LeaveStatement:
+      type: object
+      required: [employmentRecordId, leaveTypeId, leaveYearId, opening, credits, debits, closing, identityHolds, lines]
+      properties:
+        employmentRecordId: { type: string, format: uuid }
+        leaveTypeId: { type: string, format: uuid }
+        leaveYearId: { type: string, format: uuid }
+        opening: { type: integer, description: "opening + carry_forward_in units." }
+        credits: { type: integer }
+        debits: { type: integer }
+        closing: { type: integer, description: "opening + credits - debits." }
+        byKind: { type: object, additionalProperties: { type: integer } }
+        identityHolds: { type: boolean }
+        lines: { type: array, items: { type: object, additionalProperties: true } }
+    LeaveAccrualRunInput:
+      type: object
+      required: [leave_type_id, leave_year_id, period_start]
+      properties:
+        leave_type_id: { type: string, format: uuid }
+        leave_year_id: { type: string, format: uuid }
+        period_start: { type: string, format: date, description: "The first day of a month inside the leave year." }
+        max_batches: { type: integer, minimum: 1, maximum: 200 }
+    LeaveAccrualRun:
+      type: object
+      required: [id, leaveTypeId, leaveYearId, periodStart, status, batchCount]
+      properties:
+        id: { type: string, format: uuid }
+        leaveTypeId: { type: string, format: uuid }
+        leaveYearId: { type: string, format: uuid }
+        periodStart: { type: string, format: date }
+        status: { type: string, enum: [processing, completed, failed] }
+        batchCount: { type: integer }
+        failureCode: { type: string, nullable: true }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        counts: { type: object, additionalProperties: { type: integer }, description: "Disjoint outcome counts; their sum is examined." }
+        examined: { type: integer }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+        nextAfter: { type: string, format: uuid, nullable: true }
     LeaveLedgerEntry:
       type: object
       required: [id, employmentRecordId, leaveTypeId, leaveYearId, kind, units]
@@ -17405,7 +17733,7 @@ components:
         employmentRecordId: { type: string, format: uuid }
         leaveTypeId: { type: string, format: uuid }
         leaveYearId: { type: string, format: uuid }
-        kind: { type: string, enum: [allocation, adjustment, consumption, reversal, carry_forward_in, carry_forward_out, expiry] }
+        kind: { type: string, enum: [allocation, adjustment, consumption, reversal, carry_forward_in, carry_forward_out, expiry, opening, accrual], description: "HR.10 adds opening and accrual (both credits); earlier kinds keep their meaning." }
         direction: { type: string, enum: [credit, debit], nullable: true }
         units: { type: integer, minimum: 1 }
         reasonCode: { type: string, nullable: true }
@@ -17414,6 +17742,10 @@ components:
         leaveRequestId: { type: string, format: uuid, nullable: true }
         yearCloseId: { type: string, format: uuid, nullable: true }
         yearCloseReconciliationId: { type: string, format: uuid, nullable: true }
+        accrualPeriod: { type: string, format: date, nullable: true, description: "HR.10: the first day of the credited month (accrual only)." }
+        accrualRunId: { type: string, format: uuid, nullable: true }
+        leavePolicyAssignmentId: { type: string, format: uuid, nullable: true }
+        correctsEntryId: { type: string, format: uuid, nullable: true, description: "HR.10: the entry of the same account a correcting adjustment names." }
         createdAt: { type: string, format: date-time, nullable: true }
     LeaveBalance:
       type: object

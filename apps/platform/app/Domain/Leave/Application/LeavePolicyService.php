@@ -4,6 +4,8 @@ namespace App\Domain\Leave\Application;
 
 use App\Domain\HR\Application\DepartmentReference;
 use App\Domain\HR\Application\EmployeeCategoryReference;
+use App\Domain\Leave\Application\Accrual\LeaveAccrualTiming;
+use App\Domain\Leave\Application\Accrual\LeaveEntitlementMethod;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\Policy\LeaveEligibilityCriteria;
 use App\Domain\Leave\Infrastructure\LeaveEligibilityRule;
@@ -65,7 +67,7 @@ class LeavePolicyService
     ) {}
 
     /**
-     * @param  array{name: string, annual_allocation_units: int, carry_forward_allowed: bool, carry_forward_cap_units: ?int, carry_forward_expiry_days: ?int, min_notice_days?: ?int, max_backdate_days?: ?int, max_units_per_request?: ?int}  $terms
+     * @param  array{name: string, annual_allocation_units: int, carry_forward_allowed: bool, carry_forward_cap_units: ?int, carry_forward_expiry_days: ?int, min_notice_days?: ?int, max_backdate_days?: ?int, max_units_per_request?: ?int, entitlement_method?: string, monthly_accrual_units?: ?int, accrual_timing?: ?string}  $terms
      * @param  list<LeaveEligibilityCriteria>  $rules
      */
     public function create(School $school, string $leaveTypeId, array $terms, ?string $supersedesPolicyId, User $actor, array $rules = []): LeavePolicy
@@ -76,7 +78,8 @@ class LeavePolicyService
         }
         // One spelling per id: the eligibility lock key must equal the trigger's (uuid::text, lower case).
         $leaveTypeId = strtolower($leaveTypeId);
-        $terms += ['min_notice_days' => null, 'max_backdate_days' => null, 'max_units_per_request' => null];
+        $terms += ['min_notice_days' => null, 'max_backdate_days' => null, 'max_units_per_request' => null,
+            'entitlement_method' => LeaveEntitlementMethod::ANNUAL->value, 'monthly_accrual_units' => null, 'accrual_timing' => null];
         self::validateRuleSet($rules);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveTypeId, $terms, $supersedesPolicyId, $actor, $rules) {
@@ -109,6 +112,8 @@ class LeavePolicyService
                 'carry_forward_expiry_days' => $terms['carry_forward_allowed'] ? $terms['carry_forward_expiry_days'] : null,
                 'min_notice_days' => $terms['min_notice_days'], 'max_backdate_days' => $terms['max_backdate_days'],
                 'max_units_per_request' => $terms['max_units_per_request'], 'eligibility_rule_count' => count($rules),
+                'entitlement_method' => $terms['entitlement_method'], 'monthly_accrual_units' => $terms['monthly_accrual_units'],
+                'accrual_timing' => $terms['accrual_timing'],
                 'status' => 'active', 'supersedes_policy_id' => $superseded?->id, 'created_by_user_id' => $actor->id,
             ]);
             $created = [];
@@ -133,6 +138,8 @@ class LeavePolicyService
                 'carryForwardExpiryDays' => $policy->carry_forward_expiry_days, 'supersedesPolicyId' => $superseded?->id,
                 'minNoticeDays' => $policy->min_notice_days, 'maxBackdateDays' => $policy->max_backdate_days,
                 'maxUnitsPerRequest' => $policy->max_units_per_request,
+                'entitlementMethod' => $policy->entitlement_method, 'monthlyAccrualUnits' => $policy->monthly_accrual_units,
+                'accrualTiming' => $policy->accrual_timing,
                 'eligibilityRules' => array_map(fn (LeaveEligibilityRule $r) => ['id' => $r->id, 'staffType' => $r->staff_type,
                     'employeeCategoryId' => $r->employee_category_id, 'departmentId' => $r->department_id], $created),
             ]);
@@ -231,13 +238,24 @@ class LeavePolicyService
         return $policy;
     }
 
-    /** @param  array{annual_allocation_units: int, carry_forward_allowed: bool, carry_forward_cap_units: ?int, carry_forward_expiry_days: ?int, min_notice_days: ?int, max_backdate_days: ?int, max_units_per_request: ?int}  $terms */
+    /** @param  array{annual_allocation_units: int, carry_forward_allowed: bool, carry_forward_cap_units: ?int, carry_forward_expiry_days: ?int, min_notice_days: ?int, max_backdate_days: ?int, max_units_per_request: ?int, entitlement_method: string, monthly_accrual_units: ?int, accrual_timing: ?string}  $terms */
     private function validate(LeaveType $type, array $terms): void
     {
+        // HR.10 (ADR 0065 §29.2): annual and monthly are exclusive alternatives, never added together.
+        $method = LeaveEntitlementMethod::tryFrom((string) $terms['entitlement_method']);
+        if ($method === null
+            || ($method === LeaveEntitlementMethod::ANNUAL && ($terms['monthly_accrual_units'] !== null || $terms['accrual_timing'] !== null))
+            || ($method === LeaveEntitlementMethod::MONTHLY && ($terms['annual_allocation_units'] !== 0 || $terms['monthly_accrual_units'] === null
+                || $terms['monthly_accrual_units'] < 1 || $terms['monthly_accrual_units'] > 62 || LeaveAccrualTiming::tryFrom((string) $terms['accrual_timing']) === null))) {
+            throw LeaveException::invalid('LEAVE_ENTITLEMENT_METHOD_INVALID', 'An annual version has an annual allocation only; a monthly version has 0 annual units, 1-62 half-day units a month and a posting timing.');
+        }
+        if ($method === LeaveEntitlementMethod::MONTHLY && ! $type->tracks_balance) {
+            throw LeaveException::invalid('LEAVE_POLICY_UNTRACKED_TYPE', 'A leave type that does not track a balance has no accrual.');
+        }
         if (! $type->tracks_balance && ($terms['annual_allocation_units'] !== 0 || $terms['carry_forward_allowed'])) {
             throw LeaveException::invalid('LEAVE_POLICY_UNTRACKED_TYPE', 'A leave type that does not track a balance has no allocation or carry-forward.');
         }
-        $units = array_filter([$terms['annual_allocation_units'], $terms['carry_forward_allowed'] ? $terms['carry_forward_cap_units'] : null, $terms['max_units_per_request']], fn ($u) => $u !== null);
+        $units = array_filter([$terms['annual_allocation_units'], $terms['carry_forward_allowed'] ? $terms['carry_forward_cap_units'] : null, $terms['max_units_per_request'], $terms['monthly_accrual_units']], fn ($u) => $u !== null);
         if (! $type->allows_half_day && array_filter($units, fn (int $u) => $u % 2 !== 0) !== []) {
             throw LeaveException::invalid('LEAVE_HALF_DAY_NOT_ALLOWED', 'This leave type is granted in whole days (even half-day units).');
         }

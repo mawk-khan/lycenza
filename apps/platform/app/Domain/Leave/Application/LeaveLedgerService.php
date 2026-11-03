@@ -4,9 +4,11 @@ namespace App\Domain\Leave\Application;
 
 use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Application\HrSelfAdministrationGuard;
+use App\Domain\Leave\Application\Accrual\LeaveEntitlementMethod;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Infrastructure\LeaveAllocationRun;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
+use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeavePolicyAssignment;
 use App\Domain\Leave\Infrastructure\LeaveRequest;
 use App\Domain\Leave\Infrastructure\LeaveType;
@@ -69,6 +71,10 @@ class LeaveLedgerService
             $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
             $assignment = $this->assignmentFor($school, $employmentRecordId, $type, $year)
                 ?? throw LeaveException::conflict('LEAVE_NO_POLICY_ASSIGNMENT', 'The employment has no policy of this leave type in that leave year.');
+            // HR.10 (ADR 0065 §29.2): a monthly version is funded by accrual only, never by an allocation.
+            if (LeavePolicy::query()->where('school_id', $school->id)->whereKey($assignment->leave_policy_id)->value('entitlement_method') === LeaveEntitlementMethod::MONTHLY->value) {
+                throw LeaveException::conflict('LEAVE_POLICY_ACCRUES_MONTHLY', 'This employment\'s policy accrues monthly; it is never funded by an annual allocation.');
+            }
             $this->lockKey($school, $employmentRecordId, $type->id, $year->id);
 
             $entry = $this->append($school, [
@@ -125,7 +131,8 @@ class LeaveLedgerService
                     continue;
                 }
                 $this->lockKey($school, $employmentRecordId, $type->id, $year->id);
-                if ($this->hasAllocation($school, $employmentRecordId, $type->id, $year->id)) {
+                // HR.10: an account already funded (allocation, or monthly accrual) is never funded twice.
+                if ($this->hasFunding($school, $employmentRecordId, $type->id, $year->id, ['allocation', 'accrual'])) {
                     $skipped++;
 
                     continue;
@@ -157,7 +164,14 @@ class LeaveLedgerService
         }));
     }
 
-    public function adjust(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, string $direction, int $units, string $reason, User $actor): LeaveLedgerEntry
+    /**
+     * HR.10 (ADR 0065 §29.7): an adjustment is a NEW accounting event on a
+     * funded account (allocation, accrual or opening). With $correctsEntryId
+     * it names the entry of the same account it corrects (database-checked);
+     * the original is never edited. S-7: the HTTP layers require a fresh MFA
+     * code before calling it.
+     */
+    public function adjust(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, string $direction, int $units, string $reason, User $actor, ?string $correctsEntryId = null): LeaveLedgerEntry
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
         if (! in_array($direction, ['credit', 'debit'], true)) {
@@ -167,28 +181,77 @@ class LeaveLedgerService
             throw LeaveException::invalid('LEAVE_ADJUSTMENT_REASON_INVALID', 'Use one of the closed adjustment reason codes.');
         }
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $leaveYearId, $direction, $units, $reason, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $leaveYearId, $direction, $units, $reason, $actor, $correctsEntryId) {
             $this->guard->requireOperational($school->id);
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             $this->requireUnits($type, $units);
             $this->requireEmployment($school, $employmentRecordId, $year);
             $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
             $this->lockKey($school, $employmentRecordId, $type->id, $year->id);
-            if (! $this->hasAllocation($school, $employmentRecordId, $type->id, $year->id)) {
-                throw LeaveException::conflict('LEAVE_NOT_ALLOCATED', 'An adjustment changes an existing allocation; allocate first.');
+            if (! $this->hasFunding($school, $employmentRecordId, $type->id, $year->id, LeaveLedgerEntry::FUNDING_KINDS)) {
+                throw LeaveException::conflict('LEAVE_NOT_ALLOCATED', 'An adjustment changes an existing entitlement (allocation, accrual or opening); fund the account first.');
             }
 
             $entry = $this->append($school, [
                 'employment_record_id' => $employmentRecordId, 'leave_type_id' => $type->id, 'leave_year_id' => $year->id,
                 'kind' => 'adjustment', 'direction' => $direction, 'units' => $units, 'reason_code' => $reason, 'actor_user_id' => $actor->id,
+                'source_type' => $correctsEntryId === null ? null : 'leave_ledger_entry', 'source_id' => $correctsEntryId,
             ]);
             $this->audit->school($school, 'leave.adjustment.recorded', actor: $actor, subject: $entry, metadata: [
                 'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id,
                 'direction' => $direction, 'units' => $units, 'reason' => $reason,
+            ] + ($correctsEntryId === null ? [] : ['correctsEntryId' => $correctsEntryId]));
+
+            return $entry;
+        }));
+    }
+
+    /**
+     * HR.10 (ADR 0065 §29.4, D11-01): a go-live OPENING balance -- the exact
+     * units an administrator specifies, once per account and only as its
+     * first entry (database-enforced), never the actor's own (G-4). It is a
+     * migration fact with its own provenance (actor, time, audit), never
+     * derived from a current-state field. S-7: fresh MFA at the HTTP layers.
+     */
+    public function recordOpening(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, User $actor): LeaveLedgerEntry
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
+
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $leaveYearId, $units, $actor) {
+            $this->guard->requireOperational($school->id);
+            [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
+            $this->requireUnits($type, $units);
+            $this->requireEmployment($school, $employmentRecordId, $year);
+            $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
+            $assignment = $this->assignmentFor($school, $employmentRecordId, $type, $year);
+            $this->lockKey($school, $employmentRecordId, $type->id, $year->id);
+
+            $entry = $this->append($school, [
+                'employment_record_id' => $employmentRecordId, 'leave_type_id' => $type->id, 'leave_year_id' => $year->id,
+                'leave_policy_assignment_id' => $assignment?->id, 'kind' => 'opening', 'units' => $units, 'actor_user_id' => $actor->id,
+            ]);
+            $this->audit->school($school, 'leave.opening.recorded', actor: $actor, subject: $entry, metadata: [
+                'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'units' => $units,
             ]);
 
             return $entry;
         }));
+    }
+
+    /**
+     * HR.10 (ADR 0065 §29.5): one month's accrual credit. No capability of its
+     * own: only LeaveAccrualService calls it, inside its authorized, locked
+     * batch transaction (employment FOR SHARE, assignments FOR SHARE, year
+     * shared, balance key). The database re-checks the month, the assignment,
+     * the version's units and funding exclusivity.
+     */
+    public function recordAccrual(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, string $assignmentId, string $periodStart, int $units, string $runId, User $actor): LeaveLedgerEntry
+    {
+        return $this->append($school, [
+            'employment_record_id' => $employmentRecordId, 'leave_type_id' => $leaveTypeId, 'leave_year_id' => $leaveYearId,
+            'leave_policy_assignment_id' => $assignmentId, 'kind' => 'accrual', 'units' => $units, 'accrual_period' => $periodStart,
+            'accrual_run_id' => $runId, 'actor_user_id' => $actor->id,
+        ]);
     }
 
     /**
@@ -255,6 +318,12 @@ class LeaveLedgerService
             if (str_contains($e->getMessage(), 'leave_ledger_entries_one_allocation')) {
                 throw LeaveException::conflict('LEAVE_ALREADY_ALLOCATED', 'This employment already has its allocation of this leave type for that year; use an adjustment.');
             }
+            if (str_contains($e->getMessage(), 'leave_ledger_entries_one_opening')) {
+                throw LeaveException::conflict('LEAVE_OPENING_NOT_FIRST', 'An opening balance is the account\'s first and only opening entry.');
+            }
+            if (str_contains($e->getMessage(), 'leave_ledger_entries_one_accrual')) {
+                throw LeaveException::conflict('LEAVE_ACCRUAL_ALREADY_POSTED', 'This month is already credited for this account.');
+            }
             if (str_contains($e->getMessage(), 'leave_ledger_entries_one_consumption') || str_contains($e->getMessage(), 'leave_ledger_entries_one_reversal')) {
                 throw LeaveException::conflict('LEAVE_REQUEST_ALREADY_DECIDED', 'This request has already been decided.');
             }
@@ -265,6 +334,17 @@ class LeaveLedgerService
             }
             if (str_contains($e->getMessage(), 'leave_year_closed')) {
                 throw LeaveException::conflict('LEAVE_YEAR_CLOSED', 'That leave year is closed.');
+            }
+            foreach (['leave_funding_conflict' => 'LEAVE_FUNDING_CONFLICT', 'leave_opening_not_first' => 'LEAVE_OPENING_NOT_FIRST',
+                'leave_accrual_invalid' => 'LEAVE_ACCRUAL_INVALID', 'leave_adjustment_source_invalid' => 'LEAVE_ADJUSTMENT_SOURCE_INVALID'] as $needle => $code) {
+                if (str_contains($e->getMessage(), $needle)) {
+                    throw LeaveException::conflict($code, match ($code) {
+                        'LEAVE_FUNDING_CONFLICT' => 'An account is funded by an annual allocation or by monthly accrual, never both.',
+                        'LEAVE_OPENING_NOT_FIRST' => 'An opening balance is the account\'s first entry.',
+                        'LEAVE_ACCRUAL_INVALID' => 'That accrual does not match the version assigned for the whole month.',
+                        default => 'A correcting adjustment names an entry of the same account.',
+                    });
+                }
             }
             throw $e;
         }
@@ -334,10 +414,11 @@ class LeaveLedgerService
         return $candidates;
     }
 
-    private function hasAllocation(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId): bool
+    /** @param  list<string>  $kinds */
+    private function hasFunding(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, array $kinds): bool
     {
         return LeaveLedgerEntry::query()->where('school_id', $school->id)->where('employment_record_id', $employmentRecordId)
-            ->where('leave_type_id', $leaveTypeId)->where('leave_year_id', $leaveYearId)->where('kind', 'allocation')->exists();
+            ->where('leave_type_id', $leaveTypeId)->where('leave_year_id', $leaveYearId)->whereIn('kind', $kinds)->exists();
     }
 
     private function lockKey(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId): void

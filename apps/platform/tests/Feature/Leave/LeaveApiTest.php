@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Leave\Concerns\CreatesLeaveFixtures;
 use Tests\TestCase;
 
@@ -17,7 +18,7 @@ use Tests\TestCase;
  */
 class LeaveApiTest extends TestCase
 {
-    use CreatesLeaveFixtures;
+    use CreatesLeaveFixtures, ProvidesSensitiveActionMfa;
 
     private function as(User $user, ?string $key = null): static
     {
@@ -63,10 +64,12 @@ class LeaveApiTest extends TestCase
         $this->allocate($w, $configurer)->assertForbidden();
         $this->allocate($w, $viewer)->assertForbidden();
         $this->allocate($w, $manager)->assertCreated()->assertJsonPath('data.kind', 'allocation')->assertJsonPath('data.units', 6);
-        $this->as($manager)->postJson($this->url($w, '/adjustments'), [
-            'employment_record_id' => $w['employment']->id, 'leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id,
-            'direction' => 'debit', 'units' => 2, 'reason' => 'allocation_correction',
-        ])->assertCreated();
+        // HR.10 (S-7): an adjustment re-verifies a fresh MFA code; without one it is a validation error.
+        $adjustment = ['employment_record_id' => $w['employment']->id, 'leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id,
+            'direction' => 'debit', 'units' => 2, 'reason' => 'allocation_correction'];
+        $this->mfaEnrolled($manager);
+        $this->as($manager)->postJson($this->url($w, '/adjustments'), $adjustment)->assertStatus(422);
+        $this->as($manager)->postJson($this->url($w, '/adjustments'), $adjustment + ['mfa_code' => $this->freshMfaCode($manager)])->assertCreated();
         $this->as($viewer)->getJson($this->url($w, "/balances?employment_record_id={$w['employment']->id}&leave_year_id={$w['year']->id}"))
             ->assertOk()->assertJsonPath('data.0.availableUnits', 4);
     }

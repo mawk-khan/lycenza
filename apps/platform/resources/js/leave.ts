@@ -52,7 +52,66 @@ export const ledgerKindLabels: Record<string, string> = {
     carry_forward_in: 'Carried in',
     carry_forward_out: 'Carried out',
     expiry: 'Lapsed',
+    opening: 'Opening balance',
+    accrual: 'Monthly accrual',
 };
+
+/** HR.10 (D11-16) — one account's statement as the server computes it. */
+export interface LeaveStatement {
+    employmentRecordId: string;
+    leaveTypeId: string;
+    leaveYearId: string;
+    opening: number;
+    credits: number;
+    debits: number;
+    closing: number;
+    identityHolds: boolean;
+    lines: {
+        id: string;
+        kind: string;
+        direction: string | null;
+        signedUnits: number;
+        runningBalance: number;
+        reasonCode: string | null;
+        accrualPeriod: string | null;
+        accrualRunId: string | null;
+        leaveRequestId: string | null;
+        yearCloseId: string | null;
+        correctsEntryId: string | null;
+        createdAt: string;
+    }[];
+}
+
+export const accrualOutcomeLabels: Record<string, string> = {
+    credited: 'Credited',
+    already_credited: 'Already credited',
+    not_due: 'Not yet due',
+    partial_period: 'Part of the month only (not prorated)',
+    no_policy: 'No policy assigned',
+    assignment_not_whole_period: 'Assignment does not cover the whole month',
+    not_monthly_policy: 'Policy is annual',
+    annual_allocation_exists: 'Annual allocation already funds the year',
+};
+
+/** "April 2026" for a month's first day (Y-m-d), without browser time-zone shifts. */
+export function monthLabel(firstDay: string): string {
+    const [y, m] = firstDay.split('-').map(Number);
+    const names = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+    ];
+    return `${names[m - 1]} ${y}`;
+}
 
 export const blockerLabels: Record<string, string> = {
     LEAVE_YEAR_ALREADY_CLOSED: 'This leave year is already closed.',
@@ -119,6 +178,9 @@ export interface LeavePolicyRow {
     minNoticeDays: number | null;
     maxBackdateDays: number | null;
     maxUnitsPerRequest: number | null;
+    entitlementMethod: string;
+    monthlyAccrualUnits: number | null;
+    accrualTiming: string | null;
     eligibilityRules: EligibilityRuleRow[];
     createdAt: string | null;
     retiredAt: string | null;
@@ -169,6 +231,10 @@ export interface EligibilityResult {
     rows: EligibilityRow[];
     counts: Record<string, number>;
     overlappingPolicyId?: string | null;
+    /** HR.10: the server's page of rows (the counts are always complete). */
+    total?: number;
+    page?: number;
+    perPage?: number;
 }
 
 export const outcomeLabels: Record<string, string> = {

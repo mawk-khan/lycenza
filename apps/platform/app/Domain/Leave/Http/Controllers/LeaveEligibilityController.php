@@ -4,6 +4,7 @@ namespace App\Domain\Leave\Http\Controllers;
 
 use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveReadService;
+use App\Domain\Leave\Application\Policy\LeaveEligibilityOutcome;
 use App\Domain\Leave\Http\Requests\LeavePolicyInput;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -12,6 +13,7 @@ use App\Support\Tenancy\SchoolTimezone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * HR.9 (ADR 0065 §28.4) -- Leave policy eligibility API. Thin: validate ->
@@ -30,9 +32,12 @@ class LeaveEligibilityController extends Controller
 {
     public function show(Request $request, School $school, LeaveEligibilityService $eligibility): JsonResponse
     {
-        $validated = $request->validate(['leave_type_id' => ['required', 'uuid'], 'date' => ['sometimes', 'date_format:Y-m-d']]);
+        $validated = $request->validate(['leave_type_id' => ['required', 'uuid'], 'date' => ['sometimes', 'date_format:Y-m-d'],
+            'outcome' => ['sometimes', Rule::in(array_column(LeaveEligibilityOutcome::options(), 'value'))],
+            'page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'integer', 'min:1', 'max:500']]);
 
-        return response()->json(['data' => $eligibility->applicability($school, $validated['leave_type_id'], $validated['date'] ?? SchoolTimezone::today($school), $request->user())]);
+        return response()->json(['data' => $eligibility->applicability($school, $validated['leave_type_id'], $validated['date'] ?? SchoolTimezone::today($school), $request->user(),
+            $validated['outcome'] ?? null, (int) ($validated['page'] ?? 1), (int) ($validated['per_page'] ?? 200))]);
     }
 
     public function preview(Request $request, School $school, LeaveEligibilityService $eligibility): JsonResponse

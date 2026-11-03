@@ -72,14 +72,40 @@ final class LeaveEligibilityResolver
         ))->values()->all();
     }
 
+    /** Technical page size of the complete roster traversal (never a population cap). */
+    public const ROSTER_PAGE = 1000;
+
+    /**
+     * HR.10 (ADR 0065 §29.6): EVERY employment spanning the date, by a
+     * complete id-ordered traversal (`EmploymentRoster::pageOverlapping()`).
+     * HR.9 first read `EmploymentRoster::on()`, whose 2,000-row cap silently
+     * truncated a larger School; that is gone.
+     *
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
+     */
+    public function completeRoster(School $school, string $date): array
+    {
+        $rows = [];
+        $after = null;
+        do {
+            $page = $this->roster->pageOverlapping($school, $date, $date, $after, self::ROSTER_PAGE);
+            array_push($rows, ...$page);
+            $after = $page === [] ? null : $page[array_key_last($page)]['employmentRecordId'];
+        } while (count($page) === self::ROSTER_PAGE);
+
+        return $rows;
+    }
+
     /**
      * @param  list<LeaveEligibilityVersion>  $versions
+     * @param  list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>|null  $roster
+     *                                                                                                                                                                                     null = the complete roster on the date; else exactly these rows (a batch)
      * @return list<LeaveEligibilityRow> sorted by name, then employment id
      */
-    public function resolve(School $school, string $leaveTypeId, string $date, array $versions, ?User $actor): array
+    public function resolve(School $school, string $leaveTypeId, string $date, array $versions, ?User $actor, ?array $roster = null): array
     {
         $date = CarbonImmutable::parse($date)->toDateString();
-        $roster = $this->roster->on($school, $date);
+        $roster ??= $this->completeRoster($school, $date);
         if ($roster === []) {
             return [];
         }

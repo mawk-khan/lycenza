@@ -50,7 +50,8 @@ class LeaveEligibilityPageController extends Controller
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
         $actor = $context->actor();
         $validated = $request->validate(['leave_type_id' => ['sometimes', 'uuid'], 'date' => ['sometimes', 'date_format:Y-m-d'],
-            'outcome' => ['sometimes', 'nullable', 'in:'.implode(',', array_column(LeaveEligibilityOutcome::options(), 'value'))]]);
+            'outcome' => ['sometimes', 'nullable', 'in:'.implode(',', array_column(LeaveEligibilityOutcome::options(), 'value'))],
+            'page' => ['sometimes', 'integer', 'min:1']]);
         $today = SchoolTimezone::today($school);
         $date = $validated['date'] ?? $today;
         $types = $reads->types($school, $actor);
@@ -60,7 +61,8 @@ class LeaveEligibilityPageController extends Controller
         $error = null;
         if ($typeId !== null) {
             try {
-                $result = $eligibility->applicability($school, $typeId, $date, $actor);
+                // HR.10: the complete population is evaluated; the page shows 100 rows of the chosen outcome at a time.
+                $result = $eligibility->applicability($school, $typeId, $date, $actor, ($validated['outcome'] ?? '') === '' ? null : $validated['outcome'], (int) ($validated['page'] ?? 1), 100);
             } catch (ModelNotFoundException) {
                 $error = 'Choose a leave type of this School.';
             } catch (LeaveException $e) {

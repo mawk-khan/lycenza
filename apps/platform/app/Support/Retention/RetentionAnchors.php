@@ -113,7 +113,8 @@ final class RetentionAnchors
         'payroll_adjustments' => ['employment_record_id', 'payroll_run_id', 'salary_component_id'],
         'payroll_lwf_annual_charges' => ['employment_record_id', 'payroll_run_result_id'],
         // HRX Leave and Staff Attendance evidence
-        'leave_ledger_entries' => ['created_at', 'allocation_run_id', 'employment_record_id', 'leave_policy_assignment_id', 'leave_request_id', 'leave_type_id', 'leave_year_id', 'reverses_entry_id', 'tracks_balance', 'year_close_id', 'year_close_reconciliation_id', 'source_id'],
+        // HR.10 (2027_01_29): + the accrual run.
+        'leave_ledger_entries' => ['created_at', 'allocation_run_id', 'employment_record_id', 'leave_policy_assignment_id', 'leave_request_id', 'leave_type_id', 'leave_year_id', 'reverses_entry_id', 'tracks_balance', 'year_close_id', 'year_close_reconciliation_id', 'source_id', 'accrual_run_id'],
         'leave_requests' => ['created_at', 'updated_at', 'employee_id', 'employment_record_id', 'leave_type_id'],
         'leave_request_days' => ['created_at', 'leave_policy_assignment_id', 'leave_policy_id', 'leave_request_id', 'leave_year_id'],
         'leave_decisions' => ['created_at', 'decider_employee_id', 'leave_request_id', 'requester_employee_id'],

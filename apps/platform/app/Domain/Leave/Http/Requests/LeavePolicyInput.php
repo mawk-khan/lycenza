@@ -3,6 +3,8 @@
 namespace App\Domain\Leave\Http\Requests;
 
 use App\Domain\HR\Application\Workforce\StaffType;
+use App\Domain\Leave\Application\Accrual\LeaveAccrualTiming;
+use App\Domain\Leave\Application\Accrual\LeaveEntitlementMethod;
 use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\Policy\LeaveEligibilityCriteria;
 use Illuminate\Validation\Rule;
@@ -26,6 +28,10 @@ final class LeavePolicyInput
             'carry_forward_expiry_days' => ['nullable', 'integer', 'min:1', 'max:366'],
             'supersedes_policy_id' => ['sometimes', 'nullable', 'uuid'],
             ...self::timingRules(),
+            // HR.10 (ADR 0065 §29.2): the entitlement method.
+            'entitlement_method' => ['sometimes', Rule::in(array_column(LeaveEntitlementMethod::options(), 'value'))],
+            'monthly_accrual_units' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:62'],
+            'accrual_timing' => ['sometimes', 'nullable', Rule::in(array_column(LeaveAccrualTiming::options(), 'value'))],
             ...self::eligibilityRules(),
         ];
     }
@@ -54,7 +60,7 @@ final class LeavePolicyInput
 
     /**
      * @param  array<string, mixed>  $validated
-     * @return array{name: string, annual_allocation_units: int, carry_forward_allowed: bool, carry_forward_cap_units: ?int, carry_forward_expiry_days: ?int, min_notice_days: ?int, max_backdate_days: ?int, max_units_per_request: ?int}
+     * @return array{name: string, annual_allocation_units: int, carry_forward_allowed: bool, carry_forward_cap_units: ?int, carry_forward_expiry_days: ?int, min_notice_days: ?int, max_backdate_days: ?int, max_units_per_request: ?int, entitlement_method: string, monthly_accrual_units: ?int, accrual_timing: ?string}
      */
     public static function terms(array $validated): array
     {
@@ -69,6 +75,9 @@ final class LeavePolicyInput
             'min_notice_days' => $int('min_notice_days'),
             'max_backdate_days' => $int('max_backdate_days'),
             'max_units_per_request' => $int('max_units_per_request'),
+            'entitlement_method' => (string) ($validated['entitlement_method'] ?? LeaveEntitlementMethod::ANNUAL->value),
+            'monthly_accrual_units' => $int('monthly_accrual_units'),
+            'accrual_timing' => isset($validated['accrual_timing']) ? (string) $validated['accrual_timing'] : null,
         ];
     }
 

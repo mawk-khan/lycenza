@@ -72,17 +72,26 @@ class LeaveEligibilityService
         private readonly LeavePolicyService $policies,
     ) {}
 
-    /** @return array{leaveTypeId: string, date: string, versions: list<array<string, mixed>>, rows: list<array<string, mixed>>, counts: array<string, int>} */
-    public function applicability(School $school, string $leaveTypeId, string $date, User $actor): array
+    /**
+     * HR.10 (ADR 0065 §29.6): the COMPLETE population is evaluated (counts
+     * are whole); the rows are one server page, optionally of one outcome.
+     *
+     * @return array{leaveTypeId: string, date: string, versions: list<array<string, mixed>>, rows: list<array<string, mixed>>, counts: array<string, int>, total: int, page: int, perPage: int}
+     */
+    public function applicability(School $school, string $leaveTypeId, string $date, User $actor, ?string $outcome = null, int $page = 1, int $perPage = 200): array
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
         $date = self::day($date);
+        $page = max(1, $page);
+        $perPage = max(1, min($perPage, 500));
 
-        return $this->context->withSchool($school, function () use ($school, $leaveTypeId, $date, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $leaveTypeId, $date, $actor, $outcome, $page, $perPage) {
             $type = $this->type($school, $leaveTypeId);
             $versions = $this->resolver->activeVersions($school, $type->id);
+            $result = $this->result($type->id, $date, $versions, $this->resolver->resolve($school, $type->id, $date, $versions, $actor));
+            $rows = $outcome === null ? $result['rows'] : array_values(array_filter($result['rows'], fn (array $r) => $r['outcome'] === $outcome));
 
-            return $this->result($type->id, $date, $versions, $this->resolver->resolve($school, $type->id, $date, $versions, $actor));
+            return ['rows' => array_slice($rows, ($page - 1) * $perPage, $perPage), 'total' => count($rows), 'page' => $page, 'perPage' => $perPage] + $result;
         });
     }
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Leave;
 
+use App\Domain\Leave\Http\Controllers\LeaveAccrualController;
 use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
 use App\Domain\Leave\Http\Controllers\LeaveEligibilityController;
 use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
@@ -26,8 +27,8 @@ class LeaveOpenApiCoverageTest extends TestCase
         $this->assertSame([], array_values(array_diff($live, $documented)), 'Live Leave route(s) missing from the OpenAPI contract');
         $this->assertSame([], array_values(array_diff($documented, $live)), 'OpenAPI Leave operation(s) with no matching live route');
 
-        $this->assertCount(43, $live, 'Expected exactly 43 live Leave API routes (HR.9: + eligibility, preview, runs) -- update this pin (and the contract) deliberately.');
-        $this->assertCount(43, $documented);
+        $this->assertCount(50, $live, 'Expected exactly 50 live Leave API routes (HR.9: + eligibility, preview, runs; HR.10: + openings, statement, accrual preview, runs (2), run, grid) -- update this pin (and the contract) deliberately.');
+        $this->assertCount(50, $documented);
     }
 
     #[Test]
@@ -58,7 +59,7 @@ class LeaveOpenApiCoverageTest extends TestCase
                 return;
             }
             [$controller] = explode('@', $action, 2) + [null];
-            if (! in_array($controller, [LeaveConfigurationController::class, LeaveLedgerController::class, LeaveRequestController::class, LeaveEligibilityController::class], true)) {
+            if (! in_array($controller, [LeaveConfigurationController::class, LeaveLedgerController::class, LeaveRequestController::class, LeaveEligibilityController::class, LeaveAccrualController::class], true)) {
                 return;
             }
             $path = preg_replace('/\{[^}]+\}/', '{param}', '/'.preg_replace('#^api/v1/#', '', $route->uri()));

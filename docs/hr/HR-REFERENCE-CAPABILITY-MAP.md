@@ -330,7 +330,7 @@ both mean HRX-L2.
 | D10-02 | Leave category (grouping + quota) | policy per type, assigned per employment | ALT | H439–H442 | — | Leave | — | — | — |
 | D10-03 | Category / department eligibility | eligibility rules on the policy version (staff type, Employee Category, primary Department; NULL = any), never ambiguous between active versions (DB); resolved from HR.1A facts on a date; additive idempotent run → policy assignments with provenance (HR.9) | IMP | H443–H448 | — | Leave | HR.9 | M | — |
 | D10-04 | Paid / unpaid | `is_paid` | IMP | H430 | — | Leave | — | — | — |
-| D10-05 | Month-on-month carry-forward | none | MISS | H430 | monthly accrual with in-year carry | Leave | HR.10 | M | — |
+| D10-05 | Month-on-month carry-forward | monthly accrual (HR.10): each month's credit stays in the year's balance (no monthly lapse) until consumed or the year close | IMP | H430 | — | Leave | HR.10 | M | — |
 | D10-06 | Year-on-year carry-forward | year close with cap | IMP | H430 | — | Leave | — | — | — |
 | D10-07 | Gender eligibility | none; gender not modelled | DEF | H434 | sensitive-demographic decision first | Leave | after HR-L8 | H | HR-L8, HRX-L3 |
 | D10-08 | Marital-status eligibility | none | DEF | H434 | as D10-07 | Leave | after HR-L8 | H | HR-L8 |
@@ -344,7 +344,7 @@ both mean HRX-L2.
 | D10-16 | Holiday / week-off inclusion | fixed exclusion (working time only) | PART | H437 | configurable inclusion is part of OD-HR-15 | Leave | after OD-HR-15 | M | OD-HR-15 |
 | D10-17 | Academic / payroll year | leave years | IMP | H461 | — | Leave | — | — | — |
 | D10-18 | Start month | prospective start month | IMP | H441 | — | Leave | — | — | — |
-| D10-19 | Joining-date behaviour | none (no proration) | MISS | H466–H471 | proration rule on the policy version | Leave | HR.10 | M | — |
+| D10-19 | Joining-date behaviour | monthly accrual credits from the first WHOLE month of employment; a joining month is listed (`partial_period`), never prorated; annual: explicit allocation of exact units (ADR 0065 §22.2) (HR.10) | PART | H466–H471 | prorated first period needs a §22.2 amendment | Leave | after OD-HR-17 | M | OD-HR-17 |
 | D10-20 | Staff-category eligibility | eligibility rule on `employee_category_id` (HR.1A terms effective on the date) and the closed staff type (HR.9) | IMP | H443 | — | Leave | HR.9 | M | — |
 | D10-21 | Policies versioned / effective-dated | `supersedes_policy_id` + `leave_policy_assignments` (effective from/to) + frozen request days; HR.9 rule columns and eligibility rules live on the (immutable) version | IMP | — | — | Leave | — | H | — |
 | D10-22 | Statutory leave types (maternity, …) | School policy only | GATE | H433 | — | Leave | — | H | HRX-L3 |
@@ -355,38 +355,38 @@ both mean HRX-L2.
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D11-01 | Opening migration entry | none (only an `adjustment` would carry it) | MISS | — | ledger kind `opening` (one per account, unique) for go-live migration | Leave | HR.10 | M | — |
+| D11-01 | Opening migration entry | ledger kind `opening`: exact units, once per account, only as its first entry (DB), fresh MFA, never one's own (HR.10) | IMP | — | — | Leave | HR.10 | M | — |
 | D11-02 | Entitlement | `allocation` | IMP | H449 | — | Leave | — | — | — |
-| D11-03 | Monthly accrual | none | MISS | H466 | kind `accrual` with a period key (unique) | Leave | HR.10 | M | — |
+| D11-03 | Monthly accrual | ledger kind `accrual` with `accrual_period` (unique per account x month); DB-checked against the whole-month monthly assignment (HR.10) | IMP | H466 | — | Leave | HR.10 | M | — |
 | D11-04 | Annual allocation | allocation run (once per year × type) | IMP | — | — | Leave | — | — | — |
 | D11-05 | Carry-forward | `carry_forward_in` / `out` | IMP | — | — | Leave | — | — | — |
-| D11-06 | Carry-forward expiry | `carried_expires_on` recorded, not executed | PART | — | execute expiry (`expiry` kind exists) | Leave | HR.10 | M | — |
+| D11-06 | Carry-forward expiry | `carried_expires_on` recorded, not executed | PART | — | executing it needs a consumption order (carried-first / current-first / pro rata) | Leave | after OD-HR-16 | M | OD-HR-16 |
 | D11-07 | Approved leave debit | `consumption` (unique per request × year) | IMP | H449 | — | Leave | — | — | — |
 | D11-08 | Cancellation reversal | `reversal` | IMP | — | — | Leave | — | — | — |
 | D11-09 | Comp-off credit | none | MISS | H449 (Compensatory row) | kind `comp_off_credit` | Leave | HR.11 | M | — |
 | D11-10 | Comp-off expiry | none | MISS | — | kind `comp_off_expiry` | Leave | HR.11 | M | — |
 | D11-11 | Attendance deduction (late / early → leave) | none | GATE | H449, H563 | — | Leave + StaffAttendance | — | H | L2a + HRX-L4 |
 | D11-12 | LOP | none in the ledger | GATE | H449 | — | Payroll | — | H | HRX-L4 |
-| D11-13 | Manual adjustment | `adjustment` (closed reasons; no MFA, S-7) | IMP | — | MFA (S-7) | Leave | HR.10 | M | — |
+| D11-13 | Manual adjustment | `adjustment` (closed reasons) + fresh MFA on web and API (S-7) + optional link to the corrected entry of the same account (HR.10) | IMP | — | — | Leave | HR.10 | M | — |
 | D11-14 | Correction / reversal | reversal + adjustments; ledger append-only | IMP | — | — | Leave | — | — | — |
 | D11-15 | Balance derived from entries, never a column | computed; never negative (trigger) | IMP | — | — | Leave | — | — | — |
-| D11-16 | Reproducible statement (opening + credits − debits ± adjustments = closing) | balance only | PART | H449–H451 | a statement read model per account and period | Leave | HR.14 | M | — |
+| D11-16 | Reproducible statement (opening + credits − debits ± adjustments = closing) | `LeaveStatementReader::statement()`: every entry, running balance, provenance, the identity checked (HR.10) | IMP | H449–H451 | — | Leave | HR.10 | M | — |
 
 ### D12 — Leave allocation
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D12-01 | Monthly allocation | none | MISS | H466–H471 | accrual run per month (idempotent) | Leave | HR.10 | M | — |
+| D12-01 | Monthly allocation | monthly accrual runs: preview, recoverable batches, complete roster, reconciled disjoint outcomes; monthly grid (HR.10) | IMP | H466–H471 | — | Leave | HR.10 | M | — |
 | D12-02 | Annual allocation | `executeRun()` | IMP | — | — | Leave | — | — | — |
-| D12-03 | Entitlement from joining date | none | MISS | H466 | proration (D10-19) | Leave | HR.10 | M | — |
+| D12-03 | Entitlement from joining date | monthly accrual from the first whole month (D10-19); no proration | PART | H466 | prorated first month (D12-08) | Leave | after OD-HR-17 | M | OD-HR-17 |
 | D12-04 | Department / category eligibility | eligibility rules + the additive run (D10-03) (HR.9) | IMP | H443–H448 | — | Leave | HR.9 | M | — |
 | D12-05 | Assigned / unassigned staff | Leave eligibility page / API: every employment's closed outcome on a date (assigned with drift, eligible, ambiguous, no matching rule, not eligible) (HR.9) | IMP | H467 | — | Leave | HR.9 | L | — |
 | D12-06 | Bulk allocation | allocation run | IMP | — | — | Leave | — | — | — |
 | D12-07 | Carry-forward | year close | IMP | — | — | Leave | — | — | — |
-| D12-08 | Prorating | none | MISS | H466 | D10-19 | Leave | HR.10 | M | — |
+| D12-08 | Prorating | none: ADR 0065 §22.2 (final owner decision, no automatic proration); a part month is reported `partial_period` | DEF | H466 | a §22.2 amendment with a half-day rounding rule | Leave | after OD-HR-17 | M | OD-HR-17 |
 | D12-09 | Leave year | leave years | IMP | H461 | — | Leave | — | — | — |
 | D12-10 | Effective policy version | the run uses the assignment's policy | IMP | — | — | Leave | — | — | — |
-| D12-11 | Idempotent runs (never double-credit) | `leave_allocation_runs_once` (School, year, type) | IMP | — | the same guarantee for accrual (period key) | Leave | HR.10 | H | — |
+| D12-11 | Idempotent runs (never double-credit) | `leave_allocation_runs_once` (School, year, type); accrual: one per account x month (unique) + one open run per month + resumable cursor (HR.10) | IMP | — | — | Leave | — | H | — |
 
 ### D13 — Leave workflow
 
@@ -584,17 +584,17 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A (2026-11-03) | After HR.3A (2026-11-03) | After HR.2A (2026-11-03) | After HR.9 (2026-11-03) |
-|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | **123** (34.1 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | **23** |
-| MISSING | 90 | 87 | 86 | 85 | **76** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 |
-| DEFERRED | 16 | 16 | 16 | 16 | **20** |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 (2026-11-03) |
+|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | **128** (35.5 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | **24** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | **69** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | **21** |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** |
 
 HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
 D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
@@ -620,6 +620,14 @@ stays PART (fixed exclusion) behind the same decision. D10-05 and D10-19
 stay MISS for HR.10. The per-section table shows the HR.9 figures for D10,
 D12 and D14.
 
+HR.10 closed D10-05, D11-01, D11-03, D11-16 and D12-01 (to IMP), narrowed
+D10-19 and D12-03 (MISS → PART: monthly accrual from the first whole month)
+and deferred D12-08 (MISS → DEF) behind OD-HR-17 (ADR 0065 §22.2 stands).
+D11-06 stays PART behind OD-HR-16 (consumption order). D11-13 and D12-11
+were already IMPLEMENTED and are re-described (S-7 MFA; accrual
+idempotency). The per-section table shows the HR.10 figures for D10, D11
+and D12.
+
 **Per section:**
 
 | Section | IMP | PART | MISS | ALT | XDOM | DEF | GATE | NR | Rows |
@@ -633,9 +641,9 @@ D12 and D14.
 | D7 Evaluation | 6 | 1 | 0 | 2 | 0 | 0 | 7 | 0 | 16 |
 | D8 Attendance operations | 6 | 2 | 3 | 1 | 0 | 2 | 2 | 0 | 16 |
 | D9 Biometric | 0 | 1 | 0 | 1 | 0 | 0 | 15 | 0 | 17 |
-| D10 Leave policy | 11 | 1 | 2 | 2 | 0 | 5 | 3 | 0 | 24 |
-| D11 Ledger | 8 | 2 | 4 | 0 | 0 | 0 | 2 | 0 | 16 |
-| D12 Allocation | 8 | 0 | 3 | 0 | 0 | 0 | 0 | 0 | 11 |
+| D10 Leave policy | 12 | 2 | 0 | 2 | 0 | 5 | 3 | 0 | 24 |
+| D11 Ledger | 11 | 1 | 2 | 0 | 0 | 0 | 2 | 0 | 16 |
+| D12 Allocation | 9 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 11 |
 | D13 Workflow | 10 | 1 | 0 | 1 | 0 | 3 | 4 | 1 | 20 |
 | D14 Holidays | 3 | 2 | 4 | 2 | 0 | 1 | 0 | 0 | 12 |
 | D15 Comp-off | 0 | 0 | 8 | 1 | 0 | 0 | 2 | 0 | 11 |
