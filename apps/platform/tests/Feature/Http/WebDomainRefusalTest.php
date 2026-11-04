@@ -13,6 +13,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\ViewErrorBag;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCanteenFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Timetable\Concerns\CreatesTimetableFixtures;
 use Tests\TestCase;
 
@@ -25,7 +26,7 @@ use Tests\TestCase;
  */
 class WebDomainRefusalTest extends TestCase
 {
-    use CreatesCanteenFixtures, CreatesTimetableFixtures;
+    use CreatesCanteenFixtures, CreatesTimetableFixtures, ProvidesSensitiveActionMfa;
 
     private const UUID = '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i';
 
@@ -89,7 +90,8 @@ class WebDomainRefusalTest extends TestCase
         $this->assertDoesNotMatchRegularExpression(self::UUID, $overlap);
 
         $this->from($page)
-            ->post("{$page}/employment-records/{$employment->id}/end", ['ends_on' => '1990-01-01'])
+            // HR.12: the direct end records a death only (fresh MFA + confirmation); its refusal still names no ids.
+            ->post("{$page}/employment-records/{$employment->id}/end", ['ends_on' => '1990-01-01', 'status' => 'deceased', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode($user)])
             ->assertRedirect($page);
         $date = $this->refusal();
         $this->assertStringContainsString("before this employment's start date", $date);
