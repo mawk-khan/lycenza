@@ -30,6 +30,10 @@
   recoverable accrual runs, the account statement, fresh MFA for
   adjustments (S-7). In-year expiry (OD-HR-16) and proration (OD-HR-17)
   stay unbuilt.
+  **Amended by HR.11 (partial; 2026-11-04, §30):** OD-HR-5 decided (the
+  `line_manager` add-on role), approvals inbox and decision history; §6
+  unchanged; comp-off, staff permissions and special windows BLOCKED by
+  owner decision.
 - Date: 2026-10-03
 - Programme: **HRX — Leave & staff attendance**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes",
@@ -2425,3 +2429,105 @@ No HIGH findings.
     - first-period treatment on the version.
 - **Not in HR.10:** comp-off (HR.11); manager approval (OD-HR-5);
   sandwich (OD-HR-15); HR-L8 eligibility; any clock, device or GPS data.
+
+## 30. Amendment — HR.11 Leave decisions: line managers, inbox, history (2026-11-04)
+
+Baseline `7fc9f197` (DS-2 on top of HR.10 `6886247e`; HR.10's main CI
+41732246682 green). Roadmap scope: D15, D16, D17, D13-15…17/20, D11-09/10.
+The owner decided on 2026-11-04 (HR.11 preflight):
+
+| Decision | Outcome |
+|---|---|
+| OD-HR-5 (who approves as a line manager) | **Option 2**: a new add-on role `line_manager` holding exactly `hr.leave.approve` (ADR 0071 §30) |
+| §6 delegation / substitutes / escalation / multi-level | **Kept excluded**: single-stage decisions only, no amendment |
+| Comp-off (D15) | **Blocked** until worked-day evidence exists; Staff Attendance refuses non-working halves (`STAFF_ATTENDANCE_NOT_WORKING_TIME`), so a comp-off credit would rest on nothing authoritative |
+| Staff permissions (D16), special windows (D17) | **Blocked**: decisions recorded, nothing built |
+
+HR.11 is therefore **partially complete**: the decision slice (HR.11A) is
+built; HR.11B–D are blocked.
+
+### 30.1 What did not change
+- **The decision core** (§23.5–§23.7, ORG.8D) is unchanged:
+  - the manager path = whole-School `hr.leave.approve` AND the requester's
+    current HR.3A manager on the decision date (`ReportingLine::holdManagerOf`,
+    FOR SHARE);
+  - the administrative path = `hr.leave.manage`;
+  - nobody decides their own request (service plus
+    `leave_decisions_no_self_decision`), and the submitter never decides
+    (`leave_decisions_participant_guard`);
+  - one terminal decision (conditional transition plus unique decision
+    indexes);
+  - consumption once per request × year; balance checked at approval,
+    never reserved.
+- **No change to:** the request lifecycle (no draft, escalated or delegated
+  state), timing rules (§28.2), the ledger (§29), Payroll's frozen evidence
+  (§26) or the attendance gates.
+
+### 30.2 Line managers (OD-HR-5)
+- `line_manager` gives a School a way to let line managers decide. The role
+  confers no visibility beyond the inbox.
+- Former, future and separated managers decide nothing. A request whose
+  manager left stays pending for the administrative path; no replacement is
+  invented.
+- A Campus grant of the role never decides (OD-8.8). Platform authority
+  reaches nothing.
+
+### 30.3 Inbox (D13-20)
+- `LeaveRequestReadService::managedPage()` resolves ONLY the actor's current
+  direct reports, on every call.
+- Filters only narrow: status (live / pending / decided / all), leave type
+  and date range.
+- The page is server-paged (offset over a stable order), and `pendingCount`
+  counts what the actor may decide now.
+- Request detail (`/app/leave/approvals/{id}`) is the private 404 for
+  anything else. Employee labels are the directory tier only (id, number,
+  name, status). It never shows the ledger rows or any HR profile field.
+- The API list accepts the same filters, with the same response shape.
+
+### 30.4 Decision history
+- The administrative and manager views of a request's decisions show
+  outcome, path, closed reason, time and the deciding account's display
+  name (`decidedBy`), read from the decision row. The employee's own view
+  keeps §25.4: never who decided.
+- A later reporting change never rewrites it: the original manager's name
+  and path remain.
+  - The FORMER manager can no longer open the request.
+  - The NEW manager can, with the recorded name, because they now manage
+    the employee. This includes the report's decided history through the
+    `decided` / `all` filters: closed reason codes only, never health data.
+- The manager detail never carries the ledger rows, on web or API
+  (`ManagedLeaveRequestDetail`).
+- `line_manager` is presented as an add-on. Granting it alone is allowed and
+  harmless: it opens only the inbox.
+
+### 30.5 Proof
+- `LeaveLineManagerTest` covers the role through the real catalogue:
+  - exactly one key;
+  - the decision, inbox, filters, history and minimal labels;
+  - no line, no role, former / future / separated manager;
+  - a Campus-only grant; platform root; one's own request;
+  - paging without skips or repeats.
+- `LeaveDecisionSeparationConcurrencyTest` runs two real processes with the
+  contender observed blocked: approval versus the requester's separation
+  (refused, nothing consumed) and versus the manager's separation (private
+  404, request still pending).
+- Already proven by `LeaveRequestConcurrencyTest`: two approvals, approval
+  versus rejection or withdrawal, reporting changes both ways, cancellations
+  and year close.
+
+### 30.6 Blocked — what each needs
+- **Comp-off (D15, D11-09/10):** a Staff Attendance amendment recording
+  presence on non-working halves (§24), then a typed credit rule on the
+  version, a request / decide workflow on the approval registry, one credit
+  per worked half (unique), and reversal only while unconsumed. Expiry
+  waits for OD-HR-16.
+- **Staff permissions (D16):**
+  - out time, return time and the attendance effect are HRX-L2 /
+    OD-HR-14 gated;
+  - without them a "permission" is a half-day leave request of a
+    non-balance type, which the School can already configure.
+- **Special windows (D17):** needs a precedence decision for overlaps, and
+  deduction semantics that do not reopen OD-HR-15 (sandwich). A
+  restriction-only "blackout" variant was offered and not chosen.
+- **Delegation, substitutes, escalation, multi-level (D13-15…17):** §6 kept;
+  they need an amendment designed first.

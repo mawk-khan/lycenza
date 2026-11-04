@@ -2027,6 +2027,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/year-close', [LeaveAdminController::class, 'executeYearClose'])->name('year-close.store');
 
         Route::get('/approvals', [LeaveApprovalsController::class, 'index'])->name('approvals');
+        // HR.11 (ADR 0065 §30.3): one direct report's request with its decision history (private 404 otherwise).
+        Route::get('/approvals/{leaveRequest}', [LeaveApprovalsController::class, 'show'])->name('approvals.show');
         foreach (['approve', 'reject'] as $action) {
             Route::post("/approvals/{leaveRequest}/{$action}", [LeaveApprovalsController::class, 'decide'])->defaults('action', $action)->name("approvals.{$action}");
         }

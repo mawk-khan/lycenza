@@ -1746,7 +1746,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** HRX.2: the acting manager's current direct reports' submitted and approved requests, resolved server-side. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). */
+        /** HRX.2: the acting manager's current direct reports' requests, resolved server-side. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). HR.11: the HR.11 `line_manager` role carries exactly this key; optional filters only narrow (status live = submitted and approved, the default; pending; decided; all). */
         get: operations["listManagedLeaveRequests"];
         put?: never;
         post?: never;
@@ -1763,7 +1763,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** HRX.2: one direct report's request; anything else is the private 404. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). */
+        /** HRX.2: one direct report's request; anything else is the private 404. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). HR.11: the request, its chargeable days and its recorded decisions (with the decider's name); never the ledger rows. */
         get: operations["getManagedLeaveRequest"];
         put?: never;
         post?: never;
@@ -9051,6 +9051,24 @@ export interface components {
             /** Format: date-time */
             submittedAt?: string | null;
         };
+        /** @description HR.11: a direct report's request as a line manager sees it -- never the ledger rows. */
+        ManagedLeaveRequestDetail: components["schemas"]["LeaveRequest"] & {
+            days: {
+                [key: string]: unknown;
+            }[];
+            decisions: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                decision: "approved" | "rejected" | "withdrawn" | "cancelled";
+                /** @enum {string} */
+                path: "manager" | "administrative" | "self";
+                reasonCode?: string | null;
+                /** Format: date-time */
+                decidedAt?: string | null;
+                decidedBy?: string | null;
+            }[];
+        };
         LeaveRequestDetail: components["schemas"]["LeaveRequest"] & {
             /** @description The immutable chargeable-day evidence written at approval (empty until approved). */
             days: {
@@ -9072,10 +9090,12 @@ export interface components {
                 /** @enum {string} */
                 decision: "approved" | "rejected" | "withdrawn" | "cancelled";
                 /** @enum {string} */
-                path: "manager" | "administrative";
+                path: "manager" | "administrative" | "self";
                 reasonCode?: string | null;
                 /** Format: date-time */
                 decidedAt?: string | null;
+                /** @description HR.11: the deciding account's display name, as recorded; never rewritten by a later reporting change. */
+                decidedBy?: string | null;
             }[];
             ledgerEntries: components["schemas"]["LeaveLedgerEntry"][];
         };
@@ -17586,7 +17606,12 @@ export interface operations {
     };
     listManagedLeaveRequests: {
         parameters: {
-            query?: never;
+            query?: {
+                status?: "live" | "pending" | "decided" | "all";
+                leave_type_id?: string;
+                from?: string;
+                to?: string;
+            };
             header?: never;
             path: {
                 schoolId: components["parameters"]["SchoolId"];
@@ -17644,7 +17669,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["LeaveRequestDetail"];
+                        data: components["schemas"]["ManagedLeaveRequestDetail"];
                     };
                 };
             };

@@ -35,15 +35,49 @@ class LeaveApprovalsController extends Controller
 {
     use AuthorizesCapability, LeavePageSupport;
 
-    public function index(TenantContext $context, LeaveReadService $reads, LeaveRequestReadService $requests): Response
+    /** @var array<string, list<mixed>> */
+    private const FILTERS = [
+        'status' => ['sometimes', 'nullable', 'in:live,pending,decided,all'],
+        'leave_type_id' => ['sometimes', 'nullable', 'uuid'],
+        'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+        'to' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+        'page' => ['sometimes', 'integer', 'min:1'],
+    ];
+
+    public function index(Request $request, TenantContext $context, LeaveReadService $reads, LeaveRequestReadService $requests): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::APPROVE, $school);
-        $rows = $requests->managed($school, $context->actor());
+        // HR.11 (ADR 0065 §30.3): filters only narrow the server-resolved direct reports; one server page at a time.
+        $filters = $request->validate(self::FILTERS);
+        $page = $requests->managedPage($school, $context->actor(), array_filter($filters, fn ($v) => $v !== null && $v !== ''), (int) ($filters['page'] ?? 1));
 
         return Inertia::render('App/Leave/Approvals', [
-            'requests' => $rows,
-            'employees' => collect($this->employments($context, $school, array_values(array_unique(array_column($rows, 'employmentRecordId')))))->keyBy('employmentRecordId')->all(),
+            'requests' => $page['rows'],
+            'pagination' => ['total' => $page['total'], 'page' => $page['page'], 'perPage' => $page['perPage']],
+            'pendingCount' => $page['pendingCount'],
+            'filters' => ['status' => $filters['status'] ?? 'live', 'leave_type_id' => $filters['leave_type_id'] ?? '', 'from' => $filters['from'] ?? '', 'to' => $filters['to'] ?? ''],
+            'employees' => collect($this->employments($context, $school, array_values(array_unique(array_column($page['rows'], 'employmentRecordId')))))->keyBy('employmentRecordId')->all(),
+            'types' => $reads->typeNames($school, $context->actor()),
+            'rejectionReasons' => LeaveDecision::REJECTION_REASONS,
+        ]);
+    }
+
+    /** HR.11: one current direct report's request with its decision history, or the private 404. */
+    public function show(TenantContext $context, LeaveReadService $reads, LeaveRequestReadService $requests, string $leaveRequest): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability(LeaveCapabilities::APPROVE, $school);
+        abort_if(! Str::isUuid($leaveRequest), 404);
+        try {
+            $detail = $requests->managedShow($school, $leaveRequest, $context->actor());
+        } catch (ModelNotFoundException) {
+            abort(404);
+        }
+
+        return Inertia::render('App/Leave/ApprovalShow', [
+            'request' => $detail,
+            'employee' => collect($this->employments($context, $school, [$detail['employmentRecordId']]))->first(),
             'types' => $reads->typeNames($school, $context->actor()),
             'rejectionReasons' => LeaveDecision::REJECTION_REASONS,
         ]);

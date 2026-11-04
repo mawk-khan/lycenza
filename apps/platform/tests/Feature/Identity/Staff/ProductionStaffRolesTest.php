@@ -41,6 +41,8 @@ class ProductionStaffRolesTest extends TestCase
     private const ROLES = [
         'hr_officer' => ['school.roles.grant.hr'],
         'hr_sensitive_records' => ['school.roles.grant.hr_sensitive'],
+        // HR.11 (OD-HR-5): school_admin holds hr.leave.approve itself, so no grant right is used.
+        'line_manager' => [],
         'payroll_officer' => ['school.roles.grant.payroll_sensitive'],
         'accountant' => [],
         'cashier' => [],
@@ -271,13 +273,15 @@ class ProductionStaffRolesTest extends TestCase
 
         $this->assertSame([
             'school_admin', 'principal', 'teacher', 'staff_self_service',
-            'hr_officer', 'hr_sensitive_records', 'payroll_officer', 'accountant', 'cashier',
+            'hr_officer', 'hr_sensitive_records', 'line_manager', 'payroll_officer', 'accountant', 'cashier',
             'librarian', 'transport_coordinator', 'hostel_warden', 'front_office', 'stores_officer', 'canteen_operator',
             'admissions_officer', 'communications_coordinator',
         ], array_column($catalog, 'key'), 'Stable functional order.');
         $byKey = collect($catalog)->keyBy('key');
         $this->assertTrue($byKey->every(fn ($role) => $role['grantable'] === true), 'School Admin can grant every role.');
         $this->assertTrue($byKey['hr_sensitive_records']['addOn']);
+        $this->assertTrue($byKey['line_manager']['addOn'], 'HR.11: granted on top of a persona role');
+        $this->assertSame(['HR data'], $byKey['line_manager']['sensitivity']);
         $this->assertSame(['Highly sensitive HR data'], $byKey['hr_sensitive_records']['sensitivity']);
         $this->assertSame(['Payroll amounts', 'Financial', 'Operational'], $byKey['payroll_officer']['sensitivity'], 'ORG.9D-3R1: the School calendar is operational (ORG.9D-1R1: so is the own inbox).');
         $this->assertSame('HR and payroll', $byKey['hr_officer']['groupLabel']);

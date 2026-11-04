@@ -1166,6 +1166,7 @@ final class SchoolRouteCoverage
 
             // Http\Controllers\App\Leave\LeaveApprovalsController
             Coverage::gate('app.leave.approvals', 'hr.leave.approve'),
+            Coverage::gate('app.leave.approvals.show', 'hr.leave.approve'),
             Coverage::gate('app.leave.approvals.approve', 'hr.leave.approve'),
             Coverage::gate('app.leave.approvals.reject', 'hr.leave.approve'),
 

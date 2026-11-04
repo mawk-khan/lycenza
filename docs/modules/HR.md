@@ -4826,3 +4826,18 @@ The contract is ADR 0065 §29. HR changes:
 | 5 | No logged-in browser walkthrough of HR.9 / HR.10 pages | HR (UI) | owner DDEV walkthrough |
 | 6 | `EmploymentRoster::on()` / `overlapping()` keep a 2,000-row cap for Staff Attendance registers | StaffAttendance | before a School above 2,000 staff (HR.5–HR.7) |
 | — | OD-HR-15 (sandwich), OD-HR-16 (expiry order), OD-HR-17 (proration), OD-HR-5 (manager approval), OD-HR-14 (clock / biometric), HR-L8 | owner / legal | open |
+
+## Line managers and leave decisions (HR.11, partial, 2026-11-04)
+
+The contract is ADR 0065 §30 and ADR 0071 §30. HR's part:
+
+- **Reporting lines are evidence, never authority.** A `line_manager` role
+  holder decides only for the people whose HR.3A line names their CURRENT
+  employment on the decision date (`ReportingLine::holdManagerOf`, FOR
+  SHARE).
+- **A manager who leaves loses the inbox at once.** Their employment end
+  makes the acting Employee unavailable, and the request stays for the
+  administrative path. Nothing is re-routed and no substitute is created.
+- **Staff Attendance still refuses non-working halves.** That is why
+  comp-off is blocked (OD-HR-18). Changing it is a Staff Attendance
+  amendment, not an HR change.

@@ -1628,6 +1628,40 @@ Not added to `hr_sensitive_records` (add-on), `guardian`, Group or platform role
 - **Campus:** not Campus-adopted. A Campus-only grant does not confer it (whole-School paths read whole-School grants only, ADR 0076 §33), exactly like `communications.events.view`.
 - **Pins:** `StaffRoleCatalogueSnapshotTest`, the teacher/self-service pins, `StaffRoleGrantAuthorityTest` (182 classified keys) and the demo/navigation pins were updated in the same release.
 
+## 30. HR.11 amendment — the `line_manager` add-on role (2026-11-04, ADR 0065 §30)
+
+**Owner decision OD-HR-5 = Option 2** (2026-11-04). It is a catalogue
+release, as rule 93 requires: the School staff catalogue grows from 17 to
+**18** system roles. No capability is added, renamed or reclassified.
+
+- **`line_manager`** ("Line Manager (leave approvals)", scope `school`,
+  `is_system`) holds exactly `hr.leave.approve` (class `hr`, Appendix A).
+  - It is an **add-on**, like `hr_sensitive_records`: granted on top of a
+    persona role (for example `teacher`), and shown as such in Staff
+    accounts (`StaffRolePresentation`, `addOn`).
+  - It carries no authority, legal-gated or owned-scope key. It holds no
+    `communications.*` consumer key, because the person's persona role
+    already gives them those.
+- **Who grants it:** the ordinary SR.2 rule (`RoleGrantAuthority`).
+  `school_admin` holds `hr.leave.approve` and so covers the role directly,
+  with no grant right. `principal` lacks `school.roles.manage` and cannot
+  grant it. Nobody grants it to themselves.
+- **What it can do:** nothing on its own. The Leave manager path also
+  requires all of the following on the decision date (ADR 0065 §23.6,
+  §30):
+  - the holder's verified ActingEmployee is the requester's CURRENT HR.3A
+    manager;
+  - the request is not the holder's own;
+  - the grant is whole-School. A Campus grant of the role never decides
+    Leave (OD-8.8, closed as whole-School only).
+- **Not added:** a team-profile view (`hr.team.view`), delegation,
+  escalation, substitutes or multi-level approval (ADR 0065 §6 stands).
+- **Pins updated:**
+  - `StaffRoleCatalogueSnapshotTest` (snapshot and count 18);
+  - `ProductionStaffRolesTest` (order, add-on, real grant path);
+  - `StaffRoleGrantAuthorityTest` and `StaffRoleCatalogueHardeningTest`
+    (catalogue lists).
+
 ## Appendix A — capability-class map (v1, all 174 `school` capabilities; 175 since ORG.9D-3R1, §28; 176 since ORG.9D-1R1, §29)
 Grant-right coverage appears only where `school_admin` does not hold the key
 and the owner approved coverage (§6.1). The three `school.roles.grant.*`

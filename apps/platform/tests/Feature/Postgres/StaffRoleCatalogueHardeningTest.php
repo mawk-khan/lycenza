@@ -177,10 +177,10 @@ class StaffRoleCatalogueHardeningTest extends TestCase
 
         $keys = collect(app(StaffRoleCatalog::class)->catalogFor($admin, $school))->pluck('key');
 
-        // The 17 School system roles (ADR 0071 §25.1; pinned by StaffRoleCatalogueSnapshotTest).
+        // The 18 School system roles (ADR 0071 §25.1 + HR.11 line_manager; pinned by StaffRoleCatalogueSnapshotTest).
         $this->assertEqualsCanonicalizing([
             'principal', 'school_admin', 'staff_self_service', 'teacher',
-            'hr_officer', 'hr_sensitive_records', 'payroll_officer', 'accountant', 'cashier', 'librarian',
+            'hr_officer', 'hr_sensitive_records', 'line_manager', 'payroll_officer', 'accountant', 'cashier', 'librarian',
             'transport_coordinator', 'hostel_warden', 'front_office', 'stores_officer', 'canteen_operator',
             'admissions_officer', 'communications_coordinator',
         ], $keys->all());

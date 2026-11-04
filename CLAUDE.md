@@ -1891,3 +1891,23 @@ once several modules copy it.
        - Never a generic `idempotent` replay for a run.
      - **Adjustments and openings** need `hr.leave.manage` then a fresh MFA code (S-7). A correction is a new adjustment naming an entry of the same account; nothing is edited.
      - **Not built until decided:** in-year carried expiry (OD-HR-16) and proration (OD-HR-17).
+135. **Line managers decide leave only through the `line_manager` add-on, the current reporting line and one stage (HR.11, OD-HR-5, ADR 0065 §30, ADR 0071 §30).**
+     - **The role:** `line_manager` holds exactly `hr.leave.approve`.
+       - Never add another key to it.
+       - Never make it a grant right.
+       - Never derive it from a designation, Staff Type or reporting line.
+     - **The decision:** the manager path stays whole-School `hr.leave.approve` AND the holder's ActingEmployee as the requester's CURRENT HR.3A manager on the decision date.
+       - A Campus grant never decides (OD-8.8).
+       - Former, future and separated managers get the private 404.
+       - Nobody decides their own request.
+       - A pending request whose manager left waits for the administrative path; nobody is invented.
+     - **The inbox** (`LeaveRequestReadService::managedPage()`) resolves the direct reports on every call, server-paged.
+       - Filters only narrow.
+       - Labels are the directory tier only, never ledger rows or HR profile data.
+       - Decision history is read from the decision rows, never recomputed from today's line.
+     - **No delegation, substitutes, escalation or multi-level approval** without an ADR 0065 §6 amendment.
+     - **Blocked by owner decision 2026-11-04:**
+       - comp-off: OD-HR-18 (no worked-day evidence);
+       - staff permissions: OD-HR-19;
+       - special windows: OD-HR-20.
+       - Build none of them, and no dormant field or toggle for them.

@@ -117,6 +117,16 @@ when a request is drafted.
 - **Implications:** no Payroll effect. Historical balances are never
   recalculated, because any change is prospective.
 
+## 2c. Owner decisions recorded by HR.11 (2026-11-04)
+
+| Id | Subject | Decision | What would reopen it |
+|---|---|---|---|
+| OD-HR-5 | Who approves leave as a line manager | **Decided: Option 2.** The `line_manager` add-on role holds exactly `hr.leave.approve`; it still needs the current HR.3A line; whole-School grant only (ADR 0071 §30) | — |
+| ADR 0065 §6 | Delegation, substitutes, escalation, multi-level approval | **Kept excluded.** Single-stage decisions only | an ADR 0065 §6 amendment designed and approved |
+| OD-HR-18 | Compensatory off (D15, D11-09/10) | **Blocked.** Staff Attendance refuses non-working halves, so no worked-day evidence exists | a Staff Attendance amendment (§24), then a typed credit rule; expiry also needs OD-HR-16 |
+| OD-HR-19 | Staff permissions (D16) | **Blocked.** Time fields are HRX-L2 / OD-HR-14; without them a permission duplicates a half-day leave request | OD-HR-14, plus a permission-versus-leave contract |
+| OD-HR-20 | Special leave windows (D17) | **Blocked.** Needs a precedence rule for overlaps and deduction semantics that do not reopen OD-HR-15 | an owner decision on precedence and deduction (a restriction-only "blackout" variant was offered) |
+
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 
 **Problem.** HRX-L2 currently bundles two very different data classes:

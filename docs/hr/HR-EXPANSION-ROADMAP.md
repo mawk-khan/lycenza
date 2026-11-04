@@ -431,6 +431,25 @@ reservation.
 
 ### HR.11 — Leave, comp-off & permission workflows
 
+> **HR.11 PARTIALLY IMPLEMENTED (2026-11-04).** Contract: ADR 0065 §30 and
+> ADR 0071 §30.
+>
+> Owner decisions (2026-11-04):
+> - **OD-HR-5 = Option 2:** the `line_manager` add-on role, exactly
+>   `hr.leave.approve`;
+> - **§6 kept:** no delegation, escalation or multi-level approval;
+> - **comp-off BLOCKED** (OD-HR-18): no worked-day evidence exists;
+> - **staff permissions BLOCKED** (OD-HR-19);
+> - **special windows BLOCKED** (OD-HR-20).
+>
+> Built (HR.11A):
+> - the role (catalogue 17 → 18);
+> - the server-paged, filtered approvals inbox with decision history and a
+>   detail page;
+> - the role-path and separation-race proofs.
+>
+> HR.11B–D wait for the decisions listed in ADR 0065 §30.6.
+
 1. **Prerequisites:** HR.10. OD-HR-5 (manager approval). The ADR 0065 §6
    amendment for delegation and multi-level. L2a for permission times.
 2. **Scope:** D15, D16, D17; D13-15…17/20; D11-09/10.

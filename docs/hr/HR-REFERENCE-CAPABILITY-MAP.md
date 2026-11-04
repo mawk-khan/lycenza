@@ -363,8 +363,8 @@ both mean HRX-L2.
 | D11-06 | Carry-forward expiry | `carried_expires_on` recorded, not executed | PART | — | executing it needs a consumption order (carried-first / current-first / pro rata) | Leave | after OD-HR-16 | M | OD-HR-16 |
 | D11-07 | Approved leave debit | `consumption` (unique per request × year) | IMP | H449 | — | Leave | — | — | — |
 | D11-08 | Cancellation reversal | `reversal` | IMP | — | — | Leave | — | — | — |
-| D11-09 | Comp-off credit | none | MISS | H449 (Compensatory row) | kind `comp_off_credit` | Leave | HR.11 | M | — |
-| D11-10 | Comp-off expiry | none | MISS | — | kind `comp_off_expiry` | Leave | HR.11 | M | — |
+| D11-09 | Comp-off credit | none | DEF | H449 (Compensatory row) | no authoritative worked-day evidence (Staff Attendance refuses non-working halves); expiry also OD-HR-16 | Leave | after a Staff Attendance amendment | M | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
+| D11-10 | Comp-off expiry | none | DEF | — | no authoritative worked-day evidence (Staff Attendance refuses non-working halves); expiry also OD-HR-16 | Leave | after a Staff Attendance amendment | M | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
 | D11-11 | Attendance deduction (late / early → leave) | none | GATE | H449, H563 | — | Leave + StaffAttendance | — | H | L2a + HRX-L4 |
 | D11-12 | LOP | none in the ledger | GATE | H449 | — | Payroll | — | H | HRX-L4 |
 | D11-13 | Manual adjustment | `adjustment` (closed reasons) + fresh MFA on web and API (S-7) + optional link to the corrected entry of the same account (HR.10) | IMP | — | — | Leave | HR.10 | M | — |
@@ -406,12 +406,12 @@ both mean HRX-L2.
 | D13-12 | Attachments | none | GATE | — | — | — | — | H | HRX-L1 |
 | D13-13 | Approval timestamp | `leave_decisions` row time | IMP | H476 | — | Leave | — | — | — |
 | D13-14 | Approving / rejecting actor | `decider_employee_id` + audit | IMP | H476 | — | Leave | — | — | — |
-| D13-15 | Delegated approval | none | DEF | — | — | Leave | HR.11 | H | ADR 0065 §6 |
-| D13-16 | Escalation | none | DEF | — | — | Leave | HR.11 | M | ADR 0065 §6 |
-| D13-17 | Multi-level recommend → decide | none | DEF | H473–H475 | — | Leave | HR.11 | M | ADR 0065 §6 |
+| D13-15 | Delegated approval | none | DEF | — | — | Leave | after a §6 amendment | H | ADR 0065 §6 (kept, owner 2026-11-04) |
+| D13-16 | Escalation | none | DEF | — | — | Leave | after a §6 amendment | M | ADR 0065 §6 (kept, owner 2026-11-04) |
+| D13-17 | Multi-level recommend → decide | none | DEF | H473–H475 | — | Leave | after a §6 amendment | M | ADR 0065 §6 (kept, owner 2026-11-04) |
 | D13-18 | Audit | every transition | IMP | — | — | Leave | — | — | — |
 | D13-19 | Approval authority explicitly resolved | `hr.leave.approve` + current reporting line, or `hr.leave.manage`; self refused three ways | IMP | — | — | Leave | — | H | — |
-| D13-20 | Line managers can approve in practice | the key is held by `school_admin` / `principal` only | PART | H472 | OD-HR-5 (catalogue decision, rule 93) | Leave + IAM | HR.11 | M | E47 |
+| D13-20 | Line managers can approve in practice | the `line_manager` add-on role holds exactly `hr.leave.approve`; still needs the current HR.3A line on the decision date, never one's own, whole-School grant only; paged inbox with filters and decision history (HR.11, OD-HR-5 = Option 2) | IMP | H472 | — | Leave + IAM | HR.11 | M | — |
 
 ### D14 — Holidays
 
@@ -434,48 +434,48 @@ both mean HRX-L2.
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D15-01 | Worked holiday / week-off date | none | MISS | H488 | request with a non-working-day check | Leave | HR.11 | M | — |
-| D15-02 | Employee | — | MISS | H488 | ActingEmployee / on behalf | Leave | HR.11 | L | — |
+| D15-01 | Worked holiday / week-off date | none | DEF | H488 | request with a non-working-day check | Leave | after a Staff Attendance amendment | M | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
+| D15-02 | Employee | — | DEF | H488 | ActingEmployee / on behalf | Leave | after a Staff Attendance amendment | L | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
 | D15-03 | Evidence | none | GATE | — | no attachment | — | — | H | HRX-L1 |
 | D15-04 | Remarks | none | GATE | H488 | closed reason only | — | — | M | HRX-L1 (ADR 0065 §10 principle) |
-| D15-05 | Requested by | — | MISS | H489 | — | Leave | HR.11 | L | — |
-| D15-06 | Approved / rejected / cancelled lifecycle | none | MISS | H489–H492 | shared approval foundation | Leave | HR.11 | M | — |
+| D15-05 | Requested by | — | DEF | H489 | — | Leave | after a Staff Attendance amendment | L | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
+| D15-06 | Approved / rejected / cancelled lifecycle | none | DEF | H489–H492 | shared approval foundation | Leave | after a Staff Attendance amendment | M | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
 | D15-07 | Manual HR credit | ledger adjustment can credit | ALT | H488 (bulk admin credit) | becomes a typed `comp_off_credit` | Leave | HR.11 | M | — |
-| D15-08 | Credit amount | — | MISS | — | units (half-days) | Leave | HR.11 | L | — |
-| D15-09 | Expiry | none | MISS | — | expiry entry | Leave | HR.11 | M | — |
-| D15-10 | Leave-ledger posting | — | MISS | — | D11-09 | Leave | HR.11 | H | — |
-| D15-11 | Reversal | — | MISS | — | reversal entry | Leave | HR.11 | M | — |
+| D15-08 | Credit amount | — | DEF | — | units (half-days) | Leave | after a Staff Attendance amendment | L | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
+| D15-09 | Expiry | none | DEF | — | expiry entry | Leave | after a Staff Attendance amendment | M | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
+| D15-10 | Leave-ledger posting | — | DEF | — | D11-09 | Leave | after a Staff Attendance amendment | H | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
+| D15-11 | Reversal | — | DEF | — | reversal entry | Leave | after a Staff Attendance amendment | M | OD-HR-18 (comp-off blocked, owner 2026-11-04) |
 
 ### D16 — Staff permissions (short duration)
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D16-01 | Employee | none | MISS | H497 | request entity | Leave | HR.11 | L | — |
-| D16-02 | Date | none | MISS | H497 | — | Leave | HR.11 | L | — |
+| D16-01 | Employee | none | DEF | H497 | request entity | Leave | after OD-HR-14 / a permissions contract | L | OD-HR-19 (permissions blocked, owner 2026-11-04) |
+| D16-02 | Date | none | DEF | H497 | — | Leave | after OD-HR-14 / a permissions contract | L | OD-HR-19 (permissions blocked, owner 2026-11-04) |
 | D16-03 | Out time | none | GATE | H497 | — | Leave | HR.11 | M | ADR 0065 §8, L2a |
 | D16-04 | Expected return | none | GATE | H497 | — | Leave | HR.11 | M | L2a |
-| D16-05 | Purpose | none | MISS | H497 | closed purpose code | Leave | HR.11 | L | — |
+| D16-05 | Purpose | none | DEF | H497 | closed purpose code | Leave | after OD-HR-14 / a permissions contract | L | OD-HR-19 (permissions blocked, owner 2026-11-04) |
 | D16-06 | Reason | none | GATE | H497 | free text refused | — | — | M | HRX-L1 |
-| D16-07 | Request timestamp | — | MISS | H497 | — | Leave | HR.11 | L | — |
-| D16-08 | Pending / approved / rejected | none | MISS | H498 | shared approval foundation | Leave | HR.11 | M | — |
-| D16-09 | Manager | — | MISS | H498 | reporting line at decision | Leave | HR.11 | M | — |
-| D16-10 | Audit | — | MISS | H498 | — | Leave | HR.11 | L | — |
+| D16-07 | Request timestamp | — | DEF | H497 | — | Leave | after OD-HR-14 / a permissions contract | L | OD-HR-19 (permissions blocked, owner 2026-11-04) |
+| D16-08 | Pending / approved / rejected | none | DEF | H498 | shared approval foundation | Leave | after OD-HR-14 / a permissions contract | M | OD-HR-19 (permissions blocked, owner 2026-11-04) |
+| D16-09 | Manager | — | DEF | H498 | reporting line at decision | Leave | after OD-HR-14 / a permissions contract | M | OD-HR-19 (permissions blocked, owner 2026-11-04) |
+| D16-10 | Audit | — | DEF | H498 | — | Leave | after OD-HR-14 / a permissions contract | L | OD-HR-19 (permissions blocked, owner 2026-11-04) |
 | D16-11 | Attendance impact | none | GATE | — | needs evaluation (D7) | StaffAttendance | HR.11 | M | L2a |
 
 ### D17 — Special leave windows
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D17-01 | Window name | none | MISS | H493 | — | Leave | HR.11 | L | — |
-| D17-02 | School / Campus | none | MISS | H493 | — | Leave | HR.11 | L | — |
-| D17-03 | Date range | none | MISS | H494 | — | Leave | HR.11 | L | — |
-| D17-04 | Applicable departments | none | MISS | H494 | — | Leave | HR.11 | L | — |
-| D17-05 | Leave types | none | MISS | H493 | — | Leave | HR.11 | L | — |
-| D17-06 | Deduction rules (0.5 / 1 per day) | none | MISS | H493 | rule on the window version | Leave | HR.11 | M | — |
-| D17-07 | Remarks | none | MISS | H494 | administrative note (not about a person) | Leave | HR.11 | L | — |
-| D17-08 | Multiple windows | none | MISS | H495 | — | Leave | HR.11 | L | — |
-| D17-09 | Overlapping windows | none | MISS | — | — | Leave | HR.11 | M | — |
-| D17-10 | Priority / conflict resolution | none | MISS | — | deterministic: most specific wins, ties refused at write | Leave | HR.11 | M | — |
+| D17-01 | Window name | none | DEF | H493 | — | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-02 | School / Campus | none | DEF | H493 | — | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-03 | Date range | none | DEF | H494 | — | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-04 | Applicable departments | none | DEF | H494 | — | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-05 | Leave types | none | DEF | H493 | — | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-06 | Deduction rules (0.5 / 1 per day) | none | DEF | H493 | rule on the window version | Leave | after a precedence + deduction decision | M | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-07 | Remarks | none | DEF | H494 | administrative note (not about a person) | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-08 | Multiple windows | none | DEF | H495 | — | Leave | after a precedence + deduction decision | L | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-09 | Overlapping windows | none | DEF | — | — | Leave | after a precedence + deduction decision | M | OD-HR-20 (special windows blocked, owner 2026-11-04) |
+| D17-10 | Priority / conflict resolution | none | DEF | — | deterministic: most specific wins, ties refused at write | Leave | after a precedence + deduction decision | M | OD-HR-20 (special windows blocked, owner 2026-11-04) |
 
 ### D18 — Staff lifecycle
 
@@ -584,17 +584,17 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 (2026-11-03) |
-|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | **128** (35.5 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | **24** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | **69** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | **21** |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) |
+|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | **129** (35.7 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | **23** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | **42** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | **48** |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
 
 HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
 D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
@@ -628,6 +628,16 @@ were already IMPLEMENTED and are re-described (S-7 MFA; accrual
 idempotency). The per-section table shows the HR.10 figures for D10, D11
 and D12.
 
+HR.11 (partial) closed D13-20 (PART → IMP: the `line_manager` add-on role,
+OD-HR-5). On the owner's 2026-11-04 decisions, 27 rows moved MISS →
+DEFERRED. That is a recorded block, NOT progress:
+- comp-off: D11-09/10 and D15 except the GATE and ALT rows (OD-HR-18);
+- staff permissions: D16's non-gated rows (OD-HR-19);
+- special windows: all of D17 (OD-HR-20).
+
+D13-15…17 stay DEFERRED (ADR 0065 §6 kept). The per-section table shows
+the HR.11 figures for D11, D13, D15, D16 and D17.
+
 **Per section:**
 
 | Section | IMP | PART | MISS | ALT | XDOM | DEF | GATE | NR | Rows |
@@ -642,13 +652,13 @@ and D12.
 | D8 Attendance operations | 6 | 2 | 3 | 1 | 0 | 2 | 2 | 0 | 16 |
 | D9 Biometric | 0 | 1 | 0 | 1 | 0 | 0 | 15 | 0 | 17 |
 | D10 Leave policy | 12 | 2 | 0 | 2 | 0 | 5 | 3 | 0 | 24 |
-| D11 Ledger | 11 | 1 | 2 | 0 | 0 | 0 | 2 | 0 | 16 |
+| D11 Ledger | 11 | 1 | 0 | 0 | 0 | 2 | 2 | 0 | 16 |
 | D12 Allocation | 9 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 11 |
-| D13 Workflow | 10 | 1 | 0 | 1 | 0 | 3 | 4 | 1 | 20 |
+| D13 Workflow | 11 | 0 | 0 | 1 | 0 | 3 | 4 | 1 | 20 |
 | D14 Holidays | 3 | 2 | 4 | 2 | 0 | 1 | 0 | 0 | 12 |
-| D15 Comp-off | 0 | 0 | 8 | 1 | 0 | 0 | 2 | 0 | 11 |
-| D16 Permissions | 0 | 0 | 7 | 0 | 0 | 0 | 4 | 0 | 11 |
-| D17 Special windows | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 10 |
+| D15 Comp-off | 0 | 0 | 0 | 1 | 0 | 8 | 2 | 0 | 11 |
+| D16 Permissions | 0 | 0 | 0 | 0 | 0 | 7 | 4 | 0 | 11 |
+| D17 Special windows | 0 | 0 | 0 | 0 | 0 | 10 | 0 | 0 | 10 |
 | D18 Lifecycle | 10 | 4 | 4 | 1 | 1 | 1 | 0 | 0 | 21 |
 | D19 Tasks | 0 | 0 | 26 | 0 | 0 | 0 | 0 | 0 | 26 |
 | D20 Reports & MIS | 12 | 5 | 2 | 0 | 6 | 3 | 10 | 1 | 39 |

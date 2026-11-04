@@ -1764,6 +1764,21 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.employees.sensitive.view', 'hr.employees.sensitive.manage',
                 ],
             ],
+            // HR.11 (OD-HR-5 = Option 2, ADR 0065 §30, owner decision 2026-11-04): the
+            // line manager -- an ADD-ON granted on top of a person's persona role,
+            // holding exactly `hr.leave.approve`. It is useless on its own: the
+            // manager path also needs the holder's verified ActingEmployee to be the
+            // requester's CURRENT HR.3A manager on the decision date, and never their
+            // own request. A whole-School grant only (OD-8.8: a Campus grant never
+            // decides Leave). Never a second approval stage, delegation or escalation
+            // (ADR 0065 §6 unchanged).
+            'line_manager' => [
+                'name' => 'Line Manager (leave approvals)',
+                'scope' => 'school',
+                'capabilities' => [
+                    'hr.leave.approve',
+                ],
+            ],
             'payroll_officer' => [ // ADR 0071 §4.3; SR.4 §26.5: no payroll.accounting.manage
                 'name' => 'Payroll Officer',
                 'scope' => 'school',

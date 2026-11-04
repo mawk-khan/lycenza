@@ -228,6 +228,14 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 | `tests/Feature/Leave/LeaveAccrualLargeRosterTest` | 2,060 employments (above HR.9's former cap): HR.9 applicability counts and assigns all; an interrupted run (3 batches), a failing batch (rolled back alone, run `failed` with a code), a resume of the SAME run to completion; examined = the disjoint outcomes; every eligible employment credited exactly once; a re-run credits nothing |
 | `tests/Feature/Leave/LeaveAccrualConcurrencyTest` | two real processes, contender observed blocked: two runs of a month credit each account once; an employment end inside the month and an assignment end inside the month are never credited; a run waiting on a year close refuses (`LEAVE_YEAR_CLOSED`) and is marked failed |
 
+## 2f. Implemented suites (HR.11, partial)
+
+| Suite | Proves |
+|---|---|
+| `tests/Feature/Leave/LeaveLineManagerTest` | the `line_manager` role carries exactly `hr.leave.approve`; a line manager decides a current report's request (inbox count, filters narrow, minimal labels, one consumption, recorded decision with name and path) and keeps it after a reporting change; no line, no role, former / future / separated manager refused, the request stays pending for the administrative path; a Campus-only grant never decides; platform root is refused; never one's own request; the inbox pages without skips or repeats |
+| `tests/Feature/Leave/LeaveDecisionSeparationConcurrencyTest` | two real processes, contender observed blocked: approval versus the requester's separation (refused, nothing consumed); approval versus the manager's separation (private 404, still pending) |
+| catalogue pins (`StaffRoleCatalogueSnapshotTest`, `ProductionStaffRolesTest`, `StaffRoleGrantAuthorityTest`, `StaffRoleCatalogueHardeningTest`) | 18 roles; `line_manager` = add-on; granted by School Admin through the real SR.2 rule without a grant right |
+
 ## 3. Regression cadence
 
 - **Per phase:**

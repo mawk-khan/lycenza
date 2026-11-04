@@ -73,6 +73,10 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'communications.events.view', 'communications.inbox.view', 'library.catalogue.manage', 'library.catalogue.view', 'library.circulation.manage',
             'library.circulation.view', 'library.fines.view',
         ],
+        // HR.11 (OD-HR-5, owner decision 2026-11-04): the line-manager add-on -- exactly the manager-path decision key.
+        'line_manager' => [
+            'hr.leave.approve',
+        ],
         'payroll_officer' => [
             'communications.events.view', 'communications.inbox.view', 'payroll.compensation.sensitive.manage',
             'payroll.compensation.sensitive.view', 'payroll.compensation.view', 'payroll.periods.manage',
@@ -222,7 +226,9 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         $expected = self::SNAPSHOT;
         ksort($expected);
         $this->assertSame($expected, $actual, 'The School staff catalogue changed: review the role/capability diff against ADR 0071 §4.');
-        $this->assertCount(17, $actual, 'Four original roles + the thirteen ADR 0071 §4 roles.');
+        $this->assertCount(18, $actual, 'Four original roles + the thirteen ADR 0071 §4 roles + the HR.11 line_manager add-on (OD-HR-5).');
+        $lineManager = Role::query()->where('key', 'line_manager')->sole();
+        $this->assertSame(['school', true], [$lineManager->scope, $lineManager->is_system], 'line_manager');
 
         foreach (self::OPERATIONAL as $key) {
             $role = Role::query()->where('key', $key)->sole();

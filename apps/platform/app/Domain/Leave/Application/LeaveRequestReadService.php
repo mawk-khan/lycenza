@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use InvalidArgumentException;
 
@@ -91,7 +92,7 @@ class LeaveRequestReadService
         return $this->context->withSchool($school, function () use ($school, $leaveRequestId, $acting) {
             $request = LeaveRequest::query()->where('school_id', $school->id)->where('employee_id', $acting->employeeId)->find($leaveRequestId)
                 ?? throw LeaveRequestService::privateNotFound();
-            $detail = $this->detail($school, $request);
+            $detail = $this->detail($school, $request, withDecider: false);
             unset($detail['ledgerEntries']);
             $detail['days'] = array_map(fn (array $d) => ['date' => $d['date'], 'portion' => $d['portion'], 'units' => $d['units'], 'leaveYearId' => $d['leaveYearId']], $detail['days']);
 
@@ -182,7 +183,7 @@ class LeaveRequestReadService
      *
      * @return list<array<string, mixed>>
      */
-    public function managed(School $school, User $actor): array
+    public function managed(School $school, User $actor, array $filters = []): array
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::APPROVE, $school);
         $reports = $this->reports($school, $actor);
@@ -190,10 +191,63 @@ class LeaveRequestReadService
             return [];
         }
 
-        return $this->context->withSchool($school, fn () => LeaveRequest::query()->where('school_id', $school->id)
-            ->whereIn('employment_record_id', $reports)->whereIn('status', LeaveRequest::LIVE_STATUSES)
+        return $this->context->withSchool($school, fn () => $this->managedQuery($school, $reports, $filters)
             ->orderBy('starts_on')->orderBy('id')->limit(self::LIST_LIMIT)->get()
             ->map(fn (LeaveRequest $r) => self::request($r))->values()->all());
+    }
+
+    /**
+     * HR.11 (ADR 0065 §30.3): the manager's inbox, one server page. Rows are
+     * ONLY the acting Employee's current direct reports' requests (HR's
+     * ReportingLine, resolved here on every call -- never a Vue filter);
+     * filters only narrow. `pendingCount` counts every submitted request the
+     * manager may decide now.
+     *
+     * @param  array{status?: string, leave_type_id?: string, from?: string, to?: string}  $filters
+     * @return array{rows: list<array<string, mixed>>, total: int, page: int, perPage: int, pendingCount: int}
+     */
+    public function managedPage(School $school, User $actor, array $filters, int $page = 1, int $perPage = 50): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::APPROVE, $school);
+        $page = max(1, $page);
+        $perPage = max(1, min($perPage, 100));
+        $reports = $this->reports($school, $actor);
+        if ($reports === []) {
+            return ['rows' => [], 'total' => 0, 'page' => $page, 'perPage' => $perPage, 'pendingCount' => 0];
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $reports, $filters, $page, $perPage) {
+            $query = $this->managedQuery($school, $reports, $filters);
+
+            return [
+                'rows' => (clone $query)->orderBy('starts_on')->orderBy('id')->offset(($page - 1) * $perPage)->limit($perPage)->get()
+                    ->map(fn (LeaveRequest $r) => self::request($r))->values()->all(),
+                'total' => (clone $query)->count(),
+                'page' => $page,
+                'perPage' => $perPage,
+                'pendingCount' => LeaveRequest::query()->where('school_id', $school->id)->whereIn('employment_record_id', $reports)->where('status', 'submitted')->count(),
+            ];
+        });
+    }
+
+    /**
+     * @param  list<string>  $reports
+     * @param  array{status?: string, leave_type_id?: string, from?: string, to?: string}  $filters
+     * @return Builder<LeaveRequest>
+     */
+    private function managedQuery(School $school, array $reports, array $filters): Builder
+    {
+        $statuses = match ($filters['status'] ?? 'live') {
+            'pending' => ['submitted'],
+            'decided' => ['approved', 'rejected', 'withdrawn', 'cancelled'],
+            'all' => LeaveRequest::STATUSES,
+            default => LeaveRequest::LIVE_STATUSES,
+        };
+
+        return LeaveRequest::query()->where('school_id', $school->id)->whereIn('employment_record_id', $reports)->whereIn('status', $statuses)
+            ->when(isset($filters['leave_type_id']), fn ($q) => $q->where('leave_type_id', $filters['leave_type_id']))
+            ->when(isset($filters['from']), fn ($q) => $q->where('ends_on', '>=', $filters['from']))
+            ->when(isset($filters['to']), fn ($q) => $q->where('starts_on', '<=', $filters['to']));
     }
 
     /** @return array<string, mixed> one direct report's request, or the private 404 */
@@ -207,8 +261,11 @@ class LeaveRequestReadService
             if ($request === null || ! in_array($request->employment_record_id, $reports, true)) {
                 throw new ModelNotFoundException('No query results for the leave request.');
             }
+            // HR.11 (ADR 0065 §30.3): a line manager never receives the ledger rows, on web or API.
+            $detail = $this->detail($school, $request);
+            unset($detail['ledgerEntries']);
 
-            return $this->detail($school, $request);
+            return $detail;
         });
     }
 
@@ -259,7 +316,7 @@ class LeaveRequestReadService
     }
 
     /** @return array<string, mixed> */
-    private function detail(School $school, LeaveRequest $request): array
+    private function detail(School $school, LeaveRequest $request, bool $withDecider = true): array
     {
         return self::request($request) + [
             'days' => LeaveRequestDay::query()->where('school_id', $school->id)->where('leave_request_id', $request->id)->orderBy('leave_date')->get()
@@ -267,13 +324,29 @@ class LeaveRequestReadService
                     'date' => $d->leave_date->toDateString(), 'portion' => $d->portion, 'units' => $d->units, 'leaveYearId' => $d->leave_year_id,
                     'leavePolicyAssignmentId' => $d->leave_policy_assignment_id, 'leavePolicyId' => $d->leave_policy_id,
                 ])->values()->all(),
-            'decisions' => LeaveDecision::query()->where('school_id', $school->id)->where('leave_request_id', $request->id)->orderBy('created_at')->get()
-                ->map(fn (LeaveDecision $d) => [
-                    'id' => $d->id, 'decision' => $d->decision, 'path' => $d->path, 'reasonCode' => $d->reason_code, 'decidedAt' => $d->created_at->toIso8601String(),
-                ])->values()->all(),
+            'decisions' => $this->decisions($school, $request, $withDecider),
             'ledgerEntries' => LeaveLedgerEntry::query()->where('school_id', $school->id)->where('leave_request_id', $request->id)->orderBy('created_at')->get()
                 ->map(fn (LeaveLedgerEntry $e) => LeaveReadService::entry($e))->values()->all(),
         ];
+    }
+
+    /**
+     * HR.11 (ADR 0065 §30.4): the request's decision history as recorded --
+     * outcome, path (manager / administrative / self), closed reason, time and
+     * (administrative and manager views only) the deciding account's display
+     * name. Never rewritten by a later reporting change.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function decisions(School $school, LeaveRequest $request, bool $withDecider): array
+    {
+        $decisions = LeaveDecision::query()->where('school_id', $school->id)->where('leave_request_id', $request->id)->orderBy('created_at')->orderBy('id')->get();
+        $names = $withDecider ? User::query()->whereIn('id', $decisions->pluck('decided_by_user_id')->unique()->all())->pluck('name', 'id') : collect();
+
+        // HRX.4 §25.4: the employee's own view never names who decided; the administrative and manager views do.
+        return $decisions->map(fn (LeaveDecision $d) => [
+            'id' => $d->id, 'decision' => $d->decision, 'path' => $d->path, 'reasonCode' => $d->reason_code, 'decidedAt' => $d->created_at->toIso8601String(),
+        ] + ($withDecider ? ['decidedBy' => $names->get($d->decided_by_user_id)] : []))->values()->all();
     }
 
     /** @return array<string, mixed> */

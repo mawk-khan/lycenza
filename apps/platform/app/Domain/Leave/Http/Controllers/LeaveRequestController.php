@@ -94,9 +94,15 @@ class LeaveRequestController extends Controller
         return $this->completing($request, $guard, 200, fn () => LeaveRequestReadService::request($service->cancel($school, $leaveRequest, $validated['reason_code'], $request->user())));
     }
 
+    /** HR.11: optional filters only narrow the manager's current direct reports' requests (status: live | pending | decided | all). */
     public function managed(Request $request, School $school, LeaveRequestReadService $reads): JsonResponse
     {
-        return response()->json(['data' => $reads->managed($school, $request->user())]);
+        $filters = $request->validate([
+            'status' => ['sometimes', 'in:live,pending,decided,all'], 'leave_type_id' => ['sometimes', 'uuid'],
+            'from' => ['sometimes', 'date_format:Y-m-d'], 'to' => ['sometimes', 'date_format:Y-m-d'],
+        ]);
+
+        return response()->json(['data' => $reads->managed($school, $request->user(), $filters)]);
     }
 
     public function managedShow(Request $request, School $school, string $leaveRequest, LeaveRequestReadService $reads): JsonResponse

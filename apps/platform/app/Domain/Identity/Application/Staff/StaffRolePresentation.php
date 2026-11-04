@@ -36,6 +36,8 @@ final class StaffRolePresentation
         'staff_self_service' => ['group' => 'teaching', 'purpose' => 'An employee\'s own leave, attendance and payslips.'],
         'hr_officer' => ['group' => 'people', 'purpose' => 'Employee records, employment, departments, positions, leave and staff attendance administration.'],
         'hr_sensitive_records' => ['group' => 'people', 'purpose' => 'Highly sensitive employee records. Granted in addition to HR Officer, never on its own.', 'addOn' => true],
+        // HR.11 (OD-HR-5): approves only the leave of the holder's CURRENT direct reports (HR reporting line), never their own.
+        'line_manager' => ['group' => 'people', 'purpose' => 'Approves or rejects the leave requests of the people who report to this person today. Granted in addition to their usual role; it shows nothing else.', 'addOn' => true],
         'payroll_officer' => ['group' => 'people', 'purpose' => 'Salary structures, compensation, payroll periods and preparing payroll runs; approval and posting stay with an administrator.'],
         'accountant' => ['group' => 'finance', 'purpose' => 'Ledger posting, charges, fee setup and assessment runs, payments and concession requests; reversals, period closing and approvals stay with an administrator.'],
         'cashier' => ['group' => 'finance', 'purpose' => 'Records payments received and views charges.'],

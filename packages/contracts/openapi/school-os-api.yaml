@@ -4005,9 +4005,13 @@ paths:
     get:
       operationId: listManagedLeaveRequests
       summary: >
-        HRX.2: the acting manager's current direct reports' submitted and approved requests, resolved server-side. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh).
+        HRX.2: the acting manager's current direct reports' requests, resolved server-side. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). HR.11: the HR.11 `line_manager` role carries exactly this key; optional filters only narrow (status live = submitted and approved, the default; pending; decided; all).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [live, pending, decided, all] } }
+        - { name: leave_type_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: false, schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date } }
       responses:
         "200":
           description: OK
@@ -4027,7 +4031,7 @@ paths:
     get:
       operationId: getManagedLeaveRequest
       summary: >
-        HRX.2: one direct report's request; anything else is the private 404. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh).
+        HRX.2: one direct report's request; anything else is the private 404. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). HR.11: the request, its chargeable days and its recorded decisions (with the decider's name); never the ledger rows.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -4036,7 +4040,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequestDetail" } } }
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ManagedLeaveRequestDetail" } } }
         "401":
           description: Missing/invalid bearer token.
         "403":
@@ -17770,6 +17774,26 @@ components:
         submittedUnits: { type: integer, minimum: 1, description: "Integer half-day units computed at submission; the approval snapshot is authoritative." }
         status: { type: string, enum: [submitted, approved, rejected, withdrawn, cancelled] }
         submittedAt: { type: string, format: date-time, nullable: true }
+    ManagedLeaveRequestDetail:
+      description: "HR.11: a direct report's request as a line manager sees it -- never the ledger rows."
+      allOf:
+        - { $ref: "#/components/schemas/LeaveRequest" }
+        - type: object
+          required: [days, decisions]
+          properties:
+            days: { type: array, items: { type: object, additionalProperties: true } }
+            decisions:
+              type: array
+              items:
+                type: object
+                required: [id, decision, path]
+                properties:
+                  id: { type: string, format: uuid }
+                  decision: { type: string, enum: [approved, rejected, withdrawn, cancelled] }
+                  path: { type: string, enum: [manager, administrative, self] }
+                  reasonCode: { type: string, nullable: true }
+                  decidedAt: { type: string, format: date-time, nullable: true }
+                  decidedBy: { type: string, nullable: true }
     LeaveRequestDetail:
       allOf:
         - { $ref: "#/components/schemas/LeaveRequest" }
@@ -17797,9 +17821,10 @@ components:
                 properties:
                   id: { type: string, format: uuid }
                   decision: { type: string, enum: [approved, rejected, withdrawn, cancelled] }
-                  path: { type: string, enum: [manager, administrative] }
+                  path: { type: string, enum: [manager, administrative, self] }
                   reasonCode: { type: string, nullable: true }
                   decidedAt: { type: string, format: date-time, nullable: true }
+                  decidedBy: { type: string, nullable: true, description: "HR.11: the deciding account's display name, as recorded; never rewritten by a later reporting change." }
             ledgerEntries: { type: array, items: { $ref: "#/components/schemas/LeaveLedgerEntry" } }
     LeaveRequestCreateInput:
       type: object

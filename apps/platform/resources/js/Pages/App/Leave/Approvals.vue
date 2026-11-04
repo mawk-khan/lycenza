@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import {
     employeeName,
@@ -21,6 +21,9 @@ import { useLeaveError } from '../../../leave';
  * server from the HR reporting line at this moment. If the reporting line
  * changes, the request moves to the new manager. You cannot decide your own
  * request.
+ *
+ * HR.11: the server filters and pages the list (filters only narrow your
+ * current direct reports); each request opens with its decision history.
  */
 interface RequestRow {
     id: string;
@@ -34,12 +37,35 @@ interface RequestRow {
     status: string;
 }
 
-defineProps<{
+const props = defineProps<{
     requests: RequestRow[];
+    pagination: { total: number; page: number; perPage: number };
+    pendingCount: number;
+    filters: { status: string; leave_type_id: string; from: string; to: string };
     employees: Record<string, EmployeeLabel>;
     types: LeaveTypeRow[];
     rejectionReasons: string[];
 }>();
+
+const filterForm = ref({ ...props.filters });
+const pages = computed(() =>
+    Math.max(1, Math.ceil(props.pagination.total / props.pagination.perPage)),
+);
+
+function applyFilters(page = 1): void {
+    const f = filterForm.value;
+    router.get(
+        '/app/leave/approvals',
+        {
+            status: f.status === 'live' ? undefined : f.status,
+            leave_type_id: f.leave_type_id || undefined,
+            from: f.from || undefined,
+            to: f.to || undefined,
+            page: page > 1 ? page : undefined,
+        },
+        { preserveScroll: true },
+    );
+}
 
 const rejecting = ref<string | null>(null);
 const form = useForm({ reason_code: '' });
@@ -78,23 +104,66 @@ const leaveError = useLeaveError();
         </p>
         <p class="mt-1 text-sm text-slate-500">
             Requests of the staff who currently report to you.
+            <span class="font-medium">{{ pendingCount }} waiting for your decision.</span>
         </p>
+
+        <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters()">
+            <label class="text-sm"
+                >Show
+                <select
+                    v-model="filterForm.status"
+                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                >
+                    <option value="live">Submitted and approved</option>
+                    <option value="pending">Waiting for a decision</option>
+                    <option value="decided">Decided (history)</option>
+                    <option value="all">Everything</option>
+                </select>
+            </label>
+            <label class="text-sm"
+                >Leave type
+                <select
+                    v-model="filterForm.leave_type_id"
+                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                >
+                    <option value="">Any</option>
+                    <option v-for="t in types" :key="t.id" :value="t.id">{{ t.name }}</option>
+                </select>
+            </label>
+            <label class="text-sm"
+                >From
+                <input
+                    v-model="filterForm.from"
+                    type="date"
+                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+            </label>
+            <label class="text-sm"
+                >To
+                <input
+                    v-model="filterForm.to"
+                    type="date"
+                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+            </label>
+            <button type="submit" class="underline">Apply</button>
+        </form>
 
         <EmptyState
             v-if="requests.length === 0"
             class="mt-8"
             title="Nothing to decide"
-            description="None of your direct reports has a submitted or approved request."
+            description="None of your direct reports has a request matching this view."
         />
         <table v-else class="mt-6 w-full border-collapse text-sm">
             <thead>
                 <tr class="border-b border-slate-200 text-left text-slate-500">
-                    <th class="py-2">Employee</th>
-                    <th class="py-2">Leave type</th>
-                    <th class="py-2">Period</th>
-                    <th class="py-2">Units</th>
-                    <th class="py-2">Status</th>
-                    <th class="py-2"></th>
+                    <th scope="col" class="py-2">Employee</th>
+                    <th scope="col" class="py-2">Leave type</th>
+                    <th scope="col" class="py-2">Period</th>
+                    <th scope="col" class="py-2">Units</th>
+                    <th scope="col" class="py-2">Status</th>
+                    <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -108,6 +177,7 @@ const leaveError = useLeaveError();
                     <td class="py-2">{{ units(row.submittedUnits) }}</td>
                     <td class="py-2">{{ requestStatusLabels[row.status] }}</td>
                     <td class="space-x-3 py-2 text-right">
+                        <a class="underline" :href="`/app/leave/approvals/${row.id}`">Details</a>
                         <template v-if="row.status === 'submitted'">
                             <button type="button" class="underline" @click="approve(row.id)">
                                 Approve
@@ -120,6 +190,29 @@ const leaveError = useLeaveError();
                 </tr>
             </tbody>
         </table>
+        <nav
+            v-if="pages > 1"
+            aria-label="Request pages"
+            class="mt-3 flex items-center gap-3 text-sm"
+        >
+            <button
+                type="button"
+                class="underline"
+                :disabled="pagination.page <= 1"
+                @click="applyFilters(pagination.page - 1)"
+            >
+                Previous
+            </button>
+            <span>Page {{ pagination.page }} of {{ pages }} ({{ pagination.total }} requests)</span>
+            <button
+                type="button"
+                class="underline"
+                :disabled="pagination.page >= pages"
+                @click="applyFilters(pagination.page + 1)"
+            >
+                Next
+            </button>
+        </nav>
 
         <form
             v-if="rejecting !== null"
