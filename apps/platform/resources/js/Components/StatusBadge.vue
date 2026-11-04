@@ -67,87 +67,75 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const STYLES: Record<Status, { label: string; badge: string; dot: string }> = {
-    active: { label: 'Active', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
-    inactive: { label: 'Inactive', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-    archived: { label: 'Archived', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-    completed: { label: 'Completed', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
-    withdrawn: { label: 'Withdrawn', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
-    transferred: {
-        label: 'Transferred',
-        badge: 'bg-violet-50 text-violet-700',
-        dot: 'bg-violet-500',
-    },
-    cancelled: { label: 'Cancelled', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+// DS-3 (ADR 0082 §9; DS-0 §4 "Status families"): every status belongs to one
+// of six families, shown as a glyph + its word -- never colour alone. The
+// palette is mono by design (OD-DS-1): the danger hue is reserved for errors
+// and destructive actions, so a Cancelled or Failed status is a dark steel
+// tag with a cross, not red. The glyph is decorative (aria-hidden); the label
+// is what communicates state.
+type Family = 'positive' | 'info' | 'progress' | 'attention' | 'negative' | 'neutral';
+
+const FAMILIES: Record<Family, { glyph: string; tag: string }> = {
+    positive: { glyph: '✓', tag: 'tag-positive' },
+    info: { glyph: '●', tag: 'tag-info' },
+    progress: { glyph: '◷', tag: 'tag-info' },
+    attention: { glyph: '!', tag: 'tag-attention' },
+    negative: { glyph: '✕', tag: 'tag-negative' },
+    neutral: { glyph: '–', tag: 'tag-neutral' },
+};
+
+const STYLES: Record<Status, { label: string; family: Family }> = {
+    active: { label: 'Active', family: 'positive' },
+    inactive: { label: 'Inactive', family: 'neutral' },
+    archived: { label: 'Archived', family: 'neutral' },
+    completed: { label: 'Completed', family: 'info' },
+    withdrawn: { label: 'Withdrawn', family: 'attention' },
+    transferred: { label: 'Transferred', family: 'info' },
+    cancelled: { label: 'Cancelled', family: 'negative' },
     // Rollover Plan statuses.
-    draft: { label: 'Draft', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-    validated: { label: 'Validated', badge: 'bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
-    executing: { label: 'Executing', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
-    completed_with_errors: {
-        label: 'Completed with errors',
-        badge: 'bg-orange-50 text-orange-700',
-        dot: 'bg-orange-500',
-    },
+    draft: { label: 'Draft', family: 'neutral' },
+    validated: { label: 'Validated', family: 'info' },
+    executing: { label: 'Executing', family: 'progress' },
+    completed_with_errors: { label: 'Completed with errors', family: 'attention' },
     // Rollover Item validation_result.
-    ready: { label: 'Ready', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
-    excluded: { label: 'Excluded', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-    already_enrolled: {
-        label: 'Already enrolled',
-        badge: 'bg-sky-50 text-sky-700',
-        dot: 'bg-sky-500',
-    },
-    review: { label: 'Needs review', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
-    blocked: { label: 'Blocked', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+    ready: { label: 'Ready', family: 'positive' },
+    excluded: { label: 'Excluded', family: 'neutral' },
+    already_enrolled: { label: 'Already enrolled', family: 'info' },
+    review: { label: 'Needs review', family: 'attention' },
+    blocked: { label: 'Blocked', family: 'negative' },
     // Rollover Item execution_status.
-    succeeded: {
-        label: 'Succeeded',
-        badge: 'bg-emerald-50 text-emerald-700',
-        dot: 'bg-emerald-500',
-    },
-    reconciled: { label: 'Reconciled', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
-    skipped: { label: 'Skipped', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-    failed: { label: 'Failed', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+    succeeded: { label: 'Succeeded', family: 'positive' },
+    reconciled: { label: 'Reconciled', family: 'info' },
+    skipped: { label: 'Skipped', family: 'neutral' },
+    failed: { label: 'Failed', family: 'negative' },
     // AdmissionApplication lifecycle.
-    submitted: { label: 'Submitted', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
-    accepted: { label: 'Accepted', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
-    rejected: { label: 'Rejected', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
-    converted: { label: 'Converted', badge: 'bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
+    submitted: { label: 'Submitted', family: 'progress' },
+    accepted: { label: 'Accepted', family: 'positive' },
+    rejected: { label: 'Rejected', family: 'negative' },
+    converted: { label: 'Converted', family: 'info' },
     // CanteenOrder lifecycle.
-    pending: { label: 'Pending', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
-    fulfilled: {
-        label: 'Fulfilled',
-        badge: 'bg-emerald-50 text-emerald-700',
-        dot: 'bg-emerald-500',
-    },
+    pending: { label: 'Pending', family: 'progress' },
+    fulfilled: { label: 'Fulfilled', family: 'positive' },
     // PayrollPeriod / PayrollRun lifecycle.
-    open: { label: 'Open', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
-    closed: { label: 'Closed', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
-    calculated: {
-        label: 'Calculated',
-        badge: 'bg-indigo-50 text-indigo-700',
-        dot: 'bg-indigo-500',
-    },
-    approved: { label: 'Approved', badge: 'bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
-    posted: { label: 'Posted', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
-    reversed: { label: 'Reversed', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+    open: { label: 'Open', family: 'info' },
+    closed: { label: 'Closed', family: 'neutral' },
+    calculated: { label: 'Calculated', family: 'info' },
+    approved: { label: 'Approved', family: 'positive' },
+    posted: { label: 'Posted', family: 'positive' },
+    reversed: { label: 'Reversed', family: 'attention' },
 };
 
 // SIS 3.1: computed, so a status changed by an in-page Inertia visit (Submit,
 // Accept, Discard ...) relabels the badge instead of keeping the first one.
-const style = computed(() => STYLES[props.status]);
+const style = computed(() => {
+    const status = STYLES[props.status];
+    return { label: status.label, ...FAMILIES[status.family] };
+});
 </script>
 
 <template>
-    <span
-        class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-        :class="style.badge"
-    >
-        <!--
-            Status is never conveyed by color alone (accessibility) --
-            the dot is decorative (aria-hidden), the text label is what
-            actually communicates state.
-        -->
-        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full" :class="style.dot" />
+    <span class="tag" :class="style.tag">
+        <span aria-hidden="true">{{ style.glyph }}</span>
         {{ style.label }}
     </span>
 </template>

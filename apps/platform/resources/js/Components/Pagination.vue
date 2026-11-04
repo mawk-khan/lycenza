@@ -25,7 +25,7 @@ defineProps<Props>();
 <template>
     <p
         v-if="total !== undefined && total !== null && total > 0 && from && to"
-        class="mt-4 text-sm text-slate-500"
+        class="mt-4 text-sm text-ink-muted"
         aria-live="polite"
     >
         Showing {{ from }}–{{ to }} of {{ total }} {{ total === 1 ? 'result' : 'results' }}
@@ -40,7 +40,7 @@ defineProps<Props>();
         <template v-for="(link, index) in links" :key="index">
             <span
                 v-if="!link.url"
-                class="rounded px-3 py-1.5 text-sm text-slate-300"
+                class="rounded-xs px-3 py-1.5 text-sm text-graphite-400"
                 aria-disabled="true"
                 v-html="link.label"
             />
@@ -48,9 +48,11 @@ defineProps<Props>();
                 v-else
                 :href="link.url"
                 preserve-scroll
-                class="rounded px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-slate-900"
+                class="rounded-xs px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-strong"
                 :class="
-                    link.active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    link.active
+                        ? 'bg-accent-strong text-on-accent'
+                        : 'text-ink hover:bg-graphite-200'
                 "
                 :aria-current="link.active ? 'page' : undefined"
             >

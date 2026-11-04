@@ -33,8 +33,8 @@ const describedBy = computed(
 
 <template>
     <div>
-        <label :for="id" class="block text-sm font-medium text-slate-700"
-            >{{ label }}<span v-if="required" class="text-slate-500"> (required)</span></label
+        <label :for="id" class="field-label"
+            >{{ label }}<span v-if="required" class="field-optional"> (required)</span></label
         >
         <select
             :id="id"
@@ -42,15 +42,14 @@ const describedBy = computed(
             :required="required"
             :aria-invalid="error ? 'true' : undefined"
             :aria-describedby="describedBy"
-            class="mt-1 w-full rounded border bg-white px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber-500"
-            :class="error ? 'border-red-600' : 'border-slate-300'"
+            class="input mt-1"
         >
             <option v-if="placeholder !== undefined" :value="null">{{ placeholder }}</option>
             <option v-for="option in options" :key="option.value" :value="option.value">
                 {{ option.label }}
             </option>
         </select>
-        <p v-if="hint" :id="`${id}-hint`" class="mt-1 text-xs text-slate-500">{{ hint }}</p>
-        <p v-if="error" :id="`${id}-error`" class="mt-1 text-sm text-red-700">{{ error }}</p>
+        <p v-if="hint" :id="`${id}-hint`" class="field-hint">{{ hint }}</p>
+        <p v-if="error" :id="`${id}-error`" class="field-error">{{ error }}</p>
     </div>
 </template>

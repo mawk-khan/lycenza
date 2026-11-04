@@ -20,14 +20,12 @@ watch(message, () => (dismissed.value = false));
 
 <template>
     <div v-if="message && !dismissed" class="px-4 pt-4 sm:px-8">
-        <div
-            class="mx-auto flex max-w-5xl items-start justify-between gap-3 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-            role="status"
-        >
-            <p class="min-w-0 break-words">{{ message }}</p>
+        <div class="notice notice-success mx-auto max-w-5xl justify-between" role="status">
+            <span aria-hidden="true" class="font-semibold text-accent-strong">✓</span>
+            <p class="min-w-0 flex-1 break-words">{{ message }}</p>
             <button
                 type="button"
-                class="shrink-0 rounded px-1 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-800"
+                class="shrink-0 rounded-xs px-1 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-strong"
                 @click="dismissed = true"
             >
                 Dismiss<span class="sr-only"> message</span>

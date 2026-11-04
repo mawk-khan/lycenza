@@ -43,10 +43,11 @@ onMounted(async () => {
         role="alert"
         tabindex="-1"
         aria-labelledby="duplicate-warning-title"
-        class="mt-6 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-800"
+        class="mt-6 rounded-xs border border-l-4 border-accent-300 border-l-accent-strong bg-accent-100 p-4 text-sm text-ink focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-strong"
     >
-        <h2 id="duplicate-warning-title" class="font-semibold">
-            Possible duplicate: a Student with similar identity details already exists
+        <h2 id="duplicate-warning-title" class="text-base font-semibold">
+            <span aria-hidden="true" class="text-accent-strong">! </span>Possible duplicate: a
+            Student with similar identity details already exists
         </h2>
         <p class="mt-1">
             {{
@@ -59,7 +60,7 @@ onMounted(async () => {
             Student can be reactivated from their profile).
         </p>
 
-        <ul v-if="warning.candidates.length > 0" class="mt-3 divide-y divide-amber-200">
+        <ul v-if="warning.candidates.length > 0" class="mt-3 divide-y divide-accent-300">
             <li v-for="c in warning.candidates" :key="c.id" class="py-2">
                 <a :href="c.href" target="_blank" rel="noopener" class="font-medium underline">
                     {{ c.name }}<span class="sr-only"> (opens in a new tab)</span>
@@ -87,17 +88,13 @@ onMounted(async () => {
         </p>
 
         <div class="mt-4 flex flex-wrap items-center gap-3">
-            <button
-                type="button"
-                class="rounded border border-slate-400 bg-white px-3 py-1.5 font-medium text-slate-900 hover:bg-slate-50"
-                @click="emit('cancel')"
-            >
+            <button type="button" class="btn btn-secondary" @click="emit('cancel')">
                 Cancel — do not create
             </button>
             <button
                 type="button"
                 :disabled="processing"
-                class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                class="btn btn-primary"
                 @click="emit('continue')"
             >
                 {{ continueLabel }}

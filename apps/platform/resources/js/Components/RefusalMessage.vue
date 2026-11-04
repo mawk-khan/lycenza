@@ -29,17 +29,18 @@ watch(message, async (value) => {
     <div v-if="message && !dismissed" class="px-4 pt-4 sm:px-8">
         <div
             ref="box"
-            class="mx-auto flex max-w-5xl items-start justify-between gap-3 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-800"
+            class="notice notice-error mx-auto max-w-5xl justify-between focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-danger"
             role="alert"
             tabindex="-1"
         >
-            <p class="min-w-0 break-words">
-                <span class="font-semibold">Not saved:</span>
+            <span aria-hidden="true" class="font-semibold text-danger">✕</span>
+            <p class="min-w-0 flex-1 break-words">
+                <span class="font-semibold text-danger">Not saved:</span>
                 {{ message }}
             </p>
             <button
                 type="button"
-                class="shrink-0 rounded px-1 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-800"
+                class="shrink-0 rounded-xs px-1 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-strong"
                 @click="dismissed = true"
             >
                 Dismiss<span class="sr-only"> message</span>

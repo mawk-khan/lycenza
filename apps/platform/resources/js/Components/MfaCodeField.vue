@@ -21,7 +21,7 @@ const model = defineModel<string>({ required: true });
 
 <template>
     <div v-if="hasMfaFactor">
-        <label class="block text-sm text-slate-700" :for="id">Authentication code</label>
+        <label class="field-label" :for="id">Authentication code</label>
         <input
             :id="id"
             v-model="model"
@@ -29,15 +29,15 @@ const model = defineModel<string>({ required: true });
             inputmode="numeric"
             autocomplete="one-time-code"
             maxlength="32"
-            class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+            class="input mt-1 w-40 font-mono"
         />
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="field-hint">
             {{ action }} needs a current code from your authenticator app or an unused recovery
             code.
         </p>
-        <p v-if="error" class="mt-1 text-sm text-red-700">{{ error }}</p>
+        <p v-if="error" class="field-error">{{ error }}</p>
     </div>
-    <p v-else class="text-sm text-red-800">
+    <p v-else class="text-sm text-danger">
         {{ action }} needs multi-factor authentication. Enroll a factor under
         <a href="/app/account/security" class="underline">Account security</a> first.
     </p>

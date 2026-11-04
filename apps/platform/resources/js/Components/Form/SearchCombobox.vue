@@ -27,8 +27,8 @@ const props = withDefaults(
         minLength: 1,
         error: undefined,
         listClass:
-            'absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded border border-slate-200 bg-white text-sm shadow',
-        optionClass: 'cursor-pointer px-3 py-2 hover:bg-slate-50',
+            'absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-xs border border-control-line bg-white text-sm text-ink shadow-md',
+        optionClass: 'cursor-pointer px-3 py-2 hover:bg-graphite-100',
     },
 );
 
@@ -174,7 +174,7 @@ defineExpose({ focus: () => input.value?.focus() });
             :class="[
                 optionClass,
                 index === active
-                    ? 'bg-slate-100 font-medium outline outline-2 -outline-offset-2 outline-amber-500'
+                    ? 'bg-accent-100 font-medium outline outline-2 -outline-offset-2 outline-accent-strong'
                     : '',
             ]"
             @mousedown.prevent
@@ -185,5 +185,5 @@ defineExpose({ focus: () => input.value?.focus() });
         </li>
     </ul>
     <p class="sr-only" role="status" aria-live="polite">{{ status }}</p>
-    <p v-if="error" :id="`${id}-error`" class="mt-1 text-sm text-red-600">{{ error }}</p>
+    <p v-if="error" :id="`${id}-error`" class="field-error">{{ error }}</p>
 </template>

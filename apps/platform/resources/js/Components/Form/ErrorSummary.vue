@@ -12,7 +12,7 @@ const messages = () => props.fields.map((field) => props.errors[field]).filter(B
         v-if="messages().length"
         role="status"
         aria-live="polite"
-        class="mt-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800"
+        class="notice notice-error mt-4 flex-col gap-1"
         data-testid="error-summary"
     >
         <p v-for="message in messages()" :key="message">{{ message }}</p>

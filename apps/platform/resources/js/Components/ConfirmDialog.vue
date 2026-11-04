@@ -34,26 +34,16 @@ defineExpose({ open, close });
     <dialog
         ref="dialog"
         :aria-labelledby="titleId"
-        class="max-w-md rounded border border-slate-300 p-6 font-sans text-slate-900 shadow-lg backdrop:bg-slate-900/40"
+        class="frame max-w-md overflow-visible bg-white p-6 font-sans text-ink shadow-lg backdrop:bg-accent-900/50"
     >
         <h2 :id="titleId" class="text-lg font-semibold">{{ props.title }}</h2>
-        <div class="mt-2 text-sm text-slate-700"><slot /></div>
+        <div class="mt-2 text-sm text-ink"><slot /></div>
         <div class="mt-6 flex justify-end gap-3">
+            <button type="button" class="btn btn-secondary" @click="close">Cancel</button>
             <button
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
-                @click="close"
-            >
-                Cancel
-            </button>
-            <button
-                type="button"
-                class="rounded px-3 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
-                :class="
-                    props.tone === 'danger'
-                        ? 'bg-red-700 hover:bg-red-800'
-                        : 'bg-slate-900 hover:bg-slate-700'
-                "
+                class="btn"
+                :class="props.tone === 'danger' ? 'btn-danger' : 'btn-primary'"
                 data-testid="confirm-action"
                 @click="confirm"
             >

@@ -1,9 +1,9 @@
 # ADR 0082: UI Design Foundation v3 for the staff web application (DS)
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
-  implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8).** No
-  route, capability, role, table or migration change. Each further slice
-  needs owner authorization.
+  implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
+  implemented (2026-11-04, §9).** No route, capability, role, table or
+  migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
 - Owner decision: adopt the owner's "Lycenza Foundation v3" design for the
@@ -248,3 +248,46 @@ Owner authorization: "please proceed" after DS-1 (2026-11-04).
    with a hand-written Inertia page payload (Dashboard, sample navigation):
    steel default, a `#F5D90A` accent with its label chip, a `#1D4E89`
    accent, and a 390 px mobile width. The shared DDEV site was not used.
+
+## 9. DS-3 implementation: components and patterns (2026-11-04)
+
+Owner authorization: "please proceed" after DS-2 (2026-11-04).
+
+1. **Component layer** (`resources/css/app.css`, `@layer components`), built
+   only from the tokens: `btn` (+ `primary`, `secondary`, `ghost`, `danger`),
+   `field-label`, `field-optional`, `field-hint`, `field-error`, `input`,
+   `checkbox`, `notice` (+ `success`, `attention`, `error`), `tag` (+ five
+   families), `data-table` (not `table`, which is a Tailwind utility) and
+   `frame`. Usage guide: `docs/design/foundation-v3/COMPONENTS.md`.
+2. **Blueprint frame** (§2.6): one `::before` pseudo-element draws all four
+   "+" marks with eight background gradients -- no extra markup,
+   `pointer-events: none`, invisible to assistive technology. The primary
+   button carries no marks (density; decided here as §2.6 deferred).
+3. **Shared components restyled** onto the classes, with markup, props,
+   events, ARIA and `data-testid` unchanged: `Form/TextField`,
+   `SelectField`, `CheckboxField`, `ErrorSummary`, `SearchCombobox`
+   (defaults and active option), `ConfirmDialog` (framed; `btn-danger` for
+   `tone="danger"`), `EmptyState`, `Pagination`, `MfaCodeField`,
+   `FlashMessage` (✓ notice), `RefusalMessage` (✕ "Not saved:" notice),
+   `DuplicateStudentWarning` (attention notice, `btn` actions).
+   - An invalid field is now marked by the `aria-invalid` the fields
+     already set, instead of a duplicate class binding.
+4. **Status families.** `StatusBadge` maps each of its 32 statuses to one of
+   six families -- positive ✓, info ●, progress ◷, attention !, negative ✕,
+   neutral – -- shown as a glyph (decorative) + the word. Mono by design
+   (OD-DS-1): Cancelled, Failed, Rejected and Blocked are dark steel with a
+   cross, not red. Labels are unchanged.
+5. **Icons (OD-DS-2): not needed.** The patterns use text glyphs, so no
+   icon package is added. Lucide stays the choice if a real icon need
+   appears.
+6. **OD-DS-4 (new, owner): the elevation banner.** It keeps its amber styling
+   -- a security signal for a platform actor inside a School -- rather than
+   being folded into the mono palette. Default until decided: unchanged.
+7. **Tests.**
+   - `DesignTokensTest::the_shared_components_are_styled_only_through_the_design_tokens`:
+     no raw palette class in the 13 components; the badge's glyph + word and
+     exactly six families; the component classes exist; frame marks
+     decorative; `aria-invalid` drives the invalid border.
+   - Visual check: a temporary, uncommitted gallery page rendering the real
+     components inside the real shell (headless Chromium), including flash
+     and refusal messages.

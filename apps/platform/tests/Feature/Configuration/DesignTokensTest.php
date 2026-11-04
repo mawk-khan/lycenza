@@ -91,6 +91,35 @@ class DesignTokensTest extends TestCase
     }
 
     #[Test]
+    public function the_shared_components_are_styled_only_through_the_design_tokens(): void
+    {
+        // DS-3 (ADR 0082 §9). ElevationBanner keeps its amber security
+        // styling until the owner decides OD-DS-4 -- deliberately not listed.
+        $palette = '/\b(?:bg|text|border|outline|ring|divide|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/';
+        foreach ([
+            'ConfirmDialog', 'DuplicateStudentWarning', 'EmptyState', 'FlashMessage', 'MfaCodeField', 'Pagination',
+            'RefusalMessage', 'StatusBadge', 'Form/CheckboxField', 'Form/ErrorSummary', 'Form/SearchCombobox',
+            'Form/SelectField', 'Form/TextField',
+        ] as $component) {
+            $code = preg_replace(['/<!--.*?-->/s', '/^\s*\/\/.*$/m'], '', (string) file_get_contents(resource_path("js/Components/{$component}.vue")));
+            $this->assertDoesNotMatchRegularExpression($palette, $code, "{$component} uses a raw palette class");
+        }
+
+        // Status is never colour alone: a glyph (decorative) + the word, from a closed set of families.
+        $badge = (string) file_get_contents(resource_path('js/Components/StatusBadge.vue'));
+        $this->assertStringContainsString('<span aria-hidden="true">{{ style.glyph }}</span>', $badge);
+        $this->assertSame(6, preg_match_all('/^    (positive|info|progress|attention|negative|neutral): \{ glyph:/m', $badge));
+
+        // The component layer exists, and its frame marks stay decorative.
+        $css = $this->css();
+        foreach (['.btn', '.btn-primary', '.btn-secondary', '.btn-ghost', '.btn-danger', '.input', '.field-label', '.field-hint', '.field-error', '.notice', '.tag', '.data-table', '.frame'] as $class) {
+            $this->assertMatchesRegularExpression('/^\s+'.preg_quote($class, '/').' \{/m', $css, $class);
+        }
+        $this->assertMatchesRegularExpression('/\.frame::before \{[^}]*content: \'\';[^}]*pointer-events: none;/s', $css);
+        $this->assertStringContainsString('aria-invalid:border-danger', $css, 'an invalid control is marked by aria-invalid, which the fields already set');
+    }
+
+    #[Test]
     public function a_school_accent_drives_the_ramp_and_text_uses_the_strong_step(): void
     {
         $css = $this->css();
