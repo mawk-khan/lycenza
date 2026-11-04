@@ -130,15 +130,15 @@ const hiddenCategories = computed(() =>
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← {{ fullName }}</a>
 
         <h1 class="mt-2 text-xl font-semibold">History</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ fullName }} · {{ student.studentNumber }}. Changes saved to this Student's record,
             newest first, from the School audit trail. Times are in {{ timezone }}.
         </p>
-        <p v-if="hiddenCategories.length > 0" class="mt-2 text-sm text-slate-500">
+        <p v-if="hiddenCategories.length > 0" class="mt-2 text-sm text-ink-muted">
             Not shown to you: {{ hiddenCategories.map((c) => categoryLabels[c]).join(', ') }}.
         </p>
 
@@ -149,18 +149,18 @@ const hiddenCategories = computed(() =>
             description="Nothing has been recorded for this Student that you can see."
         />
 
-        <ol v-else class="mt-6 divide-y divide-slate-100 border-y border-slate-100">
+        <ol v-else class="mt-6 divide-y divide-line border-y border-line">
             <li
                 v-for="entry in entries"
                 :key="entry.id"
                 class="flex flex-wrap gap-x-6 gap-y-1 py-3 text-sm"
             >
-                <div class="w-44 shrink-0 text-slate-500">
+                <div class="w-44 shrink-0 text-ink-muted">
                     <time :datetime="entry.recordedAt">{{ recorded(entry) }}</time>
                 </div>
                 <div class="min-w-0 flex-1">
                     <p class="font-medium">{{ describe(entry) }}</p>
-                    <p class="mt-0.5 text-xs text-slate-500">
+                    <p class="mt-0.5 text-xs text-ink-muted">
                         {{ categoryLabels[entry.category] }}
                         <template v-if="entry.effectiveOn">
                             · effective {{ formatCalendarDate(entry.effectiveOn) }}</template
@@ -183,10 +183,10 @@ const hiddenCategories = computed(() =>
             </li>
         </ol>
 
-        <p v-if="truncated" class="mt-4 text-sm text-slate-500">
+        <p v-if="truncated" class="mt-4 text-sm text-ink-muted">
             Showing the {{ limit }} most recent entries. Older entries are in the School audit log.
         </p>
-        <p class="mt-6 text-xs text-slate-500">
+        <p class="mt-6 text-xs text-ink-muted">
             A status change has no separate effective date; the recorded time is when it was saved.
             Who made each change is shown in the School audit log to staff who may review it.
         </p>

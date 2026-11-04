@@ -10,12 +10,12 @@ defineProps<{ siblings: StudentSibling[]; truncated: boolean }>();
 
 <template>
     <section id="family" class="mt-8" aria-labelledby="family-heading">
-        <h2 id="family-heading" class="text-sm font-medium text-slate-500">Family</h2>
-        <p class="mt-1 text-xs text-slate-500">Students who share a Guardian with this Student.</p>
-        <p v-if="siblings.length === 0" class="mt-3 text-sm text-slate-500">
+        <h2 id="family-heading" class="text-sm font-medium text-ink-muted">Family</h2>
+        <p class="mt-1 text-xs text-ink-muted">Students who share a Guardian with this Student.</p>
+        <p v-if="siblings.length === 0" class="mt-3 text-sm text-ink-muted">
             No other Student shares a Guardian with this Student.
         </p>
-        <ul v-else class="mt-3 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul v-else class="mt-3 divide-y divide-line rounded-xs border border-line">
             <li
                 v-for="s in siblings"
                 :key="s.id"
@@ -25,19 +25,19 @@ defineProps<{ siblings: StudentSibling[]; truncated: boolean }>();
                     <a class="font-medium underline" :href="`/app/students/${s.id}`">{{
                         s.name
                     }}</a>
-                    <span class="ml-2 text-slate-500">{{ s.studentNumber }}</span>
-                    <p v-if="s.currentPlacement" class="text-slate-600">
+                    <span class="ml-2 text-ink-muted">{{ s.studentNumber }}</span>
+                    <p v-if="s.currentPlacement" class="text-ink-muted">
                         {{ s.currentPlacement.gradeLevel }} · {{ s.currentPlacement.section }} ·
                         {{ s.currentPlacement.campus }}
                     </p>
-                    <p v-if="s.sharedGuardians.length > 0" class="text-xs text-slate-500">
+                    <p v-if="s.sharedGuardians.length > 0" class="text-xs text-ink-muted">
                         Shares: {{ s.sharedGuardians.join(', ') }}
                     </p>
                 </div>
                 <StatusBadge :status="s.status" />
             </li>
         </ul>
-        <p v-if="truncated" class="mt-2 text-xs text-slate-500">
+        <p v-if="truncated" class="mt-2 text-xs text-ink-muted">
             Only the first {{ siblings.length }} are listed.
         </p>
     </section>

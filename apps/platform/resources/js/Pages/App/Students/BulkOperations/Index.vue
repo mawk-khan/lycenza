@@ -173,10 +173,10 @@ const operationHelp: Record<string, string> = {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Bulk operations</h1>
-        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+        <p class="mt-1 max-w-3xl text-sm text-ink-muted">
             Move several Students of one class at once. You review every Student before anything
             changes, confirm with an authentication code, and then either every Student is moved or
             none is. Moving Students into another Academic Year is done through
@@ -185,7 +185,7 @@ const operationHelp: Record<string, string> = {
 
         <p
             v-if="rolloverHint"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm text-ink"
             role="status"
         >
             Moving Students to another Academic Year or Grade is done through
@@ -211,7 +211,7 @@ const operationHelp: Record<string, string> = {
                     {{ o.label }}
                 </label>
             </div>
-            <p class="mt-1 text-sm text-slate-600">{{ operationHelp[operation] }}</p>
+            <p class="mt-1 text-sm text-ink-muted">{{ operationHelp[operation] }}</p>
         </fieldset>
 
         <!-- 2. Source class -->
@@ -219,24 +219,16 @@ const operationHelp: Record<string, string> = {
             <h2 id="source-heading" class="text-base font-semibold">2. Source class</h2>
             <div class="mt-2 grid gap-3 sm:grid-cols-4">
                 <div>
-                    <label class="block text-sm text-slate-600" for="source-year"
+                    <label class="block text-sm text-ink-muted" for="source-year"
                         >Academic Year</label
                     >
-                    <select
-                        id="source-year"
-                        v-model="yearId"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
-                    >
+                    <select id="source-year" v-model="yearId" class="input mt-1">
                         <option v-for="y in years" :key="y.id" :value="y.id">{{ y.name }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="source-campus">Campus</label>
-                    <select
-                        id="source-campus"
-                        v-model="campusId"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
-                    >
+                    <label class="block text-sm text-ink-muted" for="source-campus">Campus</label>
+                    <select id="source-campus" v-model="campusId" class="input mt-1">
                         <option value="">All campuses</option>
                         <option v-for="c in campuses" :key="c.id" :value="c.id">
                             {{ c.name }}
@@ -244,12 +236,8 @@ const operationHelp: Record<string, string> = {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="source-grade">Grade</label>
-                    <select
-                        id="source-grade"
-                        v-model="gradeLevelId"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
-                    >
+                    <label class="block text-sm text-ink-muted" for="source-grade">Grade</label>
+                    <select id="source-grade" v-model="gradeLevelId" class="input mt-1">
                         <option value="">All grades</option>
                         <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
                             {{ g.name }}
@@ -257,11 +245,11 @@ const operationHelp: Record<string, string> = {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="source-section">Section</label>
+                    <label class="block text-sm text-ink-muted" for="source-section">Section</label>
                     <select
                         id="source-section"
                         v-model="sectionId"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                        class="input mt-1"
                         @change="chooseSource"
                     >
                         <option value="" disabled>Choose a class</option>
@@ -271,7 +259,7 @@ const operationHelp: Record<string, string> = {
                     </select>
                 </div>
             </div>
-            <p v-if="sectionChoices.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="sectionChoices.length === 0" class="mt-2 text-sm text-ink-muted">
                 No class matches these choices.
             </p>
         </section>
@@ -283,7 +271,7 @@ const operationHelp: Record<string, string> = {
             </h2>
             <form class="mt-2 flex flex-wrap items-end gap-2" @submit.prevent="applySearch">
                 <div>
-                    <label class="block text-sm text-slate-600" for="student-search"
+                    <label class="block text-sm text-ink-muted" for="student-search"
                         >Find by name or student number</label
                     >
                     <input
@@ -291,21 +279,16 @@ const operationHelp: Record<string, string> = {
                         v-model="search"
                         type="search"
                         maxlength="100"
-                        class="mt-1 w-64 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-64 max-w-full"
                     />
                 </div>
-                <button
-                    type="submit"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
-                    Search
-                </button>
+                <button type="submit" class="btn btn-secondary">Search</button>
             </form>
 
             <div class="mt-3 flex flex-wrap items-center gap-2">
                 <button
                     type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                    class="btn btn-secondary"
                     :disabled="students.length === 0 || allVisibleSelected"
                     @click="selectVisible"
                 >
@@ -313,7 +296,7 @@ const operationHelp: Record<string, string> = {
                 </button>
                 <button
                     type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                    class="btn btn-secondary"
                     :disabled="selected.size === 0"
                     @click="clearSelection"
                 >
@@ -325,22 +308,22 @@ const operationHelp: Record<string, string> = {
                     >
                 </p>
             </div>
-            <p v-if="overLimit" class="mt-2 text-sm text-red-700" role="alert">
+            <p v-if="overLimit" class="mt-2 text-sm text-danger" role="alert">
                 A bulk move takes at most {{ limits.students }} Students at a time.
             </p>
 
-            <p v-if="students.length === 0" class="mt-3 text-sm text-slate-600">
+            <p v-if="students.length === 0" class="mt-3 text-sm text-ink-muted">
                 No Student in this class matches.
             </p>
             <div
                 v-else
-                class="relative mt-3 max-h-[28rem] overflow-auto rounded border border-slate-200"
+                class="relative mt-3 max-h-[28rem] overflow-auto rounded-xs border border-line"
             >
                 <table class="w-full min-w-[32rem] text-left text-sm">
                     <caption class="sr-only">
                         Students in the source class
                     </caption>
-                    <thead class="sticky top-0 bg-slate-50">
+                    <thead class="sticky top-0 bg-graphite-100">
                         <tr>
                             <th scope="col" class="w-12 px-3 py-2">Select</th>
                             <th scope="col" class="px-3 py-2">Student</th>
@@ -353,7 +336,7 @@ const operationHelp: Record<string, string> = {
                         <tr
                             v-for="row in students"
                             :key="row.studentId"
-                            class="border-t border-slate-100"
+                            class="border-t border-line"
                         >
                             <td class="px-3 py-2">
                                 <input
@@ -379,7 +362,7 @@ const operationHelp: Record<string, string> = {
                     </tbody>
                 </table>
             </div>
-            <p v-if="students.length >= limits.list" class="mt-1 text-xs text-slate-500">
+            <p v-if="students.length >= limits.list" class="mt-1 text-xs text-ink-muted">
                 Showing the first {{ limits.list }} Students: search to narrow the list.
             </p>
         </section>
@@ -389,27 +372,27 @@ const operationHelp: Record<string, string> = {
             <h2 id="target-heading" class="text-base font-semibold">4. Target</h2>
             <div class="mt-2 grid gap-3 sm:grid-cols-3">
                 <div>
-                    <label class="block text-sm text-slate-600" for="target-year"
+                    <label class="block text-sm text-ink-muted" for="target-year"
                         >Academic Year</label
                     >
                     <select
                         id="target-year"
                         v-model="targetYearId"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                        class="input mt-1"
                         :aria-describedby="crossYear ? 'target-year-error' : undefined"
                     >
                         <option v-for="y in years" :key="y.id" :value="y.id">{{ y.name }}</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="target-section"
+                    <label class="block text-sm text-ink-muted" for="target-section"
                         >Target class</label
                     >
                     <select
                         id="target-section"
                         v-model="targetSectionId"
                         :disabled="crossYear || targets.length === 0"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose a class</option>
                         <option v-for="t in targets" :key="t.id" :value="t.id">
@@ -418,7 +401,7 @@ const operationHelp: Record<string, string> = {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="effective-date"
+                    <label class="block text-sm text-ink-muted" for="effective-date"
                         >Effective date</label
                     >
                     <input
@@ -426,7 +409,7 @@ const operationHelp: Record<string, string> = {
                         id="effective-date"
                         v-model="effectiveDate"
                         type="date"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                        class="input mt-1"
                     />
                     <p v-else id="effective-date" class="mt-2 text-sm">
                         Today (a Campus transfer takes effect today)
@@ -436,32 +419,32 @@ const operationHelp: Record<string, string> = {
             <p
                 v-if="crossYear"
                 id="target-year-error"
-                class="mt-2 text-sm text-red-700"
+                class="mt-2 text-sm text-danger"
                 role="alert"
             >
                 A bulk move stays within one Academic Year. To move Students into another Academic
                 Year, use
                 <a class="underline" href="/app/enrollment-rollovers">Academic-Year Rollover</a>.
             </p>
-            <p v-else-if="targets.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-else-if="targets.length === 0" class="mt-2 text-sm text-ink-muted">
                 There is no class this move can go to.
             </p>
-            <p v-if="page.props.errors?.target_section_id" class="mt-1 text-sm text-red-700">
+            <p v-if="page.props.errors?.target_section_id" class="mt-1 text-sm text-danger">
                 {{ page.props.errors.target_section_id }}
             </p>
-            <p v-if="page.props.errors?.rows" class="mt-1 text-sm text-red-700">
+            <p v-if="page.props.errors?.rows" class="mt-1 text-sm text-danger">
                 {{ page.props.errors.rows }}
             </p>
 
             <button
                 type="button"
-                class="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                class="btn btn-primary mt-4"
                 :disabled="!canPreview || previewing"
                 @click="preview"
             >
                 {{ previewing ? 'Checking…' : `Preview move of ${selected.size} Student(s)` }}
             </button>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 The preview shows what would happen to each Student. Nothing is moved yet.
             </p>
         </section>

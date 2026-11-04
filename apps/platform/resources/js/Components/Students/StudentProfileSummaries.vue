@@ -40,37 +40,37 @@ function money(amount: string | null, currency: string | null): string {
 
 <template>
     <section v-if="hasAny" id="at-a-glance" class="mt-8" aria-labelledby="at-a-glance-heading">
-        <h2 id="at-a-glance-heading" class="text-sm font-medium text-slate-500">At a glance</h2>
-        <p class="mt-1 text-xs text-slate-500">
+        <h2 id="at-a-glance-heading" class="text-sm font-medium text-ink-muted">At a glance</h2>
+        <p class="mt-1 text-xs text-ink-muted">
             Read-only summaries from each module. Open a module to change anything.
         </p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
             <!-- Subjects (Academic: the current placement's offerings) -->
             <article
                 v-if="sections.subjects"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-subjects"
             >
                 <h3 id="glance-subjects" class="text-sm font-semibold">Subjects</h3>
                 <ul v-if="sections.subjects.items.length > 0" class="mt-2 space-y-1 text-sm">
                     <li v-for="(s, i) in sections.subjects.items" :key="i">
                         {{ s.subjectName }}
-                        <span class="text-xs text-slate-500">{{
+                        <span class="text-xs text-ink-muted">{{
                             s.required ? 'Required' : 'Elective'
                         }}</span>
                     </li>
                 </ul>
-                <p v-else class="mt-2 text-sm text-slate-500">No current subjects.</p>
+                <p v-else class="mt-2 text-sm text-ink-muted">No current subjects.</p>
             </article>
 
             <!-- Attendance (records only: never a rate or a tally) -->
             <article
                 v-if="sections.attendance"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-attendance"
             >
                 <h3 id="glance-attendance" class="text-sm font-semibold">Attendance</h3>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-xs text-ink-muted">
                     Latest records, {{ formatCalendarDate(sections.attendance.from) }} –
                     {{ formatCalendarDate(sections.attendance.to) }}
                 </p>
@@ -78,12 +78,12 @@ function money(amount: string | null, currency: string | null): string {
                     <li v-for="(r, i) in sections.attendance.recent" :key="i">
                         {{ formatCalendarDate(r.date) }} ·
                         {{ r.subjectName ?? r.classLabel ?? 'Class' }}
-                        <span v-if="r.periodName" class="text-slate-500">({{ r.periodName }})</span>
+                        <span v-if="r.periodName" class="text-ink-muted">({{ r.periodName }})</span>
                         — <strong>{{ ATTENDANCE_LABELS[r.status] ?? r.status }}</strong>
-                        <span v-if="r.corrected" class="text-xs text-slate-500">(corrected)</span>
+                        <span v-if="r.corrected" class="text-xs text-ink-muted">(corrected)</span>
                     </li>
                 </ul>
-                <p v-else class="mt-2 text-sm text-slate-500">
+                <p v-else class="mt-2 text-sm text-ink-muted">
                     No attendance records in this period.
                 </p>
                 <a class="mt-2 inline-block text-sm underline" :href="sections.attendance.link"
@@ -94,22 +94,22 @@ function money(amount: string | null, currency: string | null): string {
             <!-- Fees (Payments' outstanding-fees read; no family totals) -->
             <article
                 v-if="sections.fees"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-fees"
             >
                 <h3 id="glance-fees" class="text-sm font-semibold">Fees</h3>
-                <p v-if="sections.fees.scope === 'campus'" class="mt-1 text-xs text-slate-500">
+                <p v-if="sections.fees.scope === 'campus'" class="mt-1 text-xs text-ink-muted">
                     Charges on your Campuses only.
                 </p>
                 <dl
                     v-if="sections.fees.hasCharges"
                     class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm"
                 >
-                    <dt class="text-slate-500">Billed</dt>
+                    <dt class="text-ink-muted">Billed</dt>
                     <dd>{{ money(sections.fees.billed, sections.fees.currency) }}</dd>
-                    <dt class="text-slate-500">Concession</dt>
+                    <dt class="text-ink-muted">Concession</dt>
                     <dd>{{ money(sections.fees.concession, sections.fees.currency) }}</dd>
-                    <dt class="text-slate-500">Paid</dt>
+                    <dt class="text-ink-muted">Paid</dt>
                     <dd>{{ money(sections.fees.paid, sections.fees.currency) }}</dd>
                     <dt class="font-medium">Outstanding</dt>
                     <dd class="font-medium">
@@ -118,17 +118,17 @@ function money(amount: string | null, currency: string | null): string {
                     <template
                         v-if="sections.fees.overdue !== null && sections.fees.overdue !== '0.00'"
                     >
-                        <dt class="text-red-700">Overdue</dt>
-                        <dd class="text-red-700">
+                        <dt class="text-danger">Overdue</dt>
+                        <dd class="text-danger">
                             {{ money(sections.fees.overdue, sections.fees.currency) }}
                         </dd>
                     </template>
                     <template v-if="sections.fees.nextDueDate">
-                        <dt class="text-slate-500">Next due</dt>
+                        <dt class="text-ink-muted">Next due</dt>
                         <dd>{{ formatCalendarDate(sections.fees.nextDueDate) }}</dd>
                     </template>
                 </dl>
-                <p v-else class="mt-2 text-sm text-slate-500">No charges.</p>
+                <p v-else class="mt-2 text-sm text-ink-muted">No charges.</p>
                 <a
                     v-if="sections.fees.statementLink"
                     class="mt-2 inline-block text-sm underline"
@@ -140,25 +140,25 @@ function money(amount: string | null, currency: string | null): string {
             <!-- Transport (current rider assignment) -->
             <article
                 v-if="sections.transport"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-transport"
             >
                 <h3 id="glance-transport" class="text-sm font-semibold">Transport</h3>
                 <ul v-if="sections.transport.assignments.length > 0" class="mt-2 space-y-2 text-sm">
                     <li v-for="(a, i) in sections.transport.assignments" :key="i">
                         <span class="font-medium">{{ a.routeName }}</span>
-                        <span v-if="a.pickupStopName" class="block text-slate-600"
+                        <span v-if="a.pickupStopName" class="block text-ink-muted"
                             >Pick-up: {{ a.pickupStopName }}</span
                         >
-                        <span v-if="a.dropoffStopName" class="block text-slate-600"
+                        <span v-if="a.dropoffStopName" class="block text-ink-muted"
                             >Drop-off: {{ a.dropoffStopName }}</span
                         >
-                        <span class="block text-xs text-slate-500"
+                        <span class="block text-xs text-ink-muted"
                             >Since {{ formatCalendarDate(a.startsOn) }}</span
                         >
                     </li>
                 </ul>
-                <p v-else class="mt-2 text-sm text-slate-500">
+                <p v-else class="mt-2 text-sm text-ink-muted">
                     {{
                         sections.transport.scope === 'campus'
                             ? 'No current route on your Campuses.'
@@ -173,19 +173,19 @@ function money(amount: string | null, currency: string | null): string {
             <!-- Hostel (current residency) -->
             <article
                 v-if="sections.hostel"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-hostel"
             >
                 <h3 id="glance-hostel" class="text-sm font-semibold">Hostel</h3>
                 <ul v-if="sections.hostel.residencies.length > 0" class="mt-2 space-y-1 text-sm">
                     <li v-for="(r, i) in sections.hostel.residencies" :key="i">
                         {{ r.hostelName }} · Room {{ r.roomCode }} · Bed {{ r.bedCode }}
-                        <span class="block text-xs text-slate-500"
+                        <span class="block text-xs text-ink-muted"
                             >Since {{ formatCalendarDate(r.startsOn) }}</span
                         >
                     </li>
                 </ul>
-                <p v-else class="mt-2 text-sm text-slate-500">
+                <p v-else class="mt-2 text-sm text-ink-muted">
                     {{
                         sections.hostel.scope === 'campus'
                             ? 'No current residency on your Campuses.'
@@ -200,7 +200,7 @@ function money(amount: string | null, currency: string | null): string {
             <!-- Library (open loans; no fines are computed here) -->
             <article
                 v-if="sections.library"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-library"
             >
                 <h3 id="glance-library" class="text-sm font-semibold">Library</h3>
@@ -208,11 +208,11 @@ function money(amount: string | null, currency: string | null): string {
                     {{ sections.library.activeLoans }}
                     {{ sections.library.activeLoans === 1 ? 'book' : 'books' }} on loan<span
                         v-if="sections.library.overdueLoans > 0"
-                        class="text-red-700"
+                        class="text-danger"
                         >, {{ sections.library.overdueLoans }} overdue</span
                     >
                 </p>
-                <p v-if="sections.library.scope === 'campus'" class="text-xs text-slate-500">
+                <p v-if="sections.library.scope === 'campus'" class="text-xs text-ink-muted">
                     Loans from your Campuses only.
                 </p>
                 <a class="mt-2 inline-block text-sm underline" :href="sections.library.link"
@@ -223,20 +223,20 @@ function money(amount: string | null, currency: string | null): string {
             <!-- SIS 11.7: the current House (descriptive; never authority). -->
             <article
                 v-if="sections.house"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-house"
             >
                 <h3 id="glance-house" class="text-sm font-semibold">House</h3>
                 <p v-if="sections.house.house" class="mt-2 text-sm">
                     {{ sections.house.house }}
-                    <span v-if="sections.house.since" class="block text-xs text-slate-500"
+                    <span v-if="sections.house.since" class="block text-xs text-ink-muted"
                         >Since {{ formatCalendarDate(sections.house.since) }}</span
                     >
                 </p>
-                <p v-else class="mt-2 text-sm text-slate-500">No House</p>
+                <p v-else class="mt-2 text-sm text-ink-muted">No House</p>
                 <p
                     v-if="sections.house.responsibilities.length > 0"
-                    class="mt-1 text-xs text-slate-600"
+                    class="mt-1 text-xs text-ink-muted"
                 >
                     {{ sections.house.responsibilities.join(', ') }}
                 </p>
@@ -251,11 +251,11 @@ function money(amount: string | null, currency: string | null): string {
             <!-- SIS 11.8: current Clubs and Activities (descriptive; never authority). -->
             <article
                 v-if="sections.communities"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-communities"
             >
                 <h3 id="glance-communities" class="text-sm font-semibold">Clubs and activities</h3>
-                <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Clubs
                 </h4>
                 <ul v-if="sections.communities.clubs.length > 0" class="text-sm">
@@ -263,34 +263,34 @@ function money(amount: string | null, currency: string | null): string {
                         {{ club.name }}
                         <span
                             v-if="club.responsibilities.length > 0"
-                            class="text-xs text-slate-600"
+                            class="text-xs text-ink-muted"
                         >
                             · {{ club.responsibilities.join(', ') }}</span
                         >
                     </li>
-                    <li v-if="sections.communities.moreClubs > 0" class="text-xs text-slate-600">
+                    <li v-if="sections.communities.moreClubs > 0" class="text-xs text-ink-muted">
                         and {{ sections.communities.moreClubs }} more
                     </li>
                 </ul>
-                <p v-else class="text-sm text-slate-500">No current Club</p>
-                <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <p v-else class="text-sm text-ink-muted">No current Club</p>
+                <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Activities
                 </h4>
                 <ul v-if="sections.communities.activities.length > 0" class="text-sm">
                     <li v-for="activity in sections.communities.activities" :key="activity.name">
                         {{ activity.name }}
-                        <span v-if="activity.category" class="text-xs text-slate-600">
+                        <span v-if="activity.category" class="text-xs text-ink-muted">
                             · {{ activity.category }}</span
                         >
                     </li>
                     <li
                         v-if="sections.communities.moreActivities > 0"
-                        class="text-xs text-slate-600"
+                        class="text-xs text-ink-muted"
                     >
                         and {{ sections.communities.moreActivities }} more
                     </li>
                 </ul>
-                <p v-else class="text-sm text-slate-500">No current Activity</p>
+                <p v-else class="text-sm text-ink-muted">No current Activity</p>
                 <a
                     v-if="sections.communities.link"
                     class="mt-2 inline-block text-sm underline"
@@ -303,7 +303,7 @@ function money(amount: string | null, currency: string | null): string {
                  and the files need current MFA on their own page). -->
             <article
                 v-if="sections.documents"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-documents"
             >
                 <h3 id="glance-documents" class="text-sm font-semibold">Documents</h3>
@@ -311,13 +311,13 @@ function money(amount: string | null, currency: string | null): string {
                     {{ sections.documents.active }}
                     {{ sections.documents.active === 1 ? 'document' : 'documents' }} on record<span
                         v-if="sections.documents.archived > 0"
-                        class="text-slate-500"
+                        class="text-ink-muted"
                         >, {{ sections.documents.archived }} archived</span
                     >
                 </p>
                 <ul
                     v-if="sections.documents.categories.length > 0"
-                    class="mt-1 text-xs text-slate-600"
+                    class="mt-1 text-xs text-ink-muted"
                 >
                     <li v-for="c in sections.documents.categories" :key="c.value">
                         {{ c.label }}: {{ c.count }}
@@ -331,7 +331,7 @@ function money(amount: string | null, currency: string | null): string {
             <!-- SIS.EXP-4: Leaving/Transfer certificates (safe metadata). -->
             <article
                 v-if="sections.certificates"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 aria-labelledby="glance-certificates"
             >
                 <h3 id="glance-certificates" class="text-sm font-semibold">Certificates</h3>
@@ -342,7 +342,7 @@ function money(amount: string | null, currency: string | null): string {
                     <li v-for="c in sections.certificates.items" :key="c.id">
                         {{ c.number }} · {{ c.typeLabel }} ·
                         {{ c.status === 'issued' ? 'Issued' : 'Void' }}
-                        <span v-if="c.replacedByNumber" class="text-xs text-slate-500"
+                        <span v-if="c.replacedByNumber" class="text-xs text-ink-muted"
                             >(replaced by {{ c.replacedByNumber }})</span
                         >
                     </li>

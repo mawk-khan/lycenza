@@ -167,41 +167,33 @@ function studentHref(student: StudentRow): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Students</h1>
-                <p class="mt-1 text-sm text-slate-500">Your School's student directory.</p>
+                <p class="mt-1 text-sm text-ink-muted">Your School's student directory.</p>
             </div>
             <div class="flex shrink-0 flex-wrap justify-end gap-2">
                 <a
                     v-if="canViewCommunities"
                     href="/app/students/communities"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                    class="btn btn-secondary"
                 >
                     Communities
                 </a>
                 <a
                     v-if="canBulkMove"
                     href="/app/students/bulk-operations"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                    class="btn btn-secondary"
                 >
                     Bulk operations
                 </a>
-                <a
-                    v-if="canOnboard"
-                    href="/app/students/onboard"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
+                <a v-if="canOnboard" href="/app/students/onboard" class="btn btn-secondary">
                     Onboard student
                 </a>
-                <a
-                    v-if="canManage"
-                    href="/app/students/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a v-if="canManage" href="/app/students/create" class="btn btn-primary">
                     Add student
                 </a>
             </div>
@@ -216,31 +208,26 @@ function studentHref(student: StudentRow): string {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-student-number"
+                <label class="block text-sm text-ink-muted" for="filter-student-number"
                     >Student number</label
                 >
                 <input
                     id="filter-student-number"
                     v-model="studentNumber"
                     type="text"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-name">Name</label>
-                <input
-                    id="filter-name"
-                    v-model="name"
-                    type="text"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <label class="block text-sm text-ink-muted" for="filter-name">Name</label>
+                <input id="filter-name" v-model="name" type="text" class="input mt-1 w-48" />
             </div>
             <div v-if="!campusView">
-                <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+                <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
                 <select
                     id="filter-status"
                     v-model="status"
-                    class="mt-1 w-36 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-36"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -250,11 +237,11 @@ function studentHref(student: StudentRow): string {
             </div>
             <template v-if="placementFilters">
                 <div v-if="placementFilters.campuses.length > 1">
-                    <label class="block text-sm text-slate-600" for="filter-campus">Campus</label>
+                    <label class="block text-sm text-ink-muted" for="filter-campus">Campus</label>
                     <select
                         id="filter-campus"
                         v-model="campusId"
-                        class="mt-1 w-44 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-44"
                         @change="onPlacementChange"
                     >
                         <option value="">All</option>
@@ -264,11 +251,11 @@ function studentHref(student: StudentRow): string {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="filter-grade">Grade</label>
+                    <label class="block text-sm text-ink-muted" for="filter-grade">Grade</label>
                     <select
                         id="filter-grade"
                         v-model="gradeLevelId"
-                        class="mt-1 w-36 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-36"
                         @change="onPlacementChange"
                     >
                         <option value="">All</option>
@@ -278,11 +265,11 @@ function studentHref(student: StudentRow): string {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="filter-section">Section</label>
+                    <label class="block text-sm text-ink-muted" for="filter-section">Section</label>
                     <select
                         id="filter-section"
                         v-model="sectionId"
-                        class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-56"
                         @change="applyFilters"
                     >
                         <option value="">All</option>
@@ -293,11 +280,11 @@ function studentHref(student: StudentRow): string {
                 </div>
             </template>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-sort">Sort by</label>
+                <label class="block text-sm text-ink-muted" for="filter-sort">Sort by</label>
                 <select
                     id="filter-sort"
                     v-model="sort"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 >
                     <option value="">Name</option>
@@ -313,7 +300,7 @@ function studentHref(student: StudentRow): string {
                 Clear filters
             </button>
         </form>
-        <p v-if="placementFilters" class="mt-2 text-sm text-slate-500">
+        <p v-if="placementFilters" class="mt-2 text-sm text-ink-muted">
             Campus, Grade and Section filter by the current class (this academic year). For other
             years or roll numbers, use the
             <a class="underline" href="/app/enrollments">Enrollments directory</a>.
@@ -330,12 +317,7 @@ function studentHref(student: StudentRow): string {
             "
         >
             <template v-if="canManage && !hasFilters" #action>
-                <a
-                    href="/app/students/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Add student
-                </a>
+                <a href="/app/students/create" class="btn btn-primary"> Add student </a>
             </template>
         </EmptyState>
 
@@ -343,7 +325,7 @@ function studentHref(student: StudentRow): string {
             <!-- Desktop table -->
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Student</th>
                         <th scope="col" class="py-2 font-medium">Student number</th>
                         <th v-if="canViewEnrollments" scope="col" class="py-2 font-medium">
@@ -355,15 +337,15 @@ function studentHref(student: StudentRow): string {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="student in students.data" :key="student.id">
                         <td class="py-3">
                             <a class="font-medium underline" :href="studentHref(student)">{{
                                 fullName(student)
                             }}</a>
                         </td>
-                        <td class="py-3 text-slate-600">{{ student.studentNumber }}</td>
-                        <td v-if="canViewEnrollments" class="py-3 text-slate-600">
+                        <td class="py-3 text-ink-muted">{{ student.studentNumber }}</td>
+                        <td v-if="canViewEnrollments" class="py-3 text-ink-muted">
                             {{ placementLabel(student) }}
                         </td>
                         <td v-if="student.status" class="py-3">
@@ -381,13 +363,13 @@ function studentHref(student: StudentRow): string {
                 <li
                     v-for="student in students.data"
                     :key="student.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a class="font-medium underline" :href="studentHref(student)">{{
                         fullName(student)
                     }}</a>
-                    <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
-                    <p v-if="canViewEnrollments" class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">{{ student.studentNumber }}</p>
+                    <p v-if="canViewEnrollments" class="mt-1 text-sm text-ink-muted">
                         {{ placementLabel(student) }}
                     </p>
                     <div v-if="student.status" class="mt-2">

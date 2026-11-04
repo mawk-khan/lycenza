@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -291,3 +291,40 @@ Owner authorization: "please proceed" after DS-2 (2026-11-04).
    - Visual check: a temporary, uncommitted gallery page rendering the real
      components inside the real shell (headless Chromium), including flash
      and refusal messages.
+
+## 10. DS-4: page migration (DS-4a Students, 2026-11-04)
+
+Owner authorization: "please proceed" after DS-3 (2026-11-04); the
+recommended first domain (Students) was taken.
+
+1. **Method.** One codemod, `docs/design/foundation-v3/ds_migrate.py`, used
+   for every DS-4 slice so the mapping stays identical:
+   - **Structure:** an `input`/`select`/`textarea` with the bordered bundle
+     becomes `input` (keeping layout classes; `w-auto` where the original
+     had no width); a dark button or link becomes `btn btn-primary`, an
+     outlined one `btn btn-secondary`, a red one `btn btn-danger`.
+   - **Tokens:** every remaining palette class maps by hue family and shade
+     (neutral text 700+ -> `ink`, 400-600 -> `ink-muted`; neutral borders ->
+     `line`/`control-line`; dark neutral fills -> `accent-strong`; red ->
+     `danger`/`danger-tint`; amber -> `accent-100`/`accent-300` + `ink`;
+     green -> `graphite`; blue family -> accent), and `rounded`/`-sm`/`-md`/
+     `-lg` -> `rounded-xs`.
+   - It edits only `class`/`:class` values and class-like script strings;
+     never text, props, events or logic. Prettier runs afterwards.
+2. **DS-4a scope:** `Pages/App/Students/**` (26 pages),
+   `Components/Students/**` and `Components/StudentIdentityFields.vue` -- 29
+   files. Status maps stay paired with their words (`stateLabel`); missing
+   or rejected documents and blocked bulk-move rows keep the reserved danger
+   hue as actionable failures.
+3. **The ground stays off pages until DS-4 ends.** Switching background per
+   domain would make navigation between migrated and unmigrated pages
+   flicker between white and grey. The page area turns to the ground once
+   every domain is migrated, in the closing slice, together with the
+   all-of-`resources/js` guard (§2.7).
+4. **Guard.** `DesignTokensTest::migrated_pages_are_styled_only_through_the_design_tokens`
+   lists the migrated folders (`MIGRATED`); each slice appends its own. It
+   refuses raw palette classes and rounded corners other than `rounded-xs`
+   (or `rounded-full`).
+5. **Visual check.** Real page payloads captured by a throwaway (uncommitted)
+   feature test -- directory, profile, edit, history, create -- rendered by
+   the built application in headless Chromium.

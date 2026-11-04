@@ -15,10 +15,10 @@ defineProps<{
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Student reports</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Read-only lists of Student records, placements and history. You see only the reports for
             information you are allowed to view. Changes happen on the Student and Enrollment pages.
         </p>
@@ -32,10 +32,10 @@ defineProps<{
             <h2 :id="`reports-${category.key}`" class="text-sm font-semibold">
                 {{ category.label }}
             </h2>
-            <ul class="mt-3 divide-y divide-slate-100 border-y border-slate-100">
+            <ul class="mt-3 divide-y divide-line border-y border-line">
                 <li v-for="report in category.reports" :key="report.key" class="py-4">
                     <a class="font-medium underline" :href="report.url">{{ report.title }}</a>
-                    <p class="mt-1 text-sm text-slate-600">{{ report.description }}</p>
+                    <p class="mt-1 text-sm text-ink-muted">{{ report.description }}</p>
                 </li>
             </ul>
         </section>

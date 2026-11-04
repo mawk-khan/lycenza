@@ -119,6 +119,35 @@ class DesignTokensTest extends TestCase
         $this->assertStringContainsString('aria-invalid:border-danger', $css, 'an invalid control is marked by aria-invalid, which the fields already set');
     }
 
+    /**
+     * DS-4 (ADR 0082 §10): the page areas already migrated onto the tokens.
+     * Each DS-4 slice appends its folders; when every page is listed, the
+     * guard becomes "all of resources/js" (ADR 0082 §2.7).
+     */
+    private const MIGRATED = [
+        'resources/js/Pages/App/Students',          // DS-4a
+        'resources/js/Components/Students',         // DS-4a
+        'resources/js/Components/StudentIdentityFields.vue', // DS-4a
+    ];
+
+    #[Test]
+    public function migrated_pages_are_styled_only_through_the_design_tokens(): void
+    {
+        $palette = '/\b(?:bg|text|border|outline|ring|divide|placeholder|decoration|accent|fill|stroke|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/';
+        $files = [];
+        foreach (self::MIGRATED as $path) {
+            $full = base_path($path);
+            $files = [...$files, ...(is_dir($full) ? iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($full, \FilesystemIterator::SKIP_DOTS))) : [new \SplFileInfo($full)])];
+        }
+        $vue = array_filter($files, fn (\SplFileInfo $f) => $f->getExtension() === 'vue');
+        $this->assertGreaterThan(20, count($vue), 'the migrated scope resolves to real files');
+        foreach ($vue as $file) {
+            $code = preg_replace(['/<!--.*?-->/s', '/^\s*\/\/.*$/m'], '', (string) file_get_contents($file->getPathname()));
+            $this->assertDoesNotMatchRegularExpression($palette, $code, $file->getPathname().' uses a raw palette class');
+            $this->assertDoesNotMatchRegularExpression('/(?<![\w:-])rounded(?:-(?:sm|md|lg))?(?![\w-])/', $code, $file->getPathname().' uses a rounded corner (the design is square: rounded-xs)');
+        }
+    }
+
     #[Test]
     public function a_school_accent_drives_the_ramp_and_text_uses_the_strong_step(): void
     {

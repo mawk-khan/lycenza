@@ -418,13 +418,13 @@ async function unlink(r: Relationship): Promise<void> {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/students">← Students</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ fullName() }}</h1>
-                <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
+                <p class="mt-1 text-sm text-ink-muted">{{ student.studentNumber }}</p>
                 <p class="mt-1 text-sm">
                     <a class="underline" :href="`/app/students/${student.id}/history`">History</a>
                     <template v-if="canViewAttendance">
@@ -436,17 +436,8 @@ async function unlink(r: Relationship): Promise<void> {
                 </p>
             </div>
             <div v-if="canManageStudents" class="flex items-center gap-2">
-                <a
-                    :href="`/app/students/${student.id}/edit`"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
-                    Edit
-                </a>
-                <button
-                    type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    @click="openStatusChange"
-                >
+                <a :href="`/app/students/${student.id}/edit`" class="btn btn-secondary"> Edit </a>
+                <button type="button" class="btn btn-secondary" @click="openStatusChange">
                     {{ student.status === 'active' ? 'Mark inactive…' : 'Mark active…' }}
                 </button>
             </div>
@@ -454,35 +445,35 @@ async function unlink(r: Relationship): Promise<void> {
 
         <form
             v-if="statusOpen"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 p-4"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-4"
             @submit.prevent="submitStatusChange"
         >
-            <p class="text-sm font-medium text-slate-800">
+            <p class="text-sm font-medium text-ink">
                 {{
                     statusForm.status === 'inactive'
                         ? 'Mark this Student inactive'
                         : 'Mark this Student active'
                 }}
             </p>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 This changes the Student's status for the whole School. Enrollments are not changed.
             </p>
             <div class="mt-2">
-                <label class="block text-sm text-slate-600" for="status-change-reason"
+                <label class="block text-sm text-ink-muted" for="status-change-reason"
                     >Reason</label
                 >
                 <select
                     id="status-change-reason"
                     v-model="statusForm.reason_code"
                     required
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                    class="input mt-1 sm:w-72"
                 >
                     <option value="" disabled>Choose a reason</option>
                     <option v-for="r in reasonsFor(statusAction)" :key="r" :value="r">
                         {{ REASON_LABELS[r] ?? r }}
                     </option>
                 </select>
-                <p class="mt-1 text-sm text-red-600">{{ statusForm.errors.reason_code }}</p>
+                <p class="mt-1 text-sm text-danger">{{ statusForm.errors.reason_code }}</p>
             </div>
             <MfaCodeField
                 id="status-change-mfa"
@@ -492,17 +483,17 @@ async function unlink(r: Relationship): Promise<void> {
                 action="This change"
                 :error="statusForm.errors.mfa_code"
             />
-            <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+            <label class="mt-2 flex items-start gap-2 text-sm text-ink">
                 <input v-model="statusForm.confirm" type="checkbox" class="mt-0.5" />
                 <span>I confirm this change. It is recorded with my name and the reason.</span>
             </label>
-            <p class="mt-1 text-sm text-red-600">{{ statusForm.errors.confirm }}</p>
-            <p class="mt-1 text-sm text-red-600">{{ statusForm.errors.status }}</p>
+            <p class="mt-1 text-sm text-danger">{{ statusForm.errors.confirm }}</p>
+            <p class="mt-1 text-sm text-danger">{{ statusForm.errors.status }}</p>
             <div class="mt-3 flex items-center gap-3">
                 <button
                     type="submit"
                     :disabled="statusForm.processing || !hasMfaFactor"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary"
                 >
                     Confirm change
                 </button>
@@ -513,7 +504,7 @@ async function unlink(r: Relationship): Promise<void> {
         </form>
 
         <!-- SIS.EXP-1: in-page navigation over the sections this page actually has. -->
-        <nav aria-label="Profile sections" class="mt-6 border-y border-slate-200 py-2">
+        <nav aria-label="Profile sections" class="mt-6 border-y border-line py-2">
             <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                 <li><a class="underline" href="#identity">Identity</a></li>
                 <li v-if="canViewEnrollments">
@@ -528,24 +519,24 @@ async function unlink(r: Relationship): Promise<void> {
 
         <!-- Identity -->
         <section id="identity" class="mt-8 scroll-mt-4">
-            <h2 class="text-sm font-medium text-slate-500">Identity</h2>
+            <h2 class="text-sm font-medium text-ink-muted">Identity</h2>
             <dl
-                class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded border border-slate-200 p-4 text-sm sm:grid-cols-2"
+                class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded-xs border border-line p-4 text-sm sm:grid-cols-2"
             >
                 <div>
-                    <dt class="text-slate-500">Student number</dt>
+                    <dt class="text-ink-muted">Student number</dt>
                     <dd class="mt-0.5">{{ student.studentNumber }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Status</dt>
+                    <dt class="text-ink-muted">Status</dt>
                     <dd class="mt-0.5"><StatusBadge :status="student.status" /></dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Name</dt>
+                    <dt class="text-ink-muted">Name</dt>
                     <dd class="mt-0.5">{{ fullName() }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Date of birth</dt>
+                    <dt class="text-ink-muted">Date of birth</dt>
                     <dd class="mt-0.5">{{ formatCalendarDate(student.dateOfBirth) }}</dd>
                 </div>
             </dl>
@@ -555,7 +546,7 @@ async function unlink(r: Relationship): Promise<void> {
              just hidden) unless the actor holds enrollments.view. -->
         <section v-if="canViewEnrollments" id="placement" class="mt-8 scroll-mt-4">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Current placement</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Current placement</h2>
                 <a
                     v-if="canManageEnrollments && !currentEnrollment"
                     :href="`/app/students/${student.id}/enrollments/create`"
@@ -572,11 +563,11 @@ async function unlink(r: Relationship): Promise<void> {
                 description="This student has no active academic placement for the current Academic Year."
             />
 
-            <div v-else class="mt-3 rounded border border-slate-200 p-4 text-sm">
+            <div v-else class="mt-3 rounded-xs border border-line p-4 text-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="font-medium">{{ enrollmentPlacement(currentEnrollment) }}</p>
-                        <p class="mt-1 text-slate-500">
+                        <p class="mt-1 text-ink-muted">
                             Roll {{ currentEnrollment.rollNumber }} · Since
                             {{ formatCalendarDate(currentEnrollment.startsOn) }}
                         </p>
@@ -616,7 +607,7 @@ async function unlink(r: Relationship): Promise<void> {
                         </button>
                         <button
                             type="button"
-                            class="text-red-600 underline"
+                            class="text-danger underline"
                             @click="startLifecycleAction('cancel')"
                         >
                             Cancel
@@ -626,11 +617,11 @@ async function unlink(r: Relationship): Promise<void> {
 
                 <form
                     v-if="rollTarget === currentEnrollment.id"
-                    class="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4"
+                    class="mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4"
                     @submit.prevent="submitRollCorrection(currentEnrollment)"
                 >
                     <div>
-                        <label class="block text-sm text-slate-600" for="roll-current"
+                        <label class="block text-sm text-ink-muted" for="roll-current"
                             >Roll number</label
                         >
                         <input
@@ -640,17 +631,13 @@ async function unlink(r: Relationship): Promise<void> {
                             required
                             :aria-invalid="!!rollForm.errors.roll_number"
                             aria-describedby="roll-current-error"
-                            class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-40"
+                            class="input mt-1 sm:w-40"
                         />
-                        <p id="roll-current-error" class="mt-1 text-sm text-red-600">
+                        <p id="roll-current-error" class="mt-1 text-sm text-danger">
                             {{ rollForm.errors.roll_number }}
                         </p>
                     </div>
-                    <button
-                        type="submit"
-                        :disabled="rollForm.processing"
-                        class="rounded bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="rollForm.processing" class="btn btn-primary">
                         Save roll number
                     </button>
                     <button type="button" class="underline" @click="rollTarget = null">
@@ -665,15 +652,15 @@ async function unlink(r: Relationship): Promise<void> {
                      named backend action. -->
                 <form
                     v-if="activeLifecycleAction"
-                    class="mt-4 border-t border-slate-100 pt-4"
+                    class="mt-4 border-t border-line pt-4"
                     @submit.prevent="submitLifecycleAction(currentEnrollment.id)"
                 >
-                    <p class="text-sm font-medium text-slate-700">
+                    <p class="text-sm font-medium text-ink">
                         {{ LIFECYCLE_LABELS[activeLifecycleAction] }}
                     </p>
                     <div class="mt-2">
                         <label
-                            class="block text-sm text-slate-600"
+                            class="block text-sm text-ink-muted"
                             :for="`ends-on-${activeLifecycleAction}`"
                         >
                             End date
@@ -685,22 +672,22 @@ async function unlink(r: Relationship): Promise<void> {
                             required
                             :aria-invalid="!!lifecycleForm.errors.ends_on"
                             aria-describedby="ends-on-error"
-                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-56"
+                            class="input mt-1 sm:w-56"
                         />
-                        <p id="ends-on-error" class="mt-1 text-sm text-red-600">
+                        <p id="ends-on-error" class="mt-1 text-sm text-danger">
                             {{ lifecycleForm.errors.ends_on }}
                         </p>
                     </div>
                     <template v-if="activeLifecycleAction !== 'complete'">
                         <div class="mt-2">
-                            <label class="block text-sm text-slate-600" for="lifecycle-reason"
+                            <label class="block text-sm text-ink-muted" for="lifecycle-reason"
                                 >Reason</label
                             >
                             <select
                                 id="lifecycle-reason"
                                 v-model="lifecycleForm.reason_code"
                                 required
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                                class="input mt-1 sm:w-72"
                             >
                                 <option value="" disabled>Choose a reason</option>
                                 <option
@@ -713,7 +700,7 @@ async function unlink(r: Relationship): Promise<void> {
                                     {{ REASON_LABELS[r] ?? r }}
                                 </option>
                             </select>
-                            <p class="mt-1 text-sm text-red-600">
+                            <p class="mt-1 text-sm text-danger">
                                 {{ lifecycleForm.errors.reason_code }}
                             </p>
                         </div>
@@ -725,20 +712,20 @@ async function unlink(r: Relationship): Promise<void> {
                             action="This change"
                             :error="lifecycleForm.errors.mfa_code"
                         />
-                        <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                        <label class="mt-2 flex items-start gap-2 text-sm text-ink">
                             <input v-model="lifecycleForm.confirm" type="checkbox" class="mt-0.5" />
                             <span
                                 >I confirm this change. It is recorded with my name and the
                                 reason.</span
                             >
                         </label>
-                        <p class="mt-1 text-sm text-red-600">{{ lifecycleForm.errors.confirm }}</p>
+                        <p class="mt-1 text-sm text-danger">{{ lifecycleForm.errors.confirm }}</p>
                     </template>
                     <div class="mt-3 flex items-center gap-3">
                         <button
                             type="submit"
                             :disabled="lifecycleForm.processing"
-                            class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Confirm
                         </button>
@@ -753,15 +740,15 @@ async function unlink(r: Relationship): Promise<void> {
                 </form>
             </div>
 
-            <h2 id="enrollment-history" class="mt-6 text-sm font-medium text-slate-500">
+            <h2 id="enrollment-history" class="mt-6 text-sm font-medium text-ink-muted">
                 Enrollment history
             </h2>
-            <p v-if="historicalDone" class="mt-2 text-sm text-emerald-700" role="status">
+            <p v-if="historicalDone" class="mt-2 text-sm text-ink" role="status">
                 {{ historicalDone }}
             </p>
             <p
                 v-if="!enrollmentHistory || enrollmentHistory.length === 0"
-                class="mt-3 text-sm text-slate-500"
+                class="mt-3 text-sm text-ink-muted"
             >
                 No Enrollment history yet.
             </p>
@@ -769,11 +756,11 @@ async function unlink(r: Relationship): Promise<void> {
                 <li
                     v-for="e in enrollmentHistory"
                     :key="e.id"
-                    class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-3 text-sm"
+                    class="flex flex-wrap items-center justify-between gap-2 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p>{{ enrollmentPlacement(e) }}</p>
-                        <p class="mt-0.5 text-slate-500">
+                        <p class="mt-0.5 text-ink-muted">
                             Roll {{ e.rollNumber }} ·
                             <template v-if="e.cancelledBeforeStart"
                                 >Cancelled before it started (was to start
@@ -787,7 +774,7 @@ async function unlink(r: Relationship): Promise<void> {
                                 {{ e.endsOn ? formatCalendarDate(e.endsOn) : 'present' }}</template
                             >
                         </p>
-                        <p v-if="isOpenInClosedYear(e)" class="mt-1 text-amber-800">
+                        <p v-if="isOpenInClosedYear(e)" class="mt-1 text-ink">
                             Still open, but {{ e.academicYear.name }} has been closed.
                         </p>
                     </div>
@@ -798,7 +785,7 @@ async function unlink(r: Relationship): Promise<void> {
                             </button>
                             <button
                                 type="button"
-                                class="text-red-600 underline"
+                                class="text-danger underline"
                                 @click="startFutureCancel(e)"
                             >
                                 Cancel before it starts
@@ -824,11 +811,11 @@ async function unlink(r: Relationship): Promise<void> {
                     </div>
                     <form
                         v-if="rollTarget === e.id && !isCurrentPlacement(e)"
-                        class="flex w-full flex-wrap items-end gap-3 border-t border-slate-100 pt-3"
+                        class="flex w-full flex-wrap items-end gap-3 border-t border-line pt-3"
                         @submit.prevent="submitRollCorrection(e)"
                     >
                         <div>
-                            <label class="block text-slate-600" :for="`roll-${e.id}`"
+                            <label class="block text-ink-muted" :for="`roll-${e.id}`"
                                 >Roll number</label
                             >
                             <input
@@ -838,16 +825,16 @@ async function unlink(r: Relationship): Promise<void> {
                                 required
                                 :aria-invalid="!!rollForm.errors.roll_number"
                                 :aria-describedby="`roll-error-${e.id}`"
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-40"
+                                class="input mt-1 sm:w-40"
                             />
-                            <p :id="`roll-error-${e.id}`" class="mt-1 text-red-600">
+                            <p :id="`roll-error-${e.id}`" class="mt-1 text-danger">
                                 {{ rollForm.errors.roll_number }}
                             </p>
                         </div>
                         <button
                             type="submit"
                             :disabled="rollForm.processing"
-                            class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Save roll number
                         </button>
@@ -857,21 +844,21 @@ async function unlink(r: Relationship): Promise<void> {
                     </form>
                     <form
                         v-if="futureCancelTarget === e.id"
-                        class="w-full border-t border-slate-100 pt-3"
+                        class="w-full border-t border-line pt-3"
                         @submit.prevent="submitFutureCancel(e)"
                     >
-                        <p class="font-medium text-slate-700">
+                        <p class="font-medium text-ink">
                             Cancel the {{ e.academicYear.name }} placement in
                             {{ e.gradeLevel.name }} · Section {{ e.section.name }} before it starts
                         </p>
-                        <p class="mt-0.5 text-slate-500">
+                        <p class="mt-0.5 text-ink-muted">
                             It starts on {{ formatCalendarDate(e.startsOn) }} and has not started
                             yet. It stays in the history as cancelled before it started and never
                             becomes the Student's placement.
                         </p>
                         <div class="mt-2">
                             <label
-                                class="block text-sm text-slate-600"
+                                class="block text-sm text-ink-muted"
                                 :for="`future-reason-${e.id}`"
                                 >Reason</label
                             >
@@ -881,7 +868,7 @@ async function unlink(r: Relationship): Promise<void> {
                                 required
                                 :aria-invalid="!!futureCancelForm.errors.reason_code"
                                 :aria-describedby="`future-reason-error-${e.id}`"
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                                class="input mt-1 sm:w-72"
                             >
                                 <option value="" disabled>Choose a reason</option>
                                 <option
@@ -892,10 +879,7 @@ async function unlink(r: Relationship): Promise<void> {
                                     {{ REASON_LABELS[r] ?? r }}
                                 </option>
                             </select>
-                            <p
-                                :id="`future-reason-error-${e.id}`"
-                                class="mt-1 text-sm text-red-600"
-                            >
+                            <p :id="`future-reason-error-${e.id}`" class="mt-1 text-sm text-danger">
                                 {{ futureCancelForm.errors.reason_code }}
                             </p>
                         </div>
@@ -907,7 +891,7 @@ async function unlink(r: Relationship): Promise<void> {
                             action="This change"
                             :error="futureCancelForm.errors.mfa_code"
                         />
-                        <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                        <label class="mt-2 flex items-start gap-2 text-sm text-ink">
                             <input
                                 v-model="futureCancelForm.confirm"
                                 type="checkbox"
@@ -918,14 +902,14 @@ async function unlink(r: Relationship): Promise<void> {
                                 recorded with my name and the reason.</span
                             >
                         </label>
-                        <p class="mt-1 text-sm text-red-600">
+                        <p class="mt-1 text-sm text-danger">
                             {{ futureCancelForm.errors.confirm }}
                         </p>
                         <div class="mt-2 flex items-center gap-3">
                             <button
                                 type="submit"
                                 :disabled="futureCancelForm.processing"
-                                class="rounded bg-red-700 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                                class="btn btn-danger"
                             >
                                 Cancel placement
                             </button>
@@ -940,19 +924,19 @@ async function unlink(r: Relationship): Promise<void> {
                     </form>
                     <form
                         v-if="historical && historical.id === e.id"
-                        class="w-full border-t border-slate-100 pt-3"
+                        class="w-full border-t border-line pt-3"
                         @submit.prevent="submitHistorical(e)"
                     >
-                        <p class="font-medium text-slate-700">
+                        <p class="font-medium text-ink">
                             {{ historical.action === 'complete' ? 'Complete' : 'Withdraw' }} the
                             {{ e.academicYear.name }} placement in {{ e.gradeLevel.name }} · Section
                             {{ e.section.name }}
                         </p>
-                        <p class="mt-0.5 text-slate-500">
+                        <p class="mt-0.5 text-ink-muted">
                             {{ HISTORICAL_HELP[historical.action] }}
                         </p>
                         <div class="mt-2">
-                            <label class="block text-slate-600" :for="`historical-ends-on-${e.id}`"
+                            <label class="block text-ink-muted" :for="`historical-ends-on-${e.id}`"
                                 >End date</label
                             >
                             <input
@@ -963,22 +947,22 @@ async function unlink(r: Relationship): Promise<void> {
                                 :min="e.startsOn"
                                 :aria-invalid="!!historicalForm.errors.ends_on"
                                 :aria-describedby="`historical-ends-on-error-${e.id}`"
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-56"
+                                class="input mt-1 sm:w-56"
                             />
-                            <p :id="`historical-ends-on-error-${e.id}`" class="mt-1 text-red-600">
+                            <p :id="`historical-ends-on-error-${e.id}`" class="mt-1 text-danger">
                                 {{ historicalForm.errors.ends_on }}
                             </p>
                         </div>
                         <template v-if="historical.action === 'withdraw'">
                             <div class="mt-2">
-                                <label class="block text-sm text-slate-600" for="historical-reason"
+                                <label class="block text-sm text-ink-muted" for="historical-reason"
                                     >Reason</label
                                 >
                                 <select
                                     id="historical-reason"
                                     v-model="historicalForm.reason_code"
                                     required
-                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                                    class="input mt-1 sm:w-72"
                                 >
                                     <option value="" disabled>Choose a reason</option>
                                     <option
@@ -989,7 +973,7 @@ async function unlink(r: Relationship): Promise<void> {
                                         {{ REASON_LABELS[r] ?? r }}
                                     </option>
                                 </select>
-                                <p class="mt-1 text-sm text-red-600">
+                                <p class="mt-1 text-sm text-danger">
                                     {{ historicalForm.errors.reason_code }}
                                 </p>
                             </div>
@@ -1001,7 +985,7 @@ async function unlink(r: Relationship): Promise<void> {
                                 action="This change"
                                 :error="historicalForm.errors.mfa_code"
                             />
-                            <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                            <label class="mt-2 flex items-start gap-2 text-sm text-ink">
                                 <input
                                     v-model="historicalForm.confirm"
                                     type="checkbox"
@@ -1012,7 +996,7 @@ async function unlink(r: Relationship): Promise<void> {
                                     reason.</span
                                 >
                             </label>
-                            <p class="mt-1 text-sm text-red-600">
+                            <p class="mt-1 text-sm text-danger">
                                 {{ historicalForm.errors.confirm }}
                             </p>
                         </template>
@@ -1020,7 +1004,7 @@ async function unlink(r: Relationship): Promise<void> {
                             <button
                                 type="submit"
                                 :disabled="historicalForm.processing"
-                                class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                                class="btn btn-primary"
                             >
                                 Confirm
                             </button>
@@ -1036,7 +1020,7 @@ async function unlink(r: Relationship): Promise<void> {
         <!-- Guardians -->
         <section id="guardians" class="mt-8 scroll-mt-4">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Guardians</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Guardians</h2>
                 <a
                     v-if="canLinkGuardians"
                     :href="`/app/students/${student.id}/guardians/add`"
@@ -1046,11 +1030,11 @@ async function unlink(r: Relationship): Promise<void> {
                 </a>
             </div>
 
-            <p v-if="relationshipError" class="mt-3 text-sm text-red-700" role="alert">
+            <p v-if="relationshipError" class="mt-3 text-sm text-danger" role="alert">
                 {{ relationshipError }}
             </p>
 
-            <p v-if="relationships.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="relationships.length === 0" class="mt-3 text-sm text-ink-muted">
                 No Guardians linked yet.
             </p>
 
@@ -1058,7 +1042,7 @@ async function unlink(r: Relationship): Promise<void> {
                 <li
                     v-for="r in relationships"
                     :key="r.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -1074,7 +1058,7 @@ async function unlink(r: Relationship): Promise<void> {
                                 :is-emergency-contact="r.isEmergencyContact"
                                 :is-authorized-pickup="r.isAuthorizedPickup"
                             />
-                            <p v-if="r.contact" class="mt-1 text-sm text-slate-500">
+                            <p v-if="r.contact" class="mt-1 text-sm text-ink-muted">
                                 {{ r.contact.value }}
                             </p>
                         </div>
@@ -1098,7 +1082,7 @@ async function unlink(r: Relationship): Promise<void> {
                             >
                                 Edit
                             </button>
-                            <button type="button" class="text-red-600 underline" @click="unlink(r)">
+                            <button type="button" class="text-danger underline" @click="unlink(r)">
                                 Remove from student
                             </button>
                         </div>
@@ -1107,20 +1091,20 @@ async function unlink(r: Relationship): Promise<void> {
                     <!-- Inline edit-relationship form -->
                     <form
                         v-if="editingRelationshipId === r.id"
-                        class="mt-4 border-t border-slate-100 pt-4"
+                        class="mt-4 border-t border-line pt-4"
                         @submit.prevent="submitRelationshipEdit(r.id)"
                     >
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`relationship-type-${r.id}`"
                                     >Relationship</label
                                 >
                                 <select
                                     :id="`relationship-type-${r.id}`"
                                     v-model="relationshipForm.relationship_type"
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 >
                                     <option
                                         v-for="t in RELATIONSHIP_TYPES"
@@ -1160,7 +1144,7 @@ async function unlink(r: Relationship): Promise<void> {
                             <button
                                 type="submit"
                                 :disabled="relationshipForm.processing"
-                                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                class="btn btn-primary"
                             >
                                 Save
                             </button>
@@ -1188,27 +1172,27 @@ async function unlink(r: Relationship): Promise<void> {
 
         <!-- Lycenza account link -->
         <section id="account" class="mt-8 scroll-mt-4">
-            <h2 class="text-sm font-medium text-slate-500">Lycenza account</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <h2 class="text-sm font-medium text-ink-muted">Lycenza account</h2>
+            <p class="mt-1 text-xs text-ink-muted">
                 Optional. Linking an existing Lycenza account lets this Student receive in-app
                 communications when they sign in. It does not create a new account.
             </p>
-            <p class="mt-1 text-xs text-slate-400">
+            <p class="mt-1 text-xs text-ink-muted">
                 Inviting a brand-new account (as is available for Guardians) is not available for
                 Students yet -- only linking an account that already exists is supported.
             </p>
 
-            <div v-if="accountLink" class="mt-3 rounded border border-slate-200 p-4 text-sm">
+            <div v-if="accountLink" class="mt-3 rounded-xs border border-line p-4 text-sm">
                 <p>
                     Linked to <span class="font-medium">{{ accountLink.memberName }}</span>
-                    <span v-if="!accountLink.membershipActive" class="ml-2 text-amber-600"
+                    <span v-if="!accountLink.membershipActive" class="ml-2 text-ink"
                         >(membership inactive -- in-app currently unavailable)</span
                     >
                 </p>
                 <button
                     v-if="canManageStudents"
                     type="button"
-                    class="mt-2 text-red-600 underline"
+                    class="mt-2 text-danger underline"
                     :disabled="unlinking"
                     @click="unlinkAccount"
                 >
@@ -1231,7 +1215,7 @@ async function unlink(r: Relationship): Promise<void> {
                         v-model="linkQuery"
                         aria-label="Search Lycenza accounts to link"
                         placeholder="Search Lycenza accounts by name…"
-                        class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                         :options="linkCandidates"
                         :option-key="(o) => o.schoolMembershipId"
                         @input="searchLinkCandidates"
@@ -1243,20 +1227,20 @@ async function unlink(r: Relationship): Promise<void> {
                     </SearchCombobox>
                     <button
                         type="button"
-                        class="mt-2 text-xs text-slate-400 underline"
+                        class="mt-2 text-xs text-ink-muted underline"
                         @click="showLinkPicker = false"
                     >
                         Cancel
                     </button>
                 </div>
             </div>
-            <p v-else class="mt-3 text-sm text-slate-500">Not linked.</p>
+            <p v-else class="mt-3 text-sm text-ink-muted">Not linked.</p>
         </section>
 
         <!-- Communication preferences (Phase 5D.2) -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Communication preferences</h2>
-            <div class="mt-3 rounded border border-slate-200 p-4 text-sm text-slate-600">
+            <h2 class="text-sm font-medium text-ink-muted">Communication preferences</h2>
+            <div class="mt-3 rounded-xs border border-line p-4 text-sm text-ink-muted">
                 <p>
                     <span class="font-medium">In-app:</span> managed through this Student's linked
                     Lycenza account preference above, once linked -- no separate setting here.

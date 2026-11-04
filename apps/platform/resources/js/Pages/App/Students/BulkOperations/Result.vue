@@ -29,7 +29,7 @@ defineProps<Props>();
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students/bulk-operations">← Bulk operations</a>
         <h1 class="mt-2 text-xl font-semibold">{{ result.operationLabel }}: done</h1>
         <p class="mt-2 text-sm" role="status" data-testid="bulk-result">
@@ -37,12 +37,12 @@ defineProps<Props>();
             {{ result.target.label }}, effective {{ formatCalendarDate(result.effectiveDate) }}.
         </p>
 
-        <div class="mt-4 overflow-x-auto rounded border border-slate-200">
+        <div class="mt-4 overflow-x-auto rounded-xs border border-line">
             <table class="w-full min-w-[28rem] text-left text-sm">
                 <caption class="sr-only">
                     Students moved
                 </caption>
-                <thead class="bg-slate-50">
+                <thead class="bg-graphite-100">
                     <tr>
                         <th scope="col" class="px-3 py-2">Student</th>
                         <th scope="col" class="px-3 py-2">Number</th>
@@ -54,7 +54,7 @@ defineProps<Props>();
                     <tr
                         v-for="row in result.moved"
                         :key="row.studentId"
-                        class="border-t border-slate-100"
+                        class="border-t border-line"
                     >
                         <td class="px-3 py-2">{{ row.name }}</td>
                         <td class="px-3 py-2">{{ row.studentNumber }}</td>

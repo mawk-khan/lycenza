@@ -133,34 +133,34 @@ function period(from: string, to: string | null, sameDay: boolean): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← {{ student.name }}</a>
         <h1 class="mt-2 text-xl font-semibold">Clubs and activities</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ student.name }} · {{ student.studentNumber }}
             <template v-if="!active">
                 · {{ student.status === 'inactive' ? 'Inactive' : student.status }}</template
             >
         </p>
-        <p class="mt-2 text-xs text-slate-500">
+        <p class="mt-2 text-xs text-ink-muted">
             Clubs, activities and their responsibilities are descriptive. They never grant access to
             anything.
         </p>
-        <p v-if="canAssign && !active" class="mt-3 text-sm text-slate-700">
+        <p v-if="canAssign && !active" class="mt-3 text-sm text-ink">
             Only an active Student can join a Club or Activity, or take a responsibility. Current
             memberships can still be ended, and the history stays visible.
         </p>
 
         <section
             v-if="house"
-            class="mt-6 rounded border border-slate-200 p-4"
+            class="mt-6 rounded-xs border border-line p-4"
             aria-labelledby="house-heading"
         >
             <h2 id="house-heading" class="text-base font-semibold">House</h2>
             <p class="mt-2 text-sm">
                 <template v-if="house.current">
                     {{ house.current }}
-                    <span v-if="house.since" class="text-slate-600">
+                    <span v-if="house.since" class="text-ink-muted">
                         · since {{ formatCalendarDate(house.since) }}</span
                     >
                 </template>
@@ -170,23 +170,23 @@ function period(from: string, to: string | null, sameDay: boolean): string {
         </section>
 
         <!-- Clubs -->
-        <section class="mt-6 rounded border border-slate-200 p-4" aria-labelledby="clubs-heading">
+        <section class="mt-6 rounded-xs border border-line p-4" aria-labelledby="clubs-heading">
             <h2 id="clubs-heading" class="text-base font-semibold">Clubs</h2>
-            <p v-if="clubs.current.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="clubs.current.length === 0" class="mt-2 text-sm text-ink-muted">
                 Not currently in a Club.
             </p>
-            <ul v-else class="mt-2 divide-y divide-slate-200">
+            <ul v-else class="mt-2 divide-y divide-line">
                 <li v-for="row in clubs.current" :key="row.membershipId" class="py-3">
                     <p class="text-sm">
                         <span class="font-medium">{{ row.name }}</span>
-                        <span class="text-slate-600">
+                        <span class="text-ink-muted">
                             · since {{ formatCalendarDate(row.since) }}</span
                         >
                     </p>
                     <ul v-if="row.responsibilities.length > 0" class="mt-1 text-sm">
                         <li v-for="r in row.responsibilities" :key="r.id">
                             {{ r.label }}
-                            <span class="text-slate-600"
+                            <span class="text-ink-muted"
                                 >since {{ formatCalendarDate(r.from) }}</span
                             >
                             <button
@@ -201,15 +201,13 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     </ul>
                     <div v-if="canAssign" class="mt-2 flex flex-wrap items-end gap-3">
                         <div v-if="active">
-                            <label
-                                class="block text-xs text-slate-700"
-                                :for="`role-${row.membershipId}`"
+                            <label class="block text-xs text-ink" :for="`role-${row.membershipId}`"
                                 >Responsibility in {{ row.name }}</label
                             >
                             <select
                                 :id="`role-${row.membershipId}`"
                                 v-model="role[row.membershipId]"
-                                class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                                class="input mt-1 w-auto"
                             >
                                 <option :value="undefined" disabled>Choose</option>
                                 <option
@@ -224,22 +222,20 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                         <button
                             v-if="active"
                             type="button"
-                            class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                            class="btn btn-secondary"
                             :disabled="giveForm.processing"
                             @click="give(row)"
                         >
                             Give responsibility<span class="sr-only"> in {{ row.name }}</span>
                         </button>
                         <div>
-                            <label
-                                class="block text-xs text-slate-700"
-                                :for="`end-${row.membershipId}`"
+                            <label class="block text-xs text-ink" :for="`end-${row.membershipId}`"
                                 >Reason for leaving {{ row.name }}</label
                             >
                             <select
                                 :id="`end-${row.membershipId}`"
                                 v-model="reasons[row.membershipId]"
-                                class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                                class="input mt-1 w-auto"
                             >
                                 <option :value="undefined" disabled>Choose a reason</option>
                                 <option
@@ -253,7 +249,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                         </div>
                         <button
                             type="button"
-                            class="rounded border border-red-700 px-3 py-1.5 text-sm text-red-800"
+                            class="rounded-xs border border-danger px-3 py-1.5 text-sm text-danger"
                             :disabled="endForm.processing"
                             @click="end(row, 'club')"
                         >
@@ -262,7 +258,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     </div>
                 </li>
             </ul>
-            <p v-if="giveForm.errors.responsibility" class="mt-1 text-sm text-red-700" role="alert">
+            <p v-if="giveForm.errors.responsibility" class="mt-1 text-sm text-danger" role="alert">
                 {{ giveForm.errors.responsibility }}
             </p>
             <form
@@ -271,12 +267,12 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                 @submit.prevent="join(joinClub)"
             >
                 <div>
-                    <label class="block text-sm text-slate-700" for="join-club">Join a Club</label>
+                    <label class="block text-sm text-ink" for="join-club">Join a Club</label>
                     <select
                         id="join-club"
                         v-model="joinClub.group_id"
                         required
-                        class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-auto"
                     >
                         <option value="" disabled>Choose a Club</option>
                         <option v-for="o in options.clubs" :key="o.value" :value="o.value">
@@ -286,12 +282,12 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                 </div>
                 <button
                     type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                     :disabled="joinClub.processing || options.clubs.length === 0"
                 >
                     Join Club
                 </button>
-                <p v-if="options.clubs.length === 0" class="w-full text-xs text-slate-500">
+                <p v-if="options.clubs.length === 0" class="w-full text-xs text-ink-muted">
                     No other active Club to join.
                 </p>
             </form>
@@ -299,35 +295,33 @@ function period(from: string, to: string | null, sameDay: boolean): string {
 
         <!-- Activities -->
         <section
-            class="mt-6 rounded border border-slate-200 p-4"
+            class="mt-6 rounded-xs border border-line p-4"
             aria-labelledby="activities-heading"
         >
             <h2 id="activities-heading" class="text-base font-semibold">Activities</h2>
-            <p v-if="activities.current.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="activities.current.length === 0" class="mt-2 text-sm text-ink-muted">
                 Not currently taking part in an Activity.
             </p>
-            <ul v-else class="mt-2 divide-y divide-slate-200">
+            <ul v-else class="mt-2 divide-y divide-line">
                 <li v-for="row in activities.current" :key="row.membershipId" class="py-3">
                     <p class="text-sm">
                         <span class="font-medium">{{ row.name }}</span>
-                        <span v-if="row.category" class="text-slate-600">
+                        <span v-if="row.category" class="text-ink-muted">
                             · {{ row.category }}</span
                         >
-                        <span class="text-slate-600">
+                        <span class="text-ink-muted">
                             · since {{ formatCalendarDate(row.since) }}</span
                         >
                     </p>
                     <div v-if="canAssign" class="mt-2 flex flex-wrap items-end gap-3">
                         <div>
-                            <label
-                                class="block text-xs text-slate-700"
-                                :for="`end-${row.membershipId}`"
+                            <label class="block text-xs text-ink" :for="`end-${row.membershipId}`"
                                 >Reason for ending {{ row.name }}</label
                             >
                             <select
                                 :id="`end-${row.membershipId}`"
                                 v-model="reasons[row.membershipId]"
-                                class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                                class="input mt-1 w-auto"
                             >
                                 <option :value="undefined" disabled>Choose a reason</option>
                                 <option
@@ -341,7 +335,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                         </div>
                         <button
                             type="button"
-                            class="rounded border border-red-700 px-3 py-1.5 text-sm text-red-800"
+                            class="rounded-xs border border-danger px-3 py-1.5 text-sm text-danger"
                             :disabled="endForm.processing"
                             @click="end(row, 'activity')"
                         >
@@ -350,7 +344,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     </div>
                 </li>
             </ul>
-            <p v-if="endForm.errors.reason" class="mt-1 text-sm text-red-700" role="alert">
+            <p v-if="endForm.errors.reason" class="mt-1 text-sm text-danger" role="alert">
                 {{ endForm.errors.reason }}
             </p>
             <form
@@ -359,14 +353,14 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                 @submit.prevent="join(joinActivity)"
             >
                 <div>
-                    <label class="block text-sm text-slate-700" for="join-activity"
+                    <label class="block text-sm text-ink" for="join-activity"
                         >Add participation</label
                     >
                     <select
                         id="join-activity"
                         v-model="joinActivity.group_id"
                         required
-                        class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-auto"
                     >
                         <option value="" disabled>Choose an Activity</option>
                         <option v-for="o in options.activities" :key="o.value" :value="o.value">
@@ -376,12 +370,12 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                 </div>
                 <button
                     type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                     :disabled="joinActivity.processing || options.activities.length === 0"
                 >
                     Add participation
                 </button>
-                <p v-if="options.activities.length === 0" class="w-full text-xs text-slate-500">
+                <p v-if="options.activities.length === 0" class="w-full text-xs text-ink-muted">
                     No other active Activity.
                 </p>
             </form>
@@ -412,17 +406,17 @@ function period(from: string, to: string | null, sameDay: boolean): string {
             <h2 :id="`${part.key}-history-heading`" class="text-base font-semibold">
                 {{ part.title }}
             </h2>
-            <p v-if="part.rows.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="part.rows.length === 0" class="mt-2 text-sm text-ink-muted">
                 {{ part.empty }}
             </p>
-            <div v-else class="relative mt-3 overflow-x-auto rounded border border-slate-200">
-                <table class="w-full min-w-[34rem] divide-y divide-slate-200 text-sm">
+            <div v-else class="relative mt-3 overflow-x-auto rounded-xs border border-line">
+                <table class="w-full min-w-[34rem] divide-y divide-line text-sm">
                     <caption class="sr-only">
                         {{
                             part.title
                         }}, current first
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">{{ part.col }}</th>
                             <th scope="col" class="px-3 py-2 font-medium">Period</th>
@@ -436,7 +430,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="h in part.rows" :key="h.key">
                             <td class="px-3 py-2">{{ h.name }}</td>
                             <td class="px-3 py-2">{{ period(h.from, h.to, h.sameDay) }}</td>

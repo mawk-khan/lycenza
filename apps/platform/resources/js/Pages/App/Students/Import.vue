@@ -106,10 +106,10 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Import Students</h1>
-        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+        <p class="mt-1 max-w-3xl text-sm text-ink-muted">
             Add new Students with their Guardians and current placement from one CSV file. The
             import only ever adds: it never updates, matches or merges an existing Student or
             Guardian, sends no email or SMS and creates no portal account. Either every row is
@@ -127,7 +127,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
             </p>
             <details class="mt-2 text-sm">
                 <summary class="cursor-pointer underline">How to fill it in</summary>
-                <ul class="mt-2 list-disc space-y-1 pl-5 text-slate-700">
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-ink">
                     <li>
                         Required for every Student: <code>first_name</code>,
                         <code>date_of_birth</code> and the placement
@@ -158,7 +158,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                 <div class="mt-2 grid gap-4 sm:grid-cols-3">
                     <div>
                         <h3 class="font-medium">Academic years</h3>
-                        <ul class="text-slate-700">
+                        <ul class="text-ink">
                             <li v-for="y in codes.years" :key="y.code">
                                 <code>{{ y.code }}</code> {{ y.name }} ({{
                                     formatCalendarDate(y.startsOn)
@@ -169,7 +169,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                     </div>
                     <div>
                         <h3 class="font-medium">Campuses</h3>
-                        <ul class="text-slate-700">
+                        <ul class="text-ink">
                             <li v-for="c in codes.campuses" :key="c.code">
                                 <code>{{ c.code }}</code> {{ c.name }}
                             </li>
@@ -177,7 +177,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                     </div>
                     <div>
                         <h3 class="font-medium">Grades</h3>
-                        <ul class="text-slate-700">
+                        <ul class="text-ink">
                             <li v-for="g in codes.grades" :key="g.code">
                                 <code>{{ g.code }}</code> {{ g.name }}
                             </li>
@@ -185,7 +185,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                     </div>
                 </div>
                 <h3 class="mt-3 font-medium">Active Sections (year · Campus · Grade · Section)</h3>
-                <p class="text-slate-700">
+                <p class="text-ink">
                     <span v-for="(s, i) in codes.sections" :key="i" class="mr-3 inline-block"
                         ><code
                             >{{ s.year }} · {{ s.campus }} · {{ s.grade }} · {{ s.section }}</code
@@ -200,7 +200,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
             <h2 id="upload-heading" class="text-base font-semibold">2. Upload and preview</h2>
             <form class="mt-2 flex flex-wrap items-end gap-3" @submit.prevent="submitUpload">
                 <div>
-                    <label class="block text-sm text-slate-700" for="import-file">CSV file</label>
+                    <label class="block text-sm text-ink" for="import-file">CSV file</label>
                     <input
                         id="import-file"
                         ref="fileInput"
@@ -220,7 +220,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                 </div>
                 <button
                     type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                     :disabled="upload.processing || upload.file === null"
                 >
                     Preview
@@ -229,7 +229,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
             <p
                 v-if="upload.errors.file || page.props.errors?.file"
                 id="import-file-error"
-                class="mt-1 text-sm text-red-700"
+                class="mt-1 text-sm text-danger"
             >
                 {{ upload.errors.file || page.props.errors?.file }}
             </p>
@@ -241,50 +241,50 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
             <p
                 v-if="refusal"
                 role="alert"
-                class="mt-2 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+                class="mt-2 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
             >
                 {{ refusal }}
             </p>
             <p
                 v-if="preview.alreadyImported"
                 role="alert"
-                class="mt-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                class="mt-2 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
             >
                 This exact file was already imported on
                 {{ formatDateTime(preview.alreadyImported) }}. Nothing will be imported again.
             </p>
             <dl class="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
                 <div>
-                    <dt class="text-slate-500">Rows</dt>
+                    <dt class="text-ink-muted">Rows</dt>
                     <dd class="font-medium">{{ preview.summary.rows }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Ready / warning / error</dt>
+                    <dt class="text-ink-muted">Ready / warning / error</dt>
                     <dd class="font-medium">
                         {{ preview.summary.ready }} / {{ preview.summary.warning }} /
                         {{ preview.summary.error }}
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Students and placements to create</dt>
+                    <dt class="text-ink-muted">Students and placements to create</dt>
                     <dd class="font-medium">{{ preview.summary.students }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Guardians / relationships</dt>
+                    <dt class="text-ink-muted">Guardians / relationships</dt>
                     <dd class="font-medium">
                         {{ preview.summary.guardians }} / {{ preview.summary.relationships }}
                     </dd>
                 </div>
             </dl>
-            <p class="mt-2 text-xs text-slate-500">Student numbers will be assigned on import.</p>
+            <p class="mt-2 text-xs text-ink-muted">Student numbers will be assigned on import.</p>
 
             <div
-                class="relative mt-3 max-h-[32rem] overflow-auto rounded border border-slate-200"
+                class="relative mt-3 max-h-[32rem] overflow-auto rounded-xs border border-line"
                 role="region"
                 aria-label="Preview rows"
                 tabindex="0"
             >
-                <table class="w-full min-w-[46rem] divide-y divide-slate-200 text-sm">
+                <table class="w-full min-w-[46rem] divide-y divide-line text-sm">
                     <caption class="sr-only">
                         Preview of
                         {{
@@ -292,7 +292,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                         }}
                         rows
                     </caption>
-                    <thead class="sticky top-0 bg-slate-50 text-left text-slate-600">
+                    <thead class="sticky top-0 bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">Row</th>
                             <th scope="col" class="px-3 py-2 font-medium">Result</th>
@@ -302,17 +302,17 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                             <th scope="col" class="px-3 py-2 font-medium">Notes</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="r in preview.rows" :key="r.line">
                             <td class="px-3 py-2">{{ r.line }}</td>
                             <td class="px-3 py-2 font-medium">
                                 <span
                                     :class="
                                         r.result === 'error'
-                                            ? 'text-red-700'
+                                            ? 'text-danger'
                                             : r.result === 'warning'
-                                              ? 'text-amber-800'
-                                              : 'text-emerald-800'
+                                              ? 'text-ink'
+                                              : 'text-ink'
                                     "
                                     >{{ resultLabel[r.result] }}</span
                                 >
@@ -371,7 +371,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                 <p
                     v-if="page.props.errors?.confirm"
                     id="import-confirm-error"
-                    class="text-sm text-red-700"
+                    class="text-sm text-danger"
                 >
                     {{ page.props.errors.confirm }}
                 </p>
@@ -385,7 +385,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                 <div>
                     <button
                         type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        class="btn btn-primary"
                         :disabled="
                             committing || !hasMfaFactor || !confirm || (hasWarnings && !acknowledge)
                         "
@@ -393,11 +393,11 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                         Import all rows
                     </button>
                 </div>
-                <p class="text-xs text-slate-500">
+                <p class="text-xs text-ink-muted">
                     This preview can be imported for {{ limits.minutes }} minutes.
                 </p>
             </form>
-            <p v-else-if="!preview.alreadyImported" class="mt-4 text-sm text-red-800">
+            <p v-else-if="!preview.alreadyImported" class="mt-4 text-sm text-danger">
                 Fix the rows marked Error in the file and upload it again. Nothing has been
                 imported.
             </p>
@@ -412,12 +412,12 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                 title="No imports yet"
                 description="Committed imports appear here."
             />
-            <div v-else class="relative mt-3 overflow-x-auto rounded border border-slate-200">
-                <table class="w-full min-w-[36rem] divide-y divide-slate-200 text-sm">
+            <div v-else class="relative mt-3 overflow-x-auto rounded-xs border border-line">
+                <table class="w-full min-w-[36rem] divide-y divide-line text-sm">
                     <caption class="sr-only">
                         Past imports
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">Imported</th>
                             <th scope="col" class="px-3 py-2 font-medium">By</th>
@@ -426,7 +426,7 @@ const resultLabel: Record<Result, string> = { ready: 'Ready', warning: 'Warning'
                             <th scope="col" class="px-3 py-2 font-medium">Format</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="b in history" :key="b.id">
                             <td class="px-3 py-2">{{ formatDateTime(b.committedAt) }}</td>
                             <td class="px-3 py-2">{{ b.actor ?? '—' }}</td>

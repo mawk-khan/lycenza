@@ -128,27 +128,27 @@ function period(from: string, to: string | null, sameDay: boolean): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← {{ student.name }}</a>
         <h1 class="mt-2 text-xl font-semibold">House</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ student.name }} · {{ student.studentNumber }}
             <template v-if="!active">
                 · {{ student.status === 'inactive' ? 'Inactive' : student.status }}</template
             >
         </p>
 
-        <section class="mt-6 rounded border border-slate-200 p-4" aria-labelledby="current-heading">
+        <section class="mt-6 rounded-xs border border-line p-4" aria-labelledby="current-heading">
             <h2 id="current-heading" class="text-base font-semibold">Current House</h2>
             <p v-if="current" class="mt-2 text-sm">
                 <span class="font-medium">{{ current.house }}</span>
-                <span class="text-slate-600"> · since {{ formatCalendarDate(current.since) }}</span>
+                <span class="text-ink-muted"> · since {{ formatCalendarDate(current.since) }}</span>
             </p>
-            <p v-else class="mt-2 text-sm text-slate-600">No current House.</p>
+            <p v-else class="mt-2 text-sm text-ink-muted">No current House.</p>
             <ul v-if="currentResponsibilities.length > 0" class="mt-2 text-sm">
                 <li v-for="r in currentResponsibilities" :key="r.id">
                     {{ r.label }}
-                    <span class="text-slate-600">since {{ formatCalendarDate(r.from) }}</span>
+                    <span class="text-ink-muted">since {{ formatCalendarDate(r.from) }}</span>
                     <button
                         v-if="canAssign"
                         type="button"
@@ -159,37 +159,37 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     </button>
                 </li>
             </ul>
-            <p class="mt-3 text-xs text-slate-500">
+            <p class="mt-3 text-xs text-ink-muted">
                 A House and its responsibilities are descriptive. They never grant access to
                 anything.
             </p>
         </section>
 
         <template v-if="canAssign">
-            <p v-if="!active" class="mt-6 text-sm text-slate-700">
+            <p v-if="!active" class="mt-6 text-sm text-ink">
                 Only an active Student can be given a House or a responsibility. Their history stays
                 visible below.
             </p>
             <section
                 v-else
-                class="mt-6 rounded border border-slate-200 p-4"
+                class="mt-6 rounded-xs border border-line p-4"
                 aria-labelledby="assign-heading"
             >
                 <h2 id="assign-heading" class="text-base font-semibold">
                     {{ current ? 'Change House' : 'Assign a House' }}
                 </h2>
-                <p v-if="choices.length === 0" class="mt-2 text-sm text-slate-600">
+                <p v-if="choices.length === 0" class="mt-2 text-sm text-ink-muted">
                     There is no other active House. Create one in
                     <a class="underline" href="/app/students/houses">Houses</a>.
                 </p>
                 <form v-else class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitAssign">
                     <div>
-                        <label class="block text-sm text-slate-700" for="assign-house">House</label>
+                        <label class="block text-sm text-ink" for="assign-house">House</label>
                         <select
                             id="assign-house"
                             v-model="assign.house_id"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                             :aria-invalid="!!assign.errors.house_id"
                             :aria-describedby="
                                 assign.errors.house_id ? 'assign-house-error' : undefined
@@ -203,20 +203,20 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                         <p
                             v-if="assign.errors.house_id"
                             id="assign-house-error"
-                            class="mt-1 text-sm text-red-700"
+                            class="mt-1 text-sm text-danger"
                         >
                             {{ assign.errors.house_id }}
                         </p>
                     </div>
                     <div v-if="current">
-                        <label class="block text-sm text-slate-700" for="assign-reason"
+                        <label class="block text-sm text-ink" for="assign-reason"
                             >Reason for the change</label
                         >
                         <select
                             id="assign-reason"
                             v-model="assign.reason"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                             :aria-invalid="!!assign.errors.reason"
                             :aria-describedby="
                                 assign.errors.reason ? 'assign-reason-error' : undefined
@@ -234,23 +234,19 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                         <p
                             v-if="assign.errors.reason"
                             id="assign-reason-error"
-                            class="mt-1 text-sm text-red-700"
+                            class="mt-1 text-sm text-danger"
                         >
                             {{ assign.errors.reason }}
                         </p>
                     </div>
-                    <p class="text-xs text-slate-500 sm:col-span-2">
+                    <p class="text-xs text-ink-muted sm:col-span-2">
                         The new House starts today<template v-if="current"
                             >; {{ current.house }} ends yesterday, with any responsibility held
                             there</template
                         >.
                     </p>
                     <div class="sm:col-span-2">
-                        <button
-                            type="submit"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                            :disabled="assign.processing"
-                        >
+                        <button type="submit" class="btn btn-primary" :disabled="assign.processing">
                             {{ current ? 'Change House' : 'Assign House' }}
                         </button>
                     </div>
@@ -259,7 +255,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
 
             <section
                 v-if="current && active"
-                class="mt-6 rounded border border-slate-200 p-4"
+                class="mt-6 rounded-xs border border-line p-4"
                 aria-labelledby="give-heading"
             >
                 <h2 id="give-heading" class="text-base font-semibold">Give a responsibility</h2>
@@ -268,14 +264,14 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     @submit.prevent="submitResponsibility"
                 >
                     <div>
-                        <label class="block text-sm text-slate-700" for="give-responsibility"
+                        <label class="block text-sm text-ink" for="give-responsibility"
                             >Responsibility in {{ current.house }}</label
                         >
                         <select
                             id="give-responsibility"
                             v-model="give.responsibility"
                             required
-                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1 w-auto"
                             :aria-invalid="!!give.errors.responsibility"
                             :aria-describedby="
                                 give.errors.responsibility
@@ -293,21 +289,17 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                             </option>
                         </select>
                     </div>
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                        :disabled="give.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="give.processing">
                         Give responsibility
                     </button>
-                    <p id="give-responsibility-help" class="w-full text-xs text-slate-500">
+                    <p id="give-responsibility-help" class="w-full text-xs text-ink-muted">
                         A House has one House Captain and one Vice Captain at a time; it can have
                         several Prefects.
                     </p>
                     <p
                         v-if="give.errors.responsibility"
                         id="give-responsibility-error"
-                        class="w-full text-sm text-red-700"
+                        class="w-full text-sm text-danger"
                     >
                         {{ give.errors.responsibility }}
                     </p>
@@ -316,18 +308,18 @@ function period(from: string, to: string | null, sameDay: boolean): string {
 
             <section
                 v-if="current"
-                class="mt-6 rounded border border-slate-200 p-4"
+                class="mt-6 rounded-xs border border-line p-4"
                 aria-labelledby="end-heading"
             >
                 <h2 id="end-heading" class="text-base font-semibold">End House membership</h2>
                 <form class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="submitEnd">
                     <div>
-                        <label class="block text-sm text-slate-700" for="end-reason">Reason</label>
+                        <label class="block text-sm text-ink" for="end-reason">Reason</label>
                         <select
                             id="end-reason"
                             v-model="end.reason"
                             required
-                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1 w-auto"
                             :aria-invalid="!!end.errors.reason"
                             :aria-describedby="end.errors.reason ? 'end-reason-error' : undefined"
                         >
@@ -339,7 +331,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     </div>
                     <button
                         type="submit"
-                        class="rounded border border-red-700 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-50"
+                        class="rounded-xs border border-danger px-3 py-2 text-sm font-medium text-danger hover:bg-danger-tint disabled:opacity-50"
                         :disabled="end.processing"
                     >
                         End membership
@@ -347,7 +339,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                     <p
                         v-if="end.errors.reason"
                         id="end-reason-error"
-                        class="w-full text-sm text-red-700"
+                        class="w-full text-sm text-danger"
                     >
                         {{ end.errors.reason }}
                     </p>
@@ -363,12 +355,12 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                 title="No House history"
                 description="This Student has never been in a House."
             />
-            <div v-else class="relative mt-3 overflow-x-auto rounded border border-slate-200">
-                <table class="w-full min-w-[32rem] divide-y divide-slate-200 text-sm">
+            <div v-else class="relative mt-3 overflow-x-auto rounded-xs border border-line">
+                <table class="w-full min-w-[32rem] divide-y divide-line text-sm">
                     <caption class="sr-only">
                         House membership history, newest first
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">House</th>
                             <th scope="col" class="px-3 py-2 font-medium">Period</th>
@@ -376,7 +368,7 @@ function period(from: string, to: string | null, sameDay: boolean): string {
                             <th scope="col" class="px-3 py-2 font-medium">Ended</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="h in history" :key="h.key">
                             <td class="px-3 py-2">{{ h.house }}</td>
                             <td class="px-3 py-2">{{ period(h.from, h.to, h.sameDay) }}</td>
@@ -392,19 +384,19 @@ function period(from: string, to: string | null, sameDay: boolean): string {
 
         <section v-if="responsibilities.length > 0" class="mt-8" aria-labelledby="resp-heading">
             <h2 id="resp-heading" class="text-base font-semibold">Responsibility history</h2>
-            <div class="relative mt-3 overflow-x-auto rounded border border-slate-200">
-                <table class="w-full min-w-[28rem] divide-y divide-slate-200 text-sm">
+            <div class="relative mt-3 overflow-x-auto rounded-xs border border-line">
+                <table class="w-full min-w-[28rem] divide-y divide-line text-sm">
                     <caption class="sr-only">
                         House responsibility history
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">Responsibility</th>
                             <th scope="col" class="px-3 py-2 font-medium">House</th>
                             <th scope="col" class="px-3 py-2 font-medium">Period</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="r in responsibilities" :key="r.id">
                             <td class="px-3 py-2">{{ r.label }}</td>
                             <td class="px-3 py-2">{{ r.house }}</td>

@@ -14,20 +14,20 @@ const DESCRIPTIONS: Record<string, string> = {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Student communities</h1>
-        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+        <p class="mt-1 max-w-3xl text-sm text-ink-muted">
             Houses, Clubs and Activities describe how Students take part in School life. They never
             change what anyone can see or do in Lycenza.
         </p>
         <ul class="mt-6 grid gap-4 sm:grid-cols-3">
-            <li v-for="area in areas" :key="area.type" class="rounded border border-slate-200 p-4">
+            <li v-for="area in areas" :key="area.type" class="rounded-xs border border-line p-4">
                 <h2 class="text-base font-semibold">
                     <a class="underline" :href="area.url">{{ area.label }}</a>
                 </h2>
-                <p class="mt-1 text-sm text-slate-600">{{ DESCRIPTIONS[area.type] }}</p>
-                <p v-if="area.campus" class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">{{ DESCRIPTIONS[area.type] }}</p>
+                <p v-if="area.campus" class="mt-1 text-xs text-ink-muted">
                     Counts show your Campuses only.
                 </p>
             </li>

@@ -143,10 +143,10 @@ function reason(code: string | null): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Student movements</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Entries, movements and exits from each Student's placement and status history. Read
             only: changes happen on the Student and Enrollment pages.
         </p>
@@ -159,24 +159,14 @@ function reason(code: string | null): string {
 
         <form class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" @submit.prevent="apply">
             <div>
-                <label class="block text-sm text-slate-600" for="mv-q"
+                <label class="block text-sm text-ink-muted" for="mv-q"
                     >Student name or number</label
                 >
-                <input
-                    id="mv-q"
-                    v-model="form.q"
-                    type="search"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <input id="mv-q" v-model="form.q" type="search" class="input mt-1" />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-category">Category</label>
-                <select
-                    id="mv-category"
-                    v-model="form.category"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    @change="apply"
-                >
+                <label class="block text-sm text-ink-muted" for="mv-category">Category</label>
+                <select id="mv-category" v-model="form.category" class="input mt-1" @change="apply">
                     <option value="">All</option>
                     <option v-for="c in options.categories" :key="c.value" :value="c.value">
                         {{ c.label }}
@@ -184,13 +174,8 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-type">Movement type</label>
-                <select
-                    id="mv-type"
-                    v-model="form.type"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    @change="apply"
-                >
+                <label class="block text-sm text-ink-muted" for="mv-type">Movement type</label>
+                <select id="mv-type" v-model="form.type" class="input mt-1" @change="apply">
                     <option value="">All</option>
                     <option v-for="t in typeOptions" :key="t.value" :value="t.value">
                         {{ t.label }}
@@ -198,11 +183,11 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-year">Academic year</label>
+                <label class="block text-sm text-ink-muted" for="mv-year">Academic year</label>
                 <select
                     id="mv-year"
                     v-model="form.academic_year_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 >
                     <option value="">All</option>
@@ -215,33 +200,28 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-from">From date</label>
+                <label class="block text-sm text-ink-muted" for="mv-from">From date</label>
                 <input
                     id="mv-from"
                     v-model="form.from"
                     type="date"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-to">To date</label>
+                <label class="block text-sm text-ink-muted" for="mv-to">To date</label>
                 <input
                     id="mv-to"
                     v-model="form.to"
                     type="date"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-campus">Campus</label>
-                <select
-                    id="mv-campus"
-                    v-model="form.campus_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    @change="apply"
-                >
+                <label class="block text-sm text-ink-muted" for="mv-campus">Campus</label>
+                <select id="mv-campus" v-model="form.campus_id" class="input mt-1" @change="apply">
                     <option value="">All</option>
                     <option v-for="c in options.campuses" :key="c.id" :value="c.id">
                         {{ c.name }}
@@ -249,11 +229,11 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-grade">Grade</label>
+                <label class="block text-sm text-ink-muted" for="mv-grade">Grade</label>
                 <select
                     id="mv-grade"
                     v-model="form.grade_level_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 >
                     <option value="">All</option>
@@ -263,11 +243,11 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-section">Section</label>
+                <label class="block text-sm text-ink-muted" for="mv-section">Section</label>
                 <select
                     id="mv-section"
                     v-model="form.section_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 >
                     <option value="">All</option>
@@ -277,13 +257,8 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="mv-sort">Sort by</label>
-                <select
-                    id="mv-sort"
-                    v-model="form.sort"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    @change="apply"
-                >
+                <label class="block text-sm text-ink-muted" for="mv-sort">Sort by</label>
+                <select id="mv-sort" v-model="form.sort" class="input mt-1" @change="apply">
                     <option value="">Newest first</option>
                     <option value="date_asc">Oldest first</option>
                     <option value="student">Student name</option>
@@ -291,17 +266,8 @@ function reason(code: string | null): string {
                 </select>
             </div>
             <div class="flex items-end gap-3 sm:col-span-2">
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Apply
-                </button>
-                <button
-                    type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    @click="showExits"
-                >
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <button type="button" class="btn btn-secondary" @click="showExits">
                     Exits only
                 </button>
                 <button v-if="hasFilters" type="button" class="text-sm underline" @click="reset">
@@ -318,11 +284,11 @@ function reason(code: string | null): string {
         />
 
         <template v-else>
-            <p class="mt-6 text-sm text-slate-500">
+            <p class="mt-6 text-sm text-ink-muted">
                 {{ movements.from }}–{{ movements.to }} of {{ movements.total }}
             </p>
-            <div class="relative mt-2 overflow-x-auto rounded border border-slate-200">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <div class="relative mt-2 overflow-x-auto rounded-xs border border-line">
+                <table class="min-w-full divide-y divide-line text-sm">
                     <caption class="sr-only">
                         Student movements,
                         {{
@@ -330,7 +296,7 @@ function reason(code: string | null): string {
                         }}
                         in total
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">Date</th>
                             <th scope="col" class="px-3 py-2 font-medium">Student</th>
@@ -340,13 +306,13 @@ function reason(code: string | null): string {
                             <th scope="col" class="px-3 py-2 font-medium">Reason</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="m in movements.data" :key="m.id">
                             <td class="whitespace-nowrap px-3 py-2">
                                 {{ formatCalendarDate(m.effectiveDate) }}
                                 <span
                                     v-if="m.outsideAcademicYear"
-                                    class="block text-xs text-slate-500"
+                                    class="block text-xs text-ink-muted"
                                     >Outside academic year</span
                                 >
                             </td>
@@ -358,13 +324,13 @@ function reason(code: string | null): string {
                                     >{{ m.student.name }}</a
                                 >
                                 <span v-else>{{ m.student.name }}</span>
-                                <span class="block text-xs text-slate-500">{{
+                                <span class="block text-xs text-ink-muted">{{
                                     m.student.studentNumber
                                 }}</span>
                             </td>
                             <td class="px-3 py-2">
                                 <span class="font-medium">{{ m.typeLabel }}</span>
-                                <span class="block text-xs text-slate-500">{{
+                                <span class="block text-xs text-ink-muted">{{
                                     CATEGORY_LABELS[m.category]
                                 }}</span>
                             </td>
@@ -372,7 +338,7 @@ function reason(code: string | null): string {
                                 {{ place(m.from) }}
                                 <span
                                     v-if="m.from?.academicYear"
-                                    class="block text-xs text-slate-500"
+                                    class="block text-xs text-ink-muted"
                                     >{{ m.from.academicYear }}</span
                                 >
                             </td>
@@ -380,7 +346,7 @@ function reason(code: string | null): string {
                                 {{ place(m.to) }}
                                 <span
                                     v-if="m.to?.academicYear"
-                                    class="block text-xs text-slate-500"
+                                    class="block text-xs text-ink-muted"
                                     >{{ m.to.academicYear }}</span
                                 >
                             </td>

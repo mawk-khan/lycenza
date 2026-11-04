@@ -79,10 +79,10 @@ function apply(): void {
 }
 
 const stateClass: Record<string, string> = {
-    verified: 'text-green-800',
-    pending: 'text-amber-800',
-    rejected: 'text-red-800',
-    missing: 'text-red-800',
+    verified: 'text-ink',
+    pending: 'text-ink',
+    rejected: 'text-danger',
+    missing: 'text-danger',
 };
 
 const labels: Record<string, string> = {
@@ -94,10 +94,10 @@ const labels: Record<string, string> = {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students/reports">← Student reports</a>
         <h1 class="mt-2 text-xl font-semibold">Document checklist</h1>
-        <p class="mt-2 max-w-3xl text-sm text-slate-600">
+        <p class="mt-2 max-w-3xl text-sm text-ink-muted">
             Each Student's required and optional documents for an academic year. States only — open
             a Student's documents to see or verify a file. The checklist is guidance; it never
             blocks enrollment.
@@ -111,11 +111,11 @@ const labels: Record<string, string> = {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-sm text-slate-600" for="f-year">Academic year</label>
+                <label class="block text-sm text-ink-muted" for="f-year">Academic year</label>
                 <select
                     id="f-year"
                     v-model="filters.academic_year_id"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option v-for="o in options.academic_year_id" :key="o.value" :value="o.value">
@@ -127,13 +127,13 @@ const labels: Record<string, string> = {
                 v-for="key in ['campus_id', 'grade_level_id', 'category', 'status'] as const"
                 :key="key"
             >
-                <label class="block text-sm text-slate-600" :for="`f-${key}`">{{
+                <label class="block text-sm text-ink-muted" :for="`f-${key}`">{{
                     labels[key]
                 }}</label>
                 <select
                     :id="`f-${key}`"
                     v-model="filters[key]"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">All</option>
@@ -143,11 +143,11 @@ const labels: Record<string, string> = {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="f-section">Section</label>
+                <label class="block text-sm text-ink-muted" for="f-section">Section</label>
                 <select
                     id="f-section"
                     v-model="filters.section_id"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">All</option>
@@ -157,20 +157,15 @@ const labels: Record<string, string> = {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="f-q">Student name or number</label>
-                <input
-                    id="f-q"
-                    v-model="filters.q"
-                    maxlength="100"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <label class="block text-sm text-ink-muted" for="f-q">Student name or number</label>
+                <input id="f-q" v-model="filters.q" maxlength="100" class="input mt-1 w-auto" />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="f-sort">Sort by</label>
+                <label class="block text-sm text-ink-muted" for="f-sort">Sort by</label>
                 <select
                     id="f-sort"
                     v-model="filters.sort"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option v-for="(label, key) in sorts" :key="key" :value="key">
@@ -178,9 +173,7 @@ const labels: Record<string, string> = {
                     </option>
                 </select>
             </div>
-            <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
-                Search
-            </button>
+            <button type="submit" class="btn btn-secondary">Search</button>
         </form>
 
         <EmptyState
@@ -196,25 +189,25 @@ const labels: Record<string, string> = {
             description="No Student placed in this year matches these filters."
         />
         <template v-else>
-            <p class="mt-6 text-sm text-slate-500">
+            <p class="mt-6 text-sm text-ink-muted">
                 {{ year.name }} · {{ rows.from }}–{{ rows.to }} of {{ rows.total }} Students
             </p>
-            <div class="relative mt-2 overflow-x-auto rounded border border-slate-200">
-                <table class="min-w-[48rem] w-full divide-y divide-slate-200 text-sm">
+            <div class="relative mt-2 overflow-x-auto rounded-xs border border-line">
+                <table class="min-w-[48rem] w-full divide-y divide-line text-sm">
                     <caption class="sr-only">
                         Document checklist for
                         {{
                             year.name
                         }}
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">Student</th>
                             <th scope="col" class="px-3 py-2 font-medium">Class</th>
                             <th scope="col" class="px-3 py-2 font-medium">Documents</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="r in rows.data" :key="r.student.id">
                             <td class="px-3 py-2">
                                 <a
@@ -222,17 +215,17 @@ const labels: Record<string, string> = {
                                     :href="`/app/students/${r.student.id}/documents`"
                                     >{{ r.student.displayName }}</a
                                 >
-                                <span class="block text-xs text-slate-500">{{
+                                <span class="block text-xs text-ink-muted">{{
                                     r.student.studentNumber
                                 }}</span>
                             </td>
                             <td class="px-3 py-2">{{ r.placement || '—' }}</td>
                             <td class="px-3 py-2">
-                                <span v-if="r.items.length === 0" class="text-slate-500"
+                                <span v-if="r.items.length === 0" class="text-ink-muted"
                                     >No requirements</span
                                 >
                                 <template v-else>
-                                    <span class="text-xs text-slate-500"
+                                    <span class="text-xs text-ink-muted"
                                         >{{ r.summary.verified }} of
                                         {{ r.summary.required }} required verified</span
                                     >
@@ -241,7 +234,7 @@ const labels: Record<string, string> = {
                                             {{ i.label
                                             }}<span
                                                 v-if="!i.required"
-                                                class="text-xs text-slate-500"
+                                                class="text-xs text-ink-muted"
                                             >
                                                 (optional)</span
                                             >:

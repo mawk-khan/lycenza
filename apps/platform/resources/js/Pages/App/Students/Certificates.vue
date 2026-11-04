@@ -119,13 +119,13 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← {{ student.name }}</a>
         <h1 class="mt-2 text-xl font-semibold">Certificates</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ student.name }} · Student number {{ student.studentNumber }}
         </p>
-        <p class="mt-2 max-w-3xl text-sm text-slate-500">
+        <p class="mt-2 max-w-3xl text-sm text-ink-muted">
             Leaving and Transfer certificates are issued once from the Student's recorded exit. Each
             number is used once; a correction voids the certificate and issues a new one with a new
             number. Outstanding fees never block a certificate, and no financial information is
@@ -135,20 +135,20 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
         <!-- Issue -->
         <section v-if="canIssue" class="mt-8" aria-labelledby="issue-heading">
             <h2 id="issue-heading" class="text-base font-semibold">Issue a certificate</h2>
-            <p v-if="!available" class="mt-2 text-sm text-amber-800">
+            <p v-if="!available" class="mt-2 text-sm text-ink">
                 Issuing is not available in this environment: the certificate wording still needs
                 legal approval for production use.
             </p>
             <template v-else-if="preview">
-                <p v-if="!preview.eligible" class="mt-2 text-sm text-slate-700">
+                <p v-if="!preview.eligible" class="mt-2 text-sm text-ink">
                     <span class="font-medium">Not eligible:</span> {{ preview.refusal }}
                 </p>
                 <template v-else>
-                    <p v-if="!preview.printable" class="mt-2 text-sm text-red-800">
+                    <p v-if="!preview.printable" class="mt-2 text-sm text-danger">
                         This Student's record contains characters the certificate template cannot
                         print yet (only Latin-script text is supported). Issuing will be refused.
                     </p>
-                    <p v-if="finance" class="mt-2 text-sm text-slate-700">
+                    <p v-if="finance" class="mt-2 text-sm text-ink">
                         <span class="font-medium">For your information:</span>
                         {{
                             finance.outstanding === null
@@ -157,16 +157,16 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                         }}
                         This never affects issuing and is not printed on the certificate.
                     </p>
-                    <div class="mt-3 overflow-x-auto rounded border border-slate-200">
+                    <div class="mt-3 overflow-x-auto rounded-xs border border-line">
                         <table class="w-full text-sm">
-                            <caption class="px-3 py-2 text-left text-sm font-medium text-slate-600">
+                            <caption class="px-3 py-2 text-left text-sm font-medium text-ink-muted">
                                 What the certificate will record (frozen when issued)
                             </caption>
-                            <tbody class="divide-y divide-slate-200">
+                            <tbody class="divide-y divide-line">
                                 <tr>
                                     <th
                                         scope="row"
-                                        class="w-1/3 px-3 py-2 text-left font-normal text-slate-600"
+                                        class="w-1/3 px-3 py-2 text-left font-normal text-ink-muted"
                                     >
                                         Student
                                     </th>
@@ -179,7 +179,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 <tr>
                                     <th
                                         scope="row"
-                                        class="px-3 py-2 text-left font-normal text-slate-600"
+                                        class="px-3 py-2 text-left font-normal text-ink-muted"
                                     >
                                         School
                                     </th>
@@ -187,7 +187,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                         {{ preview.snapshot?.school_name }}
                                         <span
                                             v-if="preview.snapshot?.school_legal_name"
-                                            class="block text-xs text-slate-500"
+                                            class="block text-xs text-ink-muted"
                                             >{{ preview.snapshot?.school_legal_name }}</span
                                         >
                                     </td>
@@ -195,7 +195,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 <tr>
                                     <th
                                         scope="row"
-                                        class="px-3 py-2 text-left font-normal text-slate-600"
+                                        class="px-3 py-2 text-left font-normal text-ink-muted"
                                     >
                                         Last class
                                     </th>
@@ -210,7 +210,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 <tr>
                                     <th
                                         scope="row"
-                                        class="px-3 py-2 text-left font-normal text-slate-600"
+                                        class="px-3 py-2 text-left font-normal text-ink-muted"
                                     >
                                         Joined / left
                                     </th>
@@ -222,7 +222,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 <tr>
                                     <th
                                         scope="row"
-                                        class="px-3 py-2 text-left font-normal text-slate-600"
+                                        class="px-3 py-2 text-left font-normal text-ink-muted"
                                     >
                                         Reason for leaving
                                     </th>
@@ -235,7 +235,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                     </div>
                     <form class="mt-4 grid max-w-xl gap-4" @submit.prevent="submitIssue">
                         <fieldset>
-                            <legend class="text-sm text-slate-700">Certificate type</legend>
+                            <legend class="text-sm text-ink">Certificate type</legend>
                             <div
                                 v-for="t in preview.types"
                                 :key="t.value"
@@ -258,11 +258,11 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 <span
                                     v-if="t.alreadyIssued"
                                     :id="`issue-type-${t.value}-note`"
-                                    class="text-xs text-slate-500"
+                                    class="text-xs text-ink-muted"
                                     >(already issued — void or reissue it below)</span
                                 >
                             </div>
-                            <p v-if="issueForm.errors.type" class="mt-1 text-sm text-red-700">
+                            <p v-if="issueForm.errors.type" class="mt-1 text-sm text-danger">
                                 {{ issueForm.errors.type }}
                             </p>
                         </fieldset>
@@ -283,7 +283,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                         <p
                             v-if="issueForm.errors.confirm"
                             id="issue-confirm-error"
-                            class="text-sm text-red-700"
+                            class="text-sm text-danger"
                         >
                             {{ issueForm.errors.confirm }}
                         </p>
@@ -297,7 +297,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                         <div>
                             <button
                                 type="submit"
-                                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                class="btn btn-primary"
                                 :disabled="
                                     issueForm.processing || !hasMfaFactor || issueForm.type === ''
                                 "
@@ -319,15 +319,15 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                 title="No certificates issued"
                 description="Certificates appear here once issued."
             />
-            <div v-else class="relative mt-3 overflow-x-auto rounded border border-slate-200">
-                <table class="w-full min-w-[44rem] divide-y divide-slate-200 text-sm">
+            <div v-else class="relative mt-3 overflow-x-auto rounded-xs border border-line">
+                <table class="w-full min-w-[44rem] divide-y divide-line text-sm">
                     <caption class="sr-only">
                         Certificates issued for
                         {{
                             student.name
                         }}
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th scope="col" class="px-3 py-2 font-medium">Certificate</th>
                             <th scope="col" class="px-3 py-2 font-medium">Issued</th>
@@ -335,12 +335,12 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                             <th scope="col" class="px-3 py-2 font-medium">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <template v-for="row in history" :key="row.id">
                             <tr>
                                 <td class="px-3 py-2">
                                     <span class="font-medium">{{ row.number }}</span>
-                                    <span class="block text-xs text-slate-500"
+                                    <span class="block text-xs text-ink-muted"
                                         >{{ row.typeLabel
                                         }}<template v-if="row.supersedesNumber">
                                             · replaces {{ row.supersedesNumber }}</template
@@ -353,7 +353,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 <td class="px-3 py-2">
                                     <span v-if="row.status === 'issued'">Issued</span>
                                     <span v-else
-                                        >Void<span class="block text-xs text-slate-500"
+                                        >Void<span class="block text-xs text-ink-muted"
                                             >{{ row.voidReasonLabel
                                             }}<template v-if="row.replacedByNumber">
                                                 · replaced by {{ row.replacedByNumber }}</template
@@ -397,7 +397,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                 </td>
                             </tr>
                             <tr v-if="acting?.id === row.id">
-                                <td colspan="4" class="bg-slate-50 px-3 py-3">
+                                <td colspan="4" class="bg-graphite-100 px-3 py-3">
                                     <form
                                         class="grid max-w-xl gap-3"
                                         :aria-label="`${acting.mode === 'void' ? 'Void' : 'Void and reissue'} ${row.number}`"
@@ -405,7 +405,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                     >
                                         <p
                                             v-if="acting.mode === 'reissue'"
-                                            class="text-sm text-slate-600"
+                                            class="text-sm text-ink-muted"
                                         >
                                             {{ row.number }} is voided as replaced and a corrected
                                             certificate is issued with a new number from the
@@ -417,7 +417,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                                 acting.mode === 'reissue' &&
                                                 !actionForm.preview_fingerprint
                                             "
-                                            class="text-sm text-red-800"
+                                            class="text-sm text-danger"
                                         >
                                             The Student is no longer eligible, so no replacement can
                                             be issued. Use Void instead.
@@ -431,7 +431,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                             <select
                                                 :id="`void-reason-${row.id}`"
                                                 v-model="actionForm.reason"
-                                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                                class="input mt-1"
                                                 :aria-describedby="
                                                     actionForm.errors.reason
                                                         ? `void-reason-error-${row.id}`
@@ -450,7 +450,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                             <p
                                                 v-if="actionForm.errors.reason"
                                                 :id="`void-reason-error-${row.id}`"
-                                                class="mt-1 text-sm text-red-700"
+                                                class="mt-1 text-sm text-danger"
                                             >
                                                 {{ actionForm.errors.reason }}
                                             </p>
@@ -473,7 +473,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                         </div>
                                         <p
                                             v-if="actionForm.errors.confirm"
-                                            class="text-sm text-red-700"
+                                            class="text-sm text-danger"
                                         >
                                             {{ actionForm.errors.confirm }}
                                         </p>
@@ -491,7 +491,7 @@ const date = (v: string | null) => (v ? formatCalendarDate(v) : '—');
                                         <div class="flex gap-3">
                                             <button
                                                 type="submit"
-                                                class="rounded bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                                class="btn btn-danger"
                                                 :disabled="
                                                     actionForm.processing ||
                                                     !hasMfaFactor ||

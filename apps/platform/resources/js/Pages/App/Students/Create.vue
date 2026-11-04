@@ -31,10 +31,10 @@ function submit(acknowledgement = ''): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Add student</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Identity only -- grade, section, and enrollment are configured later. The student number
             is assigned automatically when the student is created.
         </p>
@@ -60,11 +60,7 @@ function submit(acknowledgement = ''): void {
             />
 
             <div class="mt-6 flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Add student' }}
                 </button>
                 <a class="text-sm underline" href="/app/students">Cancel</a>

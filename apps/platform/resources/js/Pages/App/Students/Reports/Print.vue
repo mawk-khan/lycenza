@@ -33,19 +33,19 @@ onMounted(() => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 print:max-w-none print:p-0">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink print:max-w-none print:p-0">
         <div class="mb-4 flex flex-wrap gap-3 print:hidden">
             <a class="text-sm underline" :href="backUrl">← Back to the report</a>
             <button type="button" class="text-sm underline" @click="printPage">Print</button>
         </div>
         <header>
-            <p class="text-sm text-slate-600">{{ school }}</p>
+            <p class="text-sm text-ink-muted">{{ school }}</p>
             <h1 class="text-xl font-semibold">{{ title }}</h1>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Generated {{ formatDateTime(generatedAt) }} · {{ rows.length }}
                 {{ rows.length === 1 ? 'row' : 'rows' }}
             </p>
-            <ul v-if="filters.length" class="mt-1 text-sm text-slate-600">
+            <ul v-if="filters.length" class="mt-1 text-sm text-ink-muted">
                 <li v-for="f in filters" :key="f">{{ f }}</li>
             </ul>
         </header>
@@ -63,7 +63,7 @@ onMounted(() => {
                             v-for="c in columns"
                             :key="c"
                             scope="col"
-                            class="border-b border-slate-400 px-2 py-1 font-medium"
+                            class="border-b border-control-line px-2 py-1 font-medium"
                         >
                             {{ c }}
                         </th>
@@ -74,7 +74,7 @@ onMounted(() => {
                         <td
                             v-for="(value, j) in row"
                             :key="j"
-                            class="border-b border-slate-200 px-2 py-1 align-top"
+                            class="border-b border-line px-2 py-1 align-top"
                         >
                             {{ cell(value) }}
                         </td>

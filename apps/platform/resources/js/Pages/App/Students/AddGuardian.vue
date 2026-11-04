@@ -129,13 +129,13 @@ function submitNewGuardian(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">
             Add guardian to {{ [student.firstName, student.lastName].filter(Boolean).join(' ') }}
         </h1>
 
-        <div class="mt-6 flex gap-1 border-b border-slate-200" role="tablist">
+        <div class="mt-6 flex gap-1 border-b border-line" role="tablist">
             <button
                 type="button"
                 role="tab"
@@ -143,8 +143,8 @@ function submitNewGuardian(): void {
                 class="border-b-2 px-4 py-2 text-sm font-medium"
                 :class="
                     tab === 'existing'
-                        ? 'border-slate-900 text-slate-900'
-                        : 'border-transparent text-slate-500'
+                        ? 'border-accent-strong text-ink'
+                        : 'border-transparent text-ink-muted'
                 "
                 @click="tab = 'existing'"
             >
@@ -157,8 +157,8 @@ function submitNewGuardian(): void {
                 class="border-b-2 px-4 py-2 text-sm font-medium"
                 :class="
                     tab === 'new'
-                        ? 'border-slate-900 text-slate-900'
-                        : 'border-transparent text-slate-500'
+                        ? 'border-accent-strong text-ink'
+                        : 'border-transparent text-ink-muted'
                 "
                 @click="tab = 'new'"
             >
@@ -169,7 +169,7 @@ function submitNewGuardian(): void {
         <!-- Find existing -->
         <section v-if="tab === 'existing'" class="mt-6 space-y-6">
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="guardian-name-search">
+                <label class="block text-sm font-medium text-ink" for="guardian-name-search">
                     Search by name
                 </label>
                 <input
@@ -177,11 +177,11 @@ function submitNewGuardian(): void {
                     v-model="nameQuery"
                     type="text"
                     placeholder="Start typing a Guardian's name…"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
                 <ul
                     v-if="nameResults.length"
-                    class="mt-2 divide-y divide-slate-100 rounded border border-slate-200"
+                    class="mt-2 divide-y divide-line rounded-xs border border-line"
                 >
                     <li
                         v-for="g in nameResults"
@@ -196,31 +196,27 @@ function submitNewGuardian(): void {
                 </ul>
                 <p
                     v-else-if="nameQuery.trim().length >= 2 && !nameSearching"
-                    class="mt-2 text-sm text-slate-500"
+                    class="mt-2 text-sm text-ink-muted"
                 >
                     No Guardians match "{{ nameQuery }}".
                 </p>
             </div>
 
-            <div class="border-t border-slate-100 pt-6">
-                <p class="text-sm font-medium text-slate-700">Or find by exact contact</p>
-                <p class="mt-1 text-sm text-slate-500">
+            <div class="border-t border-line pt-6">
+                <p class="text-sm font-medium text-ink">Or find by exact contact</p>
+                <p class="mt-1 text-sm text-ink-muted">
                     Search an exact email or mobile number already on file for this School.
                 </p>
                 <form class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="searchByContact">
                     <div>
-                        <label class="block text-sm text-slate-600" for="contact-type">Type</label>
-                        <select
-                            id="contact-type"
-                            v-model="contactType"
-                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
-                        >
+                        <label class="block text-sm text-ink-muted" for="contact-type">Type</label>
+                        <select id="contact-type" v-model="contactType" class="input mt-1 w-auto">
                             <option value="email">Email</option>
                             <option value="mobile">Mobile</option>
                         </select>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-sm text-slate-600" for="contact-value">
+                        <label class="block text-sm text-ink-muted" for="contact-value">
                             {{ contactType === 'email' ? 'Email address' : 'Mobile number' }}
                         </label>
                         <input
@@ -232,30 +228,30 @@ function submitNewGuardian(): void {
                                     ? 'parent@example.com'
                                     : 'Country code first, no spaces, e.g. +919876543210'
                             "
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <button
                         type="submit"
                         :disabled="contactSearching || !contactValue"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                        class="btn btn-secondary"
                     >
                         Search
                     </button>
                 </form>
-                <p v-if="contactError" class="mt-2 text-sm text-red-600">{{ contactError }}</p>
+                <p v-if="contactError" class="mt-2 text-sm text-danger">{{ contactError }}</p>
 
                 <div v-if="contactSearched && !contactError" class="mt-3">
-                    <p v-if="contactCandidates.length === 0" class="text-sm text-slate-500">
+                    <p v-if="contactCandidates.length === 0" class="text-sm text-ink-muted">
                         No existing Guardian uses this contact information.
                     </p>
                     <div v-else>
                         <!-- Neutral wording: shared household contacts are
                              legitimate, this is not "duplicate detection". -->
-                        <p class="text-sm text-amber-700">
+                        <p class="text-sm text-ink">
                             Existing guardians use this contact information.
                         </p>
-                        <ul class="mt-2 divide-y divide-slate-100 rounded border border-slate-200">
+                        <ul class="mt-2 divide-y divide-line rounded-xs border border-line">
                             <li
                                 v-for="g in contactCandidates"
                                 :key="g.id"
@@ -274,7 +270,7 @@ function submitNewGuardian(): void {
             <!-- Relationship form once a Guardian is selected -->
             <form
                 v-if="selectedGuardian"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
                 @submit.prevent="submitLinkExisting"
             >
                 <p class="text-sm">
@@ -286,7 +282,7 @@ function submitNewGuardian(): void {
 
                 <div class="mt-4">
                     <label
-                        class="block text-sm font-medium text-slate-700"
+                        class="block text-sm font-medium text-ink"
                         for="existing-relationship-type"
                         >Relationship</label
                     >
@@ -294,20 +290,20 @@ function submitNewGuardian(): void {
                         id="existing-relationship-type"
                         v-model="relationshipForm.relationship_type"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-64"
+                        class="input mt-1 sm:w-64"
                     >
                         <option value="" disabled>Select…</option>
                         <option v-for="t in RELATIONSHIP_TYPES" :key="t.value" :value="t.value">
                             {{ t.label }}
                         </option>
                     </select>
-                    <p class="mt-1 text-sm text-red-600">
+                    <p class="mt-1 text-sm text-danger">
                         {{ relationshipForm.errors.relationship_type }}
                     </p>
                 </div>
 
                 <fieldset class="mt-4 space-y-2 text-sm">
-                    <legend class="text-sm font-medium text-slate-700">Authority</legend>
+                    <legend class="text-sm font-medium text-ink">Authority</legend>
                     <label class="flex items-center gap-2">
                         <input v-model="relationshipForm.is_legal_guardian" type="checkbox" /> Legal
                         guardian
@@ -325,7 +321,7 @@ function submitNewGuardian(): void {
                 <button
                     type="submit"
                     :disabled="relationshipForm.processing"
-                    class="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-4"
                 >
                     Link guardian
                 </button>
@@ -337,7 +333,7 @@ function submitNewGuardian(): void {
             <form class="space-y-4" @submit.prevent="submitNewGuardian">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700" for="new-first-name"
+                        <label class="block text-sm font-medium text-ink" for="new-first-name"
                             >First name</label
                         >
                         <input
@@ -345,60 +341,56 @@ function submitNewGuardian(): void {
                             v-model="newGuardianForm.first_name"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label
-                            class="block text-sm font-medium text-slate-700"
-                            for="new-middle-name"
+                        <label class="block text-sm font-medium text-ink" for="new-middle-name"
                             >Middle name</label
                         >
                         <input
                             id="new-middle-name"
                             v-model="newGuardianForm.middle_name"
                             type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700" for="new-last-name"
+                        <label class="block text-sm font-medium text-ink" for="new-last-name"
                             >Last name</label
                         >
                         <input
                             id="new-last-name"
                             v-model="newGuardianForm.last_name"
                             type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
-                <p class="text-sm text-red-600">{{ newGuardianForm.errors.first_name }}</p>
+                <p class="text-sm text-danger">{{ newGuardianForm.errors.first_name }}</p>
 
                 <div>
-                    <label
-                        class="block text-sm font-medium text-slate-700"
-                        for="new-relationship-type"
+                    <label class="block text-sm font-medium text-ink" for="new-relationship-type"
                         >Relationship</label
                     >
                     <select
                         id="new-relationship-type"
                         v-model="newGuardianForm.relationship_type"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-64"
+                        class="input mt-1 sm:w-64"
                     >
                         <option value="" disabled>Select…</option>
                         <option v-for="t in RELATIONSHIP_TYPES" :key="t.value" :value="t.value">
                             {{ t.label }}
                         </option>
                     </select>
-                    <p class="mt-1 text-sm text-red-600">
+                    <p class="mt-1 text-sm text-danger">
                         {{ newGuardianForm.errors.relationship_type }}
                     </p>
                 </div>
 
                 <fieldset class="space-y-2 text-sm">
-                    <legend class="text-sm font-medium text-slate-700">Authority</legend>
+                    <legend class="text-sm font-medium text-ink">Authority</legend>
                     <label class="flex items-center gap-2">
                         <input v-model="newGuardianForm.is_legal_guardian" type="checkbox" /> Legal
                         guardian
@@ -413,14 +405,14 @@ function submitNewGuardian(): void {
                     </label>
                 </fieldset>
 
-                <p class="text-sm text-slate-500">
+                <p class="text-sm text-ink-muted">
                     Contact information can be added from the Guardian's page after creation.
                 </p>
 
                 <button
                     type="submit"
                     :disabled="newGuardianForm.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary"
                 >
                     Create and link guardian
                 </button>

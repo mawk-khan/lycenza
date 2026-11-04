@@ -46,13 +46,13 @@ const placementLabel = computed(() => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/students">← Students</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ fullName }}</h1>
-                <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
+                <p class="mt-1 text-sm text-ink-muted">{{ student.studentNumber }}</p>
             </div>
             <div class="flex shrink-0 gap-3 text-sm">
                 <a
@@ -71,9 +71,9 @@ const placementLabel = computed(() => {
         </div>
 
         <section v-if="canViewPlacement" class="mt-6">
-            <h2 class="text-sm font-semibold text-slate-700">Current placement</h2>
-            <p class="mt-1 text-sm text-slate-600">{{ placementLabel }}</p>
-            <p v-if="currentPlacement?.rollNumber" class="mt-1 text-sm text-slate-500">
+            <h2 class="text-sm font-semibold text-ink">Current placement</h2>
+            <p class="mt-1 text-sm text-ink-muted">{{ placementLabel }}</p>
+            <p v-if="currentPlacement?.rollNumber" class="mt-1 text-sm text-ink-muted">
                 Roll number {{ currentPlacement.rollNumber }}
             </p>
         </section>

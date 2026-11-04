@@ -174,10 +174,10 @@ function text(value: unknown): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students/reports">← Student reports</a>
         <h1 class="mt-2 text-xl font-semibold">{{ report.title }}</h1>
-        <p class="mt-1 text-sm text-slate-500">{{ report.description }}</p>
+        <p class="mt-1 text-sm text-ink-muted">{{ report.description }}</p>
         <ReportExportActions
             v-if="canExport"
             class="mt-4"
@@ -191,7 +191,7 @@ function text(value: unknown): string {
             @submit.prevent="apply"
         >
             <div v-for="f in shownFilters" :key="f.key">
-                <label class="block text-sm text-slate-600" :for="`rf-${f.key}`">{{
+                <label class="block text-sm text-ink-muted" :for="`rf-${f.key}`">{{
                     f.label
                 }}</label>
                 <input
@@ -201,7 +201,7 @@ function text(value: unknown): string {
                     :aria-invalid="!!errors?.[f.key]"
                     :aria-describedby="errors?.[f.key] ? `rf-${f.key}-error` : undefined"
                     type="search"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
                 <input
                     v-else-if="f.kind === 'date'"
@@ -211,7 +211,7 @@ function text(value: unknown): string {
                     :min="(RANGE_START[f.key] && form[RANGE_START[f.key]]) || undefined"
                     :aria-invalid="!!errors?.[f.key]"
                     :aria-describedby="errors?.[f.key] ? `rf-${f.key}-error` : undefined"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 />
                 <select
@@ -220,7 +220,7 @@ function text(value: unknown): string {
                     v-model="form[f.key]"
                     :aria-invalid="!!errors?.[f.key]"
                     :aria-describedby="errors?.[f.key] ? `rf-${f.key}-error` : undefined"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     @change="apply"
                 >
                     <option value="">All</option>
@@ -231,30 +231,21 @@ function text(value: unknown): string {
                 <p
                     v-if="errors?.[f.key]"
                     :id="`rf-${f.key}-error`"
-                    class="mt-1 text-sm text-red-700"
+                    class="mt-1 text-sm text-danger"
                 >
                     {{ errors[f.key] }}
                 </p>
             </div>
             <div v-if="sorts.length > 1">
-                <label class="block text-sm text-slate-600" for="rf-sort">Sort by</label>
-                <select
-                    id="rf-sort"
-                    v-model="form.sort"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    @change="apply"
-                >
+                <label class="block text-sm text-ink-muted" for="rf-sort">Sort by</label>
+                <select id="rf-sort" v-model="form.sort" class="input mt-1" @change="apply">
                     <option v-for="(s, i) in sorts" :key="s.value" :value="i === 0 ? '' : s.value">
                         {{ s.label }}
                     </option>
                 </select>
             </div>
             <div class="flex items-end gap-3">
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-                    :disabled="processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="processing">
                     Apply filters
                 </button>
                 <button v-if="hasFilters" type="button" class="text-sm underline" @click="reset">
@@ -275,8 +266,8 @@ function text(value: unknown): string {
         />
 
         <template v-else>
-            <div class="relative mt-6 overflow-x-auto rounded border border-slate-200">
-                <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <div class="relative mt-6 overflow-x-auto rounded-xs border border-line">
+                <table class="min-w-full divide-y divide-line text-sm">
                     <caption class="sr-only">
                         {{
                             report.title
@@ -286,7 +277,7 @@ function text(value: unknown): string {
                         }}
                         in total
                     </caption>
-                    <thead class="bg-slate-50 text-left text-slate-600">
+                    <thead class="bg-graphite-100 text-left text-ink-muted">
                         <tr>
                             <th
                                 v-for="c in columns"
@@ -298,7 +289,7 @@ function text(value: unknown): string {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in rows.data" :key="row.key">
                             <td v-for="c in columns" :key="c.key" class="px-3 py-2 align-top">
                                 <template v-if="c.format === 'student'">
@@ -310,7 +301,7 @@ function text(value: unknown): string {
                                             >{{ student(row, c.key)?.name }}</a
                                         >
                                         <span v-else>{{ student(row, c.key)?.name }}</span>
-                                        <span class="block text-xs text-slate-500">{{
+                                        <span class="block text-xs text-ink-muted">{{
                                             student(row, c.key)?.studentNumber
                                         }}</span>
                                     </template>
@@ -325,7 +316,7 @@ function text(value: unknown): string {
                                             s.name
                                         }}</a>
                                         <span v-else>{{ s.name }}</span>
-                                        <span class="text-xs text-slate-500">
+                                        <span class="text-xs text-ink-muted">
                                             · {{ s.studentNumber
                                             }}<template v-if="s.inactive"> · inactive</template
                                             ><template v-if="s.placement">
@@ -338,7 +329,7 @@ function text(value: unknown): string {
                                     {{ place(row[c.key]) }}
                                     <span
                                         v-if="year(row[c.key])"
-                                        class="block text-xs text-slate-500"
+                                        class="block text-xs text-ink-muted"
                                         >{{ year(row[c.key]) }}</span
                                     >
                                 </template>

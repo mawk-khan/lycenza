@@ -106,10 +106,10 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/students/communities">← Student communities</a>
         <h1 class="mt-2 text-xl font-semibold">{{ type.plural }}</h1>
-        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+        <p class="mt-1 max-w-3xl text-sm text-ink-muted">
             {{ intro }} Membership and responsibilities are descriptive: they never change what
             anyone can see or do in Lycenza.
             <template v-if="countsScope === 'campus'">
@@ -127,14 +127,14 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                     : `${type.plural} appear here once they are created.`
             "
         />
-        <div v-else class="relative mt-6 overflow-x-auto rounded border border-slate-200">
-            <table class="w-full min-w-[40rem] divide-y divide-slate-200 text-sm">
+        <div v-else class="relative mt-6 overflow-x-auto rounded-xs border border-line">
+            <table class="w-full min-w-[40rem] divide-y divide-line text-sm">
                 <caption class="sr-only">
                     {{
                         type.plural
                     }}
                 </caption>
-                <thead class="bg-slate-50 text-left text-slate-600">
+                <thead class="bg-graphite-100 text-left text-ink-muted">
                     <tr>
                         <th scope="col" class="px-3 py-2 font-medium">{{ type.label }}</th>
                         <th scope="col" class="px-3 py-2 font-medium">Code</th>
@@ -146,12 +146,12 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                         <th scope="col" class="px-3 py-2 font-medium">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <template v-for="g in groups" :key="g.id">
                         <tr>
                             <td class="px-3 py-2">
                                 <span class="font-medium">{{ g.name }}</span>
-                                <span v-if="g.description" class="block text-xs text-slate-500">{{
+                                <span v-if="g.description" class="block text-xs text-ink-muted">{{
                                     g.description
                                 }}</span>
                             </td>
@@ -179,7 +179,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                     <button
                                         v-if="g.status === 'active'"
                                         type="button"
-                                        class="ml-3 text-red-700 underline"
+                                        class="ml-3 text-danger underline"
                                         @click="setStatus(g, 'inactive')"
                                     >
                                         Deactivate<span class="sr-only"> {{ g.name }}</span>
@@ -196,7 +196,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                             </td>
                         </tr>
                         <tr v-if="editing?.id === g.id">
-                            <td :colspan="isActivity ? 6 : 5" class="bg-slate-50 px-3 py-3">
+                            <td :colspan="isActivity ? 6 : 5" class="bg-graphite-100 px-3 py-3">
                                 <form
                                     class="grid gap-3 sm:grid-cols-2"
                                     :aria-label="`Edit ${g.name}`"
@@ -210,7 +210,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                             :id="`edit-name-${g.id}`"
                                             v-model="edit.name"
                                             maxlength="80"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                             :aria-invalid="!!edit.errors.name"
                                             :aria-describedby="
                                                 edit.errors.name
@@ -221,7 +221,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                         <p
                                             v-if="edit.errors.name"
                                             :id="`edit-name-error-${g.id}`"
-                                            class="mt-1 text-sm text-red-700"
+                                            class="mt-1 text-sm text-danger"
                                         >
                                             {{ edit.errors.name }}
                                         </p>
@@ -234,7 +234,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                             :id="`edit-code-${g.id}`"
                                             v-model="edit.code"
                                             maxlength="20"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                             :aria-invalid="!!edit.errors.code"
                                             :aria-describedby="
                                                 edit.errors.code
@@ -245,7 +245,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                         <p
                                             v-if="edit.errors.code"
                                             :id="`edit-code-error-${g.id}`"
-                                            class="mt-1 text-sm text-red-700"
+                                            class="mt-1 text-sm text-danger"
                                         >
                                             {{ edit.errors.code }}
                                         </p>
@@ -260,7 +260,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                             :id="`edit-description-${g.id}`"
                                             v-model="edit.description"
                                             maxlength="255"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         />
                                     </div>
                                     <div v-if="isActivity">
@@ -270,7 +270,7 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                         <select
                                             :id="`edit-category-${g.id}`"
                                             v-model="edit.activity_category"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         >
                                             <option value="">No category</option>
                                             <option
@@ -292,13 +292,13 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                                             type="number"
                                             min="0"
                                             max="999"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         />
                                     </div>
                                     <div class="flex items-end gap-3 sm:col-span-2">
                                         <button
                                             type="submit"
-                                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                            class="btn btn-primary"
                                             :disabled="edit.processing"
                                         >
                                             Save {{ type.label }}
@@ -323,65 +323,65 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
             <h2 id="create-heading" class="text-base font-semibold">Create a {{ type.label }}</h2>
             <form class="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2" @submit.prevent="submitCreate">
                 <div>
-                    <label class="block text-sm text-slate-700" for="group-name">Name</label>
+                    <label class="block text-sm text-ink" for="group-name">Name</label>
                     <input
                         id="group-name"
                         v-model="create.name"
                         maxlength="80"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!create.errors.name"
                         :aria-describedby="create.errors.name ? 'group-name-error' : undefined"
                     />
                     <p
                         v-if="create.errors.name"
                         id="group-name-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ create.errors.name }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="group-code">Code</label>
+                    <label class="block text-sm text-ink" for="group-code">Code</label>
                     <input
                         id="group-code"
                         v-model="create.code"
                         maxlength="20"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!create.errors.code"
                         :aria-describedby="
                             create.errors.code ? 'group-code-error' : 'group-code-help'
                         "
                     />
-                    <p id="group-code-help" class="mt-1 text-xs text-slate-500">
+                    <p id="group-code-help" class="mt-1 text-xs text-ink-muted">
                         Letters, digits, - or _. Unique in your School.
                     </p>
                     <p
                         v-if="create.errors.code"
                         id="group-code-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ create.errors.code }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="group-description"
+                    <label class="block text-sm text-ink" for="group-description"
                         >Description (optional)</label
                     >
                     <input
                         id="group-description"
                         v-model="create.description"
                         maxlength="255"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     />
                 </div>
                 <div v-if="isActivity">
-                    <label class="block text-sm text-slate-700" for="group-category"
+                    <label class="block text-sm text-ink" for="group-category"
                         >Category (optional)</label
                     >
                     <select
                         id="group-category"
                         v-model="create.activity_category"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!create.errors.activity_category"
                     >
                         <option value="">No category</option>
@@ -391,24 +391,18 @@ async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="group-order"
-                        >Display order</label
-                    >
+                    <label class="block text-sm text-ink" for="group-order">Display order</label>
                     <input
                         id="group-order"
                         v-model.number="create.display_order"
                         type="number"
                         min="0"
                         max="999"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     />
                 </div>
                 <div class="sm:col-span-2">
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                        :disabled="create.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="create.processing">
                         Create {{ type.label }}
                     </button>
                 </div>

@@ -118,29 +118,29 @@ const backHref = computed(
 );
 
 const stateClass: Record<State, string> = {
-    ready: 'bg-green-50 text-green-800 border-green-300',
-    already_in_target: 'bg-slate-50 text-slate-700 border-slate-300',
-    stale: 'bg-amber-50 text-amber-900 border-amber-300',
-    blocked: 'bg-red-50 text-red-800 border-red-300',
+    ready: 'bg-graphite-100 text-ink border-graphite-300',
+    already_in_target: 'bg-graphite-100 text-ink border-control-line',
+    stale: 'bg-accent-100 text-ink border-accent-300',
+    blocked: 'bg-danger-tint text-danger border-danger/40',
 };
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="backHref">← Back to the selection</a>
         <h1 class="mt-2 text-xl font-semibold">Review: {{ preview.operationLabel }}</h1>
         <dl class="mt-2 grid gap-1 text-sm sm:grid-cols-[10rem_1fr]">
-            <dt class="text-slate-500">From</dt>
+            <dt class="text-ink-muted">From</dt>
             <dd>{{ preview.source.label }}</dd>
-            <dt class="text-slate-500">To</dt>
+            <dt class="text-ink-muted">To</dt>
             <dd>{{ preview.target.label }}</dd>
-            <dt class="text-slate-500">Effective</dt>
+            <dt class="text-ink-muted">Effective</dt>
             <dd>{{ formatCalendarDate(preview.effectiveDate) }}</dd>
         </dl>
 
         <div
             v-if="refusal"
-            class="mt-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800"
+            class="mt-4 rounded-xs border border-danger/40 bg-danger-tint px-3 py-2 text-sm text-danger"
             role="alert"
             data-testid="bulk-refusal"
         >
@@ -158,28 +158,25 @@ const stateClass: Record<State, string> = {
             >.
         </p>
 
-        <section
-            class="mt-4 rounded border border-slate-200 p-3"
-            aria-labelledby="capacity-heading"
-        >
+        <section class="mt-4 rounded-xs border border-line p-3" aria-labelledby="capacity-heading">
             <h2 id="capacity-heading" class="text-sm font-semibold">Target class capacity</h2>
             <p class="mt-1 text-sm">Now: {{ preview.capacity.now }}</p>
             <p class="text-sm">After this move: {{ preview.capacity.after }}</p>
             <p
                 v-if="preview.capacity.warning"
-                class="mt-1 text-sm text-amber-900"
+                class="mt-1 text-sm text-ink"
                 data-testid="capacity-warning"
             >
                 {{ preview.capacity.warning }}
             </p>
         </section>
 
-        <div class="relative mt-4 max-h-[32rem] overflow-auto rounded border border-slate-200">
+        <div class="relative mt-4 max-h-[32rem] overflow-auto rounded-xs border border-line">
             <table class="w-full min-w-[48rem] text-left text-sm">
                 <caption class="sr-only">
                     Every selected Student and what would happen to them
                 </caption>
-                <thead class="sticky top-0 bg-slate-50">
+                <thead class="sticky top-0 bg-graphite-100">
                     <tr>
                         <th scope="col" class="px-3 py-2">Student</th>
                         <th scope="col" class="px-3 py-2">Now</th>
@@ -192,12 +189,12 @@ const stateClass: Record<State, string> = {
                     <tr
                         v-for="row in preview.rows"
                         :key="row.studentId"
-                        class="border-t border-slate-100 align-top"
+                        class="border-t border-line align-top"
                     >
                         <td class="px-3 py-2">
                             <span v-if="row.name">{{ row.name }}</span>
-                            <span v-else class="text-slate-500">Student not available</span>
-                            <span v-if="row.studentNumber" class="block text-xs text-slate-500">{{
+                            <span v-else class="text-ink-muted">Student not available</span>
+                            <span v-if="row.studentNumber" class="block text-xs text-ink-muted">{{
                                 row.studentNumber
                             }}</span>
                         </td>
@@ -205,7 +202,7 @@ const stateClass: Record<State, string> = {
                             <template v-if="row.from">
                                 {{ row.from.gradeLevel }} · Section {{ row.from.section }} ·
                                 {{ row.from.campus }}
-                                <span class="block text-xs text-slate-500"
+                                <span class="block text-xs text-ink-muted"
                                     >Roll {{ row.from.rollNumber }}</span
                                 >
                             </template>
@@ -223,20 +220,20 @@ const stateClass: Record<State, string> = {
                                 v-model="rolls[row.studentId]"
                                 type="text"
                                 maxlength="255"
-                                class="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                                class="input w-24"
                                 :aria-describedby="row.message ? `msg-${row.studentId}` : undefined"
                             />
                         </td>
                         <td class="px-3 py-2">
                             <span
-                                class="inline-block rounded border px-2 py-0.5 text-xs font-medium"
+                                class="inline-block rounded-xs border px-2 py-0.5 text-xs font-medium"
                                 :class="stateClass[row.state]"
                                 >{{ row.stateLabel }}</span
                             >
                             <p
                                 v-if="row.message"
                                 :id="`msg-${row.studentId}`"
-                                class="mt-1 max-w-xs text-xs text-slate-700"
+                                class="mt-1 max-w-xs text-xs text-ink"
                             >
                                 {{ row.message }}
                             </p>
@@ -249,7 +246,7 @@ const stateClass: Record<State, string> = {
         <div class="mt-3 flex flex-wrap gap-2">
             <button
                 type="button"
-                class="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                class="btn btn-secondary"
                 :disabled="checking"
                 @click="checkAgain(preview.rows)"
             >
@@ -258,7 +255,7 @@ const stateClass: Record<State, string> = {
             <button
                 v-if="notReady.length > 0 && notReady.length < preview.rows.length"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+                class="btn btn-secondary"
                 :disabled="checking"
                 @click="checkAgain(preview.rows.filter((r) => r.state === 'ready'))"
             >
@@ -266,13 +263,16 @@ const stateClass: Record<State, string> = {
             </button>
         </div>
 
-        <section class="mt-6 rounded border border-slate-300 p-4" aria-labelledby="confirm-heading">
+        <section
+            class="mt-6 rounded-xs border border-control-line p-4"
+            aria-labelledby="confirm-heading"
+        >
             <h2 id="confirm-heading" class="text-base font-semibold">Confirm the move</h2>
-            <p v-if="!preview.executable" class="mt-1 text-sm text-slate-700">
+            <p v-if="!preview.executable" class="mt-1 text-sm text-ink">
                 Every Student must be Ready before the move can be confirmed. Correct the roll
                 numbers or remove the Students that are not ready, then check again.
             </p>
-            <p v-else-if="dirty" class="mt-1 text-sm text-slate-700">
+            <p v-else-if="dirty" class="mt-1 text-sm text-ink">
                 You changed roll numbers: check again before confirming.
             </p>
             <form v-else class="mt-2 space-y-3" @submit.prevent="execute">
@@ -283,7 +283,7 @@ const stateClass: Record<State, string> = {
                         {{ preview.target.label }} — or none, if anything changed.</span
                     >
                 </label>
-                <p v-if="page.props.errors?.confirm" class="text-sm text-red-700">
+                <p v-if="page.props.errors?.confirm" class="text-sm text-danger">
                     {{ page.props.errors.confirm }}
                 </p>
                 <MfaCodeField
@@ -295,12 +295,12 @@ const stateClass: Record<State, string> = {
                 />
                 <button
                     type="submit"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                     :disabled="executing || !hasMfaFactor"
                 >
                     {{ executing ? 'Moving…' : `Move ${preview.rows.length} Student(s)` }}
                 </button>
-                <p class="text-xs text-slate-500">
+                <p class="text-xs text-ink-muted">
                     This preview stays valid for {{ previewMinutes }} minutes.
                 </p>
             </form>

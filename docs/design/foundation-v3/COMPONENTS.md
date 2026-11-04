@@ -50,8 +50,22 @@ Decision record: ADR 0082 §9.
 | Pagination | `Pagination`. |
 | Activity timeline | Date, event and closed reason. No actor where the domain forbids one (rules 119, 123). |
 
+## Migrating a page (DS-4)
+
+Run the codemod on the domain's files, then Prettier, then check the result
+in the browser:
+
+```bash
+python3 -I docs/design/foundation-v3/ds_migrate.py apps/platform/resources/js/Pages/App/<Domain>/*.vue
+npx prettier --write <the same files>
+```
+
+Then add the folder to `DesignTokensTest::MIGRATED`. ADR 0082 §10 records the
+mapping. New pages in a migrated domain are written with the classes above
+from the start.
+
 ## Not yet themed
 
 - `ElevationBanner` keeps its amber security styling (OD-DS-4).
-- Page markup (about 320 files) moves in DS-4, one domain per slice. A page
-  moves onto the grey ground only when its secondary text is `text-ink-muted`.
+- Pages outside `DesignTokensTest::MIGRATED` still use the Tailwind palette.
+- The page area stays white until every domain is migrated (ADR 0082 §10.3).

@@ -40,14 +40,14 @@ function submit(acknowledgement = ''): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/students">← Students</a>
         <h1 class="mt-2 text-xl font-semibold">Onboard a new student</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             The student number is assigned automatically when the student is created.
         </p>
 
-        <p v-if="sections.length === 0" class="mt-6 text-sm text-slate-600">
+        <p v-if="sections.length === 0" class="mt-6 text-sm text-ink-muted">
             No active class of your campus is open in the current academic year.
         </p>
 
@@ -68,29 +68,19 @@ function submit(acknowledgement = ''): void {
                     v-model="form.first_name"
                     type="text"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.first_name" class="mt-1 text-sm text-red-700">
+                <p v-if="form.errors.first_name" class="mt-1 text-sm text-danger">
                     {{ form.errors.first_name }}
                 </p>
             </div>
             <div>
                 <label for="middle_name" class="block text-sm font-medium">Middle name</label>
-                <input
-                    id="middle_name"
-                    v-model="form.middle_name"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <input id="middle_name" v-model="form.middle_name" type="text" class="input mt-1" />
             </div>
             <div>
                 <label for="last_name" class="block text-sm font-medium">Last name</label>
-                <input
-                    id="last_name"
-                    v-model="form.last_name"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <input id="last_name" v-model="form.last_name" type="text" class="input mt-1" />
             </div>
             <div>
                 <label for="date_of_birth" class="block text-sm font-medium">Date of birth</label>
@@ -100,24 +90,19 @@ function submit(acknowledgement = ''): void {
                     type="date"
                     required
                     :max="today"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.date_of_birth" class="mt-1 text-sm text-red-700">
+                <p v-if="form.errors.date_of_birth" class="mt-1 text-sm text-danger">
                     {{ form.errors.date_of_birth }}
                 </p>
             </div>
             <div>
                 <label for="section_id" class="block text-sm font-medium">Class</label>
-                <select
-                    id="section_id"
-                    v-model="form.section_id"
-                    required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select id="section_id" v-model="form.section_id" required class="input mt-1">
                     <option value="" disabled>Choose a class</option>
                     <option v-for="s in sections" :key="s.id" :value="s.id">{{ s.label }}</option>
                 </select>
-                <p v-if="form.errors.section_id" class="mt-1 text-sm text-red-700">
+                <p v-if="form.errors.section_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.section_id }}
                 </p>
             </div>
@@ -128,18 +113,14 @@ function submit(acknowledgement = ''): void {
                     v-model="form.roll_number"
                     type="text"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.roll_number" class="mt-1 text-sm text-red-700">
+                <p v-if="form.errors.roll_number" class="mt-1 text-sm text-danger">
                     {{ form.errors.roll_number }}
                 </p>
             </div>
 
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary">
                 {{ form.processing ? 'Onboarding…' : 'Onboard student' }}
             </button>
         </form>

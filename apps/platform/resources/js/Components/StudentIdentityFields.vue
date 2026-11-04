@@ -32,7 +32,7 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
 <template>
     <div class="space-y-4">
         <div v-if="withNumber">
-            <label class="block text-sm font-medium text-slate-700" for="student_number"
+            <label class="block text-sm font-medium text-ink" for="student_number"
                 >Student number</label
             >
             <input
@@ -42,16 +42,16 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                 required
                 :aria-invalid="!!errors.student_number"
                 aria-describedby="student_number-error"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                class="input mt-1"
             />
-            <p id="student_number-error" class="mt-1 text-sm text-red-600">
+            <p id="student_number-error" class="mt-1 text-sm text-danger">
                 {{ errors.student_number }}
             </p>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="first_name"
+                <label class="block text-sm font-medium text-ink" for="first_name"
                     >First name</label
                 >
                 <input
@@ -60,36 +60,24 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                     type="text"
                     required
                     :aria-invalid="!!errors.first_name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="middle_name"
+                <label class="block text-sm font-medium text-ink" for="middle_name"
                     >Middle name</label
                 >
-                <input
-                    id="middle_name"
-                    v-model="middleName"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                />
+                <input id="middle_name" v-model="middleName" type="text" class="input mt-1" />
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="last_name"
-                    >Last name</label
-                >
-                <input
-                    id="last_name"
-                    v-model="lastName"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                />
+                <label class="block text-sm font-medium text-ink" for="last_name">Last name</label>
+                <input id="last_name" v-model="lastName" type="text" class="input mt-1" />
             </div>
         </div>
-        <p class="text-sm text-red-600">{{ errors.first_name }}</p>
+        <p class="text-sm text-danger">{{ errors.first_name }}</p>
 
         <div>
-            <label class="block text-sm font-medium text-slate-700" for="date_of_birth"
+            <label class="block text-sm font-medium text-ink" for="date_of_birth"
                 >Date of birth</label
             >
             <input
@@ -100,9 +88,9 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                 :max="maxDate"
                 :aria-invalid="!!errors.date_of_birth"
                 aria-describedby="date_of_birth-error"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-56"
+                class="input mt-1 sm:w-56"
             />
-            <p id="date_of_birth-error" class="mt-1 text-sm text-red-600">
+            <p id="date_of_birth-error" class="mt-1 text-sm text-danger">
                 {{ errors.date_of_birth }}
             </p>
         </div>
