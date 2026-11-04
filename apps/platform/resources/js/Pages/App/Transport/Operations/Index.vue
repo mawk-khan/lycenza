@@ -27,19 +27,19 @@ defineProps<Props>();
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2">
             <h1 class="text-xl font-semibold">Route operations</h1>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Current Vehicle/Driver assignment for each active Route.
             </p>
         </div>
 
         <table class="mt-6 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Route</th>
                     <th scope="col" class="py-2 font-medium">Vehicle</th>
                     <th scope="col" class="py-2 font-medium">Driver</th>
@@ -48,13 +48,13 @@ defineProps<Props>();
                     </th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="route in routes.data" :key="route.id">
                     <td class="py-3 font-medium">{{ route.name }}</td>
-                    <td class="py-3 text-slate-600">
+                    <td class="py-3 text-ink-muted">
                         {{ route.currentAssignment?.vehicleCode ?? 'Unassigned' }}
                     </td>
-                    <td class="py-3 text-slate-600">
+                    <td class="py-3 text-ink-muted">
                         {{ route.currentAssignment?.driverName ?? '—' }}
                     </td>
                     <td class="py-3 text-right">

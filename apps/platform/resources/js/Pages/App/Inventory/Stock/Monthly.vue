@@ -69,66 +69,47 @@ function apply(): void {
 
 <template>
     <Head title="Stock by month" />
-    <main class="mx-auto max-w-6xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/inventory-stock">← Inventory stock</a>
         <h1 class="mt-2 text-xl font-semibold">Stock by month</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ summary.from }} to {{ summary.to }} (school dates). Opening is the stock before the
             first day; closing is opening plus everything in and out during the period. Each row is
             in that item's own unit, so rows are not added together.
         </p>
 
         <form class="mt-6 grid gap-3 sm:grid-cols-4" @submit.prevent="apply">
-            <label class="text-sm text-slate-600">
+            <label class="text-sm text-ink-muted">
                 Month
-                <input
-                    v-model="form.month"
-                    type="month"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                />
-                <span v-if="pageErrors.month" class="mt-1 block text-red-600">{{
+                <input v-model="form.month" type="month" class="input mt-1" />
+                <span v-if="pageErrors.month" class="mt-1 block text-danger">{{
                     pageErrors.month
                 }}</span>
             </label>
-            <label class="text-sm text-slate-600">
+            <label class="text-sm text-ink-muted">
                 Campus
-                <select
-                    v-model="form.campus_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                >
+                <select v-model="form.campus_id" class="input mt-1">
                     <option :value="null">All</option>
                     <option v-for="c in options.campuses" :key="c.id" :value="c.id">
                         {{ c.name }}
                     </option>
                 </select>
             </label>
-            <label class="text-sm text-slate-600">
+            <label class="text-sm text-ink-muted">
                 Location
-                <select
-                    v-model="form.location_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                >
+                <select v-model="form.location_id" class="input mt-1">
                     <option :value="null">All</option>
                     <option v-for="l in options.locations" :key="l.id" :value="l.id">
                         {{ l.code }} — {{ l.name }}
                     </option>
                 </select>
             </label>
-            <label class="text-sm text-slate-600">
+            <label class="text-sm text-ink-muted">
                 Item (code or name)
-                <input
-                    v-model="form.item"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                />
+                <input v-model="form.item" type="text" class="input mt-1" />
             </label>
             <div>
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                >
-                    Show
-                </button>
+                <button type="submit" class="btn btn-primary">Show</button>
             </div>
         </form>
 
@@ -142,7 +123,7 @@ function apply(): void {
             <div class="mt-6 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Item</th>
                             <th
                                 v-for="c in columns"
@@ -154,11 +135,11 @@ function apply(): void {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in summary.rows.data" :key="row.itemId">
                             <td class="py-3 font-medium">
                                 {{ row.itemCode }} — {{ row.itemName }}
-                                <span class="text-xs text-slate-500"
+                                <span class="text-xs text-ink-muted"
                                     >({{ row.unitOfMeasure }})</span
                                 >
                             </td>

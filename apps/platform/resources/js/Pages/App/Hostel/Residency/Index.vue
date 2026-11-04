@@ -43,31 +43,31 @@ function endResidency(assignmentId: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Hostel residency</h1>
-                <p class="mt-1 text-sm text-slate-500">Students currently assigned to a Bed.</p>
+                <p class="mt-1 text-sm text-ink-muted">Students currently assigned to a Bed.</p>
             </div>
             <a
                 v-if="canManage"
                 href="/app/hostel-residency/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Assign a Student
             </a>
         </div>
 
-        <div class="mt-6 flex gap-4 border-b border-slate-200 text-sm">
+        <div class="mt-6 flex gap-4 border-b border-line text-sm">
             <button
                 type="button"
                 class="border-b-2 pb-2"
                 :class="
                     props.filters.status === 'active'
-                        ? 'border-slate-900 font-medium text-slate-900'
-                        : 'border-transparent text-slate-500'
+                        ? 'border-accent-strong font-medium text-ink'
+                        : 'border-transparent text-ink-muted'
                 "
                 @click="showStatus('active')"
             >
@@ -78,8 +78,8 @@ function endResidency(assignmentId: string): void {
                 class="border-b-2 pb-2"
                 :class="
                     props.filters.status === 'ended'
-                        ? 'border-slate-900 font-medium text-slate-900'
-                        : 'border-transparent text-slate-500'
+                        ? 'border-accent-strong font-medium text-ink'
+                        : 'border-transparent text-ink-muted'
                 "
                 @click="showStatus('ended')"
             >
@@ -96,10 +96,7 @@ function endResidency(assignmentId: string): void {
             description="Assign a Student to a Bed to see it here."
         >
             <template v-if="canManage && props.filters.status === 'active'" #action>
-                <a
-                    href="/app/hostel-residency/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a href="/app/hostel-residency/create" class="btn btn-primary">
                     Assign a Student
                 </a>
             </template>
@@ -108,7 +105,7 @@ function endResidency(assignmentId: string): void {
         <template v-else>
             <table class="mt-6 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Student</th>
                         <th scope="col" class="py-2 font-medium">Hostel</th>
                         <th scope="col" class="py-2 font-medium">Room</th>
@@ -119,15 +116,15 @@ function endResidency(assignmentId: string): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="assignment in assignments.data" :key="assignment.id">
                         <td class="py-3 font-medium">
                             {{ assignment.studentName }} ({{ assignment.studentNumber }})
                         </td>
-                        <td class="py-3 text-slate-600">{{ assignment.hostelName }}</td>
-                        <td class="py-3 text-slate-600">{{ assignment.roomCode }}</td>
-                        <td class="py-3 text-slate-600">{{ assignment.bedCode }}</td>
-                        <td class="py-3 text-slate-600">{{ assignment.startsOn }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.hostelName }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.roomCode }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.bedCode }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.startsOn }}</td>
                         <td class="py-3 text-right">
                             <button
                                 v-if="canManage && props.filters.status === 'active'"

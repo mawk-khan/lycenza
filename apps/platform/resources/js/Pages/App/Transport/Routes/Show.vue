@@ -79,20 +79,20 @@ function toggleRouteStatus(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/transport/routes">← Transport routes</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ route.name }}</h1>
-                <p class="mt-1 text-sm text-slate-500">Code {{ route.code }}</p>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">Code {{ route.code }}</p>
+                <p class="mt-1 text-sm text-ink-muted">
                     Campus:
                     <select
                         v-if="canManage"
                         aria-label="Route Campus"
                         :value="route.campusId ?? ''"
-                        class="rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input w-auto"
                         @change="changeCampus(($event.target as HTMLSelectElement).value)"
                     >
                         <option value="">School-wide (shared)</option>
@@ -102,8 +102,8 @@ function toggleRouteStatus(): void {
                     </select>
                     <span v-else>{{ route.campusName ?? 'School-wide (shared)' }}</span>
                 </p>
-                <p v-if="campusError" class="mt-1 text-sm text-red-600">{{ campusError }}</p>
-                <p v-if="route.description" class="mt-1 text-xs text-slate-400">
+                <p v-if="campusError" class="mt-1 text-sm text-danger">{{ campusError }}</p>
+                <p v-if="route.description" class="mt-1 text-xs text-ink-muted">
                     {{ route.description }}
                 </p>
             </div>
@@ -121,11 +121,11 @@ function toggleRouteStatus(): void {
         </div>
 
         <div class="mt-8 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-900">Stops</h2>
+            <h2 class="text-sm font-semibold text-ink">Stops</h2>
             <button
                 v-if="canManage"
                 type="button"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary"
                 @click="showAddStop = !showAddStop"
             >
                 {{ showAddStop ? 'Cancel' : 'Add stop' }}
@@ -134,55 +134,46 @@ function toggleRouteStatus(): void {
 
         <form v-if="showAddStop" class="mt-3 flex items-end gap-3" @submit.prevent="submitStop">
             <div>
-                <label class="block text-sm text-slate-600" for="stop-name">Name</label>
-                <input
-                    id="stop-name"
-                    v-model="form.name"
-                    type="text"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="stop-name">Name</label>
+                <input id="stop-name" v-model="form.name" type="text" class="input mt-1 w-48" />
+                <p v-if="form.errors.name" class="mt-1 text-sm text-danger">
                     {{ form.errors.name }}
                 </p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="stop-sequence">Order</label>
+                <label class="block text-sm text-ink-muted" for="stop-sequence">Order</label>
                 <input
                     id="stop-sequence"
                     v-model.number="form.sequence"
                     type="number"
                     min="1"
-                    class="mt-1 w-24 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-24"
                 />
-                <p v-if="form.errors.sequence" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.sequence" class="mt-1 text-sm text-danger">
                     {{ form.errors.sequence }}
                 </p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="stop-address">
+                <label class="block text-sm text-ink-muted" for="stop-address">
                     Address (optional)
                 </label>
                 <input
                     id="stop-address"
                     v-model="form.address"
                     type="text"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-56"
                 />
             </div>
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary">
                 {{ form.processing ? 'Saving…' : 'Add stop' }}
             </button>
         </form>
 
-        <p v-if="stops.length === 0" class="mt-4 text-sm text-slate-500">No stops added yet.</p>
+        <p v-if="stops.length === 0" class="mt-4 text-sm text-ink-muted">No stops added yet.</p>
 
         <table v-else class="mt-4 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Order</th>
                     <th scope="col" class="py-2 font-medium">Name</th>
                     <th scope="col" class="py-2 font-medium">Address</th>
@@ -192,11 +183,11 @@ function toggleRouteStatus(): void {
                     </th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="stop in stops" :key="stop.id">
-                    <td class="py-3 text-slate-600">{{ stop.sequence }}</td>
+                    <td class="py-3 text-ink-muted">{{ stop.sequence }}</td>
                     <td class="py-3 font-medium">{{ stop.name }}</td>
-                    <td class="py-3 text-slate-600">{{ stop.address ?? '—' }}</td>
+                    <td class="py-3 text-ink-muted">{{ stop.address ?? '—' }}</td>
                     <td class="py-3"><StatusBadge :status="stop.status" /></td>
                     <td class="py-3 text-right">
                         <button

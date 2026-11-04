@@ -87,10 +87,10 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/inventory-stock">← Inventory stock</a>
         <h1 class="mt-2 text-xl font-semibold">Write off stock</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             For stock that is damaged, expired or lost. A write-off is permanent: it stays in the
             movement history and cannot be edited or deleted. If the stock turns up again, record it
             as a new receipt.
@@ -98,12 +98,12 @@ function submit(): void {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="item-search">Item</label>
+                <label class="block text-sm text-ink-muted" for="item-search">Item</label>
                 <SearchCombobox
                     id="item-search"
                     v-model="itemQuery"
                     placeholder="Search by code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="itemResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.inventory_item_id"
@@ -116,12 +116,12 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="location-search">Location</label>
+                <label class="block text-sm text-ink-muted" for="location-search">Location</label>
                 <SearchCombobox
                     id="location-search"
                     v-model="locationQuery"
                     placeholder="Search by code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="locationResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.inventory_location_id"
@@ -134,22 +134,22 @@ function submit(): void {
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="quantity">Quantity</label>
+                <label class="block text-sm text-ink-muted" for="quantity">Quantity</label>
                 <input
                     id="quantity"
                     v-model="form.quantity"
                     type="text"
                     inputmode="decimal"
                     placeholder="e.g. 2 or 0.500"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.quantity" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.quantity" class="mt-1 text-sm text-danger">
                     {{ form.errors.quantity }}
                 </p>
             </div>
 
             <fieldset>
-                <legend class="text-sm text-slate-600">Reason</legend>
+                <legend class="text-sm text-ink-muted">Reason</legend>
                 <div class="mt-1 space-y-1">
                     <label
                         v-for="(label, code) in reasons"
@@ -165,7 +165,7 @@ function submit(): void {
                         {{ label }}
                     </label>
                 </div>
-                <p v-if="form.errors.reason_code" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.reason_code" class="mt-1 text-sm text-danger">
                     {{ form.errors.reason_code }}
                 </p>
             </fieldset>
@@ -176,7 +176,7 @@ function submit(): void {
                     I confirm these units are no longer usable or present and should be removed from
                     stock permanently.
                 </label>
-                <p v-if="form.errors.confirm" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.confirm" class="mt-1 text-sm text-danger">
                     {{ form.errors.confirm }}
                 </p>
             </div>
@@ -199,7 +199,7 @@ function submit(): void {
                         form.reason_code === '' ||
                         form.mfa_code === ''
                     "
-                    class="rounded bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50"
+                    class="btn btn-danger"
                 >
                     {{ form.processing ? 'Writing off…' : 'Write off' }}
                 </button>

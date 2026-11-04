@@ -32,16 +32,16 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Canteen billing settings</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             The Ledger accounts a fulfilled Canteen Order's Charge is posted against.
         </p>
 
         <p
             v-if="!configuration"
-            class="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             Not configured yet. Canteen Orders cannot be fulfilled until a receivable and revenue
             account are selected below.
@@ -49,7 +49,7 @@ function submit(): void {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="receivable_ledger_account_id"
+                <label class="block text-sm text-ink-muted" for="receivable_ledger_account_id"
                     >Receivable account</label
                 >
                 <select
@@ -57,23 +57,20 @@ function submit(): void {
                     v-model="form.receivable_ledger_account_id"
                     :disabled="!canManage"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                    class="input mt-1 disabled:bg-graphite-200"
                 >
                     <option value="" disabled>Select an account</option>
                     <option v-for="account in ledgerAccounts" :key="account.id" :value="account.id">
                         {{ account.code }} — {{ account.name }} ({{ account.type }})
                     </option>
                 </select>
-                <p
-                    v-if="form.errors.receivable_ledger_account_id"
-                    class="mt-1 text-sm text-red-600"
-                >
+                <p v-if="form.errors.receivable_ledger_account_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.receivable_ledger_account_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="revenue_ledger_account_id"
+                <label class="block text-sm text-ink-muted" for="revenue_ledger_account_id"
                     >Revenue account</label
                 >
                 <select
@@ -81,14 +78,14 @@ function submit(): void {
                     v-model="form.revenue_ledger_account_id"
                     :disabled="!canManage"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                    class="input mt-1 disabled:bg-graphite-200"
                 >
                     <option value="" disabled>Select an account</option>
                     <option v-for="account in ledgerAccounts" :key="account.id" :value="account.id">
                         {{ account.code }} — {{ account.name }} ({{ account.type }})
                     </option>
                 </select>
-                <p v-if="form.errors.revenue_ledger_account_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.revenue_ledger_account_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.revenue_ledger_account_id }}
                 </p>
             </div>
@@ -97,11 +94,11 @@ function submit(): void {
                 v-if="canManage"
                 type="submit"
                 :disabled="form.processing"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                class="btn btn-primary"
             >
                 {{ form.processing ? 'Saving…' : 'Save' }}
             </button>
-            <p v-else class="text-sm text-slate-500">
+            <p v-else class="text-sm text-ink-muted">
                 You have read-only access to these settings.
             </p>
         </form>

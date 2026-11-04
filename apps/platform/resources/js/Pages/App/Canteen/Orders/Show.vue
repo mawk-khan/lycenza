@@ -76,18 +76,18 @@ function cancel(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/canteen-orders">← Canteen orders</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">
                     Canteen order · {{ order.studentName }}
-                    <span v-if="order.studentNumber" class="text-base font-normal text-slate-500"
+                    <span v-if="order.studentNumber" class="text-base font-normal text-ink-muted"
                         >({{ order.studentNumber }})</span
                     >
                 </h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{ order.outletName }} · placed {{ formatDateTime(order.placedAt) }}
                 </p>
             </div>
@@ -96,36 +96,36 @@ function cancel(): void {
 
         <p
             v-if="fulfillError"
-            class="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            class="mt-4 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ fulfillError }}
         </p>
         <p
             v-if="cancelError"
-            class="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            class="mt-4 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ cancelError }}
         </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
-                <dt class="text-slate-500">Total</dt>
+                <dt class="text-ink-muted">Total</dt>
                 <dd class="font-mono">{{ formatMoney(order.totalAmount, order.currency) }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Placed</dt>
+                <dt class="text-ink-muted">Placed</dt>
                 <dd>{{ formatDateTime(order.placedAt) }}</dd>
             </div>
             <div v-if="order.fulfilledAt">
-                <dt class="text-slate-500">Fulfilled</dt>
+                <dt class="text-ink-muted">Fulfilled</dt>
                 <dd>{{ formatDateTime(order.fulfilledAt) }}</dd>
             </div>
             <div v-if="order.cancelledAt">
-                <dt class="text-slate-500">Cancelled</dt>
+                <dt class="text-ink-muted">Cancelled</dt>
                 <dd>{{ formatDateTime(order.cancelledAt) }}</dd>
             </div>
             <div v-if="order.chargeId">
-                <dt class="text-slate-500">Charge</dt>
+                <dt class="text-ink-muted">Charge</dt>
                 <dd>
                     <a class="underline" :href="`/app/finance/charges/${order.chargeId}`"
                         >View charge</a
@@ -135,21 +135,21 @@ function cancel(): void {
         </dl>
 
         <section class="mt-8">
-            <h2 class="text-sm font-semibold text-slate-700">Lines</h2>
+            <h2 class="text-sm font-semibold text-ink">Lines</h2>
             <table class="mt-3 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Item</th>
                         <th scope="col" class="py-2 font-medium">Quantity</th>
                         <th scope="col" class="py-2 text-right font-medium">Unit price</th>
                         <th scope="col" class="py-2 text-right font-medium">Line total</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="line in order.lines" :key="line.id">
                         <td class="py-3">
                             {{ line.itemName }}
-                            <span v-if="line.itemCode" class="text-xs text-slate-500"
+                            <span v-if="line.itemCode" class="text-xs text-ink-muted"
                                 >({{ line.itemCode }})</span
                             >
                         </td>
@@ -166,18 +166,13 @@ function cancel(): void {
         </section>
 
         <section v-if="canManage && order.status === 'pending'" class="mt-8 flex gap-3">
-            <button
-                type="button"
-                :disabled="fulfilling"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                @click="fulfill"
-            >
+            <button type="button" :disabled="fulfilling" class="btn btn-primary" @click="fulfill">
                 {{ fulfilling ? 'Fulfilling…' : 'Fulfill order' }}
             </button>
             <button
                 type="button"
                 :disabled="cancelling"
-                class="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                class="rounded-xs border border-danger/40 px-4 py-2 text-sm font-medium text-danger hover:bg-danger-tint disabled:opacity-50"
                 @click="cancel"
             >
                 {{ cancelling ? 'Cancelling…' : 'Cancel order' }}

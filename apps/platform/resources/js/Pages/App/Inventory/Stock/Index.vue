@@ -76,40 +76,25 @@ function filterType(event: Event): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Inventory stock</h1>
-                <p class="mt-1 text-sm text-slate-500">Current balances and movement history.</p>
+                <p class="mt-1 text-sm text-ink-muted">Current balances and movement history.</p>
                 <p class="mt-1 flex gap-3 text-sm">
                     <a class="underline" href="/app/inventory-stock/register">Stock register</a>
                     <a class="underline" href="/app/inventory-stock/monthly">Stock by month</a>
                 </p>
             </div>
             <div v-if="canManage" class="flex flex-wrap gap-2">
-                <a
-                    href="/app/inventory-stock/receive"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Receive
-                </a>
-                <a
-                    href="/app/inventory-stock/issue"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
-                    Issue
-                </a>
-                <a
-                    href="/app/inventory-stock/transfer"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
-                    Transfer
-                </a>
+                <a href="/app/inventory-stock/receive" class="btn btn-primary"> Receive </a>
+                <a href="/app/inventory-stock/issue" class="btn btn-secondary"> Issue </a>
+                <a href="/app/inventory-stock/transfer" class="btn btn-secondary"> Transfer </a>
                 <a
                     href="/app/inventory-stock/write-off"
-                    class="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                    class="rounded-xs border border-danger/40 px-3 py-2 text-sm font-medium text-danger hover:bg-danger-tint"
                 >
                     Write off
                 </a>
@@ -117,7 +102,7 @@ function filterType(event: Event): void {
         </div>
 
         <section class="mt-8">
-            <h2 class="text-sm font-semibold text-slate-700">Current balances</h2>
+            <h2 class="text-sm font-semibold text-ink">Current balances</h2>
 
             <EmptyState
                 v-if="balances.data.length === 0"
@@ -130,13 +115,13 @@ function filterType(event: Event): void {
                 <div class="mt-3 overflow-x-auto">
                     <table class="w-full text-left text-sm">
                         <thead>
-                            <tr class="border-b border-slate-200 text-xs text-slate-500">
+                            <tr class="border-b border-line text-xs text-ink-muted">
                                 <th scope="col" class="py-2 font-medium">Item</th>
                                 <th scope="col" class="py-2 font-medium">Location</th>
                                 <th scope="col" class="py-2 font-medium">Quantity on hand</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
+                        <tbody class="divide-y divide-line">
                             <tr v-for="balance in balances.data" :key="balance.id">
                                 <td class="py-3 font-medium">
                                     {{ balance.itemCode }} — {{ balance.itemName }}
@@ -158,11 +143,11 @@ function filterType(event: Event): void {
 
         <section class="mt-10">
             <div class="flex flex-wrap items-center justify-between gap-2">
-                <h2 class="text-sm font-semibold text-slate-700">Movement history</h2>
-                <label class="text-sm text-slate-600">
+                <h2 class="text-sm font-semibold text-ink">Movement history</h2>
+                <label class="text-sm text-ink-muted">
                     Type
                     <select
-                        class="ml-2 rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input ml-2 w-auto"
                         :value="movementType ?? ''"
                         @change="filterType"
                     >
@@ -185,7 +170,7 @@ function filterType(event: Event): void {
                 <div class="mt-3 overflow-x-auto">
                     <table class="w-full text-left text-sm">
                         <thead>
-                            <tr class="border-b border-slate-200 text-xs text-slate-500">
+                            <tr class="border-b border-line text-xs text-ink-muted">
                                 <th scope="col" class="py-2 font-medium">When</th>
                                 <th scope="col" class="py-2 font-medium">Type</th>
                                 <th scope="col" class="py-2 font-medium">Item</th>
@@ -195,9 +180,9 @@ function filterType(event: Event): void {
                                 <th scope="col" class="py-2 font-medium">Recipient / reason</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
+                        <tbody class="divide-y divide-line">
                             <tr v-for="movement in movements.data" :key="movement.id">
-                                <td class="py-3 text-slate-600">
+                                <td class="py-3 text-ink-muted">
                                     {{ formatDateTime(movement.occurredAt) }}
                                 </td>
                                 <td class="py-3">{{ typeLabels[movement.movementType] }}</td>
@@ -205,7 +190,7 @@ function filterType(event: Event): void {
                                 <td class="py-3">{{ movement.fromLocationCode ?? '—' }}</td>
                                 <td class="py-3">{{ movement.toLocationCode ?? '—' }}</td>
                                 <td class="py-3">{{ movement.quantity }}</td>
-                                <td class="py-3 text-slate-600">
+                                <td class="py-3 text-ink-muted">
                                     {{ detail(movement, writeOffReasons) }}
                                 </td>
                             </tr>

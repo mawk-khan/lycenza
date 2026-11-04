@@ -155,21 +155,21 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/canteen-orders">← Canteen orders</a>
         <h1 class="mt-2 text-xl font-semibold">Place order</h1>
 
         <form class="mt-6 space-y-6" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="student">Student</label>
+                <label class="block text-sm text-ink-muted" for="student">Student</label>
                 <div
                     v-if="selectedStudentLabel"
-                    class="mt-1 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ selectedStudentLabel }}</span>
                     <button
                         type="button"
-                        class="text-slate-400 hover:text-slate-700"
+                        class="text-ink-muted hover:text-ink"
                         @click="clearStudent"
                     >
                         Change
@@ -181,55 +181,50 @@ function submit(): void {
                     v-model="studentQuery"
                     type="text"
                     placeholder="Search by name or student number…"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
                 <ul
                     v-if="studentResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow-sm"
+                    class="absolute z-10 mt-1 w-full rounded-xs border border-line bg-white text-sm shadow-sm"
                 >
                     <li v-for="candidate in studentResults" :key="candidate.id">
                         <button
                             type="button"
-                            class="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            class="block w-full px-3 py-2 text-left text-sm hover:bg-graphite-100"
                             @click="selectStudent(candidate)"
                         >
                             {{ candidateName(candidate) }}
-                            <span class="text-xs text-slate-400"
+                            <span class="text-xs text-ink-muted"
                                 >({{ candidate.studentNumber }})</span
                             >
                         </button>
                     </li>
                 </ul>
-                <p v-if="form.errors.student_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.student_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.student_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="outlet_id">Outlet</label>
-                <select
-                    id="outlet_id"
-                    v-model="form.outlet_id"
-                    required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="outlet_id">Outlet</label>
+                <select id="outlet_id" v-model="form.outlet_id" required class="input mt-1">
                     <option value="" disabled>Select an Outlet</option>
                     <option v-for="outlet in outlets" :key="outlet.id" :value="outlet.id">
                         {{ outlet.code }} — {{ outlet.name }}
                     </option>
                 </select>
-                <p v-if="form.errors.outlet_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.outlet_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.outlet_id }}
                 </p>
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="item-search">Add item</label>
+                <label class="block text-sm text-ink-muted" for="item-search">Add item</label>
                 <SearchCombobox
                     id="item-search"
                     v-model="itemQuery"
                     placeholder="Search by code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="itemResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.lines"
@@ -245,7 +240,7 @@ function submit(): void {
 
             <table v-if="orderLines.length > 0" class="w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Item</th>
                         <th scope="col" class="py-2 font-medium">Quantity</th>
                         <th scope="col" class="py-2 font-medium">
@@ -253,7 +248,7 @@ function submit(): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="line in orderLines" :key="line.canteenItemId">
                         <td class="py-2">{{ line.code }} — {{ line.name }}</td>
                         <td class="py-2">
@@ -261,13 +256,13 @@ function submit(): void {
                                 v-model.number="line.quantity"
                                 type="number"
                                 min="1"
-                                class="w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                                class="input w-20"
                             />
                         </td>
                         <td class="py-2 text-right">
                             <button
                                 type="button"
-                                class="text-sm text-red-600 underline"
+                                class="text-sm text-danger underline"
                                 @click="removeLine(line)"
                             >
                                 Remove
@@ -277,7 +272,7 @@ function submit(): void {
                 </tbody>
             </table>
 
-            <p v-if="orderLines.length > 0" class="text-sm text-slate-600">
+            <p v-if="orderLines.length > 0" class="text-sm text-ink-muted">
                 Estimated total (client preview only, server is authoritative):
                 <span class="font-mono font-medium">{{ formatMoney(runningTotal, 'INR') }}</span>
             </p>
@@ -285,7 +280,7 @@ function submit(): void {
             <button
                 type="submit"
                 :disabled="form.processing || !form.student_id || orderLines.length === 0"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                class="btn btn-primary"
             >
                 {{ form.processing ? 'Placing…' : 'Place order' }}
             </button>

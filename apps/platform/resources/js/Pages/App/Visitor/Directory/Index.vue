@@ -54,31 +54,31 @@ function toggleStatus(visitor: VisitorRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Visitor directory</h1>
-                <p class="mt-1 text-sm text-slate-500">People known to your School's front desk.</p>
+                <p class="mt-1 text-sm text-ink-muted">People known to your School's front desk.</p>
             </div>
             <a
                 v-if="canManage"
                 href="/app/visitor/directory/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Add Visitor
             </a>
         </div>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-search">Search</label>
+            <label class="block text-sm text-ink-muted" for="filter-search">Search</label>
             <input
                 id="filter-search"
                 v-model="search"
                 type="text"
                 placeholder="Name or phone"
-                class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input mt-1 w-72"
             />
         </div>
 
@@ -93,19 +93,14 @@ function toggleStatus(visitor: VisitorRow): void {
             "
         >
             <template v-if="canManage && !search" #action>
-                <a
-                    href="/app/visitor/directory/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Add Visitor
-                </a>
+                <a href="/app/visitor/directory/create" class="btn btn-primary"> Add Visitor </a>
             </template>
         </EmptyState>
 
         <template v-else>
             <table class="mt-6 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Name</th>
                         <th scope="col" class="py-2 font-medium">Phone</th>
                         <th scope="col" class="py-2 font-medium">Status</th>
@@ -114,10 +109,10 @@ function toggleStatus(visitor: VisitorRow): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="visitor in visitors.data" :key="visitor.id">
                         <td class="py-3 font-medium">{{ visitor.fullName }}</td>
-                        <td class="py-3 text-slate-600">{{ visitor.phone ?? '—' }}</td>
+                        <td class="py-3 text-ink-muted">{{ visitor.phone ?? '—' }}</td>
                         <td class="py-3"><StatusBadge :status="visitor.status" /></td>
                         <td class="py-3 text-right">
                             <button

@@ -92,18 +92,18 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/transport/assignments">← Transport assignments</a>
         <h1 class="mt-2 text-xl font-semibold">Assign a Student to Transport</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="student-search">Student</label>
+                <label class="block text-sm text-ink-muted" for="student-search">Student</label>
                 <SearchCombobox
                     id="student-search"
                     v-model="studentQuery"
                     placeholder="Search by name or student number"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="studentResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.student_id"
@@ -116,12 +116,12 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="route-search">Route</label>
+                <label class="block text-sm text-ink-muted" for="route-search">Route</label>
                 <SearchCombobox
                     id="route-search"
                     v-model="routeQuery"
                     placeholder="Search by name or code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="routeResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.route_id"
@@ -134,49 +134,37 @@ function submit(): void {
             </div>
 
             <div v-if="stops.length > 0">
-                <label class="block text-sm text-slate-600" for="pickup-stop">
+                <label class="block text-sm text-ink-muted" for="pickup-stop">
                     Pickup stop (optional)
                 </label>
-                <select
-                    id="pickup-stop"
-                    v-model="form.pickup_stop_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select id="pickup-stop" v-model="form.pickup_stop_id" class="input mt-1">
                     <option value="">— None —</option>
                     <option v-for="stop in stops" :key="stop.id" :value="stop.id">
                         {{ stop.sequence }}. {{ stop.name }}
                     </option>
                 </select>
-                <p v-if="form.errors.pickup_stop_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.pickup_stop_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.pickup_stop_id }}
                 </p>
             </div>
 
             <div v-if="stops.length > 0">
-                <label class="block text-sm text-slate-600" for="dropoff-stop">
+                <label class="block text-sm text-ink-muted" for="dropoff-stop">
                     Drop-off stop (optional)
                 </label>
-                <select
-                    id="dropoff-stop"
-                    v-model="form.dropoff_stop_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select id="dropoff-stop" v-model="form.dropoff_stop_id" class="input mt-1">
                     <option value="">— None —</option>
                     <option v-for="stop in stops" :key="stop.id" :value="stop.id">
                         {{ stop.sequence }}. {{ stop.name }}
                     </option>
                 </select>
-                <p v-if="form.errors.dropoff_stop_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.dropoff_stop_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.dropoff_stop_id }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Assigning…' : 'Assign' }}
                 </button>
                 <a class="text-sm underline" href="/app/transport/assignments">Cancel</a>

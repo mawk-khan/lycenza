@@ -66,29 +66,25 @@ function cancel(order: OrderRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Canteen orders</h1>
-                <p class="mt-1 text-sm text-slate-500">Pending queue and Order history.</p>
+                <p class="mt-1 text-sm text-ink-muted">Pending queue and Order history.</p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/canteen-orders/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <a v-if="canManage" href="/app/canteen-orders/create" class="btn btn-primary shrink-0">
                 Place order
             </a>
         </div>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+            <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
             <select
                 id="filter-status"
                 v-model="status"
-                class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input mt-1 w-56"
                 @change="applyFilter"
             >
                 <option value="">All</option>
@@ -105,19 +101,14 @@ function cancel(order: OrderRow): void {
             description="Placed Canteen Orders will appear here."
         >
             <template v-if="canManage" #action>
-                <a
-                    href="/app/canteen-orders/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Place order
-                </a>
+                <a href="/app/canteen-orders/create" class="btn btn-primary"> Place order </a>
             </template>
         </EmptyState>
 
         <template v-else>
             <table class="mt-6 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Placed</th>
                         <th scope="col" class="py-2 font-medium">Student</th>
                         <th scope="col" class="py-2 font-medium">Outlet</th>
@@ -127,16 +118,16 @@ function cancel(order: OrderRow): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="order in orders.data" :key="order.id">
-                        <td class="py-3 text-slate-600">
+                        <td class="py-3 text-ink-muted">
                             {{ formatDateTime(order.placedAt) }}
                         </td>
                         <td class="py-3">
                             <a class="underline" :href="`/app/canteen-orders/${order.id}`">{{
                                 order.studentName
                             }}</a>
-                            <span v-if="order.studentNumber" class="ml-1 text-xs text-slate-500"
+                            <span v-if="order.studentNumber" class="ml-1 text-xs text-ink-muted"
                                 >({{ order.studentNumber }})</span
                             >
                         </td>
@@ -155,7 +146,7 @@ function cancel(order: OrderRow): void {
                                 </button>
                                 <button
                                     type="button"
-                                    class="text-sm text-red-600 underline"
+                                    class="text-sm text-danger underline"
                                     @click="cancel(order)"
                                 >
                                     Cancel<span class="sr-only">

@@ -44,31 +44,27 @@ function endVisit(visitId: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Visitor visits</h1>
-                <p class="mt-1 text-sm text-slate-500">Front-desk check-in/check-out.</p>
+                <p class="mt-1 text-sm text-ink-muted">Front-desk check-in/check-out.</p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/visitor/visits/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <a v-if="canManage" href="/app/visitor/visits/create" class="btn btn-primary shrink-0">
                 Check in a Visitor
             </a>
         </div>
 
-        <div class="mt-6 flex gap-4 border-b border-slate-200 text-sm">
+        <div class="mt-6 flex gap-4 border-b border-line text-sm">
             <button
                 type="button"
                 class="border-b-2 pb-2"
                 :class="
                     props.filters.status === 'checked_in'
-                        ? 'border-slate-900 font-medium text-slate-900'
-                        : 'border-transparent text-slate-500'
+                        ? 'border-accent-strong font-medium text-ink'
+                        : 'border-transparent text-ink-muted'
                 "
                 @click="showStatus('checked_in')"
             >
@@ -79,8 +75,8 @@ function endVisit(visitId: string): void {
                 class="border-b-2 pb-2"
                 :class="
                     props.filters.status === 'checked_out'
-                        ? 'border-slate-900 font-medium text-slate-900'
-                        : 'border-transparent text-slate-500'
+                        ? 'border-accent-strong font-medium text-ink'
+                        : 'border-transparent text-ink-muted'
                 "
                 @click="showStatus('checked_out')"
             >
@@ -99,10 +95,7 @@ function endVisit(visitId: string): void {
             description="Check in a Visitor to see it here."
         >
             <template v-if="canManage && props.filters.status === 'checked_in'" #action>
-                <a
-                    href="/app/visitor/visits/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a href="/app/visitor/visits/create" class="btn btn-primary">
                     Check in a Visitor
                 </a>
             </template>
@@ -111,7 +104,7 @@ function endVisit(visitId: string): void {
         <template v-else>
             <table class="mt-6 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Visitor</th>
                         <th scope="col" class="py-2 font-medium">Campus</th>
                         <th scope="col" class="py-2 font-medium">Host</th>
@@ -122,15 +115,15 @@ function endVisit(visitId: string): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="visit in visits.data" :key="visit.id">
                         <td class="py-3 font-medium">{{ visit.visitorName }}</td>
-                        <td class="py-3 text-slate-600">{{ visit.campusName }}</td>
-                        <td class="py-3 text-slate-600">{{ visit.hostName ?? '—' }}</td>
-                        <td class="py-3 text-slate-600">
+                        <td class="py-3 text-ink-muted">{{ visit.campusName }}</td>
+                        <td class="py-3 text-ink-muted">{{ visit.hostName ?? '—' }}</td>
+                        <td class="py-3 text-ink-muted">
                             {{ formatDateTime(visit.checkedInAt) }}
                         </td>
-                        <td class="py-3 text-slate-600">
+                        <td class="py-3 text-ink-muted">
                             {{ visit.checkedOutAt ? formatDateTime(visit.checkedOutAt) : '—' }}
                         </td>
                         <td class="py-3 text-right">

@@ -78,17 +78,17 @@ const describe = (p: Policy) =>
 
 <template>
     <Head title="Library fine policy" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/library/circulation">← Circulation</a>
         <h1 class="mt-2 text-xl font-semibold">Library fine policy</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             An overdue loan is fined at check-in under the policy current at that moment. A fine is
             waived through Finance → Concessions, or voided on its loan.
         </p>
 
         <section class="mt-6" aria-labelledby="current-policy-heading">
             <h2 id="current-policy-heading" class="font-semibold">Current policy</h2>
-            <p v-if="!props.current" class="mt-2 text-sm text-slate-600">
+            <p v-if="!props.current" class="mt-2 text-sm text-ink-muted">
                 No policy has been published: no fines are assessed.
             </p>
             <dl
@@ -96,20 +96,20 @@ const describe = (p: Policy) =>
                 class="mt-2 grid grid-cols-[10rem_1fr] gap-y-1 text-sm"
                 data-testid="current-policy"
             >
-                <dt class="text-slate-600">Version</dt>
+                <dt class="text-ink-muted">Version</dt>
                 <dd>{{ props.current.version }}</dd>
-                <dt class="text-slate-600">Rule</dt>
+                <dt class="text-ink-muted">Rule</dt>
                 <dd>{{ describe(props.current) }}</dd>
-                <dt class="text-slate-600">Fee head</dt>
+                <dt class="text-ink-muted">Fee head</dt>
                 <dd>{{ props.current.feeHead ? feeHeadText(props.current.feeHead) : '—' }}</dd>
-                <dt class="text-slate-600">Published</dt>
+                <dt class="text-ink-muted">Published</dt>
                 <dd>{{ formatDate(props.current.publishedAt) }}</dd>
             </dl>
         </section>
 
         <section
             v-if="props.canManage"
-            class="mt-8 rounded border border-slate-300 p-4"
+            class="mt-8 rounded-xs border border-control-line p-4"
             aria-labelledby="publish-policy-heading"
         >
             <h2 id="publish-policy-heading" class="font-semibold">Publish a new version</h2>
@@ -159,11 +159,7 @@ const describe = (p: Policy) =>
                     />
                 </template>
                 <div class="sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="form.processing" class="btn btn-primary">
                         Publish version {{ (props.current?.version ?? 0) + 1 }}
                     </button>
                 </div>
@@ -182,7 +178,7 @@ const describe = (p: Policy) =>
 
         <section class="mt-8" aria-labelledby="policy-history-heading">
             <h2 id="policy-history-heading" class="font-semibold">History</h2>
-            <p v-if="props.versions.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="props.versions.length === 0" class="mt-2 text-sm text-ink-muted">
                 No version yet.
             </p>
             <div v-else class="relative overflow-x-auto mt-2">
@@ -190,7 +186,7 @@ const describe = (p: Policy) =>
                     <caption class="sr-only">
                         Every published fine-policy version, newest first
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="pr-3 py-2">Version</th>
                             <th scope="col" class="pr-3 py-2">Rule</th>
@@ -198,7 +194,7 @@ const describe = (p: Policy) =>
                             <th scope="col" class="pr-3 py-2">Published</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="policy in props.versions" :key="policy.id">
                             <td class="pr-3 py-2">{{ policy.version }}</td>
                             <td class="pr-3 py-2">{{ describe(policy) }}</td>

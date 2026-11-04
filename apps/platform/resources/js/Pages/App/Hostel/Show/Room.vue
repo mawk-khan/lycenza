@@ -63,13 +63,13 @@ function toggleBedStatus(bed: BedRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/hostels/${hostel.id}`">← {{ hostel.name }}</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Room {{ room.code }}</h1>
-                <p v-if="room.floorOrBlock" class="mt-1 text-sm text-slate-500">
+                <p v-if="room.floorOrBlock" class="mt-1 text-sm text-ink-muted">
                     {{ room.floorOrBlock }}
                 </p>
             </div>
@@ -87,11 +87,11 @@ function toggleBedStatus(bed: BedRow): void {
         </div>
 
         <div class="mt-8 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-900">Beds</h2>
+            <h2 class="text-sm font-semibold text-ink">Beds</h2>
             <button
                 v-if="canManage"
                 type="button"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary"
                 @click="showAddBed = !showAddBed"
             >
                 {{ showAddBed ? 'Cancel' : 'Add bed' }}
@@ -100,31 +100,22 @@ function toggleBedStatus(bed: BedRow): void {
 
         <form v-if="showAddBed" class="mt-3 flex items-end gap-3" @submit.prevent="submitBed">
             <div>
-                <label class="block text-sm text-slate-600" for="bed-code">Code</label>
-                <input
-                    id="bed-code"
-                    v-model="form.code"
-                    type="text"
-                    class="mt-1 w-32 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.code" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="bed-code">Code</label>
+                <input id="bed-code" v-model="form.code" type="text" class="input mt-1 w-32" />
+                <p v-if="form.errors.code" class="mt-1 text-sm text-danger">
                     {{ form.errors.code }}
                 </p>
             </div>
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary">
                 {{ form.processing ? 'Saving…' : 'Add bed' }}
             </button>
         </form>
 
-        <p v-if="beds.length === 0" class="mt-4 text-sm text-slate-500">No beds added yet.</p>
+        <p v-if="beds.length === 0" class="mt-4 text-sm text-ink-muted">No beds added yet.</p>
 
         <table v-else class="mt-4 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Bed</th>
                     <th scope="col" class="py-2 font-medium">Occupant</th>
                     <th scope="col" class="py-2 font-medium">Status</th>
@@ -133,10 +124,10 @@ function toggleBedStatus(bed: BedRow): void {
                     </th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="bed in beds" :key="bed.id">
                     <td class="py-3 font-medium">{{ bed.code }}</td>
-                    <td class="py-3 text-slate-600">{{ bed.occupantName ?? '—' }}</td>
+                    <td class="py-3 text-ink-muted">{{ bed.occupantName ?? '—' }}</td>
                     <td class="py-3"><StatusBadge :status="bed.status" /></td>
                     <td class="py-3 text-right">
                         <button

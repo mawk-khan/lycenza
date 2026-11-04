@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a to DS-4e implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4f implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -375,3 +375,10 @@ recommended first domain (Students) was taken.
      presentation, integrations, organization report, index) move with
      DS-4h.
    - Visual check on 19 captured pages.
+10. **DS-4f: Operations (2026-11-04).** `Pages/App/Library`, `Transport`,
+    `Hostel`, `Inventory`, `Canteen` and `Visitor` -- 49 files on the
+    codemod. The codemod now also maps tokens inside `SearchCombobox`'s
+    `list-class` / `option-class` props (the one Canteen case was fixed with
+    the same mapping). The danger hue stays on actionable states only: an
+    overdue loan, import rows in conflict or invalid, the destructive Write
+    off. Visual check on 23 captured pages.

@@ -79,18 +79,18 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/library/circulation">← Circulation</a>
         <h1 class="mt-2 text-xl font-semibold">Check out an item</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="copy-search">Library copy</label>
+                <label class="block text-sm text-ink-muted" for="copy-search">Library copy</label>
                 <SearchCombobox
                     id="copy-search"
                     v-model="copyQuery"
                     placeholder="Search by title or accession code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="copyResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.library_copy_id"
@@ -103,12 +103,12 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="student-search">Student</label>
+                <label class="block text-sm text-ink-muted" for="student-search">Student</label>
                 <SearchCombobox
                     id="student-search"
                     v-model="studentQuery"
                     placeholder="Search by name or student number"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="studentResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.student_id"
@@ -121,25 +121,21 @@ function submit(): void {
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="due-at">Due date</label>
+                <label class="block text-sm text-ink-muted" for="due-at">Due date</label>
                 <input
                     id="due-at"
                     v-model="form.due_at"
                     type="date"
                     :min="props.today"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                 />
-                <p v-if="form.errors.due_at" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.due_at" class="mt-1 text-sm text-danger">
                     {{ form.errors.due_at }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Checking out…' : 'Check out' }}
                 </button>
                 <a class="text-sm underline" href="/app/library/circulation">Cancel</a>

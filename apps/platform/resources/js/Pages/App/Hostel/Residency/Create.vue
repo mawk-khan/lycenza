@@ -76,18 +76,18 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/hostel-residency">← Hostel residency</a>
         <h1 class="mt-2 text-xl font-semibold">Assign a Student to a Hostel Bed</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="student-search">Student</label>
+                <label class="block text-sm text-ink-muted" for="student-search">Student</label>
                 <SearchCombobox
                     id="student-search"
                     v-model="studentQuery"
                     placeholder="Search by name or student number"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="studentResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.student_id"
@@ -100,12 +100,12 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="bed-search">Bed</label>
+                <label class="block text-sm text-ink-muted" for="bed-search">Bed</label>
                 <SearchCombobox
                     id="bed-search"
                     v-model="bedQuery"
                     placeholder="Search by bed code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="bedResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.hostel_bed_id"
@@ -115,15 +115,11 @@ function submit(): void {
                         {{ bed.hostelName }} / {{ bed.roomCode }} / Bed {{ bed.code }}
                     </template>
                 </SearchCombobox>
-                <p class="mt-1 text-xs text-slate-400">Only available (unoccupied) Beds appear.</p>
+                <p class="mt-1 text-xs text-ink-muted">Only available (unoccupied) Beds appear.</p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Assigning…' : 'Assign' }}
                 </button>
                 <a class="text-sm underline" href="/app/hostel-residency">Cancel</a>

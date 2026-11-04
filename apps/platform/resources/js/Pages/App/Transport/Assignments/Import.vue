@@ -50,12 +50,12 @@ const labels: Record<Outcome, string> = {
     not_accessible: 'Not found or not accessible',
 };
 const tone: Record<Outcome, string> = {
-    ready: 'text-emerald-700',
-    already_assigned: 'text-slate-600',
-    duplicate_row: 'text-slate-600',
-    conflict: 'text-red-700',
-    invalid: 'text-red-700',
-    not_accessible: 'text-red-700',
+    ready: 'text-ink',
+    already_assigned: 'text-ink-muted',
+    duplicate_row: 'text-ink-muted',
+    conflict: 'text-danger',
+    invalid: 'text-danger',
+    not_accessible: 'text-danger',
 };
 
 const upload = useForm<{ file: File | null }>({ file: null });
@@ -87,18 +87,18 @@ function commit(): void {
 
 <template>
     <Head title="Import Transport riders" />
-    <main class="mx-auto max-w-5xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/transport/assignments">← Transport assignments</a>
         <h1 class="mt-2 text-xl font-semibold">Import Transport riders</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Adds new rider assignments from a CSV file. Nothing changes until you confirm, and then
             either every new row is assigned or none is. Existing assignments are never changed or
             ended here — end them first from the assignment list.
         </p>
 
-        <section class="mt-6 rounded border border-slate-200 p-4">
-            <h2 class="text-sm font-semibold text-slate-700">1. Choose a file</h2>
-            <p class="mt-1 text-sm text-slate-600">
+        <section class="mt-6 rounded-xs border border-line p-4">
+            <h2 class="text-sm font-semibold text-ink">1. Choose a file</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 UTF-8 CSV, up to {{ limits.rows }} rows and {{ limits.kilobytes }} KB. Columns:
                 <code>{{ limits.columns.join(', ') }}</code
                 >. Students are matched by their student number only, routes by route code, and
@@ -112,17 +112,17 @@ function commit(): void {
                 <button
                     type="submit"
                     :disabled="upload.processing || upload.file === null"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary"
                 >
                     {{ upload.processing ? 'Checking…' : 'Check rows' }}
                 </button>
             </form>
-            <p v-if="errors.file" class="mt-2 text-sm text-red-700">{{ errors.file }}</p>
+            <p v-if="errors.file" class="mt-2 text-sm text-danger">{{ errors.file }}</p>
         </section>
 
         <section v-if="preview" class="mt-6">
-            <h2 class="text-sm font-semibold text-slate-700">2. Review</h2>
-            <p v-if="refusal" class="mt-2 rounded bg-red-50 p-3 text-sm text-red-800">
+            <h2 class="text-sm font-semibold text-ink">2. Review</h2>
+            <p v-if="refusal" class="mt-2 rounded-xs bg-danger-tint p-3 text-sm text-danger">
                 {{ refusal }}
             </p>
             <ul class="mt-2 flex flex-wrap gap-3 text-sm">
@@ -133,7 +133,7 @@ function commit(): void {
             <div class="mt-3 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Line</th>
                             <th scope="col" class="py-2 font-medium">Student</th>
                             <th scope="col" class="py-2 font-medium">Route</th>
@@ -141,12 +141,12 @@ function commit(): void {
                             <th scope="col" class="py-2 font-medium">Result</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in preview.rows" :key="row.line">
-                            <td class="py-2 text-slate-500">{{ row.line }}</td>
+                            <td class="py-2 text-ink-muted">{{ row.line }}</td>
                             <td class="py-2">
                                 {{ row.studentNumber }}
-                                <span v-if="row.studentName" class="text-slate-500"
+                                <span v-if="row.studentName" class="text-ink-muted"
                                     >— {{ row.studentName }}</span
                                 >
                             </td>
@@ -156,7 +156,7 @@ function commit(): void {
                             </td>
                             <td class="py-2" :class="tone[row.outcome]">
                                 {{ labels[row.outcome]
-                                }}<span class="block text-xs text-slate-500">{{
+                                }}<span class="block text-xs text-ink-muted">{{
                                     row.message
                                 }}</span>
                             </td>
@@ -165,19 +165,19 @@ function commit(): void {
                 </table>
             </div>
 
-            <h2 class="mt-6 text-sm font-semibold text-slate-700">3. Confirm</h2>
-            <p v-if="!preview.committable" class="mt-1 text-sm text-red-700">
+            <h2 class="mt-6 text-sm font-semibold text-ink">3. Confirm</h2>
+            <p v-if="!preview.committable" class="mt-1 text-sm text-danger">
                 Fix the rows marked Conflict, Invalid or Not accessible in your file and check it
                 again. Nothing has been assigned.
             </p>
-            <p v-else-if="preview.summary.ready === 0" class="mt-1 text-sm text-slate-600">
+            <p v-else-if="preview.summary.ready === 0" class="mt-1 text-sm text-ink-muted">
                 Every row is already assigned exactly like this; there is nothing new to assign.
             </p>
             <button
                 v-else
                 type="button"
                 :disabled="committing"
-                class="mt-2 rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                class="mt-2 rounded-xs bg-accent-strong px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 @click="commit"
             >
                 {{ committing ? 'Assigning…' : `Assign ${preview.summary.ready} new rider(s)` }}

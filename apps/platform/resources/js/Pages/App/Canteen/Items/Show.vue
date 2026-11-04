@@ -106,13 +106,13 @@ function removeRequirement(requirement: RecipeRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/canteen-items">← Canteen items</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ item.name }}</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{ item.code }} · {{ formatMoney(item.price, item.currency) }}
                 </p>
             </div>
@@ -123,9 +123,9 @@ function removeRequirement(requirement: RecipeRow): void {
             {{ item.status === 'active' ? 'Deactivate' : 'Activate' }} this Item
         </button>
 
-        <section class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-semibold text-slate-700">Recipe</h2>
-            <p class="mt-1 text-xs text-slate-500">
+        <section class="mt-8 border-t border-line pt-6">
+            <h2 class="text-sm font-semibold text-ink">Recipe</h2>
+            <p class="mt-1 text-xs text-ink-muted">
                 Inventory consumed from the fulfilling Outlet's Location each time one unit of this
                 Item is fulfilled.
             </p>
@@ -139,7 +139,7 @@ function removeRequirement(requirement: RecipeRow): void {
 
             <table v-else class="mt-4 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Inventory Item</th>
                         <th scope="col" class="py-2 font-medium">Quantity required</th>
                         <th scope="col" class="py-2 font-medium">
@@ -147,7 +147,7 @@ function removeRequirement(requirement: RecipeRow): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="requirement in item.recipe" :key="requirement.id">
                         <td class="py-3 font-medium">
                             {{ requirement.inventoryItemCode }} —
@@ -158,7 +158,7 @@ function removeRequirement(requirement: RecipeRow): void {
                             <button
                                 v-if="canManage"
                                 type="button"
-                                class="text-sm text-red-600 underline"
+                                class="text-sm text-danger underline"
                                 @click="removeRequirement(requirement)"
                             >
                                 Remove
@@ -174,17 +174,17 @@ function removeRequirement(requirement: RecipeRow): void {
                 @submit.prevent="addRequirement"
             >
                 <div class="relative">
-                    <label class="block text-sm text-slate-600" for="inventory-item-search"
+                    <label class="block text-sm text-ink-muted" for="inventory-item-search"
                         >Inventory Item</label
                     >
                     <div
                         v-if="selectedInventoryItemLabel"
-                        class="mt-1 flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="mt-1 flex items-center gap-2 rounded-xs border border-control-line px-3 py-2 text-sm"
                     >
                         <span>{{ selectedInventoryItemLabel }}</span>
                         <button
                             type="button"
-                            class="text-slate-400 hover:text-slate-700"
+                            class="text-ink-muted hover:text-ink"
                             @click="clearInventoryItem"
                         >
                             ×
@@ -195,10 +195,10 @@ function removeRequirement(requirement: RecipeRow): void {
                         id="inventory-item-search"
                         v-model="inventoryItemQuery"
                         placeholder="Search by code or name"
-                        class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="mt-1 w-64 rounded-xs border border-control-line px-3 py-2 text-sm"
                         :options="inventoryItemResults"
                         :option-key="(o) => o.id"
-                        list-class="absolute z-10 mt-1 w-64 rounded border border-slate-200 bg-white text-sm shadow max-h-72 overflow-y-auto"
+                        list-class="absolute z-10 mt-1 max-h-72 w-64 overflow-y-auto rounded-xs border border-control-line bg-white text-sm text-ink shadow-md"
                         @select="pickInventoryItem"
                     >
                         <template #option="{ option: option }">
@@ -207,14 +207,14 @@ function removeRequirement(requirement: RecipeRow): void {
                     </SearchCombobox>
                     <p
                         v-if="requirementForm.errors.inventory_item_id"
-                        class="mt-1 text-sm text-red-600"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ requirementForm.errors.inventory_item_id }}
                     </p>
                 </div>
 
                 <div>
-                    <label class="block text-sm text-slate-600" for="quantity-required"
+                    <label class="block text-sm text-ink-muted" for="quantity-required"
                         >Quantity required</label
                     >
                     <input
@@ -223,11 +223,11 @@ function removeRequirement(requirement: RecipeRow): void {
                         type="text"
                         inputmode="decimal"
                         placeholder="e.g. 1 or 0.250"
-                        class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1 w-40"
                     />
                     <p
                         v-if="requirementForm.errors.quantity_required"
-                        class="mt-1 text-sm text-red-600"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ requirementForm.errors.quantity_required }}
                     </p>
@@ -236,7 +236,7 @@ function removeRequirement(requirement: RecipeRow): void {
                 <button
                     type="submit"
                     :disabled="requirementForm.processing || !requirementForm.inventory_item_id"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                 >
                     Add requirement
                 </button>

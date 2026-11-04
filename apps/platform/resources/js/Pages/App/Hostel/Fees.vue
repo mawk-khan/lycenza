@@ -29,10 +29,10 @@ const props = defineProps<{
 
 <template>
     <Head title="Hostel fees" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/hostel-residency">← Residency</a>
         <h1 class="mt-2 text-xl font-semibold">Hostel fees</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             A room's own fee head, or else its Hostel's, is recorded as fee intent when a Student
             takes up residency. Fee intent is not a charge or a payment — Finance creates charges
             when it assesses fees.
@@ -49,13 +49,13 @@ const props = defineProps<{
 
         <section class="mt-8" aria-labelledby="hostel-intent-heading">
             <h2 id="hostel-intent-heading" class="font-semibold">Fee intent by active residency</h2>
-            <p v-if="props.residencies.data.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="props.residencies.data.length === 0" class="mt-2 text-sm text-ink-muted">
                 No active residency.
             </p>
             <div
                 v-for="residency in props.residencies.data"
                 :key="residency.id"
-                class="mt-4 rounded border border-slate-200 p-3"
+                class="mt-4 rounded-xs border border-line p-3"
             >
                 <h3 class="text-sm font-semibold">
                     {{ residency.studentName }} — {{ residency.place }}

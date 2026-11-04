@@ -134,7 +134,7 @@ def restructure(tag: str, classes: str) -> str:
 
 
 TAG_RE = re.compile(r"<([A-Za-z][\w.-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*)>")
-CLASS_ATTR = re.compile(r'(\s)(class|:class)="([^"]*)"')
+CLASS_ATTR = re.compile(r'(\s)(class|:class|list-class|option-class)="([^"]*)"')
 
 
 def migrate(src: str) -> str:

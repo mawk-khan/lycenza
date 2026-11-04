@@ -48,31 +48,31 @@ watch(search, () => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Transport routes</h1>
-                <p class="mt-1 text-sm text-slate-500">Routes serving your School.</p>
+                <p class="mt-1 text-sm text-ink-muted">Routes serving your School.</p>
             </div>
             <a
                 v-if="canManage"
                 href="/app/transport/routes/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Add route
             </a>
         </div>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-search">Search</label>
+            <label class="block text-sm text-ink-muted" for="filter-search">Search</label>
             <input
                 id="filter-search"
                 v-model="search"
                 type="text"
                 placeholder="Route name or code"
-                class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input mt-1 w-72"
             />
         </div>
 
@@ -87,19 +87,14 @@ watch(search, () => {
             "
         >
             <template v-if="canManage && !search" #action>
-                <a
-                    href="/app/transport/routes/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Add route
-                </a>
+                <a href="/app/transport/routes/create" class="btn btn-primary"> Add route </a>
             </template>
         </EmptyState>
 
         <template v-else>
             <table class="mt-6 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Code</th>
                         <th scope="col" class="py-2 font-medium">Name</th>
                         <th scope="col" class="py-2 font-medium">Campus</th>
@@ -109,7 +104,7 @@ watch(search, () => {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="route in routes.data" :key="route.id">
                         <td class="py-3 font-medium">{{ route.code }}</td>
                         <td class="py-3">
@@ -117,8 +112,8 @@ watch(search, () => {
                                 route.name
                             }}</a>
                         </td>
-                        <td class="py-3 text-slate-600">{{ route.campusName ?? 'School-wide' }}</td>
-                        <td class="py-3 text-slate-600">{{ route.stopsCount }}</td>
+                        <td class="py-3 text-ink-muted">{{ route.campusName ?? 'School-wide' }}</td>
+                        <td class="py-3 text-ink-muted">{{ route.stopsCount }}</td>
                         <td class="py-3 text-right">
                             <a class="text-sm underline" :href="`/app/transport/routes/${route.id}`"
                                 >View</a

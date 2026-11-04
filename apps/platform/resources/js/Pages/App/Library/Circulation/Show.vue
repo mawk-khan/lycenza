@@ -63,19 +63,19 @@ function voidFine() {
 
 <template>
     <Head :title="`Loan — ${props.loan.titleName}`" />
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/library/circulation">← Circulation</a>
         <h1 class="mt-2 text-xl font-semibold">{{ props.loan.titleName }}</h1>
         <dl class="mt-4 grid grid-cols-[9rem_1fr] gap-y-1 text-sm">
-            <dt class="text-slate-600">Copy</dt>
+            <dt class="text-ink-muted">Copy</dt>
             <dd>{{ props.loan.copyCode }}</dd>
-            <dt class="text-slate-600">Student</dt>
+            <dt class="text-ink-muted">Student</dt>
             <dd>{{ props.loan.studentName }}</dd>
-            <dt class="text-slate-600">Checked out</dt>
+            <dt class="text-ink-muted">Checked out</dt>
             <dd>{{ formatCalendarDate(props.loan.checkedOutAt) }}</dd>
-            <dt class="text-slate-600">Due</dt>
+            <dt class="text-ink-muted">Due</dt>
             <dd>{{ formatCalendarDate(props.loan.dueAt) }}</dd>
-            <dt class="text-slate-600">Returned</dt>
+            <dt class="text-ink-muted">Returned</dt>
             <dd>
                 {{ props.loan.returnedAt ? formatCalendarDate(props.loan.returnedAt) : 'Not yet' }}
             </dd>
@@ -83,26 +83,26 @@ function voidFine() {
 
         <section v-if="props.canViewFines" class="mt-8" aria-labelledby="fine-heading">
             <h2 id="fine-heading" class="font-semibold">Overdue fine</h2>
-            <p v-if="!props.fine" class="mt-2 text-sm text-slate-600">
+            <p v-if="!props.fine" class="mt-2 text-sm text-ink-muted">
                 No fine was assessed for this loan.
             </p>
             <template v-else>
                 <dl class="mt-2 grid grid-cols-[9rem_1fr] gap-y-1 text-sm" data-testid="loan-fine">
-                    <dt class="text-slate-600">Amount</dt>
+                    <dt class="text-ink-muted">Amount</dt>
                     <dd>{{ props.fine.currency }} {{ props.fine.amount }}</dd>
-                    <dt class="text-slate-600">Days</dt>
+                    <dt class="text-ink-muted">Days</dt>
                     <dd>
                         {{ props.fine.overdueDays }} overdue,
                         {{ props.fine.chargeableDays }} charged
                     </dd>
-                    <dt class="text-slate-600">Policy</dt>
+                    <dt class="text-ink-muted">Policy</dt>
                     <dd>
                         Version {{ props.fine.policyVersion ?? '—' }} ·
                         {{ feeHeadText(props.fine.feeHead) }}
                     </dd>
-                    <dt class="text-slate-600">Assessed</dt>
+                    <dt class="text-ink-muted">Assessed</dt>
                     <dd>{{ formatDate(props.fine.assessedAt) }}</dd>
-                    <dt class="text-slate-600">Status</dt>
+                    <dt class="text-ink-muted">Status</dt>
                     <dd>
                         <template v-if="props.fine.status === 'voided'">
                             Voided {{ formatDate(props.fine.voidedAt) }} —
@@ -118,21 +118,21 @@ function voidFine() {
                     @submit.prevent="dialog?.open()"
                 >
                     <div class="w-72">
-                        <label class="block text-sm text-slate-700" for="void-reason-code"
+                        <label class="block text-sm text-ink" for="void-reason-code"
                             >Why is it voided?</label
                         >
                         <select
                             id="void-reason-code"
                             v-model="form.reason_code"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option value="" disabled>Choose a reason</option>
                             <option v-for="r in props.voidReasons" :key="r" :value="r">
                                 {{ VOID_REASON_LABELS[r] ?? r }}
                             </option>
                         </select>
-                        <p v-if="form.errors.reason_code" class="mt-1 text-sm text-red-700">
+                        <p v-if="form.errors.reason_code" class="mt-1 text-sm text-danger">
                             {{ form.errors.reason_code }}
                         </p>
                     </div>
@@ -162,7 +162,7 @@ function voidFine() {
                             !form.reason_code ||
                             !props.hasMfaFactor
                         "
-                        class="rounded bg-red-700 px-3 py-2 text-white disabled:opacity-50"
+                        class="btn btn-danger"
                     >
                         Void fine
                     </button>

@@ -13,41 +13,36 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/transport/vehicles">← Transport vehicles</a>
         <h1 class="mt-2 text-xl font-semibold">Add vehicle</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="code">Code</label>
-                <input
-                    id="code"
-                    v-model="form.code"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.code" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="code">Code</label>
+                <input id="code" v-model="form.code" type="text" class="input mt-1" />
+                <p v-if="form.errors.code" class="mt-1 text-sm text-danger">
                     {{ form.errors.code }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="registration-number">
+                <label class="block text-sm text-ink-muted" for="registration-number">
                     Registration number
                 </label>
                 <input
                     id="registration-number"
                     v-model="form.registration_number"
                     type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.registration_number" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.registration_number" class="mt-1 text-sm text-danger">
                     {{ form.errors.registration_number }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="capacity"
+                <label class="block text-sm text-ink-muted" for="capacity"
                     >Capacity (optional)</label
                 >
                 <input
@@ -55,19 +50,15 @@ function submit(): void {
                     v-model="form.capacity"
                     type="number"
                     min="1"
-                    class="mt-1 w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-32"
                 />
-                <p v-if="form.errors.capacity" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.capacity" class="mt-1 text-sm text-danger">
                     {{ form.errors.capacity }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Add vehicle' }}
                 </button>
                 <a class="text-sm underline" href="/app/transport/vehicles">Cancel</a>

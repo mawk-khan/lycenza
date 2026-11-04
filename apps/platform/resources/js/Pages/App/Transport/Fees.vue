@@ -35,10 +35,10 @@ const props = defineProps<{
 
 <template>
     <Head title="Transport fees" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/transport/assignments">← Student assignments</a>
         <h1 class="mt-2 text-xl font-semibold">Transport fees</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             A route's fee head (set on the route) is recorded as fee intent when a Student is
             assigned. Fee intent is not a charge or a payment — Finance creates charges when it
             assesses fees.
@@ -57,13 +57,13 @@ const props = defineProps<{
             <h2 id="transport-intent-heading" class="font-semibold">
                 Fee intent by active assignment
             </h2>
-            <p v-if="props.assignments.data.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="props.assignments.data.length === 0" class="mt-2 text-sm text-ink-muted">
                 No active assignment.
             </p>
             <div
                 v-for="assignment in props.assignments.data"
                 :key="assignment.id"
-                class="mt-4 rounded border border-slate-200 p-3"
+                class="mt-4 rounded-xs border border-line p-3"
             >
                 <h3 class="text-sm font-semibold">
                     {{ assignment.studentName }} —

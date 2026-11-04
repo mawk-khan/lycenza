@@ -94,18 +94,18 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/visitor/visits">← Visits</a>
         <h1 class="mt-2 text-xl font-semibold">Check in a Visitor</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="visitor-search">Visitor</label>
+                <label class="block text-sm text-ink-muted" for="visitor-search">Visitor</label>
                 <SearchCombobox
                     id="visitor-search"
                     v-model="visitorQuery"
                     placeholder="Search by name or phone, or add a new Visitor first"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="visitorResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.visitor_id"
@@ -116,7 +116,7 @@ function submit(): void {
                         }}<span v-if="visitor.phone"> ({{ visitor.phone }})</span>
                     </template>
                 </SearchCombobox>
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     Visitor not listed?
                     <a class="underline" href="/app/visitor/directory/create"
                         >Add them to the directory</a
@@ -126,31 +126,27 @@ function submit(): void {
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="campus">Campus</label>
-                <select
-                    id="campus"
-                    v-model="form.campus_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="campus">Campus</label>
+                <select id="campus" v-model="form.campus_id" class="input mt-1">
                     <option value="">— Select —</option>
                     <option v-for="campus in campuses" :key="campus.id" :value="campus.id">
                         {{ campus.name }}
                     </option>
                 </select>
-                <p v-if="form.errors.campus_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.campus_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.campus_id }}
                 </p>
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="host-search"
+                <label class="block text-sm text-ink-muted" for="host-search"
                     >Host (optional)</label
                 >
                 <SearchCombobox
                     id="host-search"
                     v-model="hostQuery"
                     placeholder="Search by Employee name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="hostResults"
                     :option-key="(o) => o.id"
                     @select="pickHost"
@@ -162,51 +158,47 @@ function submit(): void {
                 <button
                     v-if="selectedHost"
                     type="button"
-                    class="mt-1 text-xs text-slate-500 underline"
+                    class="mt-1 text-xs text-ink-muted underline"
                     @click="clearHost"
                 >
                     Clear host
                 </button>
-                <p v-if="form.errors.host_employee_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.host_employee_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.host_employee_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="purpose">Purpose</label>
+                <label class="block text-sm text-ink-muted" for="purpose">Purpose</label>
                 <textarea
                     id="purpose"
                     v-model="form.purpose"
                     rows="3"
                     maxlength="500"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 ></textarea>
-                <p v-if="form.errors.purpose" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.purpose" class="mt-1 text-sm text-danger">
                     {{ form.errors.purpose }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="gate-pass">
+                <label class="block text-sm text-ink-muted" for="gate-pass">
                     Gate pass number (optional)
                 </label>
                 <input
                     id="gate-pass"
                     v-model="form.gate_pass_number"
                     type="text"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                 />
-                <p v-if="form.errors.gate_pass_number" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.gate_pass_number" class="mt-1 text-sm text-danger">
                     {{ form.errors.gate_pass_number }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Checking in…' : 'Check in' }}
                 </button>
                 <a class="text-sm underline" href="/app/visitor/visits">Cancel</a>

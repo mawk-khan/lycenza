@@ -61,49 +61,39 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/canteen-outlets">← Canteen outlets</a>
         <h1 class="mt-2 text-xl font-semibold">Add Outlet</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="code">Code</label>
-                <input
-                    id="code"
-                    v-model="form.code"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.code" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="code">Code</label>
+                <input id="code" v-model="form.code" type="text" class="input mt-1" />
+                <p v-if="form.errors.code" class="mt-1 text-sm text-danger">
                     {{ form.errors.code }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="name">Name</label>
-                <input
-                    id="name"
-                    v-model="form.name"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="name">Name</label>
+                <input id="name" v-model="form.name" type="text" class="input mt-1" />
+                <p v-if="form.errors.name" class="mt-1 text-sm text-danger">
                     {{ form.errors.name }}
                 </p>
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="location-search"
+                <label class="block text-sm text-ink-muted" for="location-search"
                     >Inventory Location</label
                 >
                 <div
                     v-if="selectedLocationLabel"
-                    class="mt-1 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ selectedLocationLabel }}</span>
                     <button
                         type="button"
-                        class="text-slate-400 hover:text-slate-700"
+                        class="text-ink-muted hover:text-ink"
                         @click="clearLocation"
                     >
                         Change
@@ -114,7 +104,7 @@ function submit(): void {
                     id="location-search"
                     v-model="locationQuery"
                     placeholder="Search by code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="locationResults"
                     :option-key="(o) => o.id"
                     @select="pickLocation"
@@ -123,16 +113,16 @@ function submit(): void {
                         {{ location.code }} — {{ location.name }}
                     </template>
                 </SearchCombobox>
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     Stock issued to fulfill Orders from this Outlet is drawn from this Location.
                 </p>
-                <p v-if="form.errors.inventory_location_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.inventory_location_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.inventory_location_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="campus_id"
+                <label class="block text-sm text-ink-muted" for="campus_id"
                     >Campus ID (optional)</label
                 >
                 <input
@@ -140,9 +130,9 @@ function submit(): void {
                     v-model="form.campus_id"
                     type="text"
                     placeholder="Leave blank for School-wide"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.campus_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.campus_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.campus_id }}
                 </p>
             </div>
@@ -151,7 +141,7 @@ function submit(): void {
                 <button
                     type="submit"
                     :disabled="form.processing || !form.inventory_location_id"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                 >
                     {{ form.processing ? 'Saving…' : 'Add Outlet' }}
                 </button>

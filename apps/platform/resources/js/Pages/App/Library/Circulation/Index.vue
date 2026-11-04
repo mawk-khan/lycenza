@@ -74,13 +74,13 @@ function checkIn(loanId: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Library circulation</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{
                         status === 'active'
                             ? 'Currently active loans.'
@@ -93,13 +93,13 @@ function checkIn(loanId: string): void {
             <a
                 v-if="canManage"
                 href="/app/library/circulation/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Check out an item
             </a>
         </div>
 
-        <nav aria-label="Loan status" class="mt-4 border-b border-slate-200">
+        <nav aria-label="Loan status" class="mt-4 border-b border-line">
             <ul class="flex gap-4 text-sm">
                 <li v-for="view in views" :key="view.status">
                     <a
@@ -108,8 +108,8 @@ function checkIn(loanId: string): void {
                         class="-mb-px inline-block border-b-2 px-1 py-2 focus-visible:outline-2 focus-visible:outline-offset-2"
                         :class="
                             status === view.status
-                                ? 'border-slate-900 font-medium text-slate-900'
-                                : 'border-transparent text-slate-600 hover:text-slate-900'
+                                ? 'border-accent-strong font-medium text-ink'
+                                : 'border-transparent text-ink-muted hover:text-ink'
                         "
                         >{{ view.label }}</a
                     >
@@ -119,53 +119,37 @@ function checkIn(loanId: string): void {
 
         <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-xs text-slate-600" for="loans-from"
+                <label class="block text-xs text-ink-muted" for="loans-from"
                     >{{ dateLabel }} from</label
                 >
-                <input
-                    id="loans-from"
-                    v-model="from"
-                    type="date"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                />
+                <input id="loans-from" v-model="from" type="date" class="input mt-1 w-auto" />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="loans-to"
+                <label class="block text-xs text-ink-muted" for="loans-to"
                     >{{ dateLabel }} to</label
                 >
-                <input
-                    id="loans-to"
-                    v-model="to"
-                    type="date"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                />
+                <input id="loans-to" v-model="to" type="date" class="input mt-1 w-auto" />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="loans-student">Student</label>
+                <label class="block text-xs text-ink-muted" for="loans-student">Student</label>
                 <input
                     id="loans-student"
                     v-model="student"
                     type="search"
                     placeholder="Name or student number"
-                    class="mt-1 w-52 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-52"
                 />
             </div>
             <div v-if="campuses.length > 1">
-                <label class="block text-xs text-slate-600" for="loans-campus">Campus</label>
-                <select
-                    id="loans-campus"
-                    v-model="campusId"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                >
+                <label class="block text-xs text-ink-muted" for="loans-campus">Campus</label>
+                <select id="loans-campus" v-model="campusId" class="input mt-1 w-auto">
                     <option value="">All campuses</option>
                     <option v-for="c in campuses" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
             </div>
-            <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
-                Filter
-            </button>
+            <button type="submit" class="btn btn-secondary">Filter</button>
         </form>
-        <p v-if="pageErrors.to || pageErrors.from" class="mt-2 text-sm text-red-700" role="alert">
+        <p v-if="pageErrors.to || pageErrors.from" class="mt-2 text-sm text-danger" role="alert">
             {{ pageErrors.to ?? pageErrors.from }}
         </p>
 
@@ -186,10 +170,7 @@ function checkIn(loanId: string): void {
             "
         >
             <template v-if="canManage && status === 'active'" #action>
-                <a
-                    href="/app/library/circulation/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a href="/app/library/circulation/create" class="btn btn-primary">
                     Check out an item
                 </a>
             </template>
@@ -208,7 +189,7 @@ function checkIn(loanId: string): void {
                         }}
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="pr-3 py-2 font-medium">Title</th>
                             <th scope="col" class="pr-3 py-2 font-medium">Copy</th>
                             <th scope="col" class="pr-3 py-2 font-medium">Student</th>
@@ -226,7 +207,7 @@ function checkIn(loanId: string): void {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="loan in loans.data" :key="loan.id">
                             <td class="pr-3 py-3 font-medium">
                                 <a
@@ -235,21 +216,21 @@ function checkIn(loanId: string): void {
                                     >{{ loan.titleName }}</a
                                 >
                             </td>
-                            <td class="pr-3 py-3 text-slate-600">{{ loan.copyCode }}</td>
-                            <td class="pr-3 py-3 text-slate-600">{{ loan.studentName }}</td>
-                            <td class="pr-3 py-3 text-slate-600">
+                            <td class="pr-3 py-3 text-ink-muted">{{ loan.copyCode }}</td>
+                            <td class="pr-3 py-3 text-ink-muted">{{ loan.studentName }}</td>
+                            <td class="pr-3 py-3 text-ink-muted">
                                 {{ formatCalendarDate(loan.checkedOutAt) }}
                             </td>
                             <td
                                 class="pr-3 py-3"
                                 :class="
-                                    loan.isOverdue ? 'font-medium text-red-600' : 'text-slate-600'
+                                    loan.isOverdue ? 'font-medium text-danger' : 'text-ink-muted'
                                 "
                             >
                                 {{ formatCalendarDate(loan.dueAt)
                                 }}<span v-if="loan.isOverdue"> (overdue)</span>
                             </td>
-                            <td v-if="status !== 'active'" class="pr-3 py-3 text-slate-600">
+                            <td v-if="status !== 'active'" class="pr-3 py-3 text-ink-muted">
                                 {{ loan.returnedAt ? formatCalendarDate(loan.returnedAt) : '—' }}
                             </td>
                             <td class="pr-3 py-3 text-right">

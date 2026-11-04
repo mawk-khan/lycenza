@@ -100,22 +100,22 @@ function endAssignment(assignmentId: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/transport/operations">← Route operations</a>
 
         <h1 class="mt-2 text-xl font-semibold">{{ route.name }}</h1>
-        <p class="mt-1 text-sm text-slate-500">Code {{ route.code }}</p>
+        <p class="mt-1 text-sm text-ink-muted">Code {{ route.code }}</p>
 
         <div class="mt-8">
-            <h2 class="text-sm font-semibold text-slate-900">Current assignment</h2>
+            <h2 class="text-sm font-semibold text-ink">Current assignment</h2>
             <div
                 v-if="current"
-                class="mt-3 flex items-center justify-between rounded border border-slate-200 p-4 text-sm"
+                class="mt-3 flex items-center justify-between rounded-xs border border-line p-4 text-sm"
             >
                 <div>
                     <p class="font-medium">{{ current.vehicleCode }}</p>
-                    <p class="text-slate-600">{{ current.driverName }}</p>
-                    <p class="mt-1 text-xs text-slate-400">Since {{ current.startsOn }}</p>
+                    <p class="text-ink-muted">{{ current.driverName }}</p>
+                    <p class="mt-1 text-xs text-ink-muted">Since {{ current.startsOn }}</p>
                 </div>
                 <button
                     v-if="canManage"
@@ -126,22 +126,22 @@ function endAssignment(assignmentId: string): void {
                     End assignment
                 </button>
             </div>
-            <p v-else class="mt-3 text-sm text-slate-500">No Vehicle/Driver currently assigned.</p>
+            <p v-else class="mt-3 text-sm text-ink-muted">No Vehicle/Driver currently assigned.</p>
         </div>
 
         <div v-if="canManage" class="mt-8">
-            <h2 class="text-sm font-semibold text-slate-900">
+            <h2 class="text-sm font-semibold text-ink">
                 {{ current ? 'Reassign' : 'Assign' }} Vehicle / Driver
             </h2>
 
             <form class="mt-3 space-y-4" @submit.prevent="submit">
                 <div class="relative">
-                    <label class="block text-sm text-slate-600" for="vehicle-search">Vehicle</label>
+                    <label class="block text-sm text-ink-muted" for="vehicle-search">Vehicle</label>
                     <SearchCombobox
                         id="vehicle-search"
                         v-model="vehicleQuery"
                         placeholder="Search by code or registration number"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                         :options="vehicleResults"
                         :option-key="(o) => o.id"
                         :error="form.errors.vehicle_id"
@@ -154,12 +154,12 @@ function endAssignment(assignmentId: string): void {
                 </div>
 
                 <div class="relative">
-                    <label class="block text-sm text-slate-600" for="driver-search">Driver</label>
+                    <label class="block text-sm text-ink-muted" for="driver-search">Driver</label>
                     <SearchCombobox
                         id="driver-search"
                         v-model="driverQuery"
                         placeholder="Search by name or employee number"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                         :options="driverResults"
                         :option-key="(o) => o.id"
                         :error="form.errors.driver_employee_id"
@@ -171,33 +171,29 @@ function endAssignment(assignmentId: string): void {
                     </SearchCombobox>
                 </div>
 
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : current ? 'Reassign' : 'Assign' }}
                 </button>
             </form>
         </div>
 
         <div class="mt-8">
-            <h2 class="text-sm font-semibold text-slate-900">History</h2>
+            <h2 class="text-sm font-semibold text-ink">History</h2>
             <table class="mt-3 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Vehicle</th>
                         <th scope="col" class="py-2 font-medium">Driver</th>
                         <th scope="col" class="py-2 font-medium">From</th>
                         <th scope="col" class="py-2 font-medium">To</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="assignment in assignments" :key="assignment.id">
                         <td class="py-3 font-medium">{{ assignment.vehicleCode }}</td>
-                        <td class="py-3 text-slate-600">{{ assignment.driverName }}</td>
-                        <td class="py-3 text-slate-600">{{ assignment.startsOn }}</td>
-                        <td class="py-3 text-slate-600">{{ assignment.endsOn ?? 'Current' }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.driverName }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.startsOn }}</td>
+                        <td class="py-3 text-ink-muted">{{ assignment.endsOn ?? 'Current' }}</td>
                     </tr>
                 </tbody>
             </table>

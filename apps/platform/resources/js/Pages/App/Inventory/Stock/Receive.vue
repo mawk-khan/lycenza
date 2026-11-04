@@ -75,18 +75,18 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/inventory-stock">← Inventory stock</a>
         <h1 class="mt-2 text-xl font-semibold">Receive stock</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="item-search">Item</label>
+                <label class="block text-sm text-ink-muted" for="item-search">Item</label>
                 <SearchCombobox
                     id="item-search"
                     v-model="itemQuery"
                     placeholder="Search by code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="itemResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.inventory_item_id"
@@ -99,12 +99,12 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="location-search">Location</label>
+                <label class="block text-sm text-ink-muted" for="location-search">Location</label>
                 <SearchCombobox
                     id="location-search"
                     v-model="locationQuery"
                     placeholder="Search by code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="locationResults"
                     :option-key="(o) => o.id"
                     :error="form.errors.inventory_location_id"
@@ -117,26 +117,22 @@ function submit(): void {
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="quantity">Quantity</label>
+                <label class="block text-sm text-ink-muted" for="quantity">Quantity</label>
                 <input
                     id="quantity"
                     v-model="form.quantity"
                     type="text"
                     inputmode="decimal"
                     placeholder="e.g. 10 or 1.500"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.quantity" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.quantity" class="mt-1 text-sm text-danger">
                     {{ form.errors.quantity }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Receiving…' : 'Receive' }}
                 </button>
                 <a class="text-sm underline" href="/app/inventory-stock">Cancel</a>
