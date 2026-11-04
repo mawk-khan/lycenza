@@ -66,6 +66,8 @@ class DatabaseRoleVerifier
         'employment_terms', 'employee_placement_changes',
         // HR.3A: reporting lines are ended or voided, never deleted; they go only with their subordinate employment.
         'reporting_relationships',
+        // HR.12: separation cases, their timeline and clearance go only with their employment; requirements are retired.
+        'employment_separation_cases', 'employment_separation_events', 'separation_clearance_items', 'separation_clearance_requirements',
         // HR.2A (S-16, OD-HR-13): ancillary profile records are archived, never deleted; HR document
         // records are archived; reference codes are retired. Only retention purges any of them.
         'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
@@ -228,6 +230,22 @@ class DatabaseRoleVerifier
         'trg_reporting_relationships_guard' => 'reporting_relationships',
         'trg_employment_records_reporting_bounds' => 'employment_records',
     ];
+
+    /**
+     * HR.12: the separation backstops -- the case graph, evidence, maker/checker
+     * and "never the subject"; clearance snapshots cleared once; requirements
+     * retired, never edited; notice_period only under an approved case.
+     * trigger => table.
+     */
+    public const HR_SEPARATION_GUARDS = [
+        'trg_employment_separation_cases_guard' => 'employment_separation_cases',
+        'trg_separation_clearance_items_guard' => 'separation_clearance_items',
+        'trg_separation_clearance_requirements_guard' => 'separation_clearance_requirements',
+        'trg_employment_records_separation_notice' => 'employment_records',
+    ];
+
+    /** HR.12: the tenant-owned separation tables (forced RLS each). */
+    public const HR_SEPARATION_TABLES = ['employment_separation_cases', 'employment_separation_events', 'separation_clearance_requirements', 'separation_clearance_items'];
 
     /**
      * HR.9 (ADR 0065 §28): the leave policy backstops -- a version's
@@ -459,6 +477,26 @@ class DatabaseRoleVerifier
         $results[] = CheckResult::of('hr_profile_invariants', $missingProfile === [], $missingProfile === [] ? '' : count($missingProfile).' missing or disabled');
 
         $results[] = CheckResult::of('hr_reporting_invariants', $missingReporting === [], $missingReporting === [] ? '' : count($missingReporting).' missing or disabled');
+
+        // HR.12: the separation backstops, maker/checker, one live case, forced RLS.
+        $missingSeparation = array_keys(array_filter(self::HR_SEPARATION_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
+            "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
+        )->x === false, ARRAY_FILTER_USE_BOTH));
+        foreach (self::HR_SEPARATION_TABLES as $table) {
+            $forced = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (?)::regclass', ["public.{$table}"]);
+            if ($forced === null || ! $forced->x) {
+                $missingSeparation[] = "{$table}:rls";
+            }
+        }
+        foreach (['employment_separation_cases_sod_check', 'employment_separation_cases_dates_check', 'separation_clearance_items_status_check'] as $constraint) {
+            if (! DB::selectOne('select exists (select 1 from pg_constraint where conname = ?) as x', [$constraint])->x) {
+                $missingSeparation[] = $constraint;
+            }
+        }
+        if (! DB::selectOne("select exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'employment_separation_cases_one_live') as x")->x) {
+            $missingSeparation[] = 'employment_separation_cases_one_live';
+        }
+        $results[] = CheckResult::of('hr_separation_invariants', $missingSeparation === [], $missingSeparation === [] ? '' : count($missingSeparation).' missing or disabled');
 
         // HR.9: the leave policy backstops, forced RLS on the two new tables and their closed checks.
         $missingLeavePolicy = array_keys(array_filter(self::LEAVE_POLICY_GUARDS, fn (string $table, string $trigger) => DB::selectOne(

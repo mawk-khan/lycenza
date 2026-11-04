@@ -224,6 +224,9 @@ class HrEmployeeController extends Controller
                 'manageEmployees' => $canManageEmployees,
                 'managePersonal' => $capabilities->canInSchool($actor, 'hr.employees.personal.manage', $school),
                 'manageAssignments' => $canManageAssignments,
+                // HR.12: a resignation, retirement or contract end is a separation case (HR-061).
+                'recordSeparations' => $access->holdsWholeSchool($actor, 'hr.separations.manage', $school),
+                'viewSeparations' => $access->holdsWholeSchool($actor, 'hr.separations.view', $school),
                 'manageQualifications' => $capabilities->canInSchool($actor, 'hr.employees.qualifications.manage', $school),
                 'manageDocuments' => $capabilities->canInSchool($actor, 'hr.employees.documents.manage', $school),
                 'manageNotes' => $capabilities->canInSchool($actor, 'hr.employees.notes.manage', $school),

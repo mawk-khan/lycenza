@@ -60,7 +60,7 @@ class TimetableEntryConcurrencyTest extends TestCase
         $offeringB = $this->createSubjectOffering($year, $campus, $grade, $subjectB, ['is_required' => true, 'status' => 'active']);
         $sectionA = $this->createSection($year, $campus, $grade, ['status' => 'active', 'code' => 'A']);
         $sectionB = $this->createSection($year, $campus, $grade, ['status' => 'active', 'code' => 'B']);
-        $teacher = $this->createEmployee($this->school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($this->school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($this->school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
 
         $script = __DIR__.'/../../Support/create-timetable-entry.php';

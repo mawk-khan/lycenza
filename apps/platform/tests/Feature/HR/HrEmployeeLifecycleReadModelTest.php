@@ -45,7 +45,7 @@ class HrEmployeeLifecycleReadModelTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
         app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2022-01-01'], $position, $actor);
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-01-31', $actor);
+        app(EmploymentService::class)->end($employment, '2026-01-31', $actor);
 
         $page = app(EmployeeDirectoryService::class)->search($school, new EmployeeDirectoryQuery(includeArchived: true), $actor);
         $entry = collect($page->items())->firstWhere('employeeId', $employee->id);
@@ -131,7 +131,7 @@ class HrEmployeeLifecycleReadModelTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
         $firstEmployment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2020-01-01'], $actor);
-        app(EmployeeLifecycleService::class)->separate($firstEmployment, '2022-12-31', $actor);
+        app(EmploymentService::class)->end($firstEmployment, '2022-12-31', $actor);
         app(EmployeeLifecycleService::class)->rehire($employee, ['employment_type' => 'permanent', 'starts_on' => '2023-01-01'], $actor);
 
         $timeline = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $actor, new EmployeeActivityTimelineQuery(perPage: 100));
@@ -159,7 +159,7 @@ class HrEmployeeLifecycleReadModelTest extends TestCase
         $targetEmployee = $this->createEmployee($school);
         $employment = app(EmploymentService::class)->create($targetEmployee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $hrUser);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $hrUser);
+        app(EmploymentService::class)->end($employment, '2026-06-15', $hrUser);
 
         $hrActorTimeline = app(EmployeeActivityTimelineService::class)->get($school, $hrActorEmployee->id, $hrUser, new EmployeeActivityTimelineQuery(perPage: 100));
         $this->assertCount(0, collect($hrActorTimeline->items())->filter(fn ($e) => $e->eventType === 'hr.employment.ended'), 'The separation event belongs to the TARGET employee, never the acting HR staff members own timeline.');

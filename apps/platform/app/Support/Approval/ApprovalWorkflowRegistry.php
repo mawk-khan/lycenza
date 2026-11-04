@@ -127,6 +127,24 @@ final class ApprovalWorkflowRegistry
             'compatibility' => 'special_rules',
             'note' => 'ORG.8D (§62). Two paths: manager = whole-School hr.leave.approve AND the current reporting line (ReportingLine::holdManagerOf, FOR SHARE, read at decision time; HR.3A: the dated employment-level line effective on the decision date); administrative = hr.leave.manage (any request, fallback). Authority read fresh; the submitter and the requester Employee never decide (service + leave_decisions_no_self_decision + leave_decisions_participant_guard). No Campus logic; Campus-granted managers and cross-Campus managers are owner decision OD-8.8 (not built). No step-up (NONE). Administrative writes never touch the actor\'s own employment (G-4).',
         ],
+        // HR.12 (owner decision HR-061, 2026-11-04; ADR 0028 HR.12 amendment): HR records, ANOTHER person decides.
+        'employment_separation_cases' => [
+            'domain' => 'HR',
+            'tables' => ['employment_separation_cases', 'separation_clearance_items'],
+            'request' => ['hr.separations.manage'],
+            'decide' => ['hr.separations.approve'],
+            'participants' => ['employment_separation_cases.requested_by_user_id'],
+            'decider' => 'employment_separation_cases.decided_by_user_id',
+            'dbBackstop' => 'employment_separation_cases_sod_check',
+            'makerChecker' => 'shared',
+            'service' => 'App\Domain\HR\Application\Separation\SeparationCaseService',
+            'decisions' => ['approve', 'reject'],
+            'execution' => 'separate',
+            'drift' => 'immutable_terms',
+            'freshMfa' => ['approve'],
+            'compatibility' => 'as_is',
+            'note' => 'Approval moves the employment to notice_period; finalization (EmploymentService::end()) is a separate HR step on or after the planned last day. Terms (employment, reason, notice date, requester) are DB-immutable; nobody records, decides, finalizes or clears their own separation (trg_employment_separation_cases_guard).',
+        ],
         'payroll_runs' => [
             'domain' => 'Payroll',
             'tables' => ['payroll_runs', 'payroll_run_calculations'],
@@ -185,6 +203,12 @@ final class ApprovalWorkflowRegistry
             'capability' => 'school.profile.manage', 'action' => 'School institutional identity change',
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'SchoolIdentityChangeReason (closed)',
             'evidence' => 'school_audit_events school.institutional_identity_changed (changed fields, reason, MFA time; never values)', 'relationshipConflict' => null,
+        ],
+        // HR.12 (owner decision 2026-11-04): the one direct employment end left -- a death.
+        'App\Domain\HR\Application\EmployeeLifecycleService' => [
+            'capability' => 'hr.employees.assignments.manage', 'action' => 'Employment end recorded as deceased (every other separation is an approved case)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'the status itself (deceased only; closed)',
+            'evidence' => 'school_audit_events hr.employment.ended (status deceased) + employment_records.status', 'relationshipConflict' => null,
         ],
         'App\Domain\Students\Application\StudentService' => [
             'capability' => 'students.manage', 'action' => 'Student status change',

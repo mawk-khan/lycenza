@@ -470,6 +470,18 @@ reservation.
 
 ### HR.12 — Workforce lifecycle
 
+> **Status (2026-11-04): IMPLEMENTED FOR DEVELOPMENT — PARTIAL.** Owner
+> decisions HR-061 and five follow-ups (`docs/modules/HR.md` "Separation
+> cases"): HR records, another person approves; notice + manual
+> finalization; clearance blocks completion, never the end, no waivers;
+> access flagged, never automatic; direct end = deceased only; closed core
+> reasons. Built: the case workflow, notice transition, School clearance
+> requirements with snapshot, owners' obligations (Leave incl. R-HR10-1
+> detection, Timetable, Transport, Identity), X-1 write-path fix. Not built:
+> probation confirmation (D18-03/04), retirement date (HR-084, DEF),
+> domain-evidence clearance for Library/Inventory/Finance, relieving/NOC
+> documents, self-service, a cases API, the X-1 pickers (HR.15).
+
 1. **Prerequisites:** HR.1. HR-061 (separation approval) owner decision.
 2. **Scope:** D18-03/04/10…13/15…17/20/21; D1-07, D1-33 (non-recruitment
    parts).
@@ -622,7 +634,7 @@ Reserved: `HR-R1-CLOSURE-CONTRACT.md`.
 | OD-HR-13 | Ancillary profile archive vs delete | HR.2 |
 | **OD-HR-14** | **Split HRX-L2 into L2a (timing) and L2b (biometric / device / GPS / FR)** | HR.4–HR.8 |
 | HR-050 / HR-055 | Staff-child and staff-ward fee reports | HR.15 |
-| HR-061 | Separation approval | HR.12 |
+| HR-061 | Separation approval — **DECIDED 2026-11-04**: HR records, another person approves (`hr.separations.approve`) | HR.12 |
 | HR-083 | Named Campus transfer | HR.1 (proposed as HR-AD-02) |
-| HR-084 | Retirement date | HR.12 |
+| HR-084 | Retirement date (still open; D18-21 DEF) | HR.12 → later |
 | M-1 | Unlinked staff parent | HR.15 |

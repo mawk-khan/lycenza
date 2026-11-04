@@ -3,10 +3,14 @@
 namespace Tests\Feature\StaffSelfService;
 
 use App\Domain\HR\Application\EmploymentCoverage;
+use App\Domain\HR\Application\Separation\SeparationCaseService;
+use App\Domain\HR\Application\Separation\SeparationReason;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\StaffSelfService\Concerns\CreatesSelfServiceFixtures;
@@ -115,7 +119,13 @@ class StaffSelfServiceAuthorizationTest extends TestCase
 
         // E21-RH.6: an ended employment is never reopened, so the notice-period case is another member's current record.
         $serving = $this->selfMember($w);
-        $this->inSchool($w['school'], fn () => DB::table('employment_records')->where('id', $serving['employment']->id)->update(['status' => 'notice_period']));
+        // HR.12: notice_period comes only from an approved separation case (another person decides).
+        $recorder = $this->createUserWithCapabilities($w['school'], ['hr.separations.view', 'hr.separations.manage']);
+        $decider = $this->createUserWithCapabilities($w['school'], ['hr.separations.view', 'hr.separations.approve']);
+        $today = SchoolTimezone::today($w['school']);
+        $case = app(SeparationCaseService::class)->record($w['school'], $serving['employment']->id, SeparationReason::RESIGNATION, $today, CarbonImmutable::parse($today)->addMonth()->toDateString(), $recorder);
+        app(SeparationCaseService::class)->approve($w['school'], $case->id, $case->version, $decider, $this->freshMfaProofFor($decider));
+        $this->assertSame('notice_period', $this->inSchool($w['school'], fn () => DB::table('employment_records')->where('id', $serving['employment']->id)->value('status')));
         $this->assertContains('notice_period', EmploymentCoverage::CURRENT_STATUSES);
         $this->as($serving['user'])->getJson("{$base}/leave")->assertOk();
         SchoolMembership::query()->where('school_id', $w['school']->id)->where('user_id', $serving['user']->id)->update(['status' => 'suspended']);

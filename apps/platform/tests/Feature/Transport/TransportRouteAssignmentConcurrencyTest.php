@@ -55,8 +55,8 @@ class TransportRouteAssignmentConcurrencyTest extends TestCase
         $route = $this->createTransportRoute($this->school);
         $vehicleA = $this->createTransportVehicle($this->school);
         $vehicleB = $this->createTransportVehicle($this->school);
-        $driverA = $this->createEmployee($this->school);
-        $driverB = $this->createEmployee($this->school);
+        $driverA = $this->createEmployedEmployee($this->school);
+        $driverB = $this->createEmployedEmployee($this->school);
 
         $script = __DIR__.'/../../Support/assign-transport-route.php';
         $processA = new Process(['php', $script, $this->school->id, $route->id, $vehicleA->id, $driverA->id]);

@@ -4,6 +4,7 @@ namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Separation\SeparationException;
 use App\Domain\HR\Application\Workforce\EmploymentType;
 use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\Department;
@@ -13,6 +14,7 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -33,6 +35,7 @@ class EmployeeLifecycleController extends Controller
         string $employee,
         string $employment,
         EmployeeLifecycleService $service,
+        FreshMfaRequirement $mfa,
     ): JsonResponse {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
@@ -47,8 +50,13 @@ class EmployeeLifecycleController extends Controller
             'ends_on' => ['required', 'date'],
             'status' => ['sometimes', Rule::in(['separated', 'terminated', 'retired', 'deceased'])],
         ]);
+        // HR.12: only a death is recorded directly; refused before an MFA code is spent.
+        if (($validated['status'] ?? 'separated') !== 'deceased') {
+            throw SeparationException::conflict('SEPARATION_USE_CASE', 'Record a resignation, retirement, contract end or mutual agreement as a separation case; another person approves it. Only a death is recorded directly.');
+        }
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        $separated = $service->separate($employmentModel, $validated['ends_on'], $request->user(), $validated['status'] ?? 'separated');
+        $separated = $service->separate($employmentModel, $validated['ends_on'], $request->user(), $proof, $validated['status']);
 
         return response()->json(['data' => [
             'id' => $separated->id,

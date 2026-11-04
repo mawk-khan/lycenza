@@ -216,7 +216,7 @@ class VisitorCampusScopeTest extends TestCase
     public function the_shared_check_in_lookups_stay_minimal(): void
     {
         // ORG.7B (owner-approved contract): Visitors id/name/phone; hosts id/display name only.
-        $this->createEmployee($this->school, ['full_name' => 'Host Person', 'record_status' => 'active']);
+        $this->createEmployedEmployee($this->school, ['full_name' => 'Host Person', 'record_status' => 'active']);
         $user = $this->frontOffice([$this->a->id]);
         $this->actingAs($user)->post("/app/schools/{$this->school->id}/activate");
 

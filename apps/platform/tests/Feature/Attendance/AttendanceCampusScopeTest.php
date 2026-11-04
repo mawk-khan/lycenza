@@ -69,7 +69,7 @@ class AttendanceCampusScopeTest extends TestCase
         foreach (['a' => $this->a, 'b' => $this->b] as $key => $campus) {
             $offering = $this->createSubjectOffering($this->year, $campus, $grade, $this->createSubject($this->school), ['is_required' => true, 'status' => 'active']);
             $section = $this->createSection($this->year, $campus, $grade, ['status' => 'active', 'code' => 'S'.strtoupper($key)]);
-            $teacher = $this->createEmployee($this->school, ['record_status' => 'active']);
+            $teacher = $this->createEmployedEmployee($this->school, ['record_status' => 'active']);
             $entry = $this->createTimetableEntry($offering, $section, $teacher, $this->period, ['day_of_week' => 1, 'status' => 'active']);
             $enrollment = $this->enrollStudent($section, '1', '2026-06-01');
             $session = $this->inSchool($this->school, fn () => app(AttendanceSubmissionService::class)->guarded(fn () => DB::transaction(fn () => app(AttendanceSubmissionService::class)

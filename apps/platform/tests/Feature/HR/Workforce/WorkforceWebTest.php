@@ -155,7 +155,7 @@ class WorkforceWebTest extends TestCase
         $this->flushHeaders();
         $this->actingAs($hr, 'sanctum')->patchJson($api, ['probation_ends_on' => '2026-12-31'])->assertOk();
         $this->flushHeaders();
-        $this->actingAs($hr, 'sanctum')->withHeader('Idempotency-Key', (string) Str::uuid())->postJson("{$api}/end", ['ends_on' => '2026-12-31'])->assertUnprocessable();
+        $this->actingAs($hr, 'sanctum')->withHeader('Idempotency-Key', (string) Str::uuid())->postJson("{$api}/end", ['ends_on' => '2026-12-31'])->assertConflict()->assertJsonPath('error.code', 'SEPARATION_USE_CASE');
         $this->assertNull($this->inSchool(fn () => EmploymentRecord::query()->whereKey($this->employment->id)->value('ends_on')));
         $this->signedIn($hr)->from($this->page())->post("{$this->page()}/employment-records/{$this->employment->id}/end", ['ends_on' => '2026-12-31'])->assertSessionHasErrors();
     }

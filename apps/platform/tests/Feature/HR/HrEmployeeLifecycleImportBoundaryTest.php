@@ -41,7 +41,7 @@ class HrEmployeeLifecycleImportBoundaryTest extends TestCase
         $employee = $this->createEmployee($school, ['user_id' => $linkedUser->id]);
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2020-01-01'], $actor);
-        app(EmployeeLifecycleService::class)->separate($employment, '2022-12-31', $actor);
+        app(EmploymentService::class)->end($employment, '2022-12-31', $actor);
 
         $result = app(EmployeeImportService::class)->import($school, $actor, [[
             'full_name' => 'Someone Rehired',

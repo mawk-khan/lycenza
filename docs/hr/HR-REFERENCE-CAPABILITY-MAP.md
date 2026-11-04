@@ -127,7 +127,7 @@ both mean HRX-L2.
 | D1-04 | Biometric identity | none (guards) | GATE | H106, H233, H373 | an attendance identity in StaffAttendance; never on Employee | StaffAttendance | HR.8 | H | HRX-L2 (L2b) |
 | D1-05 | Active / inactive state | `record_status` + employment status | IMP | H124, H127 → `EmployeeLifecycleService` | — | HR | — | — | — |
 | D1-06 | Joining date | `employment_records.starts_on` | IMP | H117, H323 | — | HR | — | — | — |
-| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); only `end()` transitions | PART | H322–H325, H483 | S-8 closed (HR.1A: closed starting statuses, no future end over HTTP); notice/confirmation transitions remain | HR | HR.12 | M | — |
+| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) | PART | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | — |
 | D1-08 | Campus / School assignment | `employee_assignments.campus_id` (composite FK) | IMP | H174 → `CurrentEmployeeAssignments` | — | HR | — | — | — |
 | D1-09 | Department assignment | `employee_assignments.department_id` | IMP | H134 | — | HR | — | — | — |
 | D1-10 | Designation | `positions` via assignment | IMP | H134, H191 | — | HR | — | — | — |
@@ -490,14 +490,14 @@ both mean HRX-L2.
 | D18-07 | Designation change | named designation change (HR.1A) | IMP | H225 | — | HR | — | M | — |
 | D18-08 | Department change | named department change (HR.1A) | IMP | — | — | HR | — | M | — |
 | D18-09 | Inactive status | `separated` / `terminated` / `retired` / `deceased` + archive | IMP | H127, H351 | — | HR | — | — | — |
-| D18-10 | Resignation | separation status | PART | H483 | no `resigned` reason (closed separation reason, HR-027) | HR | HR.12 | M | — |
-| D18-11 | Resignation request | none | MISS | H483–H487 | employee- or HR-initiated request on the shared approval foundation | HR | HR.12 | M | — |
-| D18-12 | Resignation reason | none | MISS | H351 | closed `SeparationReason` (never free-text performance or health remarks) | HR | HR.12 | M | HRX-L1 for health |
-| D18-13 | Notice / served date | `notice_period` status, no dates | PART | H483 | notice start / served dates | HR | HR.12 | L | — |
+| D18-10 | Resignation | separation case with closed `SeparationReason` (HR.12) | IMP | H483 | — | HR | — | M | — |
+| D18-11 | Resignation request | `employment_separation_cases` recorded by HR (`SeparationCaseService::record`, HR.12); no employee self-service (not authorized) | IMP | H483–H487 | self-service would need an OD-HR-4 decision | HR | — | M | — |
+| D18-12 | Resignation reason | closed `SeparationReason`: resignation, retirement, contract end, mutual agreement (HR.12) | IMP | H351 | no dismissal (OD-HR-8) or health (HRX-L1) reason | HR | — | M | HRX-L1 for health |
+| D18-13 | Notice / served date | `notified_on`, planned / final last working day; approved case → `notice_period` (HR.12) | IMP | H483 | no notice-length calculation (no approved contract) | HR | — | L | — |
 | D18-14 | Relieving date | `ends_on` | IMP | H483 | — | HR | — | — | — |
-| D18-15 | Department-wise clearance | none | XDOM | H352–H353, H485 | each owner answers its own clearance (Inventory, Library, Finance, Documents); HR records the outcome | HR + owners | HR.12 | M | rule 105 |
-| D18-16 | Final approval | none (separation is direct, HR-061) | MISS | H486 | owner decision; a request/decide workflow if chosen | HR | HR.12 | M | — |
-| D18-17 | Offboarding | `separate()` closes assignments, manager pointers, teaching ownership; School access via Identity suspension (rule 92) | PART | H351 | orchestration and checklist across owners | HR + Identity | HR.12 | H | — |
+| D18-15 | Department-wise clearance | School-configured administrative items (closed responsibility, snapshot at approval) + owners' read-only answers (Leave, Timetable, Transport, Identity) (HR.12) | PART | H352–H353, H485 | Library, Inventory and Finance record no staff obligation: NOT_INTEGRATED (R-HR12-2, HR.15 / owners) | HR + owners | HR.15 | M | rule 105 |
+| D18-16 | Final approval | another person decides (`hr.separations.approve`, shared approval foundation, fresh MFA) (HR.12, HR-061) | IMP | H486 | single stage (ADR 0065 §6 spirit; no delegation) | HR | — | M | — |
+| D18-17 | Offboarding | case finalization through `end()`; completion gated on mandatory clearance and open owner obligations; School access flagged, off-boarded under Staff accounts (HR.12) | PART | H351 | domain-evidence clearance for Library / Inventory / Finance; relieving / NOC documents (Documents review) | HR + Identity | HR.15 | H | — |
 | D18-18 | Rehire | new employment, same Employee and number | IMP | H129 (reactivate) | — | HR | — | — | — |
 | D18-19 | Deactivation preserves history | no runtime DELETE; append-only evidence | IMP | — | — | HR | — | H | — |
 | D18-20 | Contract staff register | `employment_type` + `ends_on` | ALT | H124, H246 | contract amounts are Payroll; documents via HR documents | HR | HR.12 | L | — |
@@ -584,17 +584,24 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) |
-|---|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | **129** (35.7 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | **23** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | **42** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | **48** |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) |
+|---|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | **134** (37.1 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | **22** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | **39** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | **7** |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+
+HR.12 (2026-11-04, owner decisions HR-061) closed D18-10, D18-11, D18-12,
+D18-13 and D18-16 (IMP); D18-15 moved XDOM → PART (administrative clearance +
+owners' answers; Library, Inventory, Finance NOT_INTEGRATED); D18-17 stays PART
+(no domain-evidence clearance, no relieving document); D1-07 stays PART
+(probation confirmation, D18-03/04, not built). Previous status of each row is
+in git history at 60da2011.
 
 HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
 D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
@@ -659,7 +666,7 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
 | D15 Comp-off | 0 | 0 | 0 | 1 | 0 | 8 | 2 | 0 | 11 |
 | D16 Permissions | 0 | 0 | 0 | 0 | 0 | 7 | 4 | 0 | 11 |
 | D17 Special windows | 0 | 0 | 0 | 0 | 0 | 10 | 0 | 0 | 10 |
-| D18 Lifecycle | 10 | 4 | 4 | 1 | 1 | 1 | 0 | 0 | 21 |
+| D18 Lifecycle | 15 | 3 | 1 | 1 | 0 | 1 | 0 | 0 | 21 |
 | D19 Tasks | 0 | 0 | 26 | 0 | 0 | 0 | 0 | 0 | 26 |
 | D20 Reports & MIS | 12 | 5 | 2 | 0 | 6 | 3 | 10 | 1 | 39 |
 

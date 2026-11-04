@@ -68,7 +68,7 @@ final class PayrollEmployeeRetentionService
                 $ids = $employments($employeeId);
                 // HR.1A: an employment's own terms and placement-change history go with it (cascade);
                 // HR.3A: and its own reporting lines (subordinate side); a line naming it as manager blocks.
-                $blocker = $this->references->first('employment_records', $school->id, $ids, ['employee_assignments', 'employment_terms', 'employee_placement_changes', 'reporting_relationships.subordinate_employment_id', ...self::TABLES]);
+                $blocker = $this->references->first('employment_records', $school->id, $ids, ['employee_assignments', 'employment_terms', 'employee_placement_changes', 'reporting_relationships.subordinate_employment_id', 'employment_separation_cases', ...self::TABLES]);
                 if ($blocker !== null) {
                     return [$blocker];
                 }

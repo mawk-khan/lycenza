@@ -825,6 +825,19 @@ trait CreatesTenancyFixtures
         );
     }
 
+    /**
+     * HR.12 (X-1): an Employee who holds a current employment today -- what a
+     * new operational duty (driver, timetable teacher, visit host) requires
+     * (EmploymentCoverage). An identity-only Employee is refused there.
+     */
+    protected function createEmployedEmployee(School $school, array $attributes = []): Employee
+    {
+        $employee = $this->createEmployee($school, $attributes);
+        $this->createEmploymentRecord($employee, ['starts_on' => '2020-01-01', 'status' => 'active']);
+
+        return $employee;
+    }
+
     protected function createEmployeeAssignment(EmploymentRecord $employment, Position $position, array $attributes = []): EmployeeAssignment
     {
         return app(TenantContext::class)->withSchool(
@@ -879,6 +892,15 @@ trait CreatesTenancyFixtures
      * outlives (`trg_employment_records_reporting_bounds`). A line starting after
      * the end becomes the empty interval. Raw, runtime role; fixture only.
      */
+    /**
+     * HR.12: the fresh-MFA proof a test passes for an assured action it does not
+     * drive over HTTP (the HTTP paths mint it through FreshMfaRequirement).
+     */
+    protected function freshMfaProofFor(User $user): FreshMfaProof
+    {
+        return new FreshMfaProof($user->id, CarbonImmutable::now());
+    }
+
     protected function closeReportingLinesFixture(School|string $school, string $employmentId, string $endsOn): void
     {
         $school = $school instanceof School ? $school : School::query()->findOrFail($school);

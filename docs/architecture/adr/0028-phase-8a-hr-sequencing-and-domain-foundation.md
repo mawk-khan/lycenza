@@ -301,3 +301,50 @@ programme; roadmap HR.2; decides OD-HR-13 as written in the HR.2A brief
 - School-configurable reference kinds: integrations need a fixed contract
   per kind.
 - A stored "total experience": it drifts from its components.
+
+## HR.12 amendment (2026-11-04): separation cases, notice and offboarding
+
+**Owner decisions (2026-11-04):** HR-061 = HR records, another person
+approves; notice = `notice_period` plus manual finalization on or after the
+planned last day; clearance blocks completion, never the employment end,
+with no waivers; School access is flagged, never changed automatically; the
+direct end keeps `deceased` only, assured; reasons are a closed core set.
+
+**Decision.**
+1. A separation is a case (`employment_separation_cases`), not a status
+   edit. Recording changes nothing; approval (another person, fresh MFA)
+   moves the employment to `notice_period`; finalization calls the existing
+   `EmploymentService::end()` with the terminal status the closed reason
+   maps to (`retirement` → `retired`, otherwise `separated`).
+   `EmploymentService` gains `startNoticePeriod()`/`endNoticePeriod()`,
+   called only by the case service; the HR.1A status vocabulary is
+   unchanged and no second status system exists.
+2. `EmployeeLifecycleService::separate()` (and its four web/API routes)
+   accepts only `deceased`, with a `FreshMfaProof`, a fresh authority read
+   (`ApprovalWorkflowRegistry::DIRECT_ASSURED`), a web confirmation, never a
+   future date and never over a case in progress. Every other terminal end
+   is refused with `SEPARATION_USE_CASE`.
+3. Clearance requirements are School configuration with closed
+   dimensions (responsibility, optional staff type, mandatory); a case
+   snapshots the applicable ones at approval. Other modules' obligations are
+   their owners' answers (`SeparationObligationSource`), read only; owners
+   with no staff obligation record are NOT_INTEGRATED and never shown as
+   clear.
+4. X-1 (HR.0A) write paths are fixed: a new Timetable teacher, Transport
+   driver or Visitor host needs `EmploymentCoverage::hold()` = COVERED on the
+   School-local today. The listing pickers stay for HR.15.
+
+**Rejected:** a generic workflow engine or approval table (rule 102); an
+`employees.status` shortcut; automatic suspension of School access; a
+waiver path; a scheduler; notice-length calculation; manual attestation of
+Library, Inventory or Finance clearance; backfilling cases for historical
+separations.
+
+**Consequences.** Four tenant tables with forced RLS and triggers
+(migration `2027_01_30_090000_create_hr_separation_cases`); four
+capabilities (ADR 0071 §31); the employment, its cases, timeline and items
+are one retention unit (HR evidence, 8 years after final separation);
+rollback refuses while any case exists. Residuals: R-HR12-1 (the X-1
+pickers still list separated Employees by name), R-HR12-2 (no
+domain-evidence clearance for Library, Inventory, Finance), R-HR10-1 is now
+**detected** (flagged on the case) but still corrected manually.

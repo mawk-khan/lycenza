@@ -51,6 +51,8 @@ class StaffRoleGrantAuthorityTest extends TestCase
             'hr.employees.personal.manage',
             'hr.employees.qualifications.manage', 'hr.employees.qualifications.view',
             'hr.positions.manage', 'hr.positions.view',
+            // HR.12: running separation cases (hr_officer only).
+            'hr.separations.manage',
         ],
         'school.roles.grant.hr_sensitive' => ['hr.employees.sensitive.manage', 'hr.employees.sensitive.view'],
         'school.roles.grant.payroll_sensitive' => ['payroll.compensation.sensitive.manage', 'payroll.compensation.sensitive.view'],
@@ -192,7 +194,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
     public function the_three_grant_rights_cover_exactly_the_approved_capabilities_in_code_and_in_the_database(): void
     {
         $this->assertSame(['school.roles.grant.hr', 'school.roles.grant.hr_sensitive', 'school.roles.grant.payroll_sensitive'], CapabilityClasses::GRANT_RIGHT_KEYS);
-        $this->assertCount(15, self::EXPECTED_GRANT_RIGHTS['school.roles.grant.hr']);
+        $this->assertCount(16, self::EXPECTED_GRANT_RIGHTS['school.roles.grant.hr']);
 
         $expected = [];
         foreach (self::EXPECTED_GRANT_RIGHTS as $right => $covered) {
@@ -270,7 +272,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
         sort($code);
 
         $this->assertSame($database, $code, 'Every school capability is classified, and no unknown key is.');
-        $this->assertCount(197, $code, '174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view + ORG.9D-1R1 communications.inbox.view + SIS.EXP-3 students.documents.view/.manage + SIS.EXP-4 students.certificates.issue + SIS.EXP-5 students.import + SIS 11.4 students.export/admissions.export + SIS 11.5 students.documents.verify, admissions.documents.view/.manage + SIS 11.7 students.houses.view/.manage/.assign + SIS 11.8 students.communities.view/.manage/.assign.');
+        $this->assertCount(201, $code, 'HR.12 hr.separations.view/.manage/.approve/.configure + 174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view + ORG.9D-1R1 communications.inbox.view + SIS.EXP-3 students.documents.view/.manage + SIS.EXP-4 students.certificates.issue + SIS.EXP-5 students.import + SIS 11.4 students.export/admissions.export + SIS 11.5 students.documents.verify, admissions.documents.view/.manage + SIS 11.7 students.houses.view/.manage/.assign + SIS 11.8 students.communities.view/.manage/.assign.');
 
         foreach (CapabilityClasses::CLASSES as $capability => $classes) {
             $this->assertNotEmpty($classes, $capability);

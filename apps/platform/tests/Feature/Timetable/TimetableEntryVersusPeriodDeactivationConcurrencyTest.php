@@ -68,7 +68,7 @@ class TimetableEntryVersusPeriodDeactivationConcurrencyTest extends TestCase
         $subject = $this->createSubject($this->school);
         $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
         $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
-        $teacher = $this->createEmployee($this->school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($this->school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($this->school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
 
         $env = ['CACHE_STORE' => 'database'];

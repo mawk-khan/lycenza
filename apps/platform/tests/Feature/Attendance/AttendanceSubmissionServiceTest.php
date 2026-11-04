@@ -254,6 +254,8 @@ class AttendanceSubmissionServiceTest extends TestCase
         // Section/Period/day -- possible because every timetable
         // double-booking index is scoped WHERE status='active'.
         $this->inSchool($w['school'], fn () => app(TimetableScheduleService::class)->deactivate($w['entry'], $w['actor']));
+        // HR.12 (X-1): scheduling a teacher needs their current employment.
+        $this->createEmploymentRecord($w['teacher'], ['starts_on' => '2020-01-01', 'status' => 'active']);
         $replacement = $this->inSchool($w['school'], fn () => app(TimetableScheduleService::class)->create(
             $w['school'], $w['offering'], $w['section'], $w['teacher'], null, $w['period'], 1, $w['actor'],
         ));

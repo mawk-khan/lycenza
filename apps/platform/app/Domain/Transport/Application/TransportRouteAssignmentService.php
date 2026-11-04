@@ -2,6 +2,7 @@
 
 namespace App\Domain\Transport\Application;
 
+use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Transport\Application\Exceptions\ConcurrentRouteAssignmentConflictException;
 use App\Domain\Transport\Application\Exceptions\DriverNotEligibleException;
@@ -13,6 +14,7 @@ use App\Domain\Transport\Infrastructure\TransportRouteAssignment;
 use App\Domain\Transport\Infrastructure\TransportVehicle;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolTimezone;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -57,6 +59,11 @@ class TransportRouteAssignmentService
 
         try {
             return DB::transaction(function () use ($route, $vehicle, $driver, $actor) {
+                // HR.12 (X-1): a new duty needs the person's planned or current employment
+                // TODAY (HR's EmploymentCoverage, FOR SHARE), never the identity flag alone.
+                if (app(EmploymentCoverage::class)->hold($route->school, $driver->id, SchoolTimezone::today($route->school)) !== EmploymentCoverage::COVERED) {
+                    throw new DriverNotEligibleException;
+                }
                 $lockedRoute = TransportRoute::query()
                     ->where('id', $route->id)
                     ->lockForUpdate()

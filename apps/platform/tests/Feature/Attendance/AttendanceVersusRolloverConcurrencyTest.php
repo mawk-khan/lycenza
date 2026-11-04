@@ -95,7 +95,7 @@ class AttendanceVersusRolloverConcurrencyTest extends TestCase
             $offering = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subject, [
                 'is_required' => true, 'status' => 'active',
             ]);
-            $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+            $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
             $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '10:00:00']);
             $entry = $this->createTimetableEntry($offering, $sourceSection, $teacher, $period, ['day_of_week' => 1]);
             $actor = $this->fullAttendanceActor($school);

@@ -78,7 +78,7 @@ class TimetableScheduleServiceTest extends TestCase
         $subject = $this->createSubject($school);
         $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
         $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
         $room = $this->createRoom($campus, ['status' => 'active']);
         $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
 
@@ -226,7 +226,7 @@ class TimetableScheduleServiceTest extends TestCase
 
         $subject2 = $this->createSubject($school);
         $offering2 = $this->createSubjectOffering($year, $campus, $grade, $subject2, ['is_required' => true, 'status' => 'active']);
-        $teacher2 = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher2 = $this->createEmployedEmployee($school, ['record_status' => 'active']);
 
         $this->service()->create($school, $offering, $section, $teacher, null, $period, 1, $actor);
 
@@ -245,7 +245,7 @@ class TimetableScheduleServiceTest extends TestCase
         $subject2 = $this->createSubject($school);
         $offering2 = $this->createSubjectOffering($year, $campus, $grade, $subject2, ['is_required' => true, 'status' => 'active']);
         $section2 = $this->createSection($year, $campus, $grade, ['status' => 'active', 'code' => 'B']);
-        $teacher2 = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher2 = $this->createEmployedEmployee($school, ['record_status' => 'active']);
 
         $this->service()->create($school, $offering, $section, $teacher, $room, $period, 1, $actor);
 
@@ -295,7 +295,7 @@ class TimetableScheduleServiceTest extends TestCase
         $actor = $this->fullTimetableActor($school);
 
         $section2 = $this->createSection($year, $campus, $grade, ['status' => 'active', 'code' => 'B']);
-        $teacher2 = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher2 = $this->createEmployedEmployee($school, ['record_status' => 'active']);
 
         $this->service()->create($school, $offering, $section, $teacher, null, $period, 1, $actor);
         $entryB = $this->service()->create($school, $offering, $section2, $teacher2, null, $period, 1, $actor);

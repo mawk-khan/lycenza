@@ -393,6 +393,13 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.employees.notes.manage', 'label' => 'Manage Employee HR notes (Restricted/Confidential, HR-authored)', 'namespace' => 'school'],
             ['key' => 'hr.employees.sensitive.view', 'label' => 'View Highly Sensitive Employee data (e.g. highly_sensitive documents)', 'namespace' => 'school'],
             ['key' => 'hr.employees.sensitive.manage', 'label' => 'Manage Highly Sensitive Employee data and classification transitions', 'namespace' => 'school'],
+            // HR.12 (owner decisions HR-061, 2026-11-04; ADR 0071 HR.12 amendment): the
+            // separation case. Recorded by HR, decided by ANOTHER person (approve),
+            // finalized by HR through EmploymentService::end(). All whole-School.
+            ['key' => 'hr.separations.view', 'label' => 'View separation cases, their clearance and offboarding status', 'namespace' => 'school'],
+            ['key' => 'hr.separations.manage', 'label' => 'Record, withdraw, cancel, finalize and complete separation cases; clear HR clearance items', 'namespace' => 'school'],
+            ['key' => 'hr.separations.approve', 'label' => 'Approve or reject a separation case recorded by someone else', 'namespace' => 'school'],
+            ['key' => 'hr.separations.configure', 'label' => "Configure the School's separation clearance requirements", 'namespace' => 'school'],
             ['key' => 'hr.departments.view', 'label' => 'View HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.departments.manage', 'label' => 'Manage HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
@@ -1197,7 +1204,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // School's own role configuration must explicitly
                     // add whichever of these an actual "HR Staff" role
                     // needs.
-                    'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    'hr.employees.view', 'hr.employees.manage',
+                    // HR.12 (HR-061): decides separations recorded by HR; configures clearance.
+                    'hr.separations.view', 'hr.separations.approve', 'hr.separations.configure', 'hr.employees.personal.view',
                     // Phase 10A: same "hands-on, day-to-day operational
                     // concern" reasoning already justifying full
                     // view+manage parity for students.*/guardians.*/
@@ -1535,7 +1544,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Phase 8A.10: same default-grant boundary as
                     // school_admin above -- view/manage/personal.view
                     // only, nothing else by default.
-                    'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    'hr.employees.view', 'hr.employees.manage',
+                    // HR.12 (HR-061): decides separations recorded by HR.
+                    'hr.separations.view', 'hr.separations.approve', 'hr.employees.personal.view',
                     // Phase 10A: same day-to-day operational parity
                     // reasoning as school_admin above.
                     'library.catalogue.view', 'library.catalogue.manage',
@@ -1755,6 +1766,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.leave.configure', 'hr.staff_attendance.view', 'hr.staff_attendance.manage',
                     'communications.events.view',
                     'communications.inbox.view',
+                    // HR.12: records and runs separation cases; never approves them (HR-061).
+                    'hr.separations.view', 'hr.separations.manage', 'hr.separations.configure',
                 ],
             ],
             'hr_sensitive_records' => [ // ADR 0071 §4.2

@@ -41,13 +41,17 @@ final class CapabilityClasses
 
     /** Covered capability => the grant right that covers it (ADR 0071 §6.1, Appendix A). */
     public const GRANT_RIGHTS = [
-        // school.roles.grant.hr -- HR administration (15 keys)
+        // school.roles.grant.hr -- HR administration (16 keys)
         'hr.categories.view' => self::GRANT_HR,
         'hr.categories.manage' => self::GRANT_HR,
         'hr.departments.view' => self::GRANT_HR,
         'hr.departments.manage' => self::GRANT_HR,
         'hr.positions.view' => self::GRANT_HR,
         'hr.positions.manage' => self::GRANT_HR,
+        // HR.12 (ADR 0071 HR.12 amendment): running separation cases is HR
+        // administration, held by hr_officer only (school_admin decides and
+        // configures them; D3 keeps it off the covered keys).
+        'hr.separations.manage' => self::GRANT_HR,
         'hr.employees.assignments.view' => self::GRANT_HR,
         'hr.employees.assignments.manage' => self::GRANT_HR,
         'hr.employees.qualifications.view' => self::GRANT_HR,
@@ -169,6 +173,11 @@ final class CapabilityClasses
         'hr.employees.sensitive.view' => ['hr-sensitive'],
         'hr.employees.view' => ['hr'],
         'hr.leave.approve' => ['hr'],
+        // HR.12: separation cases.
+        'hr.separations.approve' => ['hr'],
+        'hr.separations.configure' => ['hr'],
+        'hr.separations.manage' => ['hr'],
+        'hr.separations.view' => ['hr'],
         'hr.leave.configure' => ['hr'],
         'hr.leave.manage' => ['hr'],
         'hr.leave.self' => ['owned-scope'],

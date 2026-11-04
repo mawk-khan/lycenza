@@ -98,7 +98,7 @@ class TransportVehicleLifecycleTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school, ['status' => 'inactive']);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'inactive-vehicle-assign-001')
@@ -116,7 +116,7 @@ class TransportVehicleLifecycleTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school, ['record_status' => 'archived']);
+        $driver = $this->createEmployedEmployee($school, ['record_status' => 'archived']);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'inactive-driver-assign-001')
@@ -134,7 +134,7 @@ class TransportVehicleLifecycleTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
         $assignment = $this->createTransportRouteAssignment($route, $vehicle, $driver, ['status' => 'ended', 'starts_on' => now()->subDay(), 'ends_on' => now()]);
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 

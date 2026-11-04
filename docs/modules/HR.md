@@ -4841,3 +4841,132 @@ The contract is ADR 0065 §30 and ADR 0071 §30. HR's part:
 - **Staff Attendance still refuses non-working halves.** That is why
   comp-off is blocked (OD-HR-18). Changing it is a Staff Attendance
   amendment, not an HR change.
+
+## Separation cases, notice and offboarding (HR.12, 2026-11-04)
+
+Owner decisions (HR-061 and five follow-ups, 2026-11-04; ADR 0028 HR.12
+amendment; ADR 0071 §31; CLAUDE.md rule 137):
+
+| Decision | Answer |
+|---|---|
+| HR-061: who decides a separation | HR records the case; **another person** with `hr.separations.approve` (school_admin, principal) approves or rejects it, with fresh MFA to approve. No employee self-service. |
+| Notice period | Approval moves the employment `active` → `notice_period` and fixes a planned last working day (a recorded fact; no notice-length rule is calculated). HR finalizes **on or after** that day; there is no scheduler. |
+| Clearance | School-configured administrative items with a closed responsibility. Mandatory items block **completion**, never the employment end. No waivers. |
+| School access | Flagged from Identity, never changed: off-boarding stays under Staff accounts (rule 92), or an access administrator records that the access is kept. |
+| Direct end | Only `deceased`, with fresh MFA, a fresh authority read and a confirmation. `terminated` is not recordable until OD-HR-8. |
+| Reasons | Closed: resignation, retirement, fixed-term contract end, mutual agreement. No dismissal (OD-HR-8) and no health reason (HRX-L1). |
+
+### The six states kept apart
+
+1. **Workforce identity** -- `employees`; never changed by a separation.
+2. **Employment** -- `employment_records.status` (HR.1A vocabulary, unchanged):
+   `active` → `notice_period` (approved case) → `separated` / `retired`
+   (finalization through `EmploymentService::end()`); `notice_period` →
+   `active` when the case is cancelled.
+3. **The case** -- `employment_separation_cases.status`: `requested` →
+   `approved` | `rejected` | `withdrawn`; `approved` → `cancelled` |
+   `finalized`; `finalized` → `completed`.
+4. **Clearance** -- `separation_clearance_items` (pending → cleared).
+5. **Finalization** -- the case's `final_ends_on` = the employment's
+   `ends_on` (inclusive last employed day, HR.1A).
+6. **Identity access** -- Identity's own state, read through
+   `StaffAccessState`.
+
+### Dates
+
+`notified_on` (notice given, never in the future), `planned_last_day` and
+`final_ends_on` are School-local calendar dates. `planned_last_day` is the
+INCLUSIVE last employed day and equals `final_ends_on` once finalized
+(database CHECK). It may change only BEFORE the decision (a change keeps its
+before and after in `employment_separation_events`); once approved it is a
+decided term the database freezes -- a different day means cancelling the
+case and recording a new one that another person decides (security review,
+HR.12).
+
+### Writers and authority
+
+- `SeparationCaseService` is the only writer of cases and items. Every write:
+  the whole-School capability, then in one transaction the Employee
+  placement lock, "never one's own Employee" (`HrSelfAdministrationGuard`),
+  the employment FOR UPDATE, the case FOR UPDATE, the stale version.
+- Decisions run on the shared approval foundation
+  (`ApprovalDecisionAuthority::requireCurrent()`, `MakerCheckerPolicy`,
+  `ApprovalProvenance`); the workflow is registered as
+  `employment_separation_cases`.
+- `hr.separations.manage` (hr_officer) records, withdraws, changes the
+  day before the decision, cancels (fresh MFA), finalizes (fresh MFA, plus
+  `hr.employees.assignments.manage` inside `end()`) and completes.
+- `hr.separations.approve` (school_admin, principal) decides. The
+  `line_manager` role's `hr.leave.approve` never does.
+- `hr.separations.configure` (school_admin, hr_officer) maintains the
+  requirements through `SeparationClearanceRequirementService`.
+- A clearance item is cleared by the capability its closed responsibility
+  maps to (`ClearanceResponsibility`: HR → `hr.separations.manage`, School
+  administration → `school.settings.manage`).
+- "Kept School access" needs `school.members.manage`.
+- All keys are whole-School and never Campus-adopted.
+
+### Database backstops
+
+- `trg_employment_separation_cases_guard`: born `requested`; the lifecycle
+  graph; the evidence each state needs; immutable terms and evidence; a
+  finalized case's employment really ended on its last day; completion only
+  with every mandatory item cleared; nobody recorded on the case is the
+  subject's own account; every change advances `version`.
+- `employment_separation_cases_sod_check`: decider ≠ requester.
+- `employment_separation_cases_one_live`: one live case per employment.
+- `trg_separation_clearance_items_guard`: an exact snapshot of an active
+  requirement, taken only at approval; cleared once, never by the subject,
+  only on an approved or finalized case.
+- `trg_separation_clearance_requirements_guard`: retired, never edited.
+- `trg_employment_records_separation_notice`: `notice_period` only from
+  `active` under an approved case; back to `active` only once none is
+  approved.
+- Forced RLS on all four tables; the runtime role cannot DELETE a case,
+  item or requirement, and cannot UPDATE or DELETE a timeline event.
+
+### Obligations across the School (read only)
+
+`SeparationObligations` asks each owner, through
+`SeparationObligationSource` implementations that live in the owners (the
+`EmploymentEndParticipant` shape, so HR depends on none of them):
+
+| Owner | Answer | Blocks completion |
+|---|---|---|
+| HR | direct reports whose lines end with this employment, or who were left without a manager (no successor is ever assigned) | never (review) |
+| Leave | pending requests; approved leave after the last day; monthly credits for months after the last day (**R-HR10-1 detection**) | pending requests only |
+| Timetable | active weekly entries taught | once finalized |
+| Transport | active route assignments as driver | once finalized |
+| Identity | unrevoked `school`-scope grants on an active membership | once finalized, unless recorded as kept |
+| Library, Inventory, Finance | **not integrated**: no staff obligation is recorded there (Library loans are Student-only; Inventory records no person, E21.2G O5; Finance records no staff dues) | never; never shown as clear |
+
+A separation never decides, cancels, reverses or adjusts another module's
+records. Leave keeps its own lifecycle; an unearned monthly credit is
+corrected by an ordinary adjustment that names it (ADR 0065 §29); OD-HR-16
+and OD-HR-17 stay open. Final settlement, encashment, gratuity and
+statutory amounts stay with Payroll and Finance (ADR 0036 gates unchanged).
+
+### X-1 (HR.0A): new duties need a current employment
+
+Timetable (teacher on create and update), Transport (driver assignment) and
+Visitors (host at check-in) now ask `EmploymentCoverage::hold()` for a
+planned or current employment on the School-local today, inside their
+transactions, instead of the Employee identity flag alone. History
+(existing entries, journeys, visits) is never changed. The pickers that
+still LIST separated Employees by name stay recorded for HR.15.
+
+### Not built (and why)
+
+- Employee self-service resignation (not authorized; OD-HR-4 scope).
+- Waivers, multi-level approval, delegation (owner decision; ADR 0065 §6).
+- A scheduler that ends employments automatically (owner decision).
+- Notice-length calculation (no approved contract; dates are recorded facts).
+- Domain-evidence clearance for Library, Inventory and Finance (no staff
+  obligation records exist; HR.15 / owner follow-ups).
+- Resignation letters, relieving or NOC documents (Documents owner type and
+  privacy review needed).
+- Outbox events for the case (no consumer contract; `employment.ended.v1`
+  from `end()` is unchanged).
+- A v1 API for cases (web only in HR.12; the API end routes refuse every
+  non-deceased end with `SEPARATION_USE_CASE`).
+- Backfill: none. Historical separations are not given fabricated cases.

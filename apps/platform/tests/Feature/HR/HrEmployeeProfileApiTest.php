@@ -194,7 +194,7 @@ class HrEmployeeProfileApiTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
         $first = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2020-01-01'], $actor);
-        app(EmployeeLifecycleService::class)->separate($first, '2022-12-31', $actor);
+        app(EmploymentService::class)->end($first, '2022-12-31', $actor);
         $second = app(EmployeeLifecycleService::class)->rehire($employee, ['employment_type' => 'permanent', 'starts_on' => '2023-01-01'], $actor);
 
         $data = $this->withHeader('Authorization', 'Bearer '.$this->token($actor))

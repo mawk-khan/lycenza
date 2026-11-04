@@ -152,6 +152,8 @@ final class StaffNavigation
             new E('staff-directory', 'people', 'Staff directory', 'app.hr.employees.index', all: ['hr.employees.view']),
             new E('leave', 'people', 'Leave', 'app.leave.requests', all: ['hr.leave.view'], activeWhen: ['app.leave.*']),
             new E('leave-approvals', 'people', 'Leave approvals', 'app.leave.approvals', all: ['hr.leave.approve'], activeWhen: ['app.leave.approvals*']),
+            // HR.12: separation cases (record, decide, finalize, clearance).
+            new E('separations', 'people', 'Separations', 'app.hr.separations.index', all: ['hr.separations.view'], activeWhen: ['app.hr.separations.*']),
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),
 
             new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view', 'finance.payment_corrections.view']),

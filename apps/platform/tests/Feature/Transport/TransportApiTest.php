@@ -81,7 +81,7 @@ class TransportApiTest extends TestCase
         $user = $this->createUserWithCapabilities($school, ['transport.vehicles.view']);
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'denied-route-assign-001')
@@ -147,7 +147,7 @@ class TransportApiTest extends TestCase
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $route = $this->createTransportRoute($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $otherSchool = $this->createSchool();
         $foreignVehicle = $this->createTransportVehicle($otherSchool);
@@ -168,7 +168,7 @@ class TransportApiTest extends TestCase
         $vehicle = $this->createTransportVehicle($school);
 
         $otherSchool = $this->createSchool();
-        $foreignDriver = $this->createEmployee($otherSchool);
+        $foreignDriver = $this->createEmployedEmployee($otherSchool);
 
         $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'cross-school-driver-assign-001')
@@ -272,7 +272,7 @@ class TransportApiTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'replay-route-assign-001');
@@ -299,7 +299,7 @@ class TransportApiTest extends TestCase
         $route = $this->createTransportRoute($school);
         $vehicleOne = $this->createTransportVehicle($school);
         $vehicleTwo = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'conflict-route-assign-001');

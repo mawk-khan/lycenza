@@ -191,12 +191,14 @@ final class TenantRetentionCatalog
             'employment_terms', 'employee_placement_changes',
             // HR.3A: the employment's own reporting lines (subordinate side) go with it (cascade).
             'reporting_relationships',
+            // HR.12: the employment's separation cases, their timeline and clearance items go with it (cascade).
+            'employment_separation_cases', 'employment_separation_events', 'separation_clearance_items',
         ]],
         'hr_ancillary' => [self::ADOPTED, 'D9: 2 y after final separation', [
             'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
             'employee_experience_records', 'employee_certifications',
         ]],
-        'hr_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['employee_categories', 'hr_departments', 'positions', 'hr_employee_number_counters']],
+        'hr_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['employee_categories', 'hr_departments', 'positions', 'hr_employee_number_counters', 'separation_clearance_requirements']],
         'leave_configuration' => [self::TENANT_LIFETIME, 'HRX.1 (ADR 0065 §18): leave settings and prospective start-month changes, materialized leave years, leave types and policies, the staff working calendar and allocation-run headers; HR.9 (ADR 0065 §28.7): policy-version eligibility rules and eligibility-run headers -- School configuration without per-Employee amounts', [
             'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_year_closes', 'leave_types', 'leave_policies', 'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs',
             'leave_eligibility_rules', 'leave_eligibility_runs',

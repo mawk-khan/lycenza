@@ -64,7 +64,7 @@ class AttendanceReportsTest extends TestCase
             $subject = $this->createSubject($school, ['name' => $key === 'a' ? 'Mathematics' : 'Science', 'code' => $key === 'a' ? 'MATH' : 'SCI']);
             $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
             $section = $this->createSection($year, $campus, $grade, ['status' => 'active', 'name' => 'A', 'code' => 'S'.strtoupper($key)]);
-            $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+            $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
             $entry = $this->createTimetableEntry($offering, $section, $teacher, $period, ['day_of_week' => 1, 'status' => 'active']);
             $enrollment = $this->enrollStudent($section, '1', '2026-06-01');
             $session = $this->submit($school, $entry->id, self::MONDAY, [$enrollment->id => 'absent'], $admin);

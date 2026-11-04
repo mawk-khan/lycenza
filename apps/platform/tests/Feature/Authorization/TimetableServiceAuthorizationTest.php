@@ -60,7 +60,7 @@ class TimetableServiceAuthorizationTest extends TestCase
         $subject = $this->createSubject($school);
         $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
         $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
         $actor = $this->createUserWithCapabilities($school, ['timetable.schedule.manage']);
 
@@ -79,7 +79,7 @@ class TimetableServiceAuthorizationTest extends TestCase
         $subject = $this->createSubject($school);
         $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
         $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
         $actor = $this->createUserWithCapabilities($school, ['timetable.schedule.view']);
 

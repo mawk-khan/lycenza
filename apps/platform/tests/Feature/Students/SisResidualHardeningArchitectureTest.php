@@ -88,8 +88,9 @@ class SisResidualHardeningArchitectureTest extends TestCase
     #[Test]
     public function no_capability_was_added(): void
     {
-        // SIS.HARDEN-1 added none; SIS 11.4 (D-11) added students.export and admissions.export.
-        $this->assertSame(197, DB::table('capabilities')->where('namespace', 'school')->count(), 'only reviewed releases add School capabilities');
-        $this->assertSame(222, DB::table('capabilities')->count(), 'and none in any other namespace');
+        // SIS.HARDEN-1 added none; SIS 11.4 (D-11) added students.export and admissions.export;
+        // HR.12 added hr.separations.view/.manage/.approve/.configure.
+        $this->assertSame(201, DB::table('capabilities')->where('namespace', 'school')->count(), 'only reviewed releases add School capabilities');
+        $this->assertSame(226, DB::table('capabilities')->count(), 'and none in any other namespace');
     }
 }

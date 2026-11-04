@@ -1862,3 +1862,24 @@ roles stay deferred (§5).
   (concurrency) here. Grant authority (`school.roles.*`,
   `school.members.*`, the grant rights) stays whole-School only (ADR 0076
   §11.4).
+
+## 31. HR.12 amendment — separation keys (2026-11-04, ADR 0028 HR.12 amendment)
+
+A reviewed catalogue release (rule 93) adds four `school` capabilities,
+class `hr`, whole-School, never Campus-adopted:
+
+| Key | Held by | Grant-right coverage |
+|---|---|---|
+| `hr.separations.view` | school_admin, principal, hr_officer | none (school_admin holds it) |
+| `hr.separations.manage` | hr_officer | `school.roles.grant.hr` (now 16 keys) |
+| `hr.separations.approve` | school_admin, principal | none |
+| `hr.separations.configure` | school_admin, hr_officer | none |
+
+- The role count stays 18; no new role. `line_manager` is unchanged
+  (`hr.leave.approve` only) and never decides a separation.
+- D3 holds: school_admin holds no covered key; it grants `hr_officer`
+  through `school.roles.grant.hr`, which now also covers
+  `hr.separations.manage`.
+- `hr.separations.approve` is registered as the decide key of the
+  `employment_separation_cases` workflow (ApprovalWorkflowRegistry).
+- School capability count 197 → 201; total 222 → 226.

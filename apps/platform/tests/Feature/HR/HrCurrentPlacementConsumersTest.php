@@ -92,12 +92,12 @@ class HrCurrentPlacementConsumersTest extends TestCase
         $record = $this->employee('Leaver', [$this->a]);
         // 20:00 UTC on 19 Oct is already 20 Oct in Asia/Kolkata: 20 Oct is not future.
         $this->travelTo(Carbon::parse('2026-10-19 20:00:00', 'UTC'));
-        $ended = app(TenantContext::class)->withSchool($this->school, fn () => app(EmployeeLifecycleService::class)->separate($record, '2026-10-20', $actor));
+        $ended = app(TenantContext::class)->withSchool($this->school, fn () => app(EmployeeLifecycleService::class)->separate($record, '2026-10-20', $actor, $this->freshMfaProofFor($actor), 'deceased'));
         $this->assertSame('2026-10-20', $ended->ends_on->toDateString());
 
         $next = $this->employee('Next', [$this->a]);
         $this->expectException(InvalidEmploymentEffectiveDateException::class);
-        app(TenantContext::class)->withSchool($this->school, fn () => app(EmployeeLifecycleService::class)->separate($next, '2026-10-21', $actor));
+        app(TenantContext::class)->withSchool($this->school, fn () => app(EmployeeLifecycleService::class)->separate($next, '2026-10-21', $actor, $this->freshMfaProofFor($actor), 'deceased'));
     }
 
     #[Test]

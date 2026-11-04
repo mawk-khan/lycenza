@@ -68,8 +68,8 @@ class TimetableCampusScopeTest extends TestCase
         $this->grade = $this->createGradeLevel($this->school);
         $this->p1 = $this->createTimetablePeriod($this->school, ['code' => 'P1', 'start_time' => '09:00:00', 'end_time' => '09:45:00', 'status' => 'active']);
         $this->p2 = $this->createTimetablePeriod($this->school, ['code' => 'P2', 'start_time' => '10:00:00', 'end_time' => '10:45:00', 'status' => 'active']);
-        $this->teacherA = $this->createEmployee($this->school, ['record_status' => 'active', 'full_name' => 'Asha North']);
-        $this->teacherB = $this->createEmployee($this->school, ['record_status' => 'active', 'full_name' => 'Bilal South']);
+        $this->teacherA = $this->createEmployedEmployee($this->school, ['record_status' => 'active', 'full_name' => 'Asha North']);
+        $this->teacherB = $this->createEmployedEmployee($this->school, ['record_status' => 'active', 'full_name' => 'Bilal South']);
 
         foreach (['a' => [$this->a, $this->teacherA], 'b' => [$this->b, $this->teacherB]] as $key => [$campus, $teacher]) {
             $offering = $this->createSubjectOffering($this->year, $campus, $this->grade, $this->createSubject($this->school, ['code' => 'SUB'.strtoupper($key)]), ['is_required' => true, 'status' => 'active']);

@@ -4,13 +4,17 @@ namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException;
 use App\Domain\HR\Application\Exceptions\RehireRequiresEmploymentHistoryException;
+use App\Domain\HR\Application\Separation\SeparationException;
 use App\Domain\HR\Events\EmployeeRehired;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\HR\Infrastructure\EmploymentSeparationCase;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -45,28 +49,38 @@ class EmployeeLifecycleService
     public function __construct(
         private readonly TenantContext $context,
         private readonly HrEmployeeAccess $access,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
-     * Ends the given EmploymentRecord with a real terminal status.
-     * Thin, additive wrapper over `EmploymentService::end()` (which
-     * already validates the terminal-status set, rejects a repeated
-     * end under lock, closes open Assignments, clears dangling manager
-     * pointers, and audits `hr.employment.ended`) -- the ONE thing this
-     * method adds on top is a lifecycle-level POLICY restriction not
-     * appropriate for the lower-level primitive itself: rejecting a
-     * future-dated effective date (checkpoint 8A.13 section 15 -- HR.md
-     * does not define scheduled-separation semantics, so the
-     * conservative default is chosen here, at the COMMAND layer, not
-     * inside `EmploymentService::end()`, which stays available as a
-     * more permissive primitive for any future backdated-correction
-     * workflow).
+     * HR.12 (owner decision 2026-11-04, "deceased only, assured"): the ONE
+     * direct employment end left. A resignation, retirement, fixed-term
+     * contract end or mutual agreement goes through the approved separation
+     * case (SeparationCaseService, HR-061); `terminated` is not recordable
+     * until the disciplinary decision OD-HR-8; `deceased` has nobody to
+     * resign, so it stays direct WITH ASSURANCE: the whole-School capability,
+     * a fresh MFA proof, the actor's CURRENT authority re-read
+     * (ApprovalDecisionAuthority, ApprovalWorkflowRegistry::DIRECT_ASSURED),
+     * an explicit confirmation at the edge, never a future date (School-local)
+     * and never while a separation case is in progress (cancel or withdraw it
+     * first). The reason IS the status; there is no free text.
+     *
+     * Everything else -- the terminal-status set, the already-ended guard,
+     * assignment, reporting-line and teaching-ownership closure, audit -- is
+     * EmploymentService::end(), unchanged.
      */
-    public function separate(EmploymentRecord $employment, string $endsOn, User $actor, string $status = 'separated'): EmploymentRecord
+    public function separate(EmploymentRecord $employment, string $endsOn, User $actor, FreshMfaProof $mfa, string $status = 'deceased'): EmploymentRecord
     {
         $school = $employment->school;
         // ORG.7E-1 (ADR 0076 §43): separation is terminal -- whole-School only.
         $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
+
+        if ($status !== 'deceased') {
+            throw SeparationException::conflict('SEPARATION_USE_CASE', 'Record a resignation, retirement, contract end or mutual agreement as a separation case; another person approves it. Only a death is recorded directly.');
+        }
+        if (! $mfa->isFor($actor->id)) {
+            throw new \LogicException('The fresh MFA proof belongs to another User.');
+        }
 
         // ORG.7E-0: "future" on the School's own calendar date, never the UTC date.
         $today = SchoolTimezone::today($school);
@@ -76,7 +90,17 @@ class EmployeeLifecycleService
             throw new InvalidEmploymentEffectiveDateException($employment->id, $endsOn, 'future_dated');
         }
 
-        return app(EmploymentService::class)->end($employment, $endsOn, $actor, $status);
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employment, $endsOn, $actor, $status): EmploymentRecord {
+            $this->authority->requireCurrent($actor, 'hr.employees.assignments.manage', $school);
+
+            $open = EmploymentSeparationCase::query()->where('school_id', $school->id)->where('employment_record_id', $employment->id)
+                ->whereIn('status', EmploymentSeparationCase::OPEN_STATUSES)->exists();
+            if ($open) {
+                throw SeparationException::conflict('SEPARATION_CASE_IN_PROGRESS', 'This employment has a separation case in progress. Cancel or withdraw it first (reason: employment ends another way).');
+            }
+
+            return app(EmploymentService::class)->end($employment, $endsOn, $actor, $status);
+        }));
     }
 
     /**

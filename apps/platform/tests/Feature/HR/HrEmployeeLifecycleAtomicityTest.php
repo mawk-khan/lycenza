@@ -99,13 +99,13 @@ class HrEmployeeLifecycleAtomicityTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
-        app(EmployeeLifecycleService::class)->separate($employment, '2025-01-31', $actor);
+        app(EmploymentService::class)->end($employment, '2025-01-31', $actor);
 
         app(TenantContext::class)->set($school);
         $endedEventsBefore = SchoolAuditEvent::query()->where('event_type', 'hr.employment.ended')->count();
 
         try {
-            app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+            app(EmploymentService::class)->end($employment, '2026-06-15', $actor);
             $this->fail('Expected EmploymentAlreadyEndedException.');
         } catch (EmploymentAlreadyEndedException) {
             // expected

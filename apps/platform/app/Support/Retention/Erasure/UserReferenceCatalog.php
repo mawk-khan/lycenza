@@ -126,6 +126,11 @@ final class UserReferenceCatalog
         'employee_placement_changes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         // HR.3A: who started, ended or voided a reporting line is HR evidence.
         'reporting_relationships' => ['ended_by_user_id' => self::RETAIN_REFERENCE, 'started_by_user_id' => self::RETAIN_REFERENCE, 'voided_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.12: separation case actors, timeline actors, clearance actors and requirement authors (history; RESTRICT).
+        'employment_separation_cases' => ['requested_by_user_id' => self::RETAIN_REFERENCE, 'decided_by_user_id' => self::RETAIN_REFERENCE, 'withdrawn_by_user_id' => self::RETAIN_REFERENCE, 'cancelled_by_user_id' => self::RETAIN_REFERENCE, 'finalized_by_user_id' => self::RETAIN_REFERENCE, 'access_retained_by_user_id' => self::RETAIN_REFERENCE, 'completed_by_user_id' => self::RETAIN_REFERENCE],
+        'employment_separation_events' => ['actor_user_id' => self::RETAIN_REFERENCE],
+        'separation_clearance_requirements' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'retired_by_user_id' => self::RETAIN_REFERENCE],
+        'separation_clearance_items' => ['cleared_by_user_id' => self::RETAIN_REFERENCE],
         'employment_terms' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'employees' => ['user_id' => self::ACTIVE_PURPOSE_BLOCKER],
         'enrollment_rollover_plans' => ['created_by_user_id' => self::RETAIN_REFERENCE],

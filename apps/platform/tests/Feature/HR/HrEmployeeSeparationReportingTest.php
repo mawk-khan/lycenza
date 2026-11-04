@@ -46,7 +46,7 @@ class HrEmployeeSeparationReportingTest extends TestCase
         app(EmployeeAssignmentService::class)->setPrimary($primary, $actor);
         $secondary = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2022-01-01'], $positionB, $actor);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        app(EmploymentService::class)->end($employment, '2026-06-15', $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame('2026-06-15', $primary->fresh()->ends_on->toDateString());
@@ -70,7 +70,7 @@ class HrEmployeeSeparationReportingTest extends TestCase
         $subordinateAssignment = app(EmployeeAssignmentService::class)->create($subordinateEmployment, ['starts_on' => '2022-01-01'], $position, $actor);
         app(ReportingHierarchyService::class)->setManager($subordinateAssignment, $managerAssignment, $actor);
 
-        app(EmployeeLifecycleService::class)->separate($managerEmployment, '2026-06-15', $actor);
+        app(EmploymentService::class)->end($managerEmployment, '2026-06-15', $actor);
 
         app(TenantContext::class)->set($school);
         $freshSubordinate = $subordinateAssignment->fresh();
@@ -100,7 +100,7 @@ class HrEmployeeSeparationReportingTest extends TestCase
         $subordinateAssignment = app(EmployeeAssignmentService::class)->create($subordinateEmployment, ['starts_on' => '2022-01-01'], $position, $actor);
         app(ReportingHierarchyService::class)->setManager($subordinateAssignment, $managerAssignment, $actor);
 
-        app(EmployeeLifecycleService::class)->separate($subordinateEmployment, '2026-06-15', $actor);
+        app(EmploymentService::class)->end($subordinateEmployment, '2026-06-15', $actor);
 
         app(TenantContext::class)->set($school);
         $freshManager = $managerAssignment->fresh();
@@ -125,7 +125,7 @@ class HrEmployeeSeparationReportingTest extends TestCase
         $subordinateAssignment = app(EmployeeAssignmentService::class)->create($subordinateEmployment, ['starts_on' => '2022-01-01'], $position, $actor);
         app(ReportingHierarchyService::class)->setManager($subordinateAssignment, $managerAssignment, $actor);
 
-        app(EmployeeLifecycleService::class)->separate($subordinateEmployment, '2026-06-15', $actor);
+        app(EmploymentService::class)->end($subordinateEmployment, '2026-06-15', $actor);
 
         app(TenantContext::class)->set($school);
         $line = ReportingRelationship::query()->where('subordinate_employment_id', $subordinateEmployment->id)->sole();

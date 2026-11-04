@@ -29,7 +29,7 @@ class VisitorVisitServiceTest extends TestCase
     {
         [$admin, $school] = $this->createSchoolAdmin();
         $campus = $this->createCampus($school);
-        $host = $this->createEmployee($school);
+        $host = $this->createEmployedEmployee($school);
         $visitor = $this->createVisitor($school);
 
         $visit = app(TenantContext::class)->withSchool($school, fn () => app(VisitorVisitService::class)->checkIn($visitor, $campus, $host, 'Parent meeting', 'GP-001', $admin));
@@ -93,7 +93,7 @@ class VisitorVisitServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $campus = $this->createCampus($school);
         $visitor = $this->createVisitor($school);
-        $host = $this->createEmployee($school, ['record_status' => 'archived']);
+        $host = $this->createEmployedEmployee($school, ['record_status' => 'archived']);
 
         $this->expectException(HostEmployeeNotEligibleException::class);
         app(TenantContext::class)->withSchool($school, fn () => app(VisitorVisitService::class)->checkIn($visitor, $campus, $host, 'Meeting', null, $admin));

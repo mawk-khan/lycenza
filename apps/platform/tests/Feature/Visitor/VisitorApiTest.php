@@ -134,7 +134,7 @@ class VisitorApiTest extends TestCase
         $campus = $this->createCampus($school);
 
         $otherSchool = $this->createSchool();
-        $foreignHost = $this->createEmployee($otherSchool);
+        $foreignHost = $this->createEmployedEmployee($otherSchool);
 
         $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->withHeader('Idempotency-Key', 'cross-school-host-checkin-001')

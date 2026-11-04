@@ -2,6 +2,7 @@
 
 namespace App\Domain\Visitor\Application;
 
+use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Visitor\Application\Exceptions\ConcurrentCheckInConflictException;
 use App\Domain\Visitor\Application\Exceptions\HostEmployeeNotEligibleException;
@@ -13,6 +14,7 @@ use App\Domain\Visitor\Infrastructure\VisitorVisit;
 use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolTimezone;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -62,6 +64,11 @@ class VisitorVisitService
 
         try {
             return DB::transaction(function () use ($visitor, $campus, $host, $purpose, $gatePassNumber, $actor) {
+                // HR.12 (X-1): a new duty needs the person's planned or current employment
+                // TODAY (HR's EmploymentCoverage, FOR SHARE), never the identity flag alone.
+                if ($host !== null && app(EmploymentCoverage::class)->hold($campus->school, $host->id, SchoolTimezone::today($campus->school)) !== EmploymentCoverage::COVERED) {
+                    throw new HostEmployeeNotEligibleException;
+                }
                 $lockedVisitor = Visitor::query()
                     ->where('id', $visitor->id)
                     ->lockForUpdate()

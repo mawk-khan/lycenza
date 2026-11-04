@@ -74,7 +74,7 @@ class TimetableAdminUiTest extends TestCase
         $subject = $this->createSubject($school);
         $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
         $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
 
         // `$year`/`$subject` are returned directly (not read back via
@@ -339,7 +339,7 @@ class TimetableAdminUiTest extends TestCase
         $user = $this->createUser();
         $this->grantOnly($school, $user, 'test_schedule_manager_ui_2', ['timetable.schedule.manage']);
         $this->activate($user, $school);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active', 'full_name' => 'Findable Teacher', 'work_email' => 'findable@example.test']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active', 'full_name' => 'Findable Teacher', 'work_email' => 'findable@example.test']);
 
         $response = $this->get('/app/timetable-schedule/search/teachers?q=Findable')->assertOk();
         $row = $response->json('data.0');

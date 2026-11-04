@@ -45,7 +45,7 @@ class TimetableApiTest extends TestCase
         $subject = $this->createSubject($school);
         $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => true, 'status' => 'active']);
         $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
 
         // `$year`/`$subject` are returned directly (not read back via
@@ -275,7 +275,7 @@ class TimetableApiTest extends TestCase
     {
         $school = $this->createSchool();
         $user = $this->createUserWithCapabilities($school, ['timetable.schedule.manage']);
-        $teacher = $this->createEmployee($school, ['record_status' => 'active', 'full_name' => 'Findable Teacher', 'work_email' => 'findable@example.test']);
+        $teacher = $this->createEmployedEmployee($school, ['record_status' => 'active', 'full_name' => 'Findable Teacher', 'work_email' => 'findable@example.test']);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->getJson("/api/v1/schools/{$school->id}/timetable-entries/search/teachers?q=Findable")

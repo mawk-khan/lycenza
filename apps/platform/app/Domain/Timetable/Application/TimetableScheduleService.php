@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Campuses\Application\ActiveCampus;
+use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Timetable\Application\Exceptions\CampusNotAvailableException;
 use App\Domain\Timetable\Application\Exceptions\RequiredSubjectOfferingOnlyException;
@@ -26,6 +27,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Concurrency\TenantLock;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -146,6 +148,11 @@ class TimetableScheduleService
         $context = $this->deriveContext($subjectOffering);
 
         return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor) {
+            // HR.12 (X-1): a new duty needs the person's planned or current employment
+            // TODAY (HR's EmploymentCoverage, FOR SHARE), never the identity flag alone.
+            if (app(EmploymentCoverage::class)->hold($school, $teacher->id, SchoolTimezone::today($school)) !== EmploymentCoverage::COVERED) {
+                throw new TeacherNotAvailableException;
+            }
             $this->assertPeriodSchedulable($period);
             $this->assertCampusSchedulable($school, $context['campus_id']);
 
@@ -201,6 +208,11 @@ class TimetableScheduleService
         $context = $this->deriveContext($subjectOffering);
 
         return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $entry, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor, $scope) {
+            // HR.12 (X-1): a new duty needs the person's planned or current employment
+            // TODAY (HR's EmploymentCoverage, FOR SHARE), never the identity flag alone.
+            if (app(EmploymentCoverage::class)->hold($school, $teacher->id, SchoolTimezone::today($school)) !== EmploymentCoverage::COVERED) {
+                throw new TeacherNotAvailableException;
+            }
             $this->holdInScope($scope, $entry);
             $this->assertPeriodSchedulable($period);
             $this->assertCampusSchedulable($school, $context['campus_id']);

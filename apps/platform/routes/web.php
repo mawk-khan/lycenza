@@ -103,6 +103,7 @@ use App\Http\Controllers\App\HR\HrEmployeeQualificationController;
 use App\Http\Controllers\App\HR\HrEmployeeReferenceCodeController;
 use App\Http\Controllers\App\HR\HrEmploymentController;
 use App\Http\Controllers\App\HR\HrPositionController;
+use App\Http\Controllers\App\HR\HrSeparationController;
 use App\Http\Controllers\App\IntegrationHubController;
 use App\Http\Controllers\App\Integrations\ApiClientController;
 use App\Http\Controllers\App\InventoryItemController;
@@ -1699,6 +1700,27 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
 
         Route::get('/employees/import', [HrEmployeeImportController::class, 'create'])->middleware('capability:hr.employees.manage')->name('employees.import.create');
         Route::post('/employees/import', [HrEmployeeImportController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.import.store');
+
+        // HR.12 (owner decisions HR-061, 2026-11-04): separation cases -- HR records,
+        // another person decides, HR finalizes through EmploymentService::end().
+        // Whole-School keys (never Campus-adopted). Static segments first.
+        Route::get('/separations', [HrSeparationController::class, 'index'])->middleware('capability:hr.separations.view')->name('separations.index');
+        Route::get('/separations/create', [HrSeparationController::class, 'create'])->middleware('capability:hr.separations.manage')->name('separations.create');
+        Route::post('/separations', [HrSeparationController::class, 'store'])->middleware('capability:hr.separations.manage')->name('separations.store');
+        Route::get('/separations/requirements', [HrSeparationController::class, 'requirements'])->middleware('capability:hr.separations.configure')->name('separations.requirements.index');
+        Route::post('/separations/requirements', [HrSeparationController::class, 'storeRequirement'])->middleware('capability:hr.separations.configure')->name('separations.requirements.store');
+        Route::post('/separations/requirements/{requirement}/retire', [HrSeparationController::class, 'retireRequirement'])->middleware('capability:hr.separations.configure')->whereUuid('requirement')->name('separations.requirements.retire');
+        Route::get('/separations/{separationCase}', [HrSeparationController::class, 'show'])->middleware('capability:hr.separations.view')->whereUuid('separationCase')->name('separations.show');
+        Route::post('/separations/{separationCase}/approve', [HrSeparationController::class, 'approve'])->middleware('capability:hr.separations.approve')->whereUuid('separationCase')->name('separations.approve');
+        Route::post('/separations/{separationCase}/reject', [HrSeparationController::class, 'reject'])->middleware('capability:hr.separations.approve')->whereUuid('separationCase')->name('separations.reject');
+        Route::post('/separations/{separationCase}/withdraw', [HrSeparationController::class, 'withdraw'])->middleware('capability:hr.separations.manage')->whereUuid('separationCase')->name('separations.withdraw');
+        Route::post('/separations/{separationCase}/last-day', [HrSeparationController::class, 'changeLastDay'])->middleware('capability:hr.separations.manage')->whereUuid('separationCase')->name('separations.last-day');
+        Route::post('/separations/{separationCase}/cancel', [HrSeparationController::class, 'cancel'])->middleware('capability:hr.separations.manage')->whereUuid('separationCase')->name('separations.cancel');
+        Route::post('/separations/{separationCase}/finalize', [HrSeparationController::class, 'finalize'])->middleware('capability:hr.separations.manage')->whereUuid('separationCase')->name('separations.finalize');
+        // The any-of floor: the item's own responsibility decides the exact key (ClearanceResponsibility).
+        Route::post('/separations/{separationCase}/items/{item}/clear', [HrSeparationController::class, 'clearItem'])->middleware('capability:hr.separations.manage|school.settings.manage')->whereUuid(['separationCase', 'item'])->name('separations.items.clear');
+        Route::post('/separations/{separationCase}/access-retained', [HrSeparationController::class, 'recordAccessRetained'])->middleware('capability:school.members.manage')->whereUuid('separationCase')->name('separations.access-retained');
+        Route::post('/separations/{separationCase}/complete', [HrSeparationController::class, 'complete'])->middleware('capability:hr.separations.manage')->whereUuid('separationCase')->name('separations.complete');
 
         Route::get('/employees/{employee}', [HrEmployeeController::class, 'show'])->name('employees.show');
         Route::get('/employees/{employee}/overview', [HrEmployeeController::class, 'overview'])->name('employees.overview');

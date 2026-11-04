@@ -225,6 +225,8 @@ interface Props {
         manageEmployees: boolean;
         managePersonal: boolean;
         manageAssignments: boolean;
+        recordSeparations: boolean;
+        viewSeparations: boolean;
         manageQualifications: boolean;
         manageDocuments: boolean;
         manageNotes: boolean;
@@ -362,7 +364,14 @@ function submitEmployment(): void {
 }
 
 const endingEmploymentId = ref<string | null>(null);
-const endEmploymentForm = useForm({ ends_on: '', status: 'separated' });
+// HR.12: the only direct end is a death (fresh MFA + confirmation); every
+// other separation is a case another person approves (HR-061).
+const endEmploymentForm = useForm({
+    ends_on: '',
+    status: 'deceased',
+    mfa_code: '',
+    confirm: false as boolean,
+});
 function submitEndEmployment(id: string): void {
     endEmploymentForm.post(`${base}/employment-records/${id}/end`, {
         preserveScroll: true,
@@ -1488,6 +1497,22 @@ function submitNote(): void {
                             >
                                 {{ termsEmploymentId === e.id ? 'Cancel' : 'Change terms' }}
                             </button>
+                            <a
+                                v-if="
+                                    e.ends_on === null &&
+                                    e.status === 'active' &&
+                                    can.recordSeparations
+                                "
+                                class="underline"
+                                :href="`/app/hr/separations/create?employment=${e.id}`"
+                                >Record separation</a
+                            >
+                            <a
+                                v-if="e.status === 'notice_period' && can.viewSeparations"
+                                class="underline"
+                                href="/app/hr/separations?status=approved"
+                                >Separation in progress</a
+                            >
                             <button
                                 v-if="e.ends_on === null"
                                 type="button"
@@ -1496,7 +1521,7 @@ function submitNote(): void {
                                     endingEmploymentId = endingEmploymentId === e.id ? null : e.id
                                 "
                             >
-                                {{ endingEmploymentId === e.id ? 'Cancel' : 'End' }}
+                                {{ endingEmploymentId === e.id ? 'Cancel' : 'Record death' }}
                             </button>
                         </div>
                     </div>
@@ -1516,26 +1541,44 @@ function submitNote(): void {
                                     class="input mt-1 w-auto"
                                 />
                             </div>
-                            <div>
-                                <label class="block text-sm text-ink-muted">Status</label>
-                                <select
-                                    v-model="endEmploymentForm.status"
-                                    class="input mt-1 w-auto"
-                                >
-                                    <option value="separated">Separated</option>
-                                    <option value="terminated">Terminated</option>
-                                    <option value="retired">Retired</option>
-                                    <option value="deceased">Deceased</option>
-                                </select>
-                            </div>
-                            <button
-                                type="submit"
-                                :disabled="endEmploymentForm.processing"
-                                class="btn btn-primary"
-                            >
-                                Confirm
-                            </button>
+                            <MfaCodeField
+                                :id="`end-employment-mfa-${e.id}`"
+                                v-model="endEmploymentForm.mfa_code"
+                                :has-mfa-factor="hasMfaFactor"
+                                action="Recording a death"
+                                :error="endEmploymentForm.errors.mfa_code"
+                            />
                         </div>
+                        <label class="mt-3 flex items-start gap-2 text-sm">
+                            <input
+                                v-model="endEmploymentForm.confirm"
+                                type="checkbox"
+                                class="mt-1"
+                            />
+                            <span
+                                >I confirm this employee has died. The employment ends on this date
+                                as deceased; this is not how a resignation, retirement or contract
+                                end is recorded.</span
+                            >
+                        </label>
+                        <p
+                            v-if="endEmploymentForm.errors.confirm"
+                            class="mt-1 text-sm text-danger"
+                            role="alert"
+                        >
+                            {{ endEmploymentForm.errors.confirm }}
+                        </p>
+                        <button
+                            type="submit"
+                            :disabled="
+                                endEmploymentForm.processing ||
+                                !endEmploymentForm.confirm ||
+                                !hasMfaFactor
+                            "
+                            class="btn btn-danger mt-3"
+                        >
+                            Record death
+                        </button>
                     </form>
 
                     <!-- HR.1A: dated terms change -->

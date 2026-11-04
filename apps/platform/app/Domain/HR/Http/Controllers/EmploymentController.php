@@ -5,12 +5,14 @@ namespace App\Domain\HR\Http\Controllers;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Separation\SeparationException;
 use App\Domain\HR\Application\Workforce\EmploymentType;
 use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -80,7 +82,7 @@ class EmploymentController extends Controller
      * HR.1A (S-8): ending over the API is the separation command -- a future
      * date is refused exactly as separate() refuses it.
      */
-    public function end(Request $request, School $school, string $employee, string $employment, EmployeeLifecycleService $service): JsonResponse
+    public function end(Request $request, School $school, string $employee, string $employment, EmployeeLifecycleService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
@@ -91,8 +93,13 @@ class EmploymentController extends Controller
             'ends_on' => ['required', 'date'],
             'status' => ['sometimes', Rule::in(['separated', 'terminated', 'retired', 'deceased'])],
         ]);
+        // HR.12: only a death is recorded directly; refused before an MFA code is spent.
+        if (($validated['status'] ?? 'separated') !== 'deceased') {
+            throw SeparationException::conflict('SEPARATION_USE_CASE', 'Record a resignation, retirement, contract end or mutual agreement as a separation case; another person approves it. Only a death is recorded directly.');
+        }
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        $ended = $service->separate($employmentModel, $validated['ends_on'], $request->user(), $validated['status'] ?? 'separated');
+        $ended = $service->separate($employmentModel, $validated['ends_on'], $request->user(), $proof, $validated['status']);
 
         return response()->json(['data' => $this->present($ended)]);
     }

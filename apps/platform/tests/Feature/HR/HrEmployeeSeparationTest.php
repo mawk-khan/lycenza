@@ -43,10 +43,10 @@ class HrEmployeeSeparationTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->assertSame('2026-06-15', $separated->ends_on->toDateString());
-        $this->assertSame('separated', $separated->status);
+        $this->assertSame('deceased', $separated->status);
     }
 
     #[Test]
@@ -61,7 +61,7 @@ class HrEmployeeSeparationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $ordinaryMember);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $ordinaryMember, $this->freshMfaProofFor($ordinaryMember), 'deceased');
     }
 
     #[Test]
@@ -77,7 +77,7 @@ class HrEmployeeSeparationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(EmployeeLifecycleService::class)->separate($employmentB, '2026-06-15', $actorA);
+        app(EmployeeLifecycleService::class)->separate($employmentB, '2026-06-15', $actorA, $this->freshMfaProofFor($actorA), 'deceased');
     }
 
     #[Test]
@@ -91,7 +91,7 @@ class HrEmployeeSeparationTest extends TestCase
 
         $this->expectException(InvalidEmploymentEffectiveDateException::class);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-07-01', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-07-01', $actor, $this->freshMfaProofFor($actor), 'deceased');
     }
 
     #[Test]
@@ -103,7 +103,7 @@ class HrEmployeeSeparationTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->assertSame('2026-06-15', $separated->ends_on->toDateString());
     }
@@ -117,7 +117,7 @@ class HrEmployeeSeparationTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-01-31', $actor);
+        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-01-31', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->assertSame('2026-01-31', $separated->ends_on->toDateString());
     }
@@ -130,11 +130,11 @@ class HrEmployeeSeparationTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-01-31', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-01-31', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->expectException(EmploymentAlreadyEndedException::class);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
     }
 
     #[Test]
@@ -148,7 +148,7 @@ class HrEmployeeSeparationTest extends TestCase
         app(EmploymentService::class)->end($firstEmployment, '2022-12-31', $actor, 'separated');
         $secondEmployment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2023-06-01'], $actor);
 
-        app(EmployeeLifecycleService::class)->separate($secondEmployment, '2026-06-15', $actor);
+        app(EmployeeLifecycleService::class)->separate($secondEmployment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         app(TenantContext::class)->set($school);
         $this->assertSame('2022-12-31', $firstEmployment->fresh()->ends_on->toDateString());
@@ -166,7 +166,7 @@ class HrEmployeeSeparationTest extends TestCase
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
         $originalNumber = $employee->employee_number;
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         app(TenantContext::class)->set($school);
         $fresh = $employee->fresh();

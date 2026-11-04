@@ -8,6 +8,7 @@ use App\Domain\HR\Application\Exceptions\EmployeeCategoryNotFoundException;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\Reporting\ReportingChangeReason;
 use App\Domain\HR\Application\Reporting\ReportingRelationshipService;
+use App\Domain\HR\Application\Separation\SeparationException;
 use App\Domain\HR\Application\Workforce\EmploymentTermsChangeReason;
 use App\Domain\HR\Application\Workforce\EmploymentTermsService;
 use App\Domain\HR\Application\Workforce\EmploymentType;
@@ -17,6 +18,7 @@ use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -60,7 +62,7 @@ class HrEmploymentController extends Controller
      * future date is refused exactly as separate() refuses it; the permissive
      * EmploymentService::end() primitive is not reachable over HTTP.
      */
-    public function end(Request $request, TenantContext $context, EmployeeLifecycleService $service, string $employee, string $employment): RedirectResponse
+    public function end(Request $request, TenantContext $context, EmployeeLifecycleService $service, FreshMfaRequirement $mfa, string $employee, string $employment): RedirectResponse
     {
         $school = $context->requireSchool();
         // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
@@ -73,9 +75,15 @@ class HrEmploymentController extends Controller
         $validated = $request->validate([
             'ends_on' => ['required', 'date'],
             'status' => ['sometimes', Rule::in(['separated', 'terminated', 'retired', 'deceased'])],
+            'confirm' => ['accepted'],
         ]);
+        // HR.12: only a death is recorded directly; refused before an MFA code is spent.
+        if (($validated['status'] ?? 'separated') !== 'deceased') {
+            throw SeparationException::conflict('SEPARATION_USE_CASE', 'Record a resignation, retirement, contract end or mutual agreement as a separation case; another person approves it. Only a death is recorded directly.');
+        }
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        $service->separate($employmentModel, $validated['ends_on'], $context->actor(), $validated['status'] ?? 'separated');
+        $service->separate($employmentModel, $validated['ends_on'], $context->actor(), $proof, $validated['status']);
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }
@@ -160,7 +168,7 @@ class HrEmploymentController extends Controller
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }
 
-    public function separate(Request $request, TenantContext $context, EmployeeLifecycleService $service, string $employee, string $employment): RedirectResponse
+    public function separate(Request $request, TenantContext $context, EmployeeLifecycleService $service, FreshMfaRequirement $mfa, string $employee, string $employment): RedirectResponse
     {
         $school = $context->requireSchool();
         // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
@@ -173,9 +181,15 @@ class HrEmploymentController extends Controller
         $validated = $request->validate([
             'ends_on' => ['required', 'date'],
             'status' => ['sometimes', Rule::in(['separated', 'terminated', 'retired', 'deceased'])],
+            'confirm' => ['accepted'],
         ]);
+        // HR.12: only a death is recorded directly; refused before an MFA code is spent.
+        if (($validated['status'] ?? 'separated') !== 'deceased') {
+            throw SeparationException::conflict('SEPARATION_USE_CASE', 'Record a resignation, retirement, contract end or mutual agreement as a separation case; another person approves it. Only a death is recorded directly.');
+        }
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        $service->separate($employmentModel, $validated['ends_on'], $context->actor(), $validated['status'] ?? 'separated');
+        $service->separate($employmentModel, $validated['ends_on'], $context->actor(), $proof, $validated['status']);
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }

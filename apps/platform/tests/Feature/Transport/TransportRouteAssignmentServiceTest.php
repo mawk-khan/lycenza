@@ -30,7 +30,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $assignment = app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
 
@@ -54,8 +54,8 @@ class TransportRouteAssignmentServiceTest extends TestCase
         $route = $this->createTransportRoute($school);
         $vehicleOne = $this->createTransportVehicle($school);
         $vehicleTwo = $this->createTransportVehicle($school);
-        $driverOne = $this->createEmployee($school);
-        $driverTwo = $this->createEmployee($school);
+        $driverOne = $this->createEmployedEmployee($school);
+        $driverTwo = $this->createEmployedEmployee($school);
         $service = app(TransportRouteAssignmentService::class);
 
         $first = app(TenantContext::class)->withSchool($school, fn () => $service->assign($route, $vehicleOne, $driverOne, $admin));
@@ -73,7 +73,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school, ['status' => 'inactive']);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $this->expectException(VehicleNotEligibleException::class);
         app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
@@ -85,7 +85,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school, ['record_status' => 'archived']);
+        $driver = $this->createEmployedEmployee($school, ['record_status' => 'archived']);
 
         $this->expectException(DriverNotEligibleException::class);
         app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
@@ -97,7 +97,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school, ['status' => 'inactive']);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $this->expectException(RouteNotAvailableException::class);
         app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
@@ -109,7 +109,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
         $assignment = app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
 
         $ended = app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->end($assignment, $admin));
@@ -130,7 +130,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
         $assignment = app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
 
         app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->end($assignment, $admin));
@@ -145,7 +145,7 @@ class TransportRouteAssignmentServiceTest extends TestCase
         [$admin, $school] = $this->createSchoolAdmin();
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
         $assignment = app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->assign($route, $vehicle, $driver, $admin));
         app(TenantContext::class)->withSchool($school, fn () => app(TransportRouteAssignmentService::class)->end($assignment, $admin));
 

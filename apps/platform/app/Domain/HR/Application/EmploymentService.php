@@ -16,6 +16,7 @@ use App\Domain\HR\Events\EmploymentEnded;
 use App\Domain\HR\Events\EmploymentStarted;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\SchoolTimezone;
@@ -327,6 +328,49 @@ class EmploymentService
                 return $locked->fresh();
             });
         });
+    }
+
+    /**
+     * HR.12 (owner decision HR-061, 2026-11-04): an APPROVED separation case
+     * puts its employment into `notice_period`. Called only by
+     * SeparationCaseService, inside its transaction, after it took the
+     * placement lock and locked this row FOR UPDATE and after the case row
+     * became `approved` (the database admits `notice_period` only from
+     * `active` under an approved case: trg_employment_records_separation_notice).
+     * Its caller authorized the decision; this writes the one status column.
+     */
+    public function startNoticePeriod(School $school, EmploymentRecord $locked, string $caseId, User $actor): void
+    {
+        $this->changeNoticeStatus($school, $locked, 'active', 'notice_period', 'hr.employment.notice_started', $caseId, $actor);
+    }
+
+    /**
+     * HR.12: a CANCELLED separation case returns its employment from
+     * `notice_period` to `active` (the case row is already `cancelled`).
+     * Same contract as startNoticePeriod().
+     */
+    public function endNoticePeriod(School $school, EmploymentRecord $locked, string $caseId, User $actor): void
+    {
+        $this->changeNoticeStatus($school, $locked, 'notice_period', 'active', 'hr.employment.notice_withdrawn', $caseId, $actor);
+    }
+
+    private function changeNoticeStatus(School $school, EmploymentRecord $locked, string $from, string $to, string $event, string $caseId, User $actor): void
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('A notice-period change runs only inside its separation case transaction.');
+        }
+        if ($locked->status !== $from || $locked->ends_on !== null) {
+            throw new InvalidEmploymentStatusTransitionException($locked->id, $to);
+        }
+
+        $locked->update(['status' => $to]);
+
+        $this->audit->school($school, $event, actor: $actor, subject: $locked, metadata: [
+            'employeeId' => $locked->employee_id,
+            'separationCaseId' => $caseId,
+            'fromStatus' => $from,
+            'toStatus' => $to,
+        ]);
     }
 
     /**

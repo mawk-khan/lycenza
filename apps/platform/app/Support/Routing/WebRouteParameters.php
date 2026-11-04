@@ -50,7 +50,7 @@ final class WebRouteParameters
         'leavePolicyAssignment', 'leaveRequest', 'leaveType', 'ledgerAccount', 'libraryCopy', 'libraryFine', 'libraryLoan',
         'libraryTitle', 'line', 'mapping', 'membership', 'note', 'payment', 'payrollPeriod', 'payrollRun',
         'period', 'position', 'qualification', 'referenceCode', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
-        'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection',
+        'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection', 'separationCase',
         'staffAttendanceRecord', 'staffHoliday', 'student', 'studentMark', 'studentMarkCorrection', 'subject',
         'subjectOffering', 'syllabusUnit', 'targetUser', 'teachingAssignment', 'template', 'thread',
         'timetableEntry', 'timetablePeriod', 'transportRoute', 'transportRouteAssignment', 'transportStop',

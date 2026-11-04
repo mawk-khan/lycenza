@@ -59,7 +59,11 @@ type Status =
     | 'calculated'
     | 'approved'
     | 'posted'
-    | 'reversed';
+    | 'reversed'
+    // HR.12: separation case lifecycle (`approved`, `rejected`, `withdrawn`,
+    // `cancelled`, `completed` already exist above).
+    | 'requested'
+    | 'finalized';
 
 interface Props {
     status: Status;
@@ -115,6 +119,8 @@ const STYLES: Record<Status, { label: string; family: Family }> = {
     converted: { label: 'Converted', family: 'info' },
     // CanteenOrder lifecycle.
     pending: { label: 'Pending', family: 'progress' },
+    requested: { label: 'Awaiting decision', family: 'progress' },
+    finalized: { label: 'Finalized', family: 'info' },
     fulfilled: { label: 'Fulfilled', family: 'positive' },
     // PayrollPeriod / PayrollRun lifecycle.
     open: { label: 'Open', family: 'info' },

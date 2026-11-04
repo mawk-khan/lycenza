@@ -43,7 +43,7 @@ class HrEmployeeSeparationAccessControlTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->assertNotNull($linkedUser->fresh(), 'The User row must still exist.');
         $this->assertSame('active', $membership->fresh()->status, 'School membership status must be completely untouched by separation.');
@@ -71,7 +71,7 @@ class HrEmployeeSeparationAccessControlTest extends TestCase
         $membershipRoleAssignmentsBefore = MembershipRoleAssignment::query()->count();
         $platformRoleAssignmentsBefore = PlatformRoleAssignment::query()->count();
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         app(TenantContext::class)->set($school);
         $this->assertSame($rolesBefore, Role::query()->count(), 'Separation must never create/delete a Role.');
@@ -90,7 +90,7 @@ class HrEmployeeSeparationAccessControlTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, 'terminated');
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->assertSame('active', $membership->fresh()->status);
     }
@@ -106,7 +106,7 @@ class HrEmployeeSeparationAccessControlTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
         $this->assertSame('suspended', $membership->fresh()->status, 'Separation neither causes nor lifts a membership suspension.');
     }
@@ -120,9 +120,9 @@ class HrEmployeeSeparationAccessControlTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor);
+        $separated = app(EmployeeLifecycleService::class)->separate($employment, '2026-06-15', $actor, $this->freshMfaProofFor($actor), 'deceased');
 
-        $this->assertSame('separated', $separated->status);
+        $this->assertSame('deceased', $separated->status);
 
         app(TenantContext::class)->set($school);
         $this->assertNull($employee->fresh()->user_id);

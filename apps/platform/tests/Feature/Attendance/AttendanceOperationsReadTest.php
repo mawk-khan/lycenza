@@ -57,7 +57,7 @@ class AttendanceOperationsReadTest extends TestCase
         foreach (['a' => $this->a, 'b' => $this->b] as $key => $campus) {
             $offering = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($this->school), ['is_required' => true, 'status' => 'active']);
             $section = $this->createSection($year, $campus, $grade, ['status' => 'active', 'code' => 'S'.strtoupper($key)]);
-            $teacher = $this->createEmployee($this->school, ['record_status' => 'active']);
+            $teacher = $this->createEmployedEmployee($this->school, ['record_status' => 'active']);
             $entry = $this->createTimetableEntry($offering, $section, $teacher, $first, ['day_of_week' => 1, 'status' => 'active']);
             $later = $this->createTimetableEntry($offering, $section, $teacher, $second, ['day_of_week' => 1, 'status' => 'active']);
             $enrollment = $this->enrollStudent($section, '1', '2026-06-01');

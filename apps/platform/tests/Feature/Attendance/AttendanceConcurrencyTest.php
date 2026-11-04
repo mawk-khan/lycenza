@@ -219,7 +219,7 @@ class AttendanceConcurrencyTest extends TestCase
             'is_required' => true, 'status' => 'active',
         ]);
         $otherSection = $this->createSection($w['year'], $w['campus'], $w['grade'], ['status' => 'active', 'code' => 'B']);
-        $otherTeacher = $this->createEmployee($w['school'], ['record_status' => 'active']);
+        $otherTeacher = $this->createEmployedEmployee($w['school'], ['record_status' => 'active']);
         $otherPeriod = $this->createTimetablePeriod($w['school'], [
             'start_time' => '14:00:00', 'end_time' => '15:00:00', 'code' => 'P9',
         ]);

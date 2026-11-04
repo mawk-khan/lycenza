@@ -66,7 +66,10 @@ class HrIdentityStatusConstraintTest extends TestCase
             $this->assertRefused(fn () => DB::table('employment_records')->where('id', $record->id)->update(['status' => $bad]), 'employment_records_status_check');
         }
 
-        foreach (['draft', 'pre_joining', 'active', 'notice_period', 'separated', 'terminated', 'retired', 'deceased'] as $good) {
+        // HR.12: the runtime role enters notice_period only through an approved separation case
+        // (trg_employment_records_separation_notice, SeparationCaseServiceTest); the CHECK's
+        // notice_period value is pinned by the constraint definition below.
+        foreach (['draft', 'pre_joining', 'active', 'separated', 'terminated', 'retired', 'deceased'] as $good) {
             DB::table('employment_records')->where('id', $record->id)->update(['status' => $good]);
         }
         $this->assertSame('deceased', DB::table('employment_records')->where('id', $record->id)->value('status'));

@@ -220,7 +220,7 @@ class HrSelfAdministrationTest extends TestCase
         // Lifecycle: archive, restore, end, separate.
         $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $employees->archive($ownEmployee, $officer)));
         $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $assignments->end($ownAssignment, '2026-10-01', $officer)));
-        $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => app(EmployeeLifecycleService::class)->separate($mine, '2026-10-01', $officer)));
+        $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => app(EmployeeLifecycleService::class)->separate($mine, '2026-10-01', $officer, $this->freshMfaProofFor($officer), 'deceased')));
         $this->assertSame(HrSelfAdministrationException::CODE, $this->refusal(fn () => $employment->end($mine, '2026-10-01', $officer)));
         $this->assertNull($this->reload($school, $mine)->ends_on, 'Nothing changed.');
 

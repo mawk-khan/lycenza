@@ -13,8 +13,10 @@ use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
 use App\Domain\Guardians\Application\GuardianAccountOwnership;
 use App\Domain\Hostel\Application\HostelTransferBlocker;
 use App\Domain\HR\Application\EmploymentEndParticipant;
+use App\Domain\HR\Application\Separation\SeparationObligationSource;
 use App\Domain\Identity\Application\GuardianAccountOwnershipReader;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
+use App\Domain\Leave\Application\LeaveSeparationObligations;
 use App\Domain\LMS\Application\AssignmentYearDateDependency;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
@@ -28,6 +30,8 @@ use App\Domain\Students\Application\RolloverExecutionActivationBlocker;
 use App\Domain\Students\Application\StudentTransferBlocker;
 use App\Domain\TeachingAssignments\Application\EmploymentEndedTeachingOwnership;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentYearDateDependency;
+use App\Domain\Timetable\Application\TimetableSeparationObligations;
+use App\Domain\Transport\Application\TransportSeparationObligations;
 use App\Domain\Transport\Application\TransportTransferBlocker;
 use App\Models\School;
 use App\Models\User;
@@ -134,6 +138,8 @@ class AppServiceProvider extends ServiceProvider
         // Registered here, not in HR, so HR never references Teaching
         // Assignments (which depends on HR).
         $this->app->tag([EmploymentEndedTeachingOwnership::class], EmploymentEndParticipant::TAG);
+        // HR.12: each owner answers what a separating employment still holds there (read only).
+        $this->app->tag([LeaveSeparationObligations::class, TimetableSeparationObligations::class, TransportSeparationObligations::class], SeparationObligationSource::TAG);
 
         // ORG.7F-3 (ADR 0076 §47): the active source-Campus relationships that
         // block a Campus-scoped Student transfer. Registered here, not in

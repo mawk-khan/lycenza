@@ -166,7 +166,7 @@ class TransportAdminUiTest extends TestCase
         $this->activate($user, $school);
         $route = $this->createTransportRoute($school);
         $vehicle = $this->createTransportVehicle($school);
-        $driver = $this->createEmployee($school);
+        $driver = $this->createEmployedEmployee($school);
 
         $assign = $this->post("/app/transport/operations/{$route->id}", [
             'vehicle_id' => $vehicle->id, 'driver_employee_id' => $driver->id,

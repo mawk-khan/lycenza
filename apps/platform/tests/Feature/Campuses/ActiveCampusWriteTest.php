@@ -228,7 +228,7 @@ class ActiveCampusWriteTest extends TestCase
         $actor = $this->fullTimetableActor($this->school);
         $year = $this->createAcademicYear($this->school);
         $grade = $this->createGradeLevel($this->school);
-        $teacher = $this->createEmployee($this->school, ['record_status' => 'active']);
+        $teacher = $this->createEmployedEmployee($this->school, ['record_status' => 'active']);
         $period = $this->createTimetablePeriod($this->school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
         $create = function (Campus $campus, $room, int $day) use ($actor, $year, $grade, $teacher, $period) {
             $offering = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($this->school), ['is_required' => true, 'status' => 'active']);
