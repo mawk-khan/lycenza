@@ -60,20 +60,20 @@ const hasFilters = computed(() => !!props.filters.name);
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/admissions">← Admissions</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Applicants</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Prospective students who have not yet enrolled.
                 </p>
             </div>
             <a
                 v-if="canManage"
                 href="/app/admissions/applicants/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Add applicant
             </a>
@@ -81,13 +81,8 @@ const hasFilters = computed(() => !!props.filters.name);
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-name">Name</label>
-                <input
-                    id="filter-name"
-                    v-model="name"
-                    type="text"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <label class="block text-sm text-ink-muted" for="filter-name">Name</label>
+                <input id="filter-name" v-model="name" type="text" class="input mt-1 w-56" />
             </div>
         </form>
 
@@ -102,10 +97,7 @@ const hasFilters = computed(() => !!props.filters.name);
             "
         >
             <template v-if="canManage && !hasFilters" #action>
-                <a
-                    href="/app/admissions/applicants/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a href="/app/admissions/applicants/create" class="btn btn-primary">
                     Add applicant
                 </a>
             </template>
@@ -114,14 +106,14 @@ const hasFilters = computed(() => !!props.filters.name);
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Applicant</th>
                         <th scope="col" class="py-2 font-medium">
                             <span class="sr-only">Actions</span>
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="applicant in applicants.data" :key="applicant.id">
                         <td class="py-3">
                             <a
@@ -145,7 +137,7 @@ const hasFilters = computed(() => !!props.filters.name);
                 <li
                     v-for="applicant in applicants.data"
                     :key="applicant.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a
                         class="font-medium underline"

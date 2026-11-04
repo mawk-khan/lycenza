@@ -40,23 +40,23 @@ function submit(): void {
 
 <template>
     <Head title="Correct contact" />
-    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="back">← {{ guardianName }}</a>
         <h1 class="mt-2 text-xl font-semibold">
             Correct {{ isEmail ? 'email address' : 'mobile number' }}
         </h1>
         <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <dt class="text-slate-500">Guardian</dt>
+            <dt class="text-ink-muted">Guardian</dt>
             <dd>{{ guardianName }}</dd>
-            <dt class="text-slate-500">Type</dt>
+            <dt class="text-ink-muted">Type</dt>
             <dd>{{ isEmail ? 'Email' : 'Mobile' }}</dd>
-            <dt class="text-slate-500">Status</dt>
+            <dt class="text-ink-muted">Status</dt>
             <dd>
                 {{ contact.isActive ? 'Active' : 'Inactive'
                 }}{{ contact.isPrimary ? ' · Primary' : '' }}
             </dd>
         </dl>
-        <p class="mt-3 text-sm text-slate-600">
+        <p class="mt-3 text-sm text-ink-muted">
             For a typing mistake. The corrected value replaces the old one everywhere this Guardian
             is reached; the change is recorded in the audit log without the value.
             <template v-if="!contact.isActive">
@@ -84,11 +84,7 @@ function submit(): void {
             />
 
             <div class="flex flex-wrap items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Save correction' }}
                 </button>
                 <a class="text-sm underline" :href="back">Cancel</a>

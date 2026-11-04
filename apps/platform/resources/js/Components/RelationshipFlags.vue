@@ -28,9 +28,9 @@ const flags = computed(() => {
 </script>
 
 <template>
-    <p class="text-sm text-slate-600">
+    <p class="text-sm text-ink-muted">
         {{ relationshipLabel }}
-        <span v-if="flags.length" class="text-slate-400">·</span>
-        <span v-if="flags.length" class="text-slate-500">{{ flags.join(' · ') }}</span>
+        <span v-if="flags.length" class="text-ink-muted">·</span>
+        <span v-if="flags.length" class="text-ink-muted">{{ flags.join(' · ') }}</span>
     </p>
 </template>

@@ -115,7 +115,7 @@ watch(editTargetSections, (options) => {
 <template>
     <section class="mt-8">
         <div class="flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-700">Grade &amp; Section mappings</h2>
+            <h2 class="text-sm font-semibold text-ink">Grade &amp; Section mappings</h2>
             <button
                 v-if="canManage && configurable && !showAddForm"
                 type="button"
@@ -125,43 +125,39 @@ watch(editTargetSections, (options) => {
                 Add mapping
             </button>
         </div>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             A Grade-level default applies to every Student in that source Grade unless a
             Section-specific override exists. The target Section is always authoritative -- it is
             never inferred from a Section's name or code.
         </p>
 
-        <p v-if="!configurable" class="mt-2 text-sm text-amber-700">
+        <p v-if="!configurable" class="mt-2 text-sm text-ink">
             This Plan is no longer configurable (it is executing or has reached a terminal status).
         </p>
 
         <div
             v-if="mappings.length === 0"
-            class="mt-4 rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500"
+            class="mt-4 rounded-xs border border-dashed border-control-line p-4 text-sm text-ink-muted"
         >
             No mappings configured yet.
         </div>
 
         <ul v-else class="mt-4 space-y-2">
-            <li
-                v-for="m in mappings"
-                :key="m.id"
-                class="rounded border border-slate-200 p-3 text-sm"
-            >
+            <li v-for="m in mappings" :key="m.id" class="rounded-xs border border-line p-3 text-sm">
                 <template v-if="editingMappingId !== m.id">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <span class="font-medium">{{ m.sourceGradeLevel.name }}</span>
-                            <span v-if="m.sourceSection" class="text-slate-500">
+                            <span v-if="m.sourceSection" class="text-ink-muted">
                                 · Section {{ m.sourceSection.name }} only</span
                             >
-                            <span v-else class="text-slate-500"> · Grade default</span>
-                            <span class="mx-2 text-slate-400">→</span>
+                            <span v-else class="text-ink-muted"> · Grade default</span>
+                            <span class="mx-2 text-ink-muted">→</span>
                             <span class="font-medium">{{ m.targetGradeLevel.name }}</span>
                             <span v-if="m.targetSection">
                                 · Section {{ m.targetSection.name }}</span
                             >
-                            <span v-if="m.isRepeat" class="ml-2 text-xs text-slate-500"
+                            <span v-if="m.isRepeat" class="ml-2 text-xs text-ink-muted"
                                 >(repeat)</span
                             >
                         </div>
@@ -177,14 +173,14 @@ watch(editTargetSections, (options) => {
                 </template>
 
                 <form v-else class="space-y-3" @submit.prevent="submitEdit(m.id)">
-                    <p class="text-slate-600">
+                    <p class="text-ink-muted">
                         Source: <strong>{{ m.sourceGradeLevel.name }}</strong>
                         <span v-if="m.sourceSection"> · Section {{ m.sourceSection.name }}</span>
                         <span v-else> (Grade default)</span> -- unchanged.
                     </p>
                     <div>
                         <label
-                            class="block text-xs font-medium text-slate-700"
+                            class="block text-xs font-medium text-ink"
                             :for="`edit-target-grade-${m.id}`"
                             >Target Grade</label
                         >
@@ -193,7 +189,7 @@ watch(editTargetSections, (options) => {
                             v-model="editForm.target_grade_level_id"
                             required
                             :aria-invalid="!!editForm.errors.target_grade_level_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                            class="input mt-1"
                         >
                             <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
                                 {{ g.name }}
@@ -202,14 +198,14 @@ watch(editTargetSections, (options) => {
                     </div>
                     <div>
                         <label
-                            class="block text-xs font-medium text-slate-700"
+                            class="block text-xs font-medium text-ink"
                             :for="`edit-target-section-${m.id}`"
                             >Target Section (optional default)</label
                         >
                         <select
                             :id="`edit-target-section-${m.id}`"
                             v-model="editForm.target_section_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                            class="input mt-1"
                         >
                             <option value="">No default Section</option>
                             <option v-for="s in editTargetSections" :key="s.id" :value="s.id">
@@ -217,17 +213,17 @@ watch(editTargetSections, (options) => {
                             </option>
                         </select>
                     </div>
-                    <p v-if="editForm.errors.target_grade_level_id" class="text-sm text-red-600">
+                    <p v-if="editForm.errors.target_grade_level_id" class="text-sm text-danger">
                         {{ editForm.errors.target_grade_level_id }}
                     </p>
-                    <p v-if="editForm.errors.target_section_id" class="text-sm text-red-600">
+                    <p v-if="editForm.errors.target_section_id" class="text-sm text-danger">
                         {{ editForm.errors.target_section_id }}
                     </p>
                     <div class="flex items-center gap-3">
                         <button
                             type="submit"
                             :disabled="editForm.processing"
-                            class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            class="btn btn-primary text-xs"
                         >
                             Save
                         </button>
@@ -241,15 +237,13 @@ watch(editTargetSections, (options) => {
 
         <form
             v-if="showAddForm"
-            class="mt-4 space-y-3 rounded border border-slate-200 p-4"
+            class="mt-4 space-y-3 rounded-xs border border-line p-4"
             @submit.prevent="submitAdd"
         >
-            <h3 class="text-sm font-medium text-slate-700">Add mapping</h3>
+            <h3 class="text-sm font-medium text-ink">Add mapping</h3>
             <div class="grid gap-3 sm:grid-cols-2">
                 <div>
-                    <label
-                        class="block text-xs font-medium text-slate-700"
-                        for="source_grade_level_id"
+                    <label class="block text-xs font-medium text-ink" for="source_grade_level_id"
                         >Source Grade</label
                     >
                     <select
@@ -257,7 +251,7 @@ watch(editTargetSections, (options) => {
                         v-model="addForm.source_grade_level_id"
                         required
                         :aria-invalid="!!addForm.errors.source_grade_level_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Select…</option>
                         <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
@@ -266,13 +260,13 @@ watch(editTargetSections, (options) => {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700" for="source_section_id"
+                    <label class="block text-xs font-medium text-ink" for="source_section_id"
                         >Source Section (leave blank for a Grade-level default)</label
                     >
                     <select
                         id="source_section_id"
                         v-model="addForm.source_section_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                        class="input mt-1"
                     >
                         <option value="">Grade-level default</option>
                         <option v-for="s in addSourceSections" :key="s.id" :value="s.id">
@@ -281,9 +275,7 @@ watch(editTargetSections, (options) => {
                     </select>
                 </div>
                 <div>
-                    <label
-                        class="block text-xs font-medium text-slate-700"
-                        for="target_grade_level_id"
+                    <label class="block text-xs font-medium text-ink" for="target_grade_level_id"
                         >Target Grade</label
                     >
                     <select
@@ -291,7 +283,7 @@ watch(editTargetSections, (options) => {
                         v-model="addForm.target_grade_level_id"
                         required
                         :aria-invalid="!!addForm.errors.target_grade_level_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Select…</option>
                         <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
@@ -300,13 +292,13 @@ watch(editTargetSections, (options) => {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700" for="target_section_id"
+                    <label class="block text-xs font-medium text-ink" for="target_section_id"
                         >Target Section (optional default)</label
                     >
                     <select
                         id="target_section_id"
                         v-model="addForm.target_section_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                        class="input mt-1"
                     >
                         <option value="">No default Section</option>
                         <option v-for="s in addTargetSections" :key="s.id" :value="s.id">
@@ -315,20 +307,20 @@ watch(editTargetSections, (options) => {
                     </select>
                 </div>
             </div>
-            <p v-if="addForm.errors.source_grade_level_id" class="text-sm text-red-600">
+            <p v-if="addForm.errors.source_grade_level_id" class="text-sm text-danger">
                 {{ addForm.errors.source_grade_level_id }}
             </p>
-            <p v-if="addForm.errors.source_section_id" class="text-sm text-red-600">
+            <p v-if="addForm.errors.source_section_id" class="text-sm text-danger">
                 {{ addForm.errors.source_section_id }}
             </p>
-            <p v-if="addForm.errors.target_section_id" class="text-sm text-red-600">
+            <p v-if="addForm.errors.target_section_id" class="text-sm text-danger">
                 {{ addForm.errors.target_section_id }}
             </p>
             <div class="flex items-center gap-3">
                 <button
                     type="submit"
                     :disabled="addForm.processing"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary text-xs"
                 >
                     Add mapping
                 </button>

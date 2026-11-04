@@ -45,10 +45,10 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/enrollment-rollovers">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">Create Enrollment Rollover Plan</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Choose the source Academic Year Students are currently placed in, and the target
             Academic Year they will be moved into. You will configure Grade/Section mappings and
             review individual Students next.
@@ -56,9 +56,7 @@ function submit(): void {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label
-                    class="block text-sm font-medium text-slate-700"
-                    for="source_academic_year_id"
+                <label class="block text-sm font-medium text-ink" for="source_academic_year_id"
                     >Source Academic Year</label
                 >
                 <select
@@ -67,22 +65,20 @@ function submit(): void {
                     required
                     :aria-invalid="!!form.errors.source_academic_year_id"
                     aria-describedby="source_academic_year_id-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select an Academic Year…</option>
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
                         {{ yearLabel(y) }}
                     </option>
                 </select>
-                <p id="source_academic_year_id-error" class="mt-1 text-sm text-red-600">
+                <p id="source_academic_year_id-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.source_academic_year_id }}
                 </p>
             </div>
 
             <div>
-                <label
-                    class="block text-sm font-medium text-slate-700"
-                    for="target_academic_year_id"
+                <label class="block text-sm font-medium text-ink" for="target_academic_year_id"
                     >Target Academic Year</label
                 >
                 <select
@@ -91,25 +87,25 @@ function submit(): void {
                     required
                     :aria-invalid="!!form.errors.target_academic_year_id"
                     aria-describedby="target_academic_year_id-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select an Academic Year…</option>
                     <option v-for="y in draftYears" :key="y.id" :value="y.id">
                         {{ yearLabel(y) }}
                     </option>
                 </select>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-xs text-ink-muted">
                     Only draft Academic Years are listed: rollover prepares the next year before it
                     is activated.
                 </p>
-                <p id="target_academic_year_id-error" class="mt-1 text-sm text-red-600">
+                <p id="target_academic_year_id-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.target_academic_year_id }}
                 </p>
             </div>
 
             <p
                 v-if="sourceYear && targetYear"
-                class="rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600"
+                class="rounded-xs border border-line bg-graphite-100 p-3 text-sm text-ink-muted"
             >
                 Students currently placed in <strong>{{ sourceYear.name }}</strong> will be proposed
                 for placement in <strong>{{ targetYear.name }}</strong
@@ -117,11 +113,7 @@ function submit(): void {
             </p>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Creating…' : 'Create Plan' }}
                 </button>
                 <a class="text-sm underline" href="/app/enrollment-rollovers">Cancel</a>

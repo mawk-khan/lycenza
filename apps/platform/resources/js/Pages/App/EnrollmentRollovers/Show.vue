@@ -259,7 +259,7 @@ function reload(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/enrollment-rollovers">← Enrollment Rollovers</a>
 
         <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -267,7 +267,7 @@ function reload(): void {
                 <h1 class="text-xl font-semibold">
                     {{ plan.sourceAcademicYear.name }} → {{ plan.targetAcademicYear.name }}
                 </h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Configuration version {{ plan.configurationVersion }}
                     <span v-if="plan.validatedConfigurationVersion !== null">
                         · Last validated at version {{ plan.validatedConfigurationVersion }}</span
@@ -279,7 +279,7 @@ function reload(): void {
 
         <p
             v-if="needsRevalidation"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             <strong>Revalidation required.</strong> Execution stopped because the plan's data
             changed since it was last validated. Target Enrollments already created for successful
@@ -291,7 +291,7 @@ function reload(): void {
         <!-- Validation summary -->
         <section
             v-if="capacityWarnings.length > 0"
-            class="mt-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            class="mt-6 rounded-xs border border-accent-300 bg-accent-100 px-4 py-3 text-sm text-ink"
             aria-labelledby="capacity-warnings-heading"
         >
             <h2 id="capacity-warnings-heading" class="font-semibold">
@@ -308,58 +308,58 @@ function reload(): void {
 
         <section class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-slate-700">Validation</h2>
+                <h2 class="text-sm font-semibold text-ink">Validation</h2>
                 <button
                     v-if="canManage && configurable"
                     type="button"
                     :disabled="validateProcessing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                     @click="runValidation"
                 >
                     {{ validateProcessing ? 'Validating…' : 'Run Validation' }}
                 </button>
             </div>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Checks the rollover plan against current data. This does not create or change any
                 Student Enrollment.
             </p>
-            <p v-if="validateError" class="mt-2 text-sm text-red-600">
+            <p v-if="validateError" class="mt-2 text-sm text-danger">
                 {{ validateError }}
             </p>
 
             <dl class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                <div class="rounded border border-slate-200 p-3">
-                    <dt class="text-xs text-slate-500">Ready</dt>
-                    <dd class="text-lg font-semibold text-emerald-700">
+                <div class="rounded-xs border border-line p-3">
+                    <dt class="text-xs text-ink-muted">Ready</dt>
+                    <dd class="text-lg font-semibold text-ink">
                         {{ plan.validationSummary.ready }}
                     </dd>
                 </div>
-                <div class="rounded border border-slate-200 p-3">
-                    <dt class="text-xs text-slate-500">Already enrolled</dt>
-                    <dd class="text-lg font-semibold text-sky-700">
+                <div class="rounded-xs border border-line p-3">
+                    <dt class="text-xs text-ink-muted">Already enrolled</dt>
+                    <dd class="text-lg font-semibold text-accent-strong">
                         {{ plan.validationSummary.already_enrolled }}
                     </dd>
                 </div>
-                <div class="rounded border border-slate-200 p-3">
-                    <dt class="text-xs text-slate-500">Excluded</dt>
-                    <dd class="text-lg font-semibold text-slate-600">
+                <div class="rounded-xs border border-line p-3">
+                    <dt class="text-xs text-ink-muted">Excluded</dt>
+                    <dd class="text-lg font-semibold text-ink-muted">
                         {{ plan.validationSummary.excluded }}
                     </dd>
                 </div>
-                <div class="rounded border border-slate-200 p-3">
-                    <dt class="text-xs text-slate-500">Needs review</dt>
-                    <dd class="text-lg font-semibold text-amber-700">
+                <div class="rounded-xs border border-line p-3">
+                    <dt class="text-xs text-ink-muted">Needs review</dt>
+                    <dd class="text-lg font-semibold text-ink">
                         {{ plan.validationSummary.review }}
                     </dd>
                 </div>
-                <div class="rounded border border-slate-200 p-3">
-                    <dt class="text-xs text-slate-500">Blocked</dt>
-                    <dd class="text-lg font-semibold text-red-700">
+                <div class="rounded-xs border border-line p-3">
+                    <dt class="text-xs text-ink-muted">Blocked</dt>
+                    <dd class="text-lg font-semibold text-danger">
                         {{ plan.validationSummary.blocked }}
                     </dd>
                 </div>
-                <div class="rounded border border-slate-200 p-3">
-                    <dt class="text-xs text-slate-500">Total Students</dt>
+                <div class="rounded-xs border border-line p-3">
+                    <dt class="text-xs text-ink-muted">Total Students</dt>
                     <dd class="text-lg font-semibold">{{ plan.validationSummary.total }}</dd>
                 </div>
             </dl>
@@ -399,40 +399,40 @@ function reload(): void {
         />
 
         <!-- Execution -->
-        <section class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-semibold text-slate-700">Execution</h2>
+        <section class="mt-8 border-t border-line pt-6">
+            <h2 class="text-sm font-semibold text-ink">Execution</h2>
 
             <template v-if="isTerminal">
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     This plan has finished. Configuration is read-only.
                 </p>
                 <dl class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Succeeded</dt>
-                        <dd class="text-lg font-semibold text-emerald-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Succeeded</dt>
+                        <dd class="text-lg font-semibold text-ink">
                             {{ plan.executionSummary.succeeded }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Reconciled</dt>
-                        <dd class="text-lg font-semibold text-sky-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Reconciled</dt>
+                        <dd class="text-lg font-semibold text-accent-strong">
                             {{ plan.executionSummary.reconciled }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Skipped</dt>
-                        <dd class="text-lg font-semibold text-slate-600">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Skipped</dt>
+                        <dd class="text-lg font-semibold text-ink-muted">
                             {{ plan.executionSummary.skipped }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Failed</dt>
-                        <dd class="text-lg font-semibold text-red-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Failed</dt>
+                        <dd class="text-lg font-semibold text-danger">
                             {{ plan.executionSummary.failed }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Total</dt>
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Total</dt>
                         <dd class="text-lg font-semibold">{{ plan.executionSummary.total }}</dd>
                     </div>
                 </dl>
@@ -440,7 +440,7 @@ function reload(): void {
                      existing pages (nothing here closes anything by itself). -->
                 <div
                     v-if="plan.status !== 'cancelled'"
-                    class="mt-4 rounded border border-sky-200 bg-sky-50 p-3 text-sm"
+                    class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm"
                 >
                     <p class="font-medium">Next steps</p>
                     <ol class="mt-1 list-decimal space-y-1 pl-5">
@@ -469,7 +469,7 @@ function reload(): void {
                         </li>
                     </ol>
                 </div>
-                <p class="mt-3 text-xs text-slate-500">
+                <p class="mt-3 text-xs text-ink-muted">
                     Started
                     {{ plan.executionStartedAt ? formatDateTime(plan.executionStartedAt) : '—' }}
                     · Completed
@@ -478,49 +478,49 @@ function reload(): void {
             </template>
 
             <template v-else-if="canResume">
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     This plan is still executing -- {{ plan.executionSummary.pending }} Student(s)
                     remain pending. No background process is running; click Resume to process the
                     next batch.
                 </p>
                 <dl class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Succeeded</dt>
-                        <dd class="text-lg font-semibold text-emerald-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Succeeded</dt>
+                        <dd class="text-lg font-semibold text-ink">
                             {{ plan.executionSummary.succeeded }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Reconciled</dt>
-                        <dd class="text-lg font-semibold text-sky-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Reconciled</dt>
+                        <dd class="text-lg font-semibold text-accent-strong">
                             {{ plan.executionSummary.reconciled }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Pending</dt>
-                        <dd class="text-lg font-semibold text-amber-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Pending</dt>
+                        <dd class="text-lg font-semibold text-ink">
                             {{ plan.executionSummary.pending }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Failed</dt>
-                        <dd class="text-lg font-semibold text-red-700">
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Failed</dt>
+                        <dd class="text-lg font-semibold text-danger">
                             {{ plan.executionSummary.failed }}
                         </dd>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <dt class="text-xs text-slate-500">Total</dt>
+                    <div class="rounded-xs border border-line p-3">
+                        <dt class="text-xs text-ink-muted">Total</dt>
                         <dd class="text-lg font-semibold">{{ plan.executionSummary.total }}</dd>
                     </div>
                 </dl>
-                <p v-if="resumeError" class="mt-2 text-sm text-red-600">
+                <p v-if="resumeError" class="mt-2 text-sm text-danger">
                     {{ resumeError }}
                 </p>
                 <button
                     v-if="canManage"
                     type="button"
                     :disabled="resumeProcessing"
-                    class="mt-4 rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                    class="mt-4 rounded-xs bg-accent-strong px-4 py-2 text-sm font-medium text-white hover:bg-accent-strong disabled:opacity-50"
                     @click="confirmResume"
                 >
                     {{ resumeProcessing ? 'Resuming…' : 'Resume Rollover' }}
@@ -536,18 +536,18 @@ function reload(): void {
             </template>
 
             <template v-else>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Start becomes available once this plan is fully validated with no Students
                     needing review and none blocked.
                 </p>
-                <p v-if="startError" class="mt-2 text-sm text-red-600">
+                <p v-if="startError" class="mt-2 text-sm text-danger">
                     {{ startError }}
                 </p>
                 <button
                     v-if="canManage"
                     type="button"
                     :disabled="!canStart || startProcessing"
-                    class="mt-4 rounded bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50"
+                    class="btn btn-danger mt-4"
                     @click="confirmStart"
                 >
                     {{ startProcessing ? 'Starting…' : 'Start Rollover' }}

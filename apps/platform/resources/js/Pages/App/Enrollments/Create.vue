@@ -42,38 +42,36 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">Enroll {{ studentName() }}</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Academic Year, Campus, and Grade come from the Section you choose below.
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="section_id"
-                    >Section</label
-                >
+                <label class="block text-sm font-medium text-ink" for="section_id">Section</label>
                 <select
                     id="section_id"
                     v-model="form.section_id"
                     required
                     :aria-invalid="!!form.errors.section_id"
                     aria-describedby="section_id-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select a Section…</option>
                     <option v-for="s in sections" :key="s.id" :value="s.id">
                         {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
                     </option>
                 </select>
-                <p id="section_id-error" class="mt-1 text-sm text-red-600">
+                <p id="section_id-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.section_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="roll_number"
+                <label class="block text-sm font-medium text-ink" for="roll_number"
                     >Roll number</label
                 >
                 <!--
@@ -89,17 +87,15 @@ function submit(): void {
                     required
                     :aria-invalid="!!form.errors.roll_number"
                     aria-describedby="roll_number-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-40"
+                    class="input mt-1 sm:w-40"
                 />
-                <p id="roll_number-error" class="mt-1 text-sm text-red-600">
+                <p id="roll_number-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.roll_number }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="starts_on"
-                    >Start date</label
-                >
+                <label class="block text-sm font-medium text-ink" for="starts_on">Start date</label>
                 <input
                     id="starts_on"
                     v-model="form.starts_on"
@@ -107,19 +103,15 @@ function submit(): void {
                     required
                     :aria-invalid="!!form.errors.starts_on"
                     aria-describedby="starts_on-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-56"
+                    class="input mt-1 sm:w-56"
                 />
-                <p id="starts_on-error" class="mt-1 text-sm text-red-600">
+                <p id="starts_on-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.starts_on }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Enrolling…' : 'Enroll student' }}
                 </button>
                 <a class="text-sm underline" :href="`/app/students/${student.id}`">Cancel</a>

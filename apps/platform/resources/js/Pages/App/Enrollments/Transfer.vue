@@ -81,13 +81,13 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/students/${enrollment.student.id}`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">Transfer {{ studentName() }}</h1>
 
-        <section class="mt-4 rounded border border-slate-200 p-4 text-sm">
-            <h2 class="font-medium text-slate-700">Current placement</h2>
-            <p class="mt-1 text-slate-600">
+        <section class="mt-4 rounded-xs border border-line p-4 text-sm">
+            <h2 class="font-medium text-ink">Current placement</h2>
+            <p class="mt-1 text-ink-muted">
                 {{ enrollment.gradeLevel.name }} · Section {{ enrollment.section.name }} ·
                 {{ enrollment.campus.name }} · {{ enrollment.academicYear.name }} · Roll
                 {{ enrollment.rollNumber }}
@@ -96,7 +96,7 @@ async function submit(): Promise<void> {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="target_section_id"
+                <label class="block text-sm font-medium text-ink" for="target_section_id"
                     >Target Section</label
                 >
                 <select
@@ -105,14 +105,14 @@ async function submit(): Promise<void> {
                     required
                     :aria-invalid="!!form.errors.target_section_id"
                     aria-describedby="target_section_id-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select a Section…</option>
                     <option v-for="s in sections" :key="s.id" :value="s.id">
                         {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
                     </option>
                 </select>
-                <p id="target_section_id-error" class="mt-1 text-sm text-red-600">
+                <p id="target_section_id-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.target_section_id }}
                 </p>
                 <!--
@@ -121,13 +121,13 @@ async function submit(): Promise<void> {
                     server remains authoritative regardless of what this
                     label implies (this checkpoint's brief, section 26).
                 -->
-                <p v-if="targetSection" class="mt-1 text-sm text-slate-500">
+                <p v-if="targetSection" class="mt-1 text-sm text-ink-muted">
                     Moves to {{ targetSection.label }}.
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="roll_number"
+                <label class="block text-sm font-medium text-ink" for="roll_number"
                     >New roll number</label
                 >
                 <input
@@ -137,15 +137,15 @@ async function submit(): Promise<void> {
                     required
                     :aria-invalid="!!form.errors.roll_number"
                     aria-describedby="roll_number-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-40"
+                    class="input mt-1 sm:w-40"
                 />
-                <p id="roll_number-error" class="mt-1 text-sm text-red-600">
+                <p id="roll_number-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.roll_number }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-700" for="effective_date"
+                <label class="block text-sm font-medium text-ink" for="effective_date"
                     >Effective date</label
                 >
                 <input
@@ -155,19 +155,15 @@ async function submit(): Promise<void> {
                     required
                     :aria-invalid="!!form.errors.effective_date"
                     aria-describedby="effective_date-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-56"
+                    class="input mt-1 sm:w-56"
                 />
-                <p id="effective_date-error" class="mt-1 text-sm text-red-600">
+                <p id="effective_date-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.effective_date }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Transferring…' : 'Transfer enrollment' }}
                 </button>
                 <a class="text-sm underline" :href="`/app/students/${enrollment.student.id}`"

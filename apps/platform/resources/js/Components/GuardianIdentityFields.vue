@@ -15,9 +15,7 @@ const lastName = defineModel<string>('lastName', { required: true });
 <template>
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-            <label class="block text-sm font-medium text-slate-700" for="first_name"
-                >First name</label
-            >
+            <label class="block text-sm font-medium text-ink" for="first_name">First name</label>
             <input
                 id="first_name"
                 v-model="firstName"
@@ -25,31 +23,17 @@ const lastName = defineModel<string>('lastName', { required: true });
                 required
                 autofocus
                 :aria-invalid="!!errors.first_name"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                class="input mt-1"
             />
         </div>
         <div>
-            <label class="block text-sm font-medium text-slate-700" for="middle_name"
-                >Middle name</label
-            >
-            <input
-                id="middle_name"
-                v-model="middleName"
-                type="text"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            />
+            <label class="block text-sm font-medium text-ink" for="middle_name">Middle name</label>
+            <input id="middle_name" v-model="middleName" type="text" class="input mt-1" />
         </div>
         <div>
-            <label class="block text-sm font-medium text-slate-700" for="last_name"
-                >Last name</label
-            >
-            <input
-                id="last_name"
-                v-model="lastName"
-                type="text"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            />
+            <label class="block text-sm font-medium text-ink" for="last_name">Last name</label>
+            <input id="last_name" v-model="lastName" type="text" class="input mt-1" />
         </div>
     </div>
-    <p class="mt-1 text-sm text-red-600">{{ errors.first_name }}</p>
+    <p class="mt-1 text-sm text-danger">{{ errors.first_name }}</p>
 </template>

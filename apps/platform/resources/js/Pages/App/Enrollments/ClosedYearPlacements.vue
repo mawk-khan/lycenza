@@ -64,13 +64,13 @@ const notCompleted = computed(
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/data-health/enrollment.active_in_closed_year"
             >← Data health</a
         >
 
         <h1 class="mt-2 text-xl font-semibold">Open placements in closed years</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             When an academic year is closed, its class placements stay open until someone completes
             them. Completing records that the placement ran to the end of its year. Nothing else
             about the Student, their attendance or their other placements changes.
@@ -78,11 +78,11 @@ const notCompleted = computed(
 
         <section
             v-if="results"
-            class="mt-6 rounded border px-4 py-3 text-sm"
+            class="mt-6 rounded-xs border px-4 py-3 text-sm"
             :class="
                 notCompleted.length === 0
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-amber-200 bg-amber-50'
+                    ? 'border-graphite-300 bg-graphite-100'
+                    : 'border-accent-300 bg-accent-100'
             "
             role="status"
         >
@@ -108,13 +108,13 @@ const notCompleted = computed(
 
         <template v-else>
             <div class="mt-6">
-                <label class="block text-sm text-slate-600" for="closed-year"
+                <label class="block text-sm text-ink-muted" for="closed-year"
                     >Closed academic year</label
                 >
                 <select
                     id="closed-year"
                     v-model="yearId"
-                    class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-72"
                     @change="chooseYear"
                 >
                     <option v-for="year in years" :key="year.id" :value="year.id">
@@ -136,7 +136,7 @@ const notCompleted = computed(
                 </h2>
                 <p
                     v-if="preview.total > preview.placements.length"
-                    class="mt-1 text-sm text-slate-500"
+                    class="mt-1 text-sm text-ink-muted"
                 >
                     {{ preview.total }} are open in {{ preview.yearName }}; at most
                     {{ maxBatch }} are completed at a time. Run it again for the rest.
@@ -151,14 +151,14 @@ const notCompleted = computed(
                             }}
                         </caption>
                         <thead>
-                            <tr class="border-b border-slate-200 text-xs text-slate-500">
+                            <tr class="border-b border-line text-xs text-ink-muted">
                                 <th scope="col" class="py-2 font-medium">Student</th>
                                 <th scope="col" class="py-2 font-medium">Class</th>
                                 <th scope="col" class="py-2 font-medium">Roll</th>
                                 <th scope="col" class="py-2 font-medium">Placed since</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
+                        <tbody class="divide-y divide-line">
                             <tr v-for="row in preview.placements" :key="row.id">
                                 <td class="py-2">
                                     <a
@@ -167,9 +167,9 @@ const notCompleted = computed(
                                         >{{ row.student }}</a
                                     >
                                 </td>
-                                <td class="py-2 text-slate-600">{{ row.class }}</td>
-                                <td class="py-2 text-slate-600">{{ row.rollNumber }}</td>
-                                <td class="py-2 text-slate-600">
+                                <td class="py-2 text-ink-muted">{{ row.class }}</td>
+                                <td class="py-2 text-ink-muted">{{ row.rollNumber }}</td>
+                                <td class="py-2 text-ink-muted">
                                     {{ formatCalendarDate(row.startsOn) }}
                                 </td>
                             </tr>
@@ -177,7 +177,7 @@ const notCompleted = computed(
                     </table>
                 </div>
 
-                <p class="mt-3 text-sm text-slate-500">
+                <p class="mt-3 text-sm text-ink-muted">
                     If a Student actually left before the year ended, withdraw that placement from
                     their Student page instead, with the real date.
                 </p>
@@ -199,7 +199,7 @@ const notCompleted = computed(
                         form.errors.enrollment_ids ||
                         form.errors.academic_year_id
                     "
-                    class="mt-1 text-sm text-red-600"
+                    class="mt-1 text-sm text-danger"
                 >
                     {{
                         form.errors.confirm ??
@@ -210,7 +210,7 @@ const notCompleted = computed(
                 <button
                     type="submit"
                     :disabled="!form.confirm || form.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Complete {{ preview.placements.length }} placement{{
                         preview.placements.length === 1 ? '' : 's'

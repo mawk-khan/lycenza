@@ -67,10 +67,10 @@ const props = defineProps<Props>();
 const base = `/app/admissions/${props.application.id}/documents`;
 
 const stateClass: Record<string, string> = {
-    verified: 'text-green-800',
-    pending: 'text-amber-800',
-    rejected: 'text-red-800',
-    missing: 'text-red-800',
+    verified: 'text-ink',
+    pending: 'text-ink',
+    rejected: 'text-danger',
+    missing: 'text-danger',
 };
 
 const uploadForm = useForm<{
@@ -180,13 +180,13 @@ const selectedCategory = () =>
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/admissions/${application.id}`">← Application</a>
         <h1 class="mt-2 text-xl font-semibold">Admission documents</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ application.applicantName }} · {{ application.applyingFor }}
         </p>
-        <p class="mt-2 max-w-3xl text-sm text-slate-500">
+        <p class="mt-2 max-w-3xl text-sm text-ink-muted">
             Documents collected for this application. They are highly sensitive: only staff with
             admission document access can see them, and each download is recorded. Do not upload
             government identity documents, medical, caste, religion or disability certificates, or
@@ -194,25 +194,25 @@ const selectedCategory = () =>
         </p>
         <p
             v-if="movedCount > 0"
-            class="mt-4 rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-accent-strong"
         >
             {{ movedCount }} {{ movedCount === 1 ? 'document' : 'documents' }} moved to the
             Student's record when the application was converted.
         </p>
         <p
             v-else-if="!application.open"
-            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-line bg-graphite-100 p-3 text-sm text-ink"
         >
             This application is closed, so no new documents can be added.
         </p>
 
         <section
             v-if="compliance.length > 0"
-            class="mt-6 max-w-3xl rounded border border-slate-200 p-4"
+            class="mt-6 max-w-3xl rounded-xs border border-line p-4"
             aria-labelledby="checklist-heading"
         >
             <h2 id="checklist-heading" class="text-base font-semibold">Document checklist</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 {{ complianceSummary.verified }} of {{ complianceSummary.required }} required
                 verified<template v-if="complianceSummary.missing > 0">
                     · {{ complianceSummary.missing }} missing</template
@@ -222,7 +222,7 @@ const selectedCategory = () =>
                     · {{ complianceSummary.rejected }} rejected</template
                 >. The checklist is guidance; it never blocks admission.
             </p>
-            <ul class="mt-3 divide-y divide-slate-100 text-sm">
+            <ul class="mt-3 divide-y divide-line text-sm">
                 <li
                     v-for="item in compliance"
                     :key="item.category"
@@ -230,7 +230,7 @@ const selectedCategory = () =>
                 >
                     <span
                         >{{ item.label }}
-                        <span class="text-xs text-slate-500">{{
+                        <span class="text-xs text-ink-muted">{{
                             item.required ? 'Required' : 'Optional'
                         }}</span></span
                     >
@@ -252,15 +252,15 @@ const selectedCategory = () =>
             "
         />
 
-        <div v-else class="relative mt-6 overflow-x-auto rounded border border-slate-200">
-            <table class="min-w-[48rem] w-full divide-y divide-slate-200 text-sm">
+        <div v-else class="relative mt-6 overflow-x-auto rounded-xs border border-line">
+            <table class="min-w-[48rem] w-full divide-y divide-line text-sm">
                 <caption class="sr-only">
                     Admission documents for
                     {{
                         application.applicantName
                     }}
                 </caption>
-                <thead class="bg-slate-50 text-left text-slate-600">
+                <thead class="bg-graphite-100 text-left text-ink-muted">
                     <tr>
                         <th scope="col" class="px-3 py-2 font-medium">Document</th>
                         <th scope="col" class="px-3 py-2 font-medium">Document date</th>
@@ -269,12 +269,12 @@ const selectedCategory = () =>
                         <th scope="col" class="px-3 py-2 font-medium">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <template v-for="d in documents" :key="d.id">
                         <tr>
                             <td class="px-3 py-2">
                                 <span class="font-medium">{{ d.title }}</span>
-                                <span class="block text-xs text-slate-500">{{
+                                <span class="block text-xs text-ink-muted">{{
                                     d.categoryLabel
                                 }}</span>
                             </td>
@@ -286,7 +286,7 @@ const selectedCategory = () =>
                             </td>
                             <td class="px-3 py-2">
                                 <span v-if="d.archived"
-                                    >Archived<span class="block text-xs text-slate-500">{{
+                                    >Archived<span class="block text-xs text-ink-muted">{{
                                         d.archived.reasonLabel
                                     }}</span></span
                                 >
@@ -337,13 +337,13 @@ const selectedCategory = () =>
                             </td>
                         </tr>
                         <tr v-if="isOpen(d, 'decide')">
-                            <td colspan="5" class="bg-slate-50 px-3 py-3">
+                            <td colspan="5" class="bg-graphite-100 px-3 py-3">
                                 <form
                                     class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
                                     :aria-label="`Verify or reject ${d.title}`"
                                     @submit.prevent="submitDecision(d)"
                                 >
-                                    <p class="text-sm text-slate-600 sm:col-span-2 lg:col-span-4">
+                                    <p class="text-sm text-ink-muted sm:col-span-2 lg:col-span-4">
                                         Check the file against the original before deciding. A
                                         decision is final; a rejected document is fixed by uploading
                                         a replacement.
@@ -374,7 +374,7 @@ const selectedCategory = () =>
                                         <select
                                             :id="`reason-${d.id}`"
                                             v-model="decisionForm.reason"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                             :aria-invalid="!!decisionForm.errors.reason"
                                             :aria-describedby="
                                                 decisionForm.errors.reason
@@ -394,7 +394,7 @@ const selectedCategory = () =>
                                         <p
                                             v-if="decisionForm.errors.reason"
                                             :id="`reason-error-${d.id}`"
-                                            class="mt-1 text-sm text-red-700"
+                                            class="mt-1 text-sm text-danger"
                                         >
                                             {{ decisionForm.errors.reason }}
                                         </p>
@@ -409,7 +409,7 @@ const selectedCategory = () =>
                                     <div class="flex items-end gap-3 sm:col-span-2 lg:col-span-4">
                                         <button
                                             type="submit"
-                                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                            class="btn btn-primary"
                                             :disabled="decisionForm.processing || !hasMfaFactor"
                                         >
                                             Record decision
@@ -426,13 +426,13 @@ const selectedCategory = () =>
                             </td>
                         </tr>
                         <tr v-if="isOpen(d, 'archive')">
-                            <td colspan="5" class="bg-slate-50 px-3 py-3">
+                            <td colspan="5" class="bg-graphite-100 px-3 py-3">
                                 <form
                                     class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
                                     :aria-label="`Archive ${d.title}`"
                                     @submit.prevent="submitArchive(d)"
                                 >
-                                    <p class="text-sm text-slate-600 sm:col-span-2 lg:col-span-4">
+                                    <p class="text-sm text-ink-muted sm:col-span-2 lg:col-span-4">
                                         Archiving is final. The file stays on record with the
                                         application and is removed with it under the School's
                                         retention rules.
@@ -444,7 +444,7 @@ const selectedCategory = () =>
                                         <select
                                             :id="`archive-reason-${d.id}`"
                                             v-model="archiveForm.reason"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                             :aria-invalid="!!archiveForm.errors.reason"
                                             :aria-describedby="
                                                 archiveForm.errors.reason
@@ -464,7 +464,7 @@ const selectedCategory = () =>
                                         <p
                                             v-if="archiveForm.errors.reason"
                                             :id="`archive-reason-error-${d.id}`"
-                                            class="mt-1 text-sm text-red-700"
+                                            class="mt-1 text-sm text-danger"
                                         >
                                             {{ archiveForm.errors.reason }}
                                         </p>
@@ -479,7 +479,7 @@ const selectedCategory = () =>
                                     <div class="flex items-end gap-3 sm:col-span-2 lg:col-span-4">
                                         <button
                                             type="submit"
-                                            class="rounded bg-red-800 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                            class="btn btn-danger"
                                             :disabled="archiveForm.processing || !hasMfaFactor"
                                         >
                                             Archive document
@@ -502,13 +502,13 @@ const selectedCategory = () =>
 
         <section v-if="canManage" class="mt-10" aria-labelledby="upload-heading">
             <h2 id="upload-heading" class="text-base font-semibold">Upload a document</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 PDF, JPEG or PNG, up to {{ upload.maxMb }} MB. Files are not scanned for malware, so
                 only upload files you trust.
             </p>
             <p
                 v-if="replacing"
-                class="mt-2 flex flex-wrap items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                class="mt-2 flex flex-wrap items-center gap-3 rounded-xs bg-accent-100 px-3 py-2 text-sm text-ink"
                 role="status"
             >
                 Replacing “{{ replacing.title }}”. The current document is archived as superseded
@@ -519,14 +519,14 @@ const selectedCategory = () =>
             </p>
             <form class="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2" @submit.prevent="submitUpload">
                 <div>
-                    <label class="block text-sm text-slate-700" for="upload-category"
+                    <label class="block text-sm text-ink" for="upload-category"
                         >Document type</label
                     >
                     <select
                         id="upload-category"
                         v-model="uploadForm.category"
                         :disabled="replacing !== null"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!uploadForm.errors.category"
                         aria-describedby="upload-category-help upload-category-error"
                     >
@@ -535,24 +535,24 @@ const selectedCategory = () =>
                             {{ c.label }}
                         </option>
                     </select>
-                    <p id="upload-category-help" class="mt-1 text-xs text-slate-500">
+                    <p id="upload-category-help" class="mt-1 text-xs text-ink-muted">
                         {{ selectedCategory() }}
                     </p>
                     <p
                         v-if="uploadForm.errors.category"
                         id="upload-category-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ uploadForm.errors.category }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="upload-title">Title</label>
+                    <label class="block text-sm text-ink" for="upload-title">Title</label>
                     <input
                         id="upload-title"
                         v-model="uploadForm.title"
                         maxlength="120"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!uploadForm.errors.title"
                         :aria-describedby="
                             uploadForm.errors.title ? 'upload-title-error' : undefined
@@ -561,20 +561,20 @@ const selectedCategory = () =>
                     <p
                         v-if="uploadForm.errors.title"
                         id="upload-title-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ uploadForm.errors.title }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="upload-date"
+                    <label class="block text-sm text-ink" for="upload-date"
                         >Document date (optional)</label
                     >
                     <input
                         id="upload-date"
                         v-model="uploadForm.document_date"
                         type="date"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!uploadForm.errors.document_date"
                         :aria-describedby="
                             uploadForm.errors.document_date ? 'upload-date-error' : undefined
@@ -583,13 +583,13 @@ const selectedCategory = () =>
                     <p
                         v-if="uploadForm.errors.document_date"
                         id="upload-date-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ uploadForm.errors.document_date }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="upload-file">File</label>
+                    <label class="block text-sm text-ink" for="upload-file">File</label>
                     <input
                         id="upload-file"
                         ref="fileInput"
@@ -603,7 +603,7 @@ const selectedCategory = () =>
                     <p
                         v-if="uploadForm.errors.file"
                         id="upload-file-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ uploadForm.errors.file }}
                     </p>
@@ -617,16 +617,16 @@ const selectedCategory = () =>
                         :error="uploadForm.errors.mfa_code"
                     />
                 </div>
-                <p v-if="uploadForm.errors.form_key" class="text-sm text-red-700 sm:col-span-2">
+                <p v-if="uploadForm.errors.form_key" class="text-sm text-danger sm:col-span-2">
                     {{ uploadForm.errors.form_key }}
                 </p>
-                <p v-if="uploadForm.errors.replaces" class="text-sm text-red-700 sm:col-span-2">
+                <p v-if="uploadForm.errors.replaces" class="text-sm text-danger sm:col-span-2">
                     {{ uploadForm.errors.replaces }}
                 </p>
                 <div class="sm:col-span-2">
                     <button
                         type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        class="btn btn-primary"
                         :disabled="uploadForm.processing || !hasMfaFactor"
                     >
                         Upload document

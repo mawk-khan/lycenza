@@ -133,13 +133,13 @@ function resetFilters(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Admissions</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Admission Applications across your School.
                 </p>
             </div>
@@ -162,22 +162,22 @@ function resetFilters(): void {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-applicant-name"
+                <label class="block text-sm text-ink-muted" for="filter-applicant-name"
                     >Applicant</label
                 >
                 <input
                     id="filter-applicant-name"
                     v-model="applicantName"
                     type="text"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+                <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
                 <select
                     id="filter-status"
                     v-model="status"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -190,13 +190,13 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-academic-year"
+                <label class="block text-sm text-ink-muted" for="filter-academic-year"
                     >Academic Year</label
                 >
                 <select
                     id="filter-academic-year"
                     v-model="academicYearId"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -206,11 +206,11 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-campus">Campus</label>
+                <label class="block text-sm text-ink-muted" for="filter-campus">Campus</label>
                 <select
                     id="filter-campus"
                     v-model="campusId"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -218,11 +218,11 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-grade">Grade</label>
+                <label class="block text-sm text-ink-muted" for="filter-grade">Grade</label>
                 <select
                     id="filter-grade"
                     v-model="gradeLevelId"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -230,19 +230,19 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-created-from"
+                <label class="block text-sm text-ink-muted" for="filter-created-from"
                     >Created from</label
                 >
                 <input
                     id="filter-created-from"
                     v-model="createdFrom"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-created-to"
+                <label class="block text-sm text-ink-muted" for="filter-created-to"
                     >Created to</label
                 >
                 <input
@@ -250,16 +250,16 @@ function resetFilters(): void {
                     v-model="createdTo"
                     type="date"
                     :min="createdFrom || undefined"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-sort">Sort by</label>
+                <label class="block text-sm text-ink-muted" for="filter-sort">Sort by</label>
                 <select
                     id="filter-sort"
                     v-model="sort"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option v-for="(s, i) in sorts" :key="s.value" :value="i === 0 ? '' : s.value">
@@ -289,7 +289,7 @@ function resetFilters(): void {
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Applicant</th>
                         <th scope="col" class="py-2 font-medium">Applying for</th>
                         <th scope="col" class="py-2 font-medium">Status</th>
@@ -299,7 +299,7 @@ function resetFilters(): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="a in applications.data" :key="a.id">
                         <td class="py-3">
                             <a
@@ -312,9 +312,9 @@ function resetFilters(): void {
                                 >{{ applicantName_(a.applicant) }}</a
                             >
                         </td>
-                        <td class="py-3 text-slate-600">{{ applicationContext(a) }}</td>
+                        <td class="py-3 text-ink-muted">{{ applicationContext(a) }}</td>
                         <td class="py-3"><StatusBadge :status="a.status" /></td>
-                        <td class="whitespace-nowrap py-3 text-slate-600">
+                        <td class="whitespace-nowrap py-3 text-ink-muted">
                             {{ formatDate(a.createdAt) }}
                         </td>
                         <td class="py-3 text-right">
@@ -334,13 +334,13 @@ function resetFilters(): void {
                 <li
                     v-for="a in applications.data"
                     :key="a.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a class="font-medium underline" :href="`/app/admissions/${a.id}`">{{
                         applicantName_(a.applicant)
                     }}</a>
-                    <p class="mt-1 text-sm text-slate-500">{{ applicationContext(a) }}</p>
-                    <p class="mt-1 text-sm text-slate-500">Created {{ formatDate(a.createdAt) }}</p>
+                    <p class="mt-1 text-sm text-ink-muted">{{ applicationContext(a) }}</p>
+                    <p class="mt-1 text-sm text-ink-muted">Created {{ formatDate(a.createdAt) }}</p>
                     <div class="mt-2 flex items-center gap-3">
                         <StatusBadge :status="a.status" />
                         <a

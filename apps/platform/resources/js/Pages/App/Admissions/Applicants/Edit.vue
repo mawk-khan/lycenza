@@ -35,10 +35,10 @@ function submit(): void {
 
 <template>
     <Head title="Correct applicant" />
-    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/admissions/applicants/${applicant.id}`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">Correct applicant details</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             For a typing mistake. Every application of this applicant shows the corrected details;
             the change is recorded in the audit log.
         </p>
@@ -81,11 +81,7 @@ function submit(): void {
             />
 
             <div class="flex flex-wrap items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Save correction' }}
                 </button>
                 <a class="text-sm underline" :href="`/app/admissions/applicants/${applicant.id}`"

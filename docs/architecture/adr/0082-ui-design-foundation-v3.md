@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a and DS-4b implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -328,3 +328,11 @@ recommended first domain (Students) was taken.
 5. **Visual check.** Real page payloads captured by a throwaway (uncommitted)
    feature test -- directory, profile, edit, history, create -- rendered by
    the built application in headless Chromium.
+6. **DS-4b: the rest of the Student area (2026-11-04).** `Pages/App/Guardians`,
+   `Enrollments`, `Admissions` (incl. Applicants) and `EnrollmentRollovers`,
+   plus `Components/GuardianIdentityFields.vue` and
+   `Components/RelationshipFlags.vue` -- 27 files, same codemod, no manual
+   edits; zero palette classes left. Visual check on nine captured pages
+   (Guardian directory and profile, Enrollments, Rollover list and plan,
+   Admissions, Applicant list and profile, Application). The admission-fee
+   panel (`Components/Fees/AdmissionFeePanel.vue`) moves with Finance.

@@ -120,23 +120,23 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2">
             <h1 class="text-xl font-semibold">Enrollments</h1>
-            <p class="mt-1 text-sm text-slate-500">Academic placement across your School.</p>
+            <p class="mt-1 text-sm text-ink-muted">Academic placement across your School.</p>
         </div>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-academic-year"
+                <label class="block text-sm text-ink-muted" for="filter-academic-year"
                     >Academic Year</label
                 >
                 <select
                     id="filter-academic-year"
                     v-model="academicYearId"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -146,11 +146,11 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-campus">Campus</label>
+                <label class="block text-sm text-ink-muted" for="filter-campus">Campus</label>
                 <select
                     id="filter-campus"
                     v-model="campusId"
-                    class="mt-1 w-36 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-36"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -158,11 +158,11 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-grade">Grade</label>
+                <label class="block text-sm text-ink-muted" for="filter-grade">Grade</label>
                 <select
                     id="filter-grade"
                     v-model="gradeLevelId"
-                    class="mt-1 w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-32"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -170,11 +170,11 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-section">Section</label>
+                <label class="block text-sm text-ink-muted" for="filter-section">Section</label>
                 <select
                     id="filter-section"
                     v-model="sectionId"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-56"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -182,11 +182,11 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+                <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
                 <select
                     id="filter-status"
                     v-model="status"
-                    class="mt-1 w-36 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-36"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -196,36 +196,36 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-student-number"
+                <label class="block text-sm text-ink-muted" for="filter-student-number"
                     >Student number</label
                 >
                 <input
                     id="filter-student-number"
                     v-model="studentNumber"
                     type="text"
-                    class="mt-1 w-36 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-36"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-student-name"
+                <label class="block text-sm text-ink-muted" for="filter-student-name"
                     >Student name</label
                 >
                 <input
                     id="filter-student-name"
                     v-model="studentName"
                     type="text"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-roll-number"
+                <label class="block text-sm text-ink-muted" for="filter-roll-number"
                     >Roll number</label
                 >
                 <input
                     id="filter-roll-number"
                     v-model="rollNumber"
                     type="text"
-                    class="mt-1 w-28 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-28"
                 />
             </div>
         </form>
@@ -246,7 +246,7 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
             <div class="mt-6 hidden overflow-x-auto md:block">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Student</th>
                             <th scope="col" class="py-2 font-medium">Student number</th>
                             <th scope="col" class="py-2 font-medium">Academic Year</th>
@@ -260,7 +260,7 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="e in enrollments.data" :key="e.id">
                             <td class="py-3">
                                 <a
@@ -269,12 +269,12 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                                     >{{ enrollmentStudentName(e.student) }}</a
                                 >
                             </td>
-                            <td class="py-3 text-slate-600">{{ e.student.studentNumber }}</td>
-                            <td class="py-3 text-slate-600">{{ e.academicYear.name }}</td>
-                            <td class="py-3 text-slate-600">{{ e.campus.name }}</td>
-                            <td class="py-3 text-slate-600">{{ e.gradeLevel.name }}</td>
-                            <td class="py-3 text-slate-600">{{ e.section.name }}</td>
-                            <td class="py-3 text-slate-600">{{ e.rollNumber }}</td>
+                            <td class="py-3 text-ink-muted">{{ e.student.studentNumber }}</td>
+                            <td class="py-3 text-ink-muted">{{ e.academicYear.name }}</td>
+                            <td class="py-3 text-ink-muted">{{ e.campus.name }}</td>
+                            <td class="py-3 text-ink-muted">{{ e.gradeLevel.name }}</td>
+                            <td class="py-3 text-ink-muted">{{ e.section.name }}</td>
+                            <td class="py-3 text-ink-muted">{{ e.rollNumber }}</td>
                             <td class="py-3"><StatusBadge :status="e.status" /></td>
                             <td class="py-3 text-right">
                                 <a
@@ -294,16 +294,16 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => v !==
                 <li
                     v-for="e in enrollments.data"
                     :key="e.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a class="font-medium underline" :href="studentHref(e.student.id)">{{
                         enrollmentStudentName(e.student)
                     }}</a>
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">
                         {{ e.gradeLevel.name }} · Section {{ e.section.name }} · Roll
                         {{ e.rollNumber }}
                     </p>
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">
                         {{ e.academicYear.name }} · {{ e.campus.name }}
                     </p>
                     <div class="mt-2"><StatusBadge :status="e.status" /></div>

@@ -337,7 +337,7 @@ function submitContact(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/guardians">← Guardians</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
@@ -346,17 +346,8 @@ function submitContact(): void {
                 <div class="mt-1"><StatusBadge :status="guardian.status" /></div>
             </div>
             <div v-if="canManage" class="flex items-center gap-2">
-                <a
-                    :href="`/app/guardians/${guardian.id}/edit`"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
-                    Edit
-                </a>
-                <button
-                    type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    @click="statusDialog?.open()"
-                >
+                <a :href="`/app/guardians/${guardian.id}/edit`" class="btn btn-secondary"> Edit </a>
+                <button type="button" class="btn btn-secondary" @click="statusDialog?.open()">
                     {{ guardian.status === 'active' ? 'Mark inactive…' : 'Mark active…' }}
                 </button>
             </div>
@@ -387,7 +378,7 @@ function submitContact(): void {
         <!-- Contacts -->
         <section class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Contact information</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Contact information</h2>
                 <button
                     v-if="canManage && !showAddContact"
                     type="button"
@@ -398,7 +389,7 @@ function submitContact(): void {
                 </button>
             </div>
 
-            <p v-if="contacts.length === 0 && !showAddContact" class="mt-3 text-sm text-slate-500">
+            <p v-if="contacts.length === 0 && !showAddContact" class="mt-3 text-sm text-ink-muted">
                 No contact information on file yet.
             </p>
 
@@ -406,19 +397,19 @@ function submitContact(): void {
                 <li
                     v-for="contact in activeContacts"
                     :key="contact.id"
-                    class="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex flex-wrap items-center justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p>
                             <span class="font-medium">{{ contact.value }}</span>
-                            <span class="ml-2 text-slate-400">{{
+                            <span class="ml-2 text-ink-muted">{{
                                 contact.type === 'email' ? 'Email' : 'Mobile'
                             }}</span>
-                            <span v-if="contact.label" class="ml-2 text-slate-400"
+                            <span v-if="contact.label" class="ml-2 text-ink-muted"
                                 >· {{ contact.label }}</span
                             >
                         </p>
-                        <p class="mt-0.5 text-slate-500">
+                        <p class="mt-0.5 text-ink-muted">
                             <span v-if="contact.isPrimary">Primary</span>
                             <span v-if="contact.isPrimary && !contact.isActive"> · </span>
                             <span v-if="!contact.isActive">Inactive</span>
@@ -443,7 +434,7 @@ function submitContact(): void {
                         <button
                             v-if="contact.isActive"
                             type="button"
-                            class="text-red-600 underline"
+                            class="text-danger underline"
                             @click="deactivateContact(contact)"
                         >
                             Deactivate
@@ -453,29 +444,29 @@ function submitContact(): void {
             </ul>
 
             <template v-if="inactiveContacts.length">
-                <h3 class="mt-5 text-sm font-medium text-slate-500">
+                <h3 class="mt-5 text-sm font-medium text-ink-muted">
                     Inactive contacts ({{ inactiveContacts.length }})
                 </h3>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-xs text-ink-muted">
                     Kept on file, never used to reach this Guardian. Reactivate one to use it again.
                 </p>
                 <ul class="mt-2 space-y-2">
                     <li
                         v-for="contact in inactiveContacts"
                         :key="contact.id"
-                        class="flex flex-wrap items-center justify-between gap-3 rounded border border-dashed border-slate-300 p-3 text-sm"
+                        class="flex flex-wrap items-center justify-between gap-3 rounded-xs border border-dashed border-control-line p-3 text-sm"
                     >
                         <div>
                             <p>
-                                <span class="font-medium text-slate-600">{{ contact.value }}</span>
-                                <span class="ml-2 text-slate-400">{{
+                                <span class="font-medium text-ink-muted">{{ contact.value }}</span>
+                                <span class="ml-2 text-ink-muted">{{
                                     contact.type === 'email' ? 'Email' : 'Mobile'
                                 }}</span>
-                                <span v-if="contact.label" class="ml-2 text-slate-400"
+                                <span v-if="contact.label" class="ml-2 text-ink-muted"
                                     >· {{ contact.label }}</span
                                 >
                             </p>
-                            <p class="mt-0.5 text-slate-500">Inactive</p>
+                            <p class="mt-0.5 text-ink-muted">Inactive</p>
                         </div>
                         <div v-if="canManage" class="flex items-center gap-3">
                             <a class="underline" :href="`/app/contacts/${contact.id}/edit`"
@@ -495,23 +486,23 @@ function submitContact(): void {
 
             <form
                 v-if="showAddContact"
-                class="mt-4 rounded border border-slate-200 p-4"
+                class="mt-4 rounded-xs border border-line p-4"
                 @submit.prevent="submitContact"
             >
                 <div class="flex flex-wrap items-end gap-3">
                     <div>
-                        <label class="block text-sm text-slate-600" for="contact-type">Type</label>
+                        <label class="block text-sm text-ink-muted" for="contact-type">Type</label>
                         <select
                             id="contact-type"
                             v-model="contactForm.type"
-                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1 w-auto"
                         >
                             <option value="email">Email</option>
                             <option value="mobile">Mobile</option>
                         </select>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-sm text-slate-600" for="contact-value">
+                        <label class="block text-sm text-ink-muted" for="contact-value">
                             {{ contactForm.type === 'email' ? 'Email address' : 'Mobile number' }}
                         </label>
                         <input
@@ -529,11 +520,11 @@ function submitContact(): void {
                                     ? 'parent@example.com'
                                     : 'e.g. +919876543210'
                             "
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="contact-label"
+                        <label class="block text-sm text-ink-muted" for="contact-label"
                             >Label (optional)</label
                         >
                         <input
@@ -541,19 +532,19 @@ function submitContact(): void {
                             v-model="contactForm.label"
                             type="text"
                             placeholder="Work, Home…"
-                            class="mt-1 w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1 w-32"
                         />
                     </div>
                 </div>
                 <p
                     v-if="contactForm.type === 'mobile'"
                     id="contact-value-hint"
-                    class="mt-2 text-xs text-slate-500"
+                    class="mt-2 text-xs text-ink-muted"
                 >
                     Country code first, no spaces, e.g. +919876543210. We never guess a country for
                     you.
                 </p>
-                <p id="contact-value-error" class="mt-2 text-sm text-red-600">
+                <p id="contact-value-error" class="mt-2 text-sm text-danger">
                     {{ contactForm.errors.value }}
                 </p>
                 <label class="mt-3 flex items-center gap-2 text-sm">
@@ -564,7 +555,7 @@ function submitContact(): void {
                     <button
                         type="submit"
                         :disabled="contactForm.processing"
-                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Save contact
                     </button>
@@ -577,20 +568,20 @@ function submitContact(): void {
 
         <!-- Linked students -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Students</h2>
-            <p v-if="students.length === 0" class="mt-3 text-sm text-slate-500">
+            <h2 class="text-sm font-medium text-ink-muted">Students</h2>
+            <p v-if="students.length === 0" class="mt-3 text-sm text-ink-muted">
                 Not linked to any Student yet.
             </p>
             <ul v-else class="mt-3 space-y-3">
                 <li
                     v-for="s in students"
                     :key="s.relationshipId"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a class="font-medium underline" :href="`/app/students/${s.student.id}`">{{
                         studentName(s.student)
                     }}</a>
-                    <p class="text-sm text-slate-500">{{ s.student.studentNumber }}</p>
+                    <p class="text-sm text-ink-muted">{{ s.student.studentNumber }}</p>
                     <RelationshipFlags
                         :relationship-type="s.relationshipType"
                         :is-primary="s.isPrimary"
@@ -604,24 +595,24 @@ function submitContact(): void {
 
         <!-- Lycenza account link -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Lycenza account</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <h2 class="text-sm font-medium text-ink-muted">Lycenza account</h2>
+            <p class="mt-1 text-xs text-ink-muted">
                 Optional. Linking an existing Lycenza account lets this Guardian receive in-app
                 communications when they sign in. It does not create a new account and does not
                 affect their email/mobile contact information used for email delivery.
             </p>
 
-            <div v-if="accountLink" class="mt-3 rounded border border-slate-200 p-4 text-sm">
+            <div v-if="accountLink" class="mt-3 rounded-xs border border-line p-4 text-sm">
                 <p>
                     Linked to <span class="font-medium">{{ accountLink.memberName }}</span>
-                    <span v-if="!accountLink.membershipActive" class="ml-2 text-amber-600"
+                    <span v-if="!accountLink.membershipActive" class="ml-2 text-ink"
                         >(membership inactive -- in-app currently unavailable)</span
                     >
                 </p>
                 <button
                     v-if="canManage"
                     type="button"
-                    class="mt-2 text-red-600 underline"
+                    class="mt-2 text-danger underline"
                     :disabled="unlinking"
                     @click="unlinkAccount"
                 >
@@ -630,32 +621,32 @@ function submitContact(): void {
 
                 <form
                     v-if="canOffboardPortal"
-                    class="mt-4 border-t border-slate-200 pt-3"
+                    class="mt-4 border-t border-line pt-3"
                     @submit.prevent="offboardGuardian"
                 >
-                    <p class="text-xs text-slate-500">
+                    <p class="text-xs text-ink-muted">
                         Off-boarding ends this Guardian's portal access in this School. A fresh
                         authentication code is required.
                     </p>
-                    <label class="mt-2 block text-xs font-medium text-slate-700" for="offboard-mfa"
+                    <label class="mt-2 block text-xs font-medium text-ink" for="offboard-mfa"
                         >Authentication code</label
                     >
                     <input
                         id="offboard-mfa"
                         v-model="offboardForm.mfa_code"
-                        class="mt-1 w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-1 w-32"
                         inputmode="numeric"
                         autocomplete="one-time-code"
                     />
-                    <p v-if="offboardError('mfa_code')" class="mt-1 text-xs text-red-600">
+                    <p v-if="offboardError('mfa_code')" class="mt-1 text-xs text-danger">
                         {{ offboardError('mfa_code') }}
                     </p>
-                    <p v-if="offboardError('guardian')" class="mt-1 text-xs text-red-600">
+                    <p v-if="offboardError('guardian')" class="mt-1 text-xs text-danger">
                         {{ offboardError('guardian') }}
                     </p>
                     <button
                         type="submit"
-                        class="mt-2 block text-red-600 underline"
+                        class="mt-2 block text-danger underline"
                         :disabled="offboardForm.processing"
                     >
                         Off-board from the School
@@ -678,7 +669,7 @@ function submitContact(): void {
                         v-model="linkQuery"
                         aria-label="Search Lycenza accounts to link"
                         placeholder="Search Lycenza accounts by name…"
-                        class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                         :options="linkCandidates"
                         :option-key="(o) => o.schoolMembershipId"
                         @input="searchLinkCandidates"
@@ -690,34 +681,34 @@ function submitContact(): void {
                     </SearchCombobox>
                     <button
                         type="button"
-                        class="mt-2 text-xs text-slate-400 underline"
+                        class="mt-2 text-xs text-ink-muted underline"
                         @click="showLinkPicker = false"
                     >
                         Cancel
                     </button>
                 </div>
             </div>
-            <p v-else class="mt-3 text-sm text-slate-500">Not linked.</p>
+            <p v-else class="mt-3 text-sm text-ink-muted">Not linked.</p>
         </section>
 
         <!-- Guardian account invitation (Phase 5D.3) -->
         <section v-if="!accountLink" class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Invite a new Lycenza account</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <h2 class="text-sm font-medium text-ink-muted">Invite a new Lycenza account</h2>
+            <p class="mt-1 text-xs text-ink-muted">
                 Sends this Guardian a one-time link at their email contact to create their own
                 Lycenza account. Different from linking above, which attaches an account that
                 already exists.
             </p>
 
-            <div v-if="!accountInvitation.canManage" class="mt-3 text-sm text-slate-500">
+            <div v-if="!accountInvitation.canManage" class="mt-3 text-sm text-ink-muted">
                 You do not have permission to invite an account for this Guardian.
             </div>
-            <div v-else-if="!accountInvitation.hasEmailContact" class="mt-3 text-sm text-slate-500">
+            <div v-else-if="!accountInvitation.hasEmailContact" class="mt-3 text-sm text-ink-muted">
                 Add an active email contact before inviting an account.
             </div>
             <div
                 v-else-if="accountInvitation.pending"
-                class="mt-3 rounded border border-slate-200 p-4 text-sm"
+                class="mt-3 rounded-xs border border-line p-4 text-sm"
             >
                 <p>
                     Invitation
@@ -727,7 +718,7 @@ function submitContact(): void {
                         {{ formatDate(accountInvitation.pending.expiresAt) }})
                     </span>
                 </p>
-                <p v-if="accountInvitation.pending.email" class="mt-1 text-slate-600">
+                <p v-if="accountInvitation.pending.email" class="mt-1 text-ink-muted">
                     Invitation email:
                     <span class="font-medium">{{
                         invitationEmailLabel(accountInvitation.pending.email)
@@ -744,7 +735,7 @@ function submitContact(): void {
                     </button>
                     <button
                         type="button"
-                        class="text-sm text-red-600 underline"
+                        class="text-sm text-danger underline"
                         :disabled="invitationBusy"
                         @click="revokeInvitation"
                     >
@@ -765,22 +756,22 @@ function submitContact(): void {
 
         <!-- Domain communication preference / consent (Phase 5D.2) -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Communication preferences</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <h2 class="text-sm font-medium text-ink-muted">Communication preferences</h2>
+            <p class="mt-1 text-xs text-ink-muted">
                 Governs optional Email communications sent directly to this Guardian's contact
                 information, independent of any Lycenza account link above. Required/Emergency
                 school communications are not affected by these settings.
             </p>
 
-            <div class="mt-3 rounded border border-slate-200 p-4 text-sm">
+            <div class="mt-3 rounded-xs border border-line p-4 text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="font-medium">Email</span>
                     <span
-                        class="rounded px-1.5 py-0.5 text-xs font-medium"
+                        class="rounded-xs px-1.5 py-0.5 text-xs font-medium"
                         :class="
                             communicationPreferences.email.endpointAvailable
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-amber-100 text-amber-700'
+                                ? 'bg-graphite-100 text-ink'
+                                : 'bg-accent-100 text-ink'
                         "
                     >
                         {{
@@ -792,7 +783,7 @@ function submitContact(): void {
                 </div>
 
                 <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-slate-600">
+                    <span class="text-ink-muted">
                         Preference:
                         <span class="font-medium">{{
                             communicationPreferences.email.preferenceEnabled === null
@@ -806,7 +797,7 @@ function submitContact(): void {
                         <button
                             type="button"
                             :disabled="updatingPreference"
-                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+                            class="btn btn-secondary text-xs"
                             @click="setEmailPreference(true)"
                         >
                             Enable
@@ -814,7 +805,7 @@ function submitContact(): void {
                         <button
                             type="button"
                             :disabled="updatingPreference"
-                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+                            class="btn btn-secondary text-xs"
                             @click="setEmailPreference(false)"
                         >
                             Opt out
@@ -823,9 +814,9 @@ function submitContact(): void {
                 </div>
 
                 <div
-                    class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"
+                    class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3"
                 >
-                    <span class="text-slate-600">
+                    <span class="text-ink-muted">
                         Consent:
                         <span class="font-medium">{{
                             communicationPreferences.email.consentStatus === null
@@ -839,7 +830,7 @@ function submitContact(): void {
                         <button
                             type="button"
                             :disabled="recordingConsent"
-                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+                            class="btn btn-secondary text-xs"
                             @click="recordEmailConsent('granted')"
                         >
                             Record granted
@@ -847,7 +838,7 @@ function submitContact(): void {
                         <button
                             type="button"
                             :disabled="recordingConsent"
-                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-slate-50 disabled:opacity-50"
+                            class="btn btn-secondary text-xs text-danger"
                             @click="recordEmailConsent('withdrawn')"
                         >
                             Record withdrawn

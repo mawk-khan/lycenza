@@ -290,21 +290,21 @@ function isExecuted(item: Item): boolean {
 
 <template>
     <section class="mt-8">
-        <h2 class="text-sm font-semibold text-slate-700">Student Items</h2>
-        <p class="mt-1 text-sm text-slate-500">
+        <h2 class="text-sm font-semibold text-ink">Student Items</h2>
+        <p class="mt-1 text-sm text-ink-muted">
             One row per Student under review for this Plan. Items appear here after Run Validation
             is used at least once.
         </p>
 
         <form class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-xs text-slate-600" for="filter-validation-result"
+                <label class="block text-xs text-ink-muted" for="filter-validation-result"
                     >Validation result</label
                 >
                 <select
                     id="filter-validation-result"
                     v-model="validationResult"
-                    class="mt-1 w-40 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -318,13 +318,13 @@ function isExecuted(item: Item): boolean {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-execution-status"
+                <label class="block text-xs text-ink-muted" for="filter-execution-status"
                     >Execution status</label
                 >
                 <select
                     id="filter-execution-status"
                     v-model="executionStatus"
-                    class="mt-1 w-40 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -338,11 +338,11 @@ function isExecuted(item: Item): boolean {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-decision">Decision</label>
+                <label class="block text-xs text-ink-muted" for="filter-decision">Decision</label>
                 <select
                     id="filter-decision"
                     v-model="decisionFilter"
-                    class="mt-1 w-40 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -352,13 +352,13 @@ function isExecuted(item: Item): boolean {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-per-page"
+                <label class="block text-xs text-ink-muted" for="filter-per-page"
                     >Students per page</label
                 >
                 <select
                     id="filter-per-page"
                     v-model="perPage"
-                    class="mt-1 w-28 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-28"
                     @change="applyFilters"
                 >
                     <option value="20">20</option>
@@ -371,11 +371,11 @@ function isExecuted(item: Item): boolean {
         <!-- UAT-C2: what the last bulk decision did, Student by Student. -->
         <section
             v-if="bulkResult"
-            class="mt-4 rounded border px-4 py-3 text-sm"
+            class="mt-4 rounded-xs border px-4 py-3 text-sm"
             :class="
                 bulkResult.unresolved.length === 0
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-amber-200 bg-amber-50'
+                    ? 'border-graphite-300 bg-graphite-100'
+                    : 'border-accent-300 bg-accent-100'
             "
             role="status"
         >
@@ -398,7 +398,7 @@ function isExecuted(item: Item): boolean {
         <!-- UAT-C2: bulk Promote / Exclude for the rows selected on this page. -->
         <div
             v-if="canManage && configurable && items.data.length > 0"
-            class="mt-4 flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+            class="mt-4 flex flex-wrap items-center gap-3 rounded-xs border border-line bg-graphite-100 px-3 py-2 text-sm"
         >
             <span>{{ selected.length }} selected on this page</span>
             <button
@@ -411,7 +411,7 @@ function isExecuted(item: Item): boolean {
             </button>
             <button
                 type="button"
-                class="rounded border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-50"
+                class="btn btn-secondary"
                 :disabled="selected.length === 0 || previewing || preview !== null"
                 @click="startBulk('promote')"
             >
@@ -419,23 +419,23 @@ function isExecuted(item: Item): boolean {
             </button>
             <button
                 type="button"
-                class="rounded border border-slate-300 bg-white px-3 py-1.5 disabled:opacity-50"
+                class="btn btn-secondary"
                 :disabled="selected.length === 0 || previewing || preview !== null"
                 @click="startBulk('exclude')"
             >
                 Exclude selected…
             </button>
-            <span class="text-xs text-slate-500"
+            <span class="text-xs text-ink-muted"
                 >Up to {{ bulkMax }} at a time; only this page's rows.</span
             >
         </div>
-        <p v-if="previewError" role="alert" class="mt-2 text-sm text-red-700">
+        <p v-if="previewError" role="alert" class="mt-2 text-sm text-danger">
             {{ previewError }}
         </p>
 
         <section
             v-if="preview"
-            class="mt-3 rounded border border-slate-300 p-4 text-sm"
+            class="mt-3 rounded-xs border border-control-line p-4 text-sm"
             aria-labelledby="bulk-preview-heading"
         >
             <h3 id="bulk-preview-heading" class="font-semibold">
@@ -455,14 +455,14 @@ function isExecuted(item: Item): boolean {
                 Nothing else about these Students changes; the plan needs Run Validation again
                 before it can be executed.
             </p>
-            <ul class="mt-2 space-y-0.5 text-slate-600">
+            <ul class="mt-2 space-y-0.5 text-ink-muted">
                 <template v-for="(count, outcome) in outcomeCounts" :key="outcome">
                     <li v-if="outcome !== 'ready'">{{ count }} · {{ OUTCOME_LABELS[outcome] }}</li>
                 </template>
             </ul>
             <details
                 v-if="preview.rows.some((r) => r.outcome !== 'ready')"
-                class="mt-2 text-slate-600"
+                class="mt-2 text-ink-muted"
             >
                 <summary class="cursor-pointer">Students who will be left unchanged</summary>
                 <ul class="mt-1 list-disc pl-5">
@@ -473,11 +473,11 @@ function isExecuted(item: Item): boolean {
                     </template>
                 </ul>
             </details>
-            <p v-if="bulkError" role="alert" class="mt-2 text-red-700">{{ bulkError }}</p>
+            <p v-if="bulkError" role="alert" class="mt-2 text-danger">{{ bulkError }}</p>
             <div class="mt-3 flex flex-wrap gap-3">
                 <button
                     type="button"
-                    class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary"
                     :disabled="readyCount === 0 || bulkForm.processing"
                     @click="confirmBulk"
                 >
@@ -488,7 +488,7 @@ function isExecuted(item: Item): boolean {
             </div>
         </section>
 
-        <p v-if="items.data.length === 0" class="mt-4 text-sm text-slate-500">
+        <p v-if="items.data.length === 0" class="mt-4 text-sm text-ink-muted">
             No Student Items match. Run Validation to populate them.
         </p>
 
@@ -497,7 +497,7 @@ function isExecuted(item: Item): boolean {
             <div class="mt-4 hidden overflow-x-auto md:block">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th v-if="canManage && configurable" scope="col" class="w-8 py-2">
                                 <input
                                     type="checkbox"
@@ -518,7 +518,7 @@ function isExecuted(item: Item): boolean {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <template v-for="item in items.data" :key="item.id">
                             <tr>
                                 <td v-if="canManage && configurable" class="py-3">
@@ -533,20 +533,20 @@ function isExecuted(item: Item): boolean {
                                 </td>
                                 <td class="py-3">
                                     {{ studentName(item.student) }}
-                                    <span class="block text-xs text-slate-500">{{
+                                    <span class="block text-xs text-ink-muted">{{
                                         item.student.studentNumber
                                     }}</span>
                                 </td>
-                                <td class="py-3 text-slate-600">
+                                <td class="py-3 text-ink-muted">
                                     {{ sectionLabel(item.sourceEnrollment.section) }}
                                     <span
                                         v-if="item.sourceEnrollment.rollNumber"
-                                        class="block text-xs text-slate-500"
+                                        class="block text-xs text-ink-muted"
                                         >Roll {{ item.sourceEnrollment.rollNumber }}</span
                                     >
                                 </td>
-                                <td class="py-3 text-slate-600">{{ item.decision }}</td>
-                                <td class="py-3 text-slate-600">
+                                <td class="py-3 text-ink-muted">{{ item.decision }}</td>
+                                <td class="py-3 text-ink-muted">
                                     <span v-if="item.targetSection"
                                         >{{ sectionLabel(item.targetSection) }}
                                         <span v-if="item.targetRollNumber"
@@ -560,10 +560,10 @@ function isExecuted(item: Item): boolean {
                                         v-if="item.validationResult"
                                         :status="item.validationResult"
                                     />
-                                    <span v-else class="text-slate-400">Not validated</span>
+                                    <span v-else class="text-ink-muted">Not validated</span>
                                     <p
                                         v-if="item.validationReason"
-                                        class="mt-1 text-xs text-slate-500"
+                                        class="mt-1 text-xs text-ink-muted"
                                     >
                                         {{ rolloverReasonLabel(item.validationReason) }}
                                     </p>
@@ -573,7 +573,7 @@ function isExecuted(item: Item): boolean {
                                         v-if="item.executionStatus"
                                         :status="item.executionStatus"
                                     />
-                                    <span v-else class="text-slate-400">—</span>
+                                    <span v-else class="text-ink-muted">—</span>
                                 </td>
                                 <td class="py-3 text-right">
                                     <button
@@ -594,13 +594,13 @@ function isExecuted(item: Item): boolean {
                             <tr v-if="editingItemId === item.id">
                                 <td :colspan="canManage && configurable ? 8 : 7" class="pb-4">
                                     <form
-                                        class="rounded border border-slate-200 p-4"
+                                        class="rounded-xs border border-line p-4"
                                         @submit.prevent="submitEdit(item.id)"
                                     >
                                         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                             <div>
                                                 <label
-                                                    class="block text-xs font-medium text-slate-700"
+                                                    class="block text-xs font-medium text-ink"
                                                     :for="`decision-${item.id}`"
                                                     >Decision</label
                                                 >
@@ -608,7 +608,7 @@ function isExecuted(item: Item): boolean {
                                                     :id="`decision-${item.id}`"
                                                     v-model="editForm.decision"
                                                     required
-                                                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                                                    class="input mt-1"
                                                 >
                                                     <option
                                                         v-for="d in ROLLOVER_ITEM_DECISIONS"
@@ -621,14 +621,14 @@ function isExecuted(item: Item): boolean {
                                             </div>
                                             <div>
                                                 <label
-                                                    class="block text-xs font-medium text-slate-700"
+                                                    class="block text-xs font-medium text-ink"
                                                     :for="`target-section-${item.id}`"
                                                     >Target Section override</label
                                                 >
                                                 <select
                                                     :id="`target-section-${item.id}`"
                                                     v-model="editForm.target_section_id"
-                                                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                                                    class="input mt-1"
                                                 >
                                                     <option value="">Use mapping default</option>
                                                     <option
@@ -646,14 +646,14 @@ function isExecuted(item: Item): boolean {
                                             </div>
                                             <div>
                                                 <label
-                                                    class="block text-xs font-medium text-slate-700"
+                                                    class="block text-xs font-medium text-ink"
                                                     :for="`roll-strategy-${item.id}`"
                                                     >Roll Number strategy</label
                                                 >
                                                 <select
                                                     :id="`roll-strategy-${item.id}`"
                                                     v-model="editForm.roll_number_strategy"
-                                                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                                                    class="input mt-1"
                                                 >
                                                     <option value="">Not set</option>
                                                     <option
@@ -667,7 +667,7 @@ function isExecuted(item: Item): boolean {
                                             </div>
                                             <div>
                                                 <label
-                                                    class="block text-xs font-medium text-slate-700"
+                                                    class="block text-xs font-medium text-ink"
                                                     :for="`roll-number-${item.id}`"
                                                     >Explicit Roll Number</label
                                                 >
@@ -680,17 +680,17 @@ function isExecuted(item: Item): boolean {
                                                     :disabled="
                                                         editForm.roll_number_strategy !== 'explicit'
                                                     "
-                                                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 disabled:bg-slate-100"
+                                                    class="input mt-1 disabled:bg-graphite-200"
                                                 />
                                             </div>
                                         </div>
                                         <p
                                             v-if="editForm.errors.decision"
-                                            class="mt-2 text-sm text-red-600"
+                                            class="mt-2 text-sm text-danger"
                                         >
                                             {{ editForm.errors.decision }}
                                         </p>
-                                        <p class="mt-2 text-xs text-slate-500">
+                                        <p class="mt-2 text-xs text-ink-muted">
                                             Saving changes the Plan's configuration -- validation
                                             will be required again before execution.
                                         </p>
@@ -698,7 +698,7 @@ function isExecuted(item: Item): boolean {
                                             <button
                                                 type="submit"
                                                 :disabled="editForm.processing"
-                                                class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                                class="btn btn-primary text-xs"
                                             >
                                                 Save
                                             </button>
@@ -723,7 +723,7 @@ function isExecuted(item: Item): boolean {
                 <li
                     v-for="item in items.data"
                     :key="item.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <label class="flex items-start gap-2">
                         <input
@@ -736,12 +736,12 @@ function isExecuted(item: Item): boolean {
                         />
                         <span>
                             <span class="block font-medium">{{ studentName(item.student) }}</span>
-                            <span class="block text-xs text-slate-500">{{
+                            <span class="block text-xs text-ink-muted">{{
                                 item.student.studentNumber
                             }}</span>
                         </span>
                     </label>
-                    <p class="mt-2 text-sm text-slate-600">
+                    <p class="mt-2 text-sm text-ink-muted">
                         {{ sectionLabel(item.sourceEnrollment.section) }} → decision:
                         {{ item.decision }}
                     </p>

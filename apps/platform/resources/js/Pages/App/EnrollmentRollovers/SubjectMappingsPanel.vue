@@ -164,7 +164,7 @@ function submitAdd(): void {
 <template>
     <section class="mt-8">
         <div class="flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-700">Elective subject mappings</h2>
+            <h2 class="text-sm font-semibold text-ink">Elective subject mappings</h2>
             <button
                 v-if="canManage && configurable && !showAddForm"
                 type="button"
@@ -174,20 +174,20 @@ function submitAdd(): void {
                 Add mapping
             </button>
         </div>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Only EXPLICIT electives need a mapping -- required subjects are always derived
             automatically and never listed here. A source elective with no decision (Not configured)
             blocks validation until you either map it forward or explicitly mark it Omit next year.
         </p>
 
-        <p v-if="!configurable" class="mt-2 text-sm text-amber-700">
+        <p v-if="!configurable" class="mt-2 text-sm text-ink">
             This Plan is no longer configurable (it is executing or has reached a terminal status).
         </p>
 
         <!-- Configured mappings -->
         <div
             v-if="subjectMappings.length === 0"
-            class="mt-4 rounded border border-dashed border-slate-300 p-4 text-sm text-slate-500"
+            class="mt-4 rounded-xs border border-dashed border-control-line p-4 text-sm text-ink-muted"
         >
             No elective subject mappings configured yet.
         </div>
@@ -195,7 +195,7 @@ function submitAdd(): void {
             <li
                 v-for="m in subjectMappings"
                 :key="m.id"
-                class="rounded border border-slate-200 p-3 text-sm"
+                class="rounded-xs border border-line p-3 text-sm"
             >
                 <template v-if="editingSourceId !== m.sourceSubjectOffering.id">
                     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -203,8 +203,8 @@ function submitAdd(): void {
                             <span class="font-medium">{{
                                 offeringLabel(m.sourceSubjectOffering)
                             }}</span>
-                            <span class="mx-2 text-slate-400">→</span>
-                            <span v-if="m.state === 'omit'" class="italic text-slate-500"
+                            <span class="mx-2 text-ink-muted">→</span>
+                            <span v-if="m.state === 'omit'" class="italic text-ink-muted"
                                 >Omit next year</span
                             >
                             <span v-else class="font-medium">{{
@@ -218,7 +218,7 @@ function submitAdd(): void {
                             <button
                                 type="button"
                                 :disabled="removingSourceId === m.sourceSubjectOffering.id"
-                                class="text-sm text-red-700 underline disabled:opacity-50"
+                                class="text-sm text-danger underline disabled:opacity-50"
                                 @click="resetToUnconfigured(m.sourceSubjectOffering.id)"
                             >
                                 Reset to unconfigured
@@ -237,12 +237,12 @@ function submitAdd(): void {
                         )
                     "
                 >
-                    <p class="text-slate-600">
+                    <p class="text-ink-muted">
                         Source: <strong>{{ offeringLabel(m.sourceSubjectOffering) }}</strong>
                     </p>
                     <div>
                         <label
-                            class="block text-xs font-medium text-slate-700"
+                            class="block text-xs font-medium text-ink"
                             :for="`edit-target-${m.sourceSubjectOffering.id}`"
                             >Decision</label
                         >
@@ -250,7 +250,7 @@ function submitAdd(): void {
                             :id="`edit-target-${m.sourceSubjectOffering.id}`"
                             :value="selectValue(m.sourceSubjectOffering.id)"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                            class="input mt-1"
                             @change="
                                 setSelectValue(
                                     m.sourceSubjectOffering.id,
@@ -270,7 +270,7 @@ function submitAdd(): void {
                         v-if="
                             rowForms[m.sourceSubjectOffering.id]?.errors.target_subject_offering_id
                         "
-                        class="text-sm text-red-600"
+                        class="text-sm text-danger"
                     >
                         {{ rowForms[m.sourceSubjectOffering.id].errors.target_subject_offering_id }}
                     </p>
@@ -278,7 +278,7 @@ function submitAdd(): void {
                         <button
                             type="submit"
                             :disabled="rowForms[m.sourceSubjectOffering.id]?.processing"
-                            class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            class="btn btn-primary text-xs"
                         >
                             Save
                         </button>
@@ -292,10 +292,10 @@ function submitAdd(): void {
 
         <!-- Needs configuration -->
         <template v-if="unmappedSourceSubjectOfferings.length > 0">
-            <h3 class="mt-6 text-xs font-semibold uppercase tracking-wide text-amber-700">
+            <h3 class="mt-6 text-xs font-semibold uppercase tracking-wide text-ink">
                 Needs configuration
             </h3>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 These electives have active Students in this Plan but no mapping yet -- dry-run will
                 block them as "missing subject mapping" until you decide.
             </p>
@@ -303,7 +303,7 @@ function submitAdd(): void {
                 <li
                     v-for="o in unmappedSourceSubjectOfferings"
                     :key="o.id"
-                    class="rounded border border-amber-200 bg-amber-50 p-3 text-sm"
+                    class="rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm"
                 >
                     <template v-if="editingSourceId !== o.id">
                         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -326,14 +326,14 @@ function submitAdd(): void {
                         class="space-y-3"
                         @submit.prevent="submitConfigure(o.id, selectValue(o.id))"
                     >
-                        <p class="text-slate-600">
+                        <p class="text-ink-muted">
                             Source: <strong>{{ offeringLabel(o) }}</strong>
                         </p>
                         <select
                             :value="selectValue(o.id)"
                             :aria-label="`Next year for ${offeringLabel(o)}`"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                            class="input mt-1"
                             @change="
                                 setSelectValue(o.id, ($event.target as HTMLSelectElement).value)
                             "
@@ -347,7 +347,7 @@ function submitAdd(): void {
                         </select>
                         <p
                             v-if="rowForms[o.id]?.errors.target_subject_offering_id"
-                            class="text-sm text-red-600"
+                            class="text-sm text-danger"
                         >
                             {{ rowForms[o.id].errors.target_subject_offering_id }}
                         </p>
@@ -355,7 +355,7 @@ function submitAdd(): void {
                             <button
                                 type="submit"
                                 :disabled="rowForms[o.id]?.processing"
-                                class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                class="btn btn-primary text-xs"
                             >
                                 Save
                             </button>
@@ -371,14 +371,14 @@ function submitAdd(): void {
         <!-- Add mapping (manual) -->
         <form
             v-if="showAddForm"
-            class="mt-4 space-y-3 rounded border border-slate-200 p-4"
+            class="mt-4 space-y-3 rounded-xs border border-line p-4"
             @submit.prevent="submitAdd"
         >
-            <h3 class="text-sm font-medium text-slate-700">Add mapping</h3>
+            <h3 class="text-sm font-medium text-ink">Add mapping</h3>
             <div class="grid gap-3 sm:grid-cols-2">
                 <div>
                     <label
-                        class="block text-xs font-medium text-slate-700"
+                        class="block text-xs font-medium text-ink"
                         for="source_subject_offering_id"
                         >Source elective</label
                     >
@@ -387,7 +387,7 @@ function submitAdd(): void {
                         v-model="addForm.source_subject_offering_id"
                         required
                         :aria-invalid="!!addForm.errors.source_subject_offering_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Select…</option>
                         <option v-for="o in addableSourceOfferings" :key="o.id" :value="o.id">
@@ -397,7 +397,7 @@ function submitAdd(): void {
                 </div>
                 <div>
                     <label
-                        class="block text-xs font-medium text-slate-700"
+                        class="block text-xs font-medium text-ink"
                         for="target_subject_offering_id"
                         >Decision</label
                     >
@@ -405,7 +405,7 @@ function submitAdd(): void {
                         id="target_subject_offering_id"
                         v-model="addForm.target_subject_offering_id"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Select…</option>
                         <option :value="OMIT_VALUE">Omit next year (do not carry forward)</option>
@@ -415,14 +415,14 @@ function submitAdd(): void {
                     </select>
                 </div>
             </div>
-            <p v-if="addForm.errors.target_subject_offering_id" class="text-sm text-red-600">
+            <p v-if="addForm.errors.target_subject_offering_id" class="text-sm text-danger">
                 {{ addForm.errors.target_subject_offering_id }}
             </p>
             <div class="flex items-center gap-3">
                 <button
                     type="submit"
                     :disabled="addForm.processing"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary text-xs"
                 >
                     Add mapping
                 </button>

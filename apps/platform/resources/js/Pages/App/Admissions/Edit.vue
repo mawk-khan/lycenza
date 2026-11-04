@@ -69,16 +69,16 @@ function submit(): void {
 
 <template>
     <Head title="Correct application" />
-    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/admissions/${application.id}`">← Back</a>
         <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h1 class="text-xl font-semibold">Correct application</h1>
-                <p class="mt-1 text-sm text-slate-500">{{ applicantName }}</p>
+                <p class="mt-1 text-sm text-ink-muted">{{ applicantName }}</p>
             </div>
             <StatusBadge :status="application.status" />
         </div>
-        <p class="mt-2 text-sm text-slate-600">
+        <p class="mt-2 text-sm text-ink-muted">
             <template v-if="mode === 'context'">
                 For a data-entry mistake in what this application is for. The status stays as it is;
                 names and date of birth are corrected on the applicant's page.
@@ -122,9 +122,9 @@ function submit(): void {
                 />
             </template>
             <template v-else>
-                <dl class="grid grid-cols-1 gap-3 rounded border border-slate-200 p-4 text-sm">
+                <dl class="grid grid-cols-1 gap-3 rounded-xs border border-line p-4 text-sm">
                     <div>
-                        <dt class="text-slate-500">Applied for (fixed)</dt>
+                        <dt class="text-ink-muted">Applied for (fixed)</dt>
                         <dd class="mt-0.5">
                             {{ application.gradeLevel.name }} · {{ application.campus.name }} ·
                             {{ application.academicYear.name }}
@@ -132,7 +132,7 @@ function submit(): void {
                     </div>
                 </dl>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700" for="decision_note"
+                    <label class="block text-sm font-medium text-ink" for="decision_note"
                         >Decision note</label
                     >
                     <textarea
@@ -144,12 +144,12 @@ function submit(): void {
                         :aria-describedby="
                             form.errors.decision_note ? 'decision_note-error' : undefined
                         "
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     />
                     <p
                         v-if="form.errors.decision_note"
                         id="decision_note-error"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ form.errors.decision_note }}
                     </p>
@@ -157,11 +157,7 @@ function submit(): void {
             </template>
 
             <div class="flex flex-wrap items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Save correction' }}
                 </button>
                 <a class="text-sm underline" :href="`/app/admissions/${application.id}`">Cancel</a>

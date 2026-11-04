@@ -77,34 +77,30 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h1 class="text-xl font-semibold">Enrollment Rollovers</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Move Students from one Academic Year into the next.
                 </p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/enrollment-rollovers/create"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <a v-if="canManage" href="/app/enrollment-rollovers/create" class="btn btn-primary">
                 Create Plan
             </a>
         </div>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-source-year"
+                <label class="block text-sm text-ink-muted" for="filter-source-year"
                     >Source Academic Year</label
                 >
                 <select
                     id="filter-source-year"
                     v-model="sourceAcademicYearId"
-                    class="mt-1 w-44 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-44"
                 >
                     <option value="">All</option>
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
@@ -113,13 +109,13 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-target-year"
+                <label class="block text-sm text-ink-muted" for="filter-target-year"
                     >Target Academic Year</label
                 >
                 <select
                     id="filter-target-year"
                     v-model="targetAcademicYearId"
-                    class="mt-1 w-44 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-44"
                 >
                     <option value="">All</option>
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
@@ -128,12 +124,8 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-status">Status</label>
-                <select
-                    id="filter-status"
-                    v-model="status"
-                    class="mt-1 w-44 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
+                <select id="filter-status" v-model="status" class="input mt-1 w-44">
                     <option value="">All</option>
                     <option v-for="s in ROLLOVER_PLAN_STATUSES" :key="s.value" :value="s.value">
                         {{ s.label }}
@@ -164,7 +156,7 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
             <div class="mt-6 hidden overflow-x-auto md:block">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Source Year</th>
                             <th scope="col" class="py-2 font-medium">Target Year</th>
                             <th scope="col" class="py-2 font-medium">Status</th>
@@ -175,15 +167,15 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="p in plans.data" :key="p.id">
                             <td class="py-3">{{ p.sourceAcademicYear.name }}</td>
                             <td class="py-3">{{ p.targetAcademicYear.name }}</td>
                             <td class="py-3"><StatusBadge :status="p.status" /></td>
-                            <td class="py-3 text-slate-600">
+                            <td class="py-3 text-ink-muted">
                                 {{ isReadyForConfigurationVersion(p) ? 'Yes' : 'No' }}
                             </td>
-                            <td class="py-3 text-slate-600">
+                            <td class="py-3 text-ink-muted">
                                 {{ formatDate(p.createdAt) }}
                             </td>
                             <td class="py-3 text-right">
@@ -200,11 +192,11 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
 
             <!-- Mobile/tablet card list -->
             <ul class="mt-6 space-y-3 md:hidden">
-                <li v-for="p in plans.data" :key="p.id" class="rounded border border-slate-200 p-4">
+                <li v-for="p in plans.data" :key="p.id" class="rounded-xs border border-line p-4">
                     <a class="font-medium underline" :href="`/app/enrollment-rollovers/${p.id}`">
                         {{ p.sourceAcademicYear.name }} → {{ p.targetAcademicYear.name }}
                     </a>
-                    <p class="mt-1 text-sm text-slate-500">Created {{ formatDate(p.createdAt) }}</p>
+                    <p class="mt-1 text-sm text-ink-muted">Created {{ formatDate(p.createdAt) }}</p>
                     <div class="mt-2"><StatusBadge :status="p.status" /></div>
                 </li>
             </ul>
