@@ -173,6 +173,12 @@ final class CapabilityClasses
         'hr.employees.sensitive.view' => ['hr-sensitive'],
         'hr.employees.view' => ['hr'],
         'hr.leave.approve' => ['hr'],
+        // HR.13: staff tasks (own tasks are owned-scope, like hr.leave.self).
+        'hr.tasks.configure' => ['hr'],
+        'hr.tasks.manage' => ['hr'],
+        'hr.tasks.self' => ['owned-scope'],
+        'hr.tasks.team' => ['hr'],
+        'hr.tasks.view' => ['hr'],
         // HR.12: separation cases.
         'hr.separations.approve' => ['hr'],
         'hr.separations.configure' => ['hr'],

@@ -52,7 +52,7 @@ final class WebRouteParameters
         'period', 'position', 'qualification', 'referenceCode', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
         'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection', 'separationCase',
         'staffAttendanceRecord', 'staffHoliday', 'student', 'studentMark', 'studentMarkCorrection', 'subject',
-        'subjectOffering', 'syllabusUnit', 'targetUser', 'teachingAssignment', 'template', 'thread',
+        'subjectOffering', 'syllabusUnit', 'targetUser', 'task', 'teachingAssignment', 'template', 'thread',
         'timetableEntry', 'timetablePeriod', 'transportRoute', 'transportRouteAssignment', 'transportStop',
         'transportStudentAssignment', 'transportVehicle', 'visitor', 'visitorVisit', 'zone',
     ];

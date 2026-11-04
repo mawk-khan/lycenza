@@ -1,0 +1,23 @@
+<?php
+
+namespace App\Domain\WorkforceTasks\Infrastructure;
+
+use App\Support\Identifiers\GeneratesUuidV7;
+use App\Support\Tenancy\BelongsToSchool;
+use Illuminate\Database\Eloquent\Model;
+
+/** HR.13: see the migration `2027_01_31_090000_create_workforce_tasks`. Status columns are written by the services only. */
+class TaskTemplate extends Model
+{
+    use BelongsToSchool, GeneratesUuidV7;
+
+    protected $table = 'workforce_task_templates';
+
+    protected $fillable = ['code', 'created_by_user_id'];
+
+    protected function casts(): array
+    {
+        return ['retired_at' => 'datetime', 'occurrence_on' => 'date', 'started_at' => 'datetime', 'finished_at' => 'datetime',
+            'examined' => 'integer', 'created' => 'integer', 'existing' => 'integer', 'not_matched' => 'integer'];
+    }
+}

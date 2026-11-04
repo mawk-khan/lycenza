@@ -400,6 +400,13 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.separations.manage', 'label' => 'Record, withdraw, cancel, finalize and complete separation cases; clear HR clearance items', 'namespace' => 'school'],
             ['key' => 'hr.separations.approve', 'label' => 'Approve or reject a separation case recorded by someone else', 'namespace' => 'school'],
             ['key' => 'hr.separations.configure', 'label' => "Configure the School's separation clearance requirements", 'namespace' => 'school'],
+            // HR.13 (owner decisions 2026-11-04; ADR 0071 §32): staff tasks. `team` acts
+            // only for the holder's CURRENT direct reports (HR.3A); `self` is one's own tasks.
+            ['key' => 'hr.tasks.view', 'label' => 'View the Staff Task Monitor and any staff task', 'namespace' => 'school'],
+            ['key' => 'hr.tasks.configure', 'label' => 'Configure task categories, recurring task templates and run task generation', 'namespace' => 'school'],
+            ['key' => 'hr.tasks.manage', 'label' => 'Assign, review, cancel and reassign any staff task', 'namespace' => 'school'],
+            ['key' => 'hr.tasks.team', 'label' => "Assign and review tasks of one's current direct reports", 'namespace' => 'school'],
+            ['key' => 'hr.tasks.self', 'label' => 'View and submit your own staff tasks', 'namespace' => 'school'],
             ['key' => 'hr.departments.view', 'label' => 'View HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.departments.manage', 'label' => 'Manage HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
@@ -1207,6 +1214,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.employees.view', 'hr.employees.manage',
                     // HR.12 (HR-061): decides separations recorded by HR; configures clearance.
                     'hr.separations.view', 'hr.separations.approve', 'hr.separations.configure', 'hr.employees.personal.view',
+                    // HR.13: staff tasks (team: held so the Team Task Manager role is grantable).
+                    'hr.tasks.view', 'hr.tasks.configure', 'hr.tasks.manage', 'hr.tasks.team', 'hr.tasks.self',
                     // Phase 10A: same "hands-on, day-to-day operational
                     // concern" reasoning already justifying full
                     // view+manage parity for students.*/guardians.*/
@@ -1547,6 +1556,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.employees.view', 'hr.employees.manage',
                     // HR.12 (HR-061): decides separations recorded by HR.
                     'hr.separations.view', 'hr.separations.approve', 'hr.employees.personal.view',
+                    // HR.13: reads the Staff Task Monitor.
+                    'hr.tasks.view',
                     // Phase 10A: same day-to-day operational parity
                     // reasoning as school_admin above.
                     'library.catalogue.view', 'library.catalogue.manage',
@@ -1733,7 +1744,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'name' => 'Staff Self-Service',
                 'scope' => 'school',
                 'capabilities' => [
-                    'hr.leave.self',
+                    'hr.leave.self', 'hr.tasks.self',
                     'hr.staff_attendance.self',
                     'payroll.payslips.self',
                     'communications.events.view',
@@ -1768,6 +1779,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'communications.inbox.view',
                     // HR.12: records and runs separation cases; never approves them (HR-061).
                     'hr.separations.view', 'hr.separations.manage', 'hr.separations.configure',
+                    // HR.13: staff task administration.
+                    'hr.tasks.view', 'hr.tasks.configure', 'hr.tasks.manage',
                 ],
             ],
             'hr_sensitive_records' => [ // ADR 0071 §4.2
@@ -1790,6 +1803,16 @@ class CapabilityAndRoleSeeder extends Seeder
                 'scope' => 'school',
                 'capabilities' => [
                     'hr.leave.approve',
+                ],
+            ],
+            // HR.13 (owner decision 2026-11-04, ADR 0071 §32): an ADD-ON holding exactly
+            // `hr.tasks.team` -- assign to and review the tasks of the holder's CURRENT HR.3A
+            // direct reports, never their own. Useless without a reporting line.
+            'team_task_manager' => [
+                'name' => 'Team Task Manager',
+                'scope' => 'school',
+                'capabilities' => [
+                    'hr.tasks.team',
                 ],
             ],
             'payroll_officer' => [ // ADR 0071 §4.3; SR.4 §26.5: no payroll.accounting.manage

@@ -5024,3 +5024,72 @@ is caught.
 - HR.15C Finance staff dues and settlement: needs Payroll/Finance and legal
   rules (ADR 0036, OD-HR-1/2).
 - HR.15D Library staff borrowing: needs a Library product decision.
+
+## Staff tasks (HR.13, 2026-11-04)
+
+Owner decisions (2026-11-04; ADR 0028 HR.13 amendment, ADR 0071 §32, rule
+139): new whole-School keys and one add-on role; per-template completion
+(self or reviewed); scheduled, calendar-neutral recurrence; bounded text, no
+attachments. The sub-domain is `App\Domain\WorkforceTasks` (HR-owned; HR
+depends on none of it).
+
+### Model
+
+| Table | What it holds |
+|---|---|
+| `workforce_task_categories` | School-configured categories (code, label), retired never deleted |
+| `workforce_task_templates` | a recurring task's identity (code, active / retired) |
+| `workforce_task_template_versions` | immutable terms: title, category, completion mode, schedule, due offset (calendar days), applicability, effective date |
+| `workforce_tasks` | one obligation of one EMPLOYMENT: a generated occurrence (template + date) or a one-off task; terms and attribution are snapshots |
+| `workforce_task_events` | the append-only timeline; remarks and feedback (500 chars) live here |
+| `workforce_task_generation_runs` | one resumable run per School and date, with reconciled counts |
+
+### Schedule (calendar-neutral)
+
+Daily on chosen weekdays; weekly on one weekday; monthly on day 1-28 or the
+last day; yearly on a month and an existing day (never 29 February) or that
+month's last day. No holidays: WorkSchedule is gated and the staff calendar
+belongs to Leave, which HR never depends on.
+
+### Applicability
+
+Staff types (HR.1A terms on the occurrence date), and optionally one HR
+Department and one Position (the primary assignment on that date). Every set
+condition must match; an unclassified staff type never matches. No Campus
+applicability (task keys are whole-School).
+
+### Generation
+
+`TaskGenerationService` (hourly `workforce-tasks:generate` for every active
+School, plus "generate now"): only TODAY's occurrences on the School-local
+date, never a backlog. The complete roster is traversed by id in batches
+(`EmploymentRoster::pageOverlapping`, no cap; proven with 2,100 staff).
+Eligible = `active` / `notice_period` employment of an active Employee whose
+facts match. Idempotent through `workforce_tasks_one_occurrence` (ON
+CONFLICT DO NOTHING); resumable from the run's cursor; reconciled per pass:
+created + existing + not_matched = examined × occurring templates.
+
+### Lifecycle and authority
+
+`assigned | returned` → submit → `completed` (self) or `submitted`
+(reviewed); `submitted` → review → `completed` or `returned` (once);
+any open → `cancelled` (closed reason). Reassignment cancels (`reassigned`)
+and creates a linked task for the new employment.
+
+| Key | Holders | Allows |
+|---|---|---|
+| `hr.tasks.configure` | school_admin, hr_officer | categories, templates, versions, generation |
+| `hr.tasks.manage` | school_admin, hr_officer | assign to anyone current, review, cancel, reassign |
+| `hr.tasks.view` | school_admin, hr_officer, principal | the Staff Task Monitor |
+| `hr.tasks.team` | `team_task_manager` add-on (and school_admin, so it is grantable) | the same, for CURRENT HR.3A direct reports only |
+| `hr.tasks.self` | school_admin, staff_self_service | own tasks; only the assignee submits |
+
+Never one's own task (service + `trg_workforce_tasks_guard`); `line_manager`
+gains nothing. A separated assignee gets no new task; open tasks show on the
+separation case (ATTENTION). A rehire's new employment starts empty.
+
+### Not built
+
+Attachments (Documents owner type; owner decision), numeric targets and due
+times, academic references on recurring templates, notifications and
+reminders, rates and percentages (ADR 0040; HR.14), exports (D-11), an API.

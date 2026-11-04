@@ -63,7 +63,10 @@ type Status =
     // HR.12: separation case lifecycle (`approved`, `rejected`, `withdrawn`,
     // `cancelled`, `completed` already exist above).
     | 'requested'
-    | 'finalized';
+    | 'finalized'
+    // HR.13: staff task lifecycle (`submitted`, `completed`, `cancelled` exist above).
+    | 'assigned'
+    | 'returned';
 
 interface Props {
     status: Status;
@@ -121,6 +124,8 @@ const STYLES: Record<Status, { label: string; family: Family }> = {
     pending: { label: 'Pending', family: 'progress' },
     requested: { label: 'Awaiting decision', family: 'progress' },
     finalized: { label: 'Finalized', family: 'info' },
+    assigned: { label: 'To do', family: 'info' },
+    returned: { label: 'Returned for revision', family: 'attention' },
     fulfilled: { label: 'Fulfilled', family: 'positive' },
     // PayrollPeriod / PayrollRun lifecycle.
     open: { label: 'Open', family: 'info' },

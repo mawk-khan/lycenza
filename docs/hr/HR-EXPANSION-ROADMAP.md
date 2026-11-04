@@ -510,6 +510,12 @@ reservation.
 
 ### HR.13 — Staff tasks
 
+> **Status (2026-11-04): IMPLEMENTED FOR DEVELOPMENT.** D19: 18 IMP, 5 PART,
+> 2 ALT, 1 DEF (attachments, owner decision); D20-26 PART. See
+> `docs/modules/HR.md` "Staff tasks". Not built: attachments, numeric targets
+> and due times, academic references on templates, reminders, rates (HR.14 /
+> ADR 0040), exports (D-11), an API.
+
 1. **Prerequisites:** HR.1 (staff type), HR.3 (reporting line).
 2. **Scope:** D19 (all), D20-26.
 3. **Schema:** `workforce_task_categories`, `_templates`, `_assignments`,

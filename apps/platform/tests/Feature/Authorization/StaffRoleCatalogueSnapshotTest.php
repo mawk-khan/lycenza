@@ -65,7 +65,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'hr.employees.qualifications.view', 'hr.employees.view', 'hr.leave.configure', 'hr.leave.manage',
             'hr.leave.view', 'hr.positions.manage', 'hr.positions.view',
             'hr.separations.configure', 'hr.separations.manage', 'hr.separations.view', 'hr.staff_attendance.manage',
-            'hr.staff_attendance.view',
+            'hr.staff_attendance.view', 'hr.tasks.configure', 'hr.tasks.manage', 'hr.tasks.view',
         ],
         'hr_sensitive_records' => [
             'hr.employees.sensitive.manage', 'hr.employees.sensitive.view',
@@ -102,7 +102,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'hostel.directory.manage', 'hostel.directory.view', 'hostel.residency.manage',
             'hostel.residency.view', 'hr.employees.manage', 'hr.employees.personal.view',
             'hr.employees.view', 'hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage',
-            'hr.leave.view', 'hr.separations.approve', 'hr.separations.view', 'hr.staff_attendance.manage', 'hr.staff_attendance.view',
+            'hr.leave.view', 'hr.separations.approve', 'hr.separations.view', 'hr.staff_attendance.manage', 'hr.staff_attendance.view', 'hr.tasks.view',
             'inventory.directory.manage', 'inventory.directory.view', 'inventory.stock.manage',
             'inventory.stock.view', 'library.catalogue.manage', 'library.catalogue.view',
             'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage',
@@ -150,7 +150,8 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'hr.employees.view', 'hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage',
             'hr.leave.self', 'hr.leave.view', 'hr.separations.approve', 'hr.separations.configure', 'hr.separations.view',
             'hr.staff_attendance.manage', 'hr.staff_attendance.self',
-            'hr.staff_attendance.view', 'integrations.api_clients.manage', 'integrations.api_clients.view',
+            'hr.staff_attendance.view',
+            'hr.tasks.configure', 'hr.tasks.manage', 'hr.tasks.self', 'hr.tasks.team', 'hr.tasks.view', 'integrations.api_clients.manage', 'integrations.api_clients.view',
             'integrations.webhooks.manage', 'integrations.webhooks.view', 'inventory.directory.manage',
             'inventory.directory.view', 'inventory.stock.manage', 'inventory.stock.view',
             'library.catalogue.manage', 'library.catalogue.view', 'library.circulation.manage',
@@ -177,7 +178,11 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'visitor.directory.view', 'visitor.visits.manage', 'visitor.visits.view',
         ],
         'staff_self_service' => [
-            'communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
+            'communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'hr.tasks.self', 'payroll.payslips.self',
+        ],
+        // HR.13: the add-on holding exactly hr.tasks.team.
+        'team_task_manager' => [
+            'hr.tasks.team',
         ],
         'stores_officer' => [
             'communications.events.view', 'communications.inbox.view', 'inventory.directory.manage', 'inventory.directory.view', 'inventory.stock.manage',
@@ -228,7 +233,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         $expected = self::SNAPSHOT;
         ksort($expected);
         $this->assertSame($expected, $actual, 'The School staff catalogue changed: review the role/capability diff against ADR 0071 §4.');
-        $this->assertCount(18, $actual, 'Four original roles + the thirteen ADR 0071 §4 roles + the HR.11 line_manager add-on (OD-HR-5).');
+        $this->assertCount(19, $actual, 'Four original roles + the thirteen ADR 0071 §4 roles + the HR.11 line_manager add-on (OD-HR-5) + the HR.13 team_task_manager add-on.');
         $lineManager = Role::query()->where('key', 'line_manager')->sole();
         $this->assertSame(['school', true], [$lineManager->scope, $lineManager->is_system], 'line_manager');
 

@@ -68,6 +68,8 @@ class DatabaseRoleVerifier
         'reporting_relationships',
         // HR.12: separation cases, their timeline and clearance go only with their employment; requirements are retired.
         'employment_separation_cases', 'employment_separation_events', 'separation_clearance_items', 'separation_clearance_requirements',
+        // HR.13: staff tasks, their timeline and configuration are never deleted at runtime.
+        'workforce_task_categories', 'workforce_task_templates', 'workforce_task_template_versions', 'workforce_tasks', 'workforce_task_events', 'workforce_task_generation_runs',
         // HR.2A (S-16, OD-HR-13): ancillary profile records are archived, never deleted; HR document
         // records are archived; reference codes are retired. Only retention purges any of them.
         'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
@@ -496,6 +498,32 @@ class DatabaseRoleVerifier
         if (! DB::selectOne("select exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'employment_separation_cases_one_live') as x")->x) {
             $missingSeparation[] = 'employment_separation_cases_one_live';
         }
+        // HR.13: the staff task backstops, idempotent occurrences, forced RLS.
+        $missingTasks = [];
+        if (! DB::selectOne("select exists (select 1 from pg_trigger where tgrelid = 'public.workforce_tasks'::regclass and tgname = 'trg_workforce_tasks_guard' and tgenabled = 'O') as x")->x) {
+            $missingTasks[] = 'trg_workforce_tasks_guard';
+        }
+        if (! DB::selectOne("select exists (select 1 from pg_trigger where tgrelid = 'public.workforce_task_events'::regclass and tgname = 'trg_workforce_task_events_guard' and tgenabled = 'O') as x")->x) {
+            $missingTasks[] = 'trg_workforce_task_events_guard';
+        }
+        foreach (['workforce_tasks_one_occurrence'] as $index) {
+            if (! DB::selectOne("select exists (select 1 from pg_indexes where schemaname = 'public' and indexname = ?) as x", [$index])->x) {
+                $missingTasks[] = $index;
+            }
+        }
+        foreach (['workforce_tasks_path_check', 'workforce_tasks_outcome_check', 'workforce_task_template_versions_schedule_check'] as $constraint) {
+            if (! DB::selectOne('select exists (select 1 from pg_constraint where conname = ?) as x', [$constraint])->x) {
+                $missingTasks[] = $constraint;
+            }
+        }
+        foreach (['workforce_task_categories', 'workforce_task_templates', 'workforce_task_template_versions', 'workforce_tasks', 'workforce_task_events', 'workforce_task_generation_runs'] as $table) {
+            $forced = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (?)::regclass', ["public.{$table}"]);
+            if ($forced === null || ! $forced->x) {
+                $missingTasks[] = "{$table}:rls";
+            }
+        }
+        $results[] = CheckResult::of('hr_task_invariants', $missingTasks === [], $missingTasks === [] ? '' : count($missingTasks).' missing or disabled');
+
         $results[] = CheckResult::of('hr_separation_invariants', $missingSeparation === [], $missingSeparation === [] ? '' : count($missingSeparation).' missing or disabled');
 
         // HR.9: the leave policy backstops, forced RLS on the two new tables and their closed checks.

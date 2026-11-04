@@ -372,3 +372,26 @@ HR-owned shadow of any owner's data; treating a failed read as zero.
 **Consequences.** No migration. R-HR12-1 closed. Residual R-HR15-1: Identity
 grants are not locked by HR, so a role granted in the same instant a case
 completes can be missed (the case stays readable and the grant visible).
+
+## HR.13 amendment (2026-11-04): staff tasks
+
+**Owner decisions:** new keys `hr.tasks.view/.configure/.manage/.team/.self`
+and one add-on role `team_task_manager` (ADR 0071 §32); per-template
+self / reviewed completion; scheduled, calendar-neutral recurrence (today
+only, never a backlog); bounded remarks and feedback, no attachments.
+
+**Decision.** A new HR-owned sub-domain `App\Domain\WorkforceTasks` with six
+tenant tables (migration `2027_01_31_090000_create_workforce_tasks`). A task
+belongs to an EMPLOYMENT. Templates have immutable versions. One generator
+(`TaskGenerationService`) traverses the complete roster, matches HR.1A
+effective facts (`WorkforceAsOfReader::placementsOn`) and inserts
+idempotently. Manager authority is `hr.tasks.team` plus the CURRENT HR.3A
+line; administrators use `hr.tasks.manage`. HR gains `PositionReference`;
+Academic Structure gains `AcademicContextReference` (labels only).
+
+**Rejected:** a generic workflow engine; an EAV or expression-based rule
+engine; a work calendar inside tasks; backlog generation; ratings (OD-HR-7);
+attachments; extending `line_manager`.
+
+**Consequences.** Task history is HR evidence (goes with its employment);
+configuration is tenant-lifetime. Rollback refuses while tasks exist.

@@ -33,6 +33,7 @@ use App\Domain\TeachingAssignments\Application\TeachingAssignmentYearDateDepende
 use App\Domain\Timetable\Application\TimetableSeparationObligations;
 use App\Domain\Transport\Application\TransportSeparationObligations;
 use App\Domain\Transport\Application\TransportTransferBlocker;
+use App\Domain\WorkforceTasks\Application\TaskSeparationObligations;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
@@ -139,7 +140,7 @@ class AppServiceProvider extends ServiceProvider
         // Assignments (which depends on HR).
         $this->app->tag([EmploymentEndedTeachingOwnership::class], EmploymentEndParticipant::TAG);
         // HR.12: each owner answers what a separating employment still holds there (read only).
-        $this->app->tag([LeaveSeparationObligations::class, TimetableSeparationObligations::class, TransportSeparationObligations::class], SeparationObligationSource::TAG);
+        $this->app->tag([LeaveSeparationObligations::class, TimetableSeparationObligations::class, TransportSeparationObligations::class, TaskSeparationObligations::class], SeparationObligationSource::TAG);
 
         // ORG.7F-3 (ADR 0076 §47): the active source-Campus relationships that
         // block a Campus-scoped Student transfer. Registered here, not in

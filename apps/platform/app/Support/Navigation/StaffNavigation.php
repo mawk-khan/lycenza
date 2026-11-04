@@ -84,6 +84,7 @@ final class StaffNavigation
 
             // Own (self-service and teacher-owned) capabilities.
             new E('my-leave', 'my-work', 'My leave', 'app.my-leave.index', all: ['hr.leave.self']),
+            new E('my-tasks', 'my-work', 'My tasks', 'app.my-tasks.index', all: ['hr.tasks.self']),
             new E('my-staff-attendance', 'my-work', 'My staff attendance', 'app.my-staff-attendance.index', all: ['hr.staff_attendance.self']),
             new E('my-payslips', 'my-work', 'My payslips', 'app.my-payslips.index', all: ['payroll.payslips.self']),
             new E('my-curriculum-delivery', 'my-work', 'My curriculum delivery', 'app.my-curriculum-delivery.index', all: ['curriculum.delivery.teacher']),
@@ -154,6 +155,9 @@ final class StaffNavigation
             new E('leave-approvals', 'people', 'Leave approvals', 'app.leave.approvals', all: ['hr.leave.approve'], activeWhen: ['app.leave.approvals*']),
             // HR.12: separation cases (record, decide, finalize, clearance).
             new E('separations', 'people', 'Separations', 'app.hr.separations.index', all: ['hr.separations.view'], activeWhen: ['app.hr.separations.*']),
+            // HR.13: the Staff Task Monitor (administrators) and the team view (Team Task Managers).
+            new E('staff-tasks', 'people', 'Staff tasks', 'app.hr.tasks.index', any: ['hr.tasks.view', 'hr.tasks.manage'], activeWhen: ['app.hr.tasks.index', 'app.hr.tasks.catalogue', 'app.hr.tasks.show', 'app.hr.tasks.create', 'app.hr.tasks.assigned-by-me']),
+            new E('team-tasks', 'people', 'Team tasks', 'app.hr.tasks.team', all: ['hr.tasks.team'], activeWhen: ['app.hr.tasks.team']),
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),
 
             new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view', 'finance.payment_corrections.view']),

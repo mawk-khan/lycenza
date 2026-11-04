@@ -229,3 +229,11 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | R-HR10-1 | LOW | a backdated end may leave monthly credits for months after the last day | **detected** on the separation case (Leave obligation, ATTENTION); still corrected by an ordinary adjustment that names the credit | Leave (manual) |
 | R-HR12-3 | LOW | a separated person keeps School staff access until someone off-boards them; completion of the case is blocked meanwhile | by owner decision (flag, never automatic); HR.15E shows kept access as RETAINED, never clear | Identity (rule 92) |
 | R-HR15-1 | LOW | Identity grants are not locked by HR: a School role granted in the same instant a case completes can be missed | recorded; completion re-reads Identity inside its transaction, the case and the grant stay visible | Identity / HR.16 |
+
+## HR.13 residuals (2026-11-04)
+
+| Id | Severity | Finding | Disposition | Owner |
+|---|---|---|---|---|
+| R-HR13-1 | LOW | Task remarks and feedback are free text (bounded, escaped, with a fixed notice) -- a user could still type sensitive content | by owner decision; no attachments; never a rating (OD-HR-7) | HR |
+| R-HR13-2 | LOW | Recurrence ignores holidays (calendar-neutral); a task can fall on a School holiday | by owner decision until WorkSchedule (OD-HR-14) | HR.4+ |
+| R-HR13-3 | LOW | A missed generation day is not back-filled (today only) | by owner decision | HR |

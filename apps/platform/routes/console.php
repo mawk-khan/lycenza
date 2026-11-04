@@ -56,6 +56,14 @@ Schedule::command('platform:email-messages-redispatch')
 // withoutOverlapping() here is purely a coarser efficiency safeguard
 // against a slow run piling up a second overlapping one, not a
 // correctness requirement.
+// HR.13 (owner decision 2026-11-04): today's recurring staff tasks, per School
+// (each on its own School-local date; idempotent and resumable, so a rerun or a
+// second worker never duplicates). Hourly so every timezone's day is covered.
+Schedule::command('workforce-tasks:generate')
+    ->hourlyAt(15)
+    ->withoutOverlapping()
+    ->name('workforce-tasks-generate');
+
 Schedule::command('communications:publish-scheduled')
     ->everyMinute()
     ->withoutOverlapping()

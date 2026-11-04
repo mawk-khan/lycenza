@@ -43,6 +43,8 @@ class ProductionStaffRolesTest extends TestCase
         'hr_sensitive_records' => ['school.roles.grant.hr_sensitive'],
         // HR.11 (OD-HR-5): school_admin holds hr.leave.approve itself, so no grant right is used.
         'line_manager' => [],
+        // HR.13: school_admin holds hr.tasks.team itself, so no grant right is used.
+        'team_task_manager' => [],
         'payroll_officer' => ['school.roles.grant.payroll_sensitive'],
         'accountant' => [],
         'cashier' => [],
@@ -273,7 +275,7 @@ class ProductionStaffRolesTest extends TestCase
 
         $this->assertSame([
             'school_admin', 'principal', 'teacher', 'staff_self_service',
-            'hr_officer', 'hr_sensitive_records', 'line_manager', 'payroll_officer', 'accountant', 'cashier',
+            'hr_officer', 'hr_sensitive_records', 'line_manager', 'team_task_manager', 'payroll_officer', 'accountant', 'cashier',
             'librarian', 'transport_coordinator', 'hostel_warden', 'front_office', 'stores_officer', 'canteen_operator',
             'admissions_officer', 'communications_coordinator',
         ], array_column($catalog, 'key'), 'Stable functional order.');

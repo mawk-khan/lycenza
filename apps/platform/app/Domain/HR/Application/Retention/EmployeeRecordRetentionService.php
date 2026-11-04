@@ -170,7 +170,7 @@ final class EmployeeRecordRetentionService
         // HR.1A: an employment's terms and placement changes are its own history, removed with it.
         // HR.3A: so are its OWN reporting lines (subordinate side, cascade); a line naming it as
         // MANAGER is another Employee's history and still blocks.
-        return $this->references->first('employment_records', $schoolId, $employments, ['employee_assignments', 'employment_terms', 'employee_placement_changes', 'reporting_relationships.subordinate_employment_id', 'employment_separation_cases', ...$cleared])
+        return $this->references->first('employment_records', $schoolId, $employments, ['employee_assignments', 'employment_terms', 'employee_placement_changes', 'reporting_relationships.subordinate_employment_id', 'employment_separation_cases', 'workforce_tasks', ...$cleared])
             ?? $this->references->first('employee_assignments', $schoolId, $assignments, ['employee_placement_changes'])
             ?? $this->references->first('employee_personal_details', $schoolId, DB::table('employee_personal_details')->where('employee_id', $employeeId)->pluck('id')->all())
             ?? $this->references->first('employee_documents', $schoolId, DB::table('employee_documents')->where('employee_id', $employeeId)->pluck('id')->all())

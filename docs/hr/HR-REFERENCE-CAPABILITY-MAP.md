@@ -507,32 +507,32 @@ both mean HRX-L2.
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D19-01 | Task catalogue | none | MISS | H499–H506 | `workforce_task_templates` | WorkforceTasks | HR.13 | L | — |
-| D19-02 | Designation mapping | none | MISS | H191, H499 | template ↔ position | WorkforceTasks | HR.13 | L | — |
-| D19-03 | Teaching | none | MISS | H499 | via the staff-type classification (D1-11) | WorkforceTasks | HR.13 | L | — |
-| D19-04 | Non-Teaching | none | MISS | H499 | as D19-03 | WorkforceTasks | HR.13 | L | — |
-| D19-05 | Outsource | none | MISS | H499 | as D19-03 | WorkforceTasks | HR.13 | L | — |
-| D19-06 | Task category | none | MISS | H516 | School-configured categories | WorkforceTasks | HR.13 | L | — |
-| D19-07 | Academic task (class-section / subject-wise) | none | MISS | H501 | — | WorkforceTasks | HR.13 | L | — |
-| D19-08 | Admin task | none | MISS | H501 | — | WorkforceTasks | HR.13 | L | — |
-| D19-09 | General task | none | MISS | H501 | — | WorkforceTasks | HR.13 | L | — |
-| D19-10 | Daily frequency | none | MISS | H499 | closed frequency enum | WorkforceTasks | HR.13 | L | — |
-| D19-11 | Weekly frequency | none | MISS | H499 | — | WorkforceTasks | HR.13 | L | — |
-| D19-12 | Monthly frequency | none | MISS | H499 | — | WorkforceTasks | HR.13 | L | — |
-| D19-13 | Yearly frequency | none | MISS | H499 | — | WorkforceTasks | HR.13 | L | — |
-| D19-14 | Target / deadline | none | MISS | H504 | School-local date-time | WorkforceTasks | HR.13 | L | — |
-| D19-15 | Class / section relationship | none | MISS | H501 | Section reference through Academic Structure readers (composite key) | WorkforceTasks | HR.13 | M | — |
-| D19-16 | Subject relationship | none | MISS | H501 | SubjectOffering reference | WorkforceTasks | HR.13 | M | — |
-| D19-17 | Employee submission | none | MISS | H507 | — | WorkforceTasks | HR.13 | L | — |
-| D19-18 | Remarks | none | MISS | H507 | bounded text; no health or performance category (a guard test) | WorkforceTasks | HR.13 | M | — |
-| D19-19 | Attachments | none | MISS | H514 | Documents owner type `workforce_task` | WorkforceTasks + Documents | HR.13 | M | — |
-| D19-20 | Manager feedback | none | MISS | H507 | bounded text; never a rating (OD-HR-7) | WorkforceTasks | HR.13 | M | HR-L11 for ratings |
-| D19-21 | Direct manager assignment | none | MISS | H514 | uses the reporting line; assigns work, not data access | WorkforceTasks | HR.13 | M | — |
-| D19-22 | Assigned by me | none | MISS | H514 | — | WorkforceTasks | HR.13 | L | — |
-| D19-23 | Assigned to me | none | MISS | H514 | — | WorkforceTasks | HR.13 | L | — |
-| D19-24 | Status | none | MISS | H515 | closed status | WorkforceTasks | HR.13 | L | — |
-| D19-25 | Task reports | none | MISS | H510–H513 | operational counts only | WorkforceTasks | HR.13 / HR.14 | L | ADR 0040 for rates |
-| D19-26 | Task monitoring | none | MISS | H514–H517 | — | WorkforceTasks | HR.13 | L | — |
+| D19-01 | Task catalogue | `workforce_task_templates` + immutable versions (`TaskCatalogueService`) | IMP | H499–H506 | — | WorkforceTasks | — | L | — |
+| D19-02 | Designation mapping | template version `position_id` (HR Position, composite key) | IMP | H191, H499 | — | WorkforceTasks | — | L | — |
+| D19-03 | Teaching | version `applies_teaching` (HR.1A staff type on the occurrence date) | IMP | H499 | — | WorkforceTasks | — | L | — |
+| D19-04 | Non-Teaching | version `applies_non_teaching` | IMP | H499 | — | WorkforceTasks | — | L | — |
+| D19-05 | Outsource | version `applies_outsourced` | IMP | H499 | — | WorkforceTasks | — | L | — |
+| D19-06 | Task category | `workforce_task_categories` (School-configured, retired never deleted) | IMP | H516 | — | WorkforceTasks | — | L | — |
+| D19-07 | Academic task (class-section / subject-wise) | optional Section / SubjectOffering reference on a one-off task (labels only, no access) | PART | H501 | not on recurring templates | WorkforceTasks | later | L | — |
+| D19-08 | Admin task | a School-configured category (no closed "admin" type) | ALT | H501 | — | WorkforceTasks | — | L | — |
+| D19-09 | General task | a School-configured category (no closed "general" type) | ALT | H501 | — | WorkforceTasks | — | L | — |
+| D19-10 | Daily frequency | `daily` on chosen weekdays (calendar-neutral) | IMP | H499 | no holidays (WorkSchedule gated) | WorkforceTasks | — | L | — |
+| D19-11 | Weekly frequency | `weekly` on one weekday | IMP | H499 | — | WorkforceTasks | — | L | — |
+| D19-12 | Monthly frequency | `monthly` on day 1-28 or the last day | IMP | H499 | — | WorkforceTasks | — | L | — |
+| D19-13 | Yearly frequency | `yearly` on an existing date or the month's last day (never 29 Feb) | IMP | H499 | — | WorkforceTasks | — | L | — |
+| D19-14 | Target / deadline | available / due dates (School-local); due offset in calendar days | PART | H504 | no numeric targets or due times | WorkforceTasks | later | L | — |
+| D19-15 | Class / section relationship | `workforce_tasks.section_id` (composite key; Academic Structure labels) | PART | H501 | one-off tasks only | WorkforceTasks | later | M | — |
+| D19-16 | Subject relationship | `workforce_tasks.subject_offering_id` (composite key) | PART | H501 | one-off tasks only | WorkforceTasks | later | M | — |
+| D19-17 | Employee submission | `TaskWorkflowService::submit()` (assignee only) | IMP | H507 | — | WorkforceTasks | — | L | — |
+| D19-18 | Remarks | bounded remarks on the append-only timeline (500 chars) | IMP | H507 | — | WorkforceTasks | — | M | — |
+| D19-19 | Attachments | none (owner decision 2026-11-04: deferred) | DEF | H514 | a Documents owner type `workforce_task` + ADR 0012 review | WorkforceTasks + Documents | later | M | — |
+| D19-20 | Manager feedback | bounded reviewer feedback (complete / return once); never a rating | IMP | H507 | — | WorkforceTasks | — | M | HR-L11 for ratings |
+| D19-21 | Direct manager assignment | `hr.tasks.team` + current HR.3A line (`team_task_manager` add-on) | IMP | H514 | — | WorkforceTasks | — | M | — |
+| D19-22 | Assigned by me | Assigned by me (`TaskReadService::assignedByMe`) | IMP | H514 | — | WorkforceTasks | — | L | — |
+| D19-23 | Assigned to me | My tasks (`/app/my-tasks`, current employment) | IMP | H514 | — | WorkforceTasks | — | L | — |
+| D19-24 | Status | closed status (assigned, submitted, returned, completed, cancelled); overdue derived | IMP | H515 | — | WorkforceTasks | — | L | — |
+| D19-25 | Task reports | Staff Task Monitor counts by status + overdue (filters) | PART | H510–H513 | no rates or percentages (ADR 0040); HR.14 reports | WorkforceTasks | HR.14 | L | ADR 0040 for rates |
+| D19-26 | Task monitoring | Staff Task Monitor (`/app/hr/tasks`, server-filtered and paged) | IMP | H514–H517 | — | WorkforceTasks | — | L | — |
 
 ### D20 — HR reporting and MIS
 
@@ -563,7 +563,7 @@ both mean HRX-L2.
 | D20-23 | As-on-month leave | balance per year | PART | H563 | as-of statement (D11-16) | Leave | HR.14 | M | — |
 | D20-24 | Leave balances | ledger balance reads | IMP | H449 | — | Leave | — | — | — |
 | D20-25 | Leave analytics | none | GATE | H044–H047, H452 | — | Analytics | — | M | ADR 0040 |
-| D20-26 | Staff task reports | none | MISS | H510–H513 | D19-25 | WorkforceTasks | HR.13 | L | — |
+| D20-26 | Staff task reports | Staff Task Monitor counts (HR.13) | PART | H510–H513 | report registry and rates (ADR 0040) | WorkforceTasks | HR.14 | L | — |
 | D20-27 | Roaming staff | none (a punch at another branch's device) | GATE | H408, H542 | — | StaffAttendance | HR.8 | M | L2b |
 | D20-28 | GPS / self check-in report | none | GATE | H545 | — | StaffAttendance | HR.8 | H | L2b |
 | D20-29 | Staff-child report | none (the reference matches by mobile number) | XDOM | H518–H520, H541 | an explicit HR ↔ SIS contract (owner decision HR-050); **never PII matching** | SIS + HR | HR.15 | H | M-1, E47 |
@@ -584,17 +584,22 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) |
-|---|---|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | **134** (37.1 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | **22** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | **39** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | **7** |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) |
+|---|---|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | **152** (42.1 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | **28** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | **12** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | **20** |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | **49** |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+
+HR.13 (2026-11-04, owner decisions) moved all 26 D19 rows from MISS: 18 IMP,
+5 PART (D19-07, D19-14, D19-15, D19-16, D19-25), 2 ALT (D19-08, D19-09:
+School-configured categories) and 1 DEF (D19-19 attachments, owner decision);
+D20-26 MISS -> PART (counts only; rates wait for ADR 0040 / HR.14).
 
 HR.15 (2026-11-04) changed no row's status: HR.15A fixed the X-1 pickers (a
 finding, not a row); D20-30 stays XDOM (Inventory custody deferred by owner
@@ -672,8 +677,8 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
 | D16 Permissions | 0 | 0 | 0 | 0 | 0 | 7 | 4 | 0 | 11 |
 | D17 Special windows | 0 | 0 | 0 | 0 | 0 | 10 | 0 | 0 | 10 |
 | D18 Lifecycle | 15 | 3 | 1 | 1 | 0 | 1 | 0 | 0 | 21 |
-| D19 Tasks | 0 | 0 | 26 | 0 | 0 | 0 | 0 | 0 | 26 |
-| D20 Reports & MIS | 12 | 5 | 2 | 0 | 6 | 3 | 10 | 1 | 39 |
+| D19 Tasks | 18 | 5 | 0 | 2 | 0 | 1 | 0 | 0 | 26 |
+| D20 Reports & MIS | 12 | 6 | 1 | 0 | 6 | 3 | 10 | 1 | 39 |
 
 **Reading the totals:**
 - **Gates block 87 capabilities:**

@@ -189,6 +189,8 @@ class DemoDataBuilderTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher', 'examinations.marks.teacher',
             'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
+            // HR.13: own staff tasks (staff_self_service).
+            'hr.tasks.self',
             // ORG.9D-3R1: reading the School calendar (both roles carry it).
             'communications.events.view',
             // ORG.9D-1R1: reading own received Communications (both roles carry it).

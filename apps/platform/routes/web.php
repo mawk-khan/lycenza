@@ -104,6 +104,7 @@ use App\Http\Controllers\App\HR\HrEmployeeReferenceCodeController;
 use App\Http\Controllers\App\HR\HrEmploymentController;
 use App\Http\Controllers\App\HR\HrPositionController;
 use App\Http\Controllers\App\HR\HrSeparationController;
+use App\Http\Controllers\App\HR\HrTaskController;
 use App\Http\Controllers\App\IntegrationHubController;
 use App\Http\Controllers\App\Integrations\ApiClientController;
 use App\Http\Controllers\App\InventoryItemController;
@@ -1701,6 +1702,27 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/employees/import', [HrEmployeeImportController::class, 'create'])->middleware('capability:hr.employees.manage')->name('employees.import.create');
         Route::post('/employees/import', [HrEmployeeImportController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.import.store');
 
+        // HR.13 (owner decisions 2026-11-04): staff tasks. Whole-School keys; the
+        // manager path (hr.tasks.team) and "never one's own" are decided in the
+        // services. Static segments first.
+        Route::get('/tasks', [HrTaskController::class, 'monitor'])->middleware('capability:hr.tasks.view|hr.tasks.manage')->name('tasks.index');
+        Route::get('/tasks/assigned-by-me', [HrTaskController::class, 'assignedByMe'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->name('tasks.assigned-by-me');
+        Route::get('/tasks/team', [HrTaskController::class, 'team'])->middleware('capability:hr.tasks.team')->name('tasks.team');
+        Route::get('/tasks/assign', [HrTaskController::class, 'create'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->name('tasks.create');
+        Route::get('/tasks/assignees', [HrTaskController::class, 'assignees'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->name('tasks.assignees');
+        Route::post('/tasks', [HrTaskController::class, 'store'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->name('tasks.store');
+        Route::get('/tasks/catalogue', [HrTaskController::class, 'catalogue'])->middleware('capability:hr.tasks.configure')->name('tasks.catalogue');
+        Route::post('/tasks/catalogue/categories', [HrTaskController::class, 'storeCategory'])->middleware('capability:hr.tasks.configure')->name('tasks.categories.store');
+        Route::post('/tasks/catalogue/categories/{category}/retire', [HrTaskController::class, 'retireCategory'])->middleware('capability:hr.tasks.configure')->whereUuid('category')->name('tasks.categories.retire');
+        Route::post('/tasks/catalogue/templates', [HrTaskController::class, 'storeTemplate'])->middleware('capability:hr.tasks.configure')->name('tasks.templates.store');
+        Route::post('/tasks/catalogue/templates/{template}/versions', [HrTaskController::class, 'storeVersion'])->middleware('capability:hr.tasks.configure')->whereUuid('template')->name('tasks.templates.versions.store');
+        Route::post('/tasks/catalogue/templates/{template}/retire', [HrTaskController::class, 'retireTemplate'])->middleware('capability:hr.tasks.configure')->whereUuid('template')->name('tasks.templates.retire');
+        Route::post('/tasks/generate', [HrTaskController::class, 'generate'])->middleware('capability:hr.tasks.configure')->name('tasks.generate');
+        Route::get('/tasks/{task}', [HrTaskController::class, 'show'])->middleware('capability:hr.tasks.view|hr.tasks.manage|hr.tasks.team|hr.tasks.self')->whereUuid('task')->name('tasks.show');
+        Route::post('/tasks/{task}/review', [HrTaskController::class, 'review'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->whereUuid('task')->name('tasks.review');
+        Route::post('/tasks/{task}/cancel', [HrTaskController::class, 'cancel'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->whereUuid('task')->name('tasks.cancel');
+        Route::post('/tasks/{task}/reassign', [HrTaskController::class, 'reassign'])->middleware('capability:hr.tasks.manage|hr.tasks.team')->whereUuid('task')->name('tasks.reassign');
+
         // HR.12 (owner decisions HR-061, 2026-11-04): separation cases -- HR records,
         // another person decides, HR finalizes through EmploymentService::end().
         // Whole-School keys (never Campus-adopted). Static segments first.
@@ -2060,6 +2082,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // (read only), My Payslips. Each page needs its `.self` capability; the
     // services add ActingEmployee ownership. Fixed action paths (never a
     // constrained route parameter).
+    // HR.13: one's own staff tasks (the acting employee's current employment).
+    Route::prefix('app/my-tasks')->name('app.my-tasks.')->group(function (): void {
+        Route::get('/', [HrTaskController::class, 'mine'])->middleware('capability:hr.tasks.self')->name('index');
+        Route::post('/{task}/submit', [HrTaskController::class, 'submit'])->middleware('capability:hr.tasks.self')->whereUuid('task')->name('submit');
+    });
+
     Route::prefix('app/my-leave')->name('app.my-leave.')->group(function (): void {
         Route::get('/', [StaffSelfServiceController::class, 'leave'])->name('index');
         Route::post('/requests', [StaffSelfServiceController::class, 'submitLeave'])->name('requests.store');

@@ -131,6 +131,13 @@ final class UserReferenceCatalog
         'employment_separation_events' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'separation_clearance_requirements' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'retired_by_user_id' => self::RETAIN_REFERENCE],
         'separation_clearance_items' => ['cleared_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.13: staff task configuration authors, assigners, completers, cancellers, timeline actors, generation starters.
+        'workforce_task_categories' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        'workforce_task_templates' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'retired_by_user_id' => self::RETAIN_REFERENCE],
+        'workforce_task_template_versions' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        'workforce_tasks' => ['assigned_by_user_id' => self::RETAIN_REFERENCE, 'completed_by_user_id' => self::RETAIN_REFERENCE, 'cancelled_by_user_id' => self::RETAIN_REFERENCE],
+        'workforce_task_events' => ['actor_user_id' => self::RETAIN_REFERENCE],
+        'workforce_task_generation_runs' => ['started_by_user_id' => self::RETAIN_REFERENCE],
         'employment_terms' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'employees' => ['user_id' => self::ACTIVE_PURPOSE_BLOCKER],
         'enrollment_rollover_plans' => ['created_by_user_id' => self::RETAIN_REFERENCE],

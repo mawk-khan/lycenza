@@ -174,6 +174,6 @@ class LeaveArchitectureGuardTest extends TestCase
         $leave = DB::table('capabilities')->where('key', 'like', 'hr.leave.%')->orderBy('key')->pluck('key')->all();
         $this->assertSame(['hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage', 'hr.leave.self', 'hr.leave.view'], $leave, 'HRX.2 adds approve; HRX.4 adds self');
         $bundle = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', 'staff_self_service')->pluck('rc.capability_key')->sort()->values()->all();
-        $this->assertSame(['communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], $bundle, 'HRX.4: the self-service bundle, and nothing administrative (ORG.9D-3R1: plus reading the School calendar; ORG.9D-1R1: and own Communications)');
+        $this->assertSame(['communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'hr.tasks.self', 'payroll.payslips.self'], $bundle, 'HRX.4: the self-service bundle, and nothing administrative (ORG.9D-3R1: plus reading the School calendar; ORG.9D-1R1: and own Communications; HR.13: own staff tasks)');
     }
 }

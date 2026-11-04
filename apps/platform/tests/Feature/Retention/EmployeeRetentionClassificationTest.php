@@ -58,6 +58,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'reporting_relationships' => 'own lines: D9 evidence, cascade; as MANAGER of another Employee: retained, blocks (NO ACTION, as the 8A.5 pointer did)',
             // HR.12: the employment's separation cases (their timeline and clearance items cascade with them).
             'employment_separation_cases' => 'D9 evidence (8 y): separation history, goes with its employment (cascade)',
+            // HR.13: the employment's staff tasks (their timeline cascades with them).
+            'workforce_tasks' => 'D9 evidence (8 y): staff task history, goes with its employment (cascade)',
             'employee_compensation_assignments' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
             'employee_statutory_identifiers' => 'D9 evidence (8 y): Payroll, purged by Payroll first',
             'employee_tax_profile' => 'D9 evidence (8 y): Payroll, purged by Payroll first',

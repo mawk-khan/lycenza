@@ -82,7 +82,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
     private const SR3_CATALOGUE = [
         'accountant', 'admissions_officer', 'canteen_operator', 'cashier', 'communications_coordinator', 'front_office',
         'hostel_warden', 'hr_officer', 'hr_sensitive_records', 'librarian', 'line_manager', 'payroll_officer', 'principal',
-        'school_admin', 'staff_self_service', 'stores_officer', 'teacher', 'transport_coordinator',
+        'school_admin', 'staff_self_service', 'stores_officer', 'teacher', 'team_task_manager', 'transport_coordinator',
     ];
 
     /** Staff administration without any grant right. */
@@ -272,7 +272,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
         sort($code);
 
         $this->assertSame($database, $code, 'Every school capability is classified, and no unknown key is.');
-        $this->assertCount(201, $code, 'HR.12 hr.separations.view/.manage/.approve/.configure + 174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view + ORG.9D-1R1 communications.inbox.view + SIS.EXP-3 students.documents.view/.manage + SIS.EXP-4 students.certificates.issue + SIS.EXP-5 students.import + SIS 11.4 students.export/admissions.export + SIS 11.5 students.documents.verify, admissions.documents.view/.manage + SIS 11.7 students.houses.view/.manage/.assign + SIS 11.8 students.communities.view/.manage/.assign.');
+        $this->assertCount(206, $code, 'HR.13 hr.tasks.view/.configure/.manage/.team/.self + HR.12 hr.separations.view/.manage/.approve/.configure + 174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view + ORG.9D-1R1 communications.inbox.view + SIS.EXP-3 students.documents.view/.manage + SIS.EXP-4 students.certificates.issue + SIS.EXP-5 students.import + SIS 11.4 students.export/admissions.export + SIS 11.5 students.documents.verify, admissions.documents.view/.manage + SIS 11.7 students.houses.view/.manage/.assign + SIS 11.8 students.communities.view/.manage/.assign.');
 
         foreach (CapabilityClasses::CLASSES as $capability => $classes) {
             $this->assertNotEmpty($classes, $capability);
@@ -504,7 +504,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
     public function reactivation_decides_every_chosen_role_inside_its_transaction(): void
     {
         $school = $this->createSchool();
-        [$limited] = $this->issuer($school, $this->createFixtureRole([...self::ADMIN_WITHOUT_GRANT_RIGHTS, 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self', 'communications.events.view', 'communications.inbox.view']));
+        [$limited] = $this->issuer($school, $this->createFixtureRole([...self::ADMIN_WITHOUT_GRANT_RIGHTS, 'hr.leave.self', 'hr.staff_attendance.self', 'hr.tasks.self', 'payroll.payslips.self', 'communications.events.view', 'communications.inbox.view']));
         [, $target] = $this->staffMember($school, 'staff_self_service');
         $this->access()->suspend($school, $limited, $target->id);
         $hr = $this->systemRole(['hr.positions.view']);

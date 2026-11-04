@@ -1883,3 +1883,21 @@ class `hr`, whole-School, never Campus-adopted:
 - `hr.separations.approve` is registered as the decide key of the
   `employment_separation_cases` workflow (ApprovalWorkflowRegistry).
 - School capability count 197 → 201; total 222 → 226.
+
+## 32. HR.13 amendment — staff task keys and the Team Task Manager add-on (2026-11-04)
+
+A reviewed catalogue release adds five `school` capabilities and one role
+(18 → 19 roles):
+
+| Key | Class | Held by |
+|---|---|---|
+| `hr.tasks.view` | hr | school_admin, principal, hr_officer |
+| `hr.tasks.configure` | hr | school_admin, hr_officer |
+| `hr.tasks.manage` | hr | school_admin, hr_officer |
+| `hr.tasks.team` | hr | school_admin, `team_task_manager` |
+| `hr.tasks.self` | owned-scope | school_admin, staff_self_service |
+
+- `team_task_manager` is an add-on holding exactly `hr.tasks.team`, useless
+  without a current HR.3A reporting line; `line_manager` is unchanged.
+- No grant-right coverage changes: school_admin holds every key itself.
+- School capability count 201 → 206; total 226 → 231.
