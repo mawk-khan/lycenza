@@ -5,6 +5,7 @@ namespace Tests\Feature\Leave;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Models\School;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -15,7 +16,9 @@ use Tests\TestCase;
 /**
  * HR.11 (ADR 0065 §30.5): a line manager's decision racing a separation, in
  * two real OS processes with the contender OBSERVED blocked (COMMITTED
- * fixtures; the children run on the real clock, so the leave is far ahead):
+ * fixtures; the children run on the real clock, so the leave is far ahead;
+ * the end date is the School-local today -- a UTC date is the School's
+ * yesterday after its midnight, and the line would then already be over):
  * - the REQUESTER's employment ends before the leave: the approval waits on
  *   HR's FOR SHARE read, then refuses (the employment no longer covers it) --
  *   nothing consumed;
@@ -91,7 +94,7 @@ class LeaveDecisionSeparationConcurrencyTest extends TestCase
         $t = $this->team();
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->script('end-employment', $t['school']->id, $t['requester']['employment']->id, now()->toDateString(), $t['hr']->id),
+            $this->script('end-employment', $t['school']->id, $t['requester']['employment']->id, SchoolTimezone::today($t['school']), $t['hr']->id),
             $this->script('manager-approve', $t['school']->id, $t['request']->id, $t['manager']['user']->id),
         );
 
@@ -106,7 +109,7 @@ class LeaveDecisionSeparationConcurrencyTest extends TestCase
         $t = $this->team();
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->script('end-employment', $t['school']->id, $t['manager']['employment']->id, now()->toDateString(), $t['hr']->id),
+            $this->script('end-employment', $t['school']->id, $t['manager']['employment']->id, SchoolTimezone::today($t['school']), $t['hr']->id),
             $this->script('manager-approve', $t['school']->id, $t['request']->id, $t['manager']['user']->id),
         );
 
