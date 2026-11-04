@@ -11,7 +11,12 @@ namespace App\Domain\HR\Application\Separation;
  * - CLEAR: nothing outstanding;
  * - ATTENTION: worth reviewing, never blocking (no contract decides it);
  * - NOT_INTEGRATED: the owner records no staff obligation of this kind, so
- *   nothing can be verified -- shown, never blocking, never "clear".
+ *   nothing can be verified -- shown, never blocking, never "clear";
+ * - RETAINED (HR.15E): School access an authorized person recorded as KEPT on
+ *   purpose -- the roles are still active, so it is never shown as clear (or
+ *   as revoked); it does not block completion (HR.12 owner decision);
+ * - UNAVAILABLE (HR.15F): the owner could not be asked (its reader failed) --
+ *   unknown is never clear, so it BLOCKS completion until a retry succeeds.
  */
 final readonly class SeparationObligation
 {
@@ -22,6 +27,10 @@ final readonly class SeparationObligation
     public const string ATTENTION = 'attention';
 
     public const string NOT_INTEGRATED = 'not_integrated';
+
+    public const string RETAINED = 'retained';
+
+    public const string UNAVAILABLE = 'unavailable';
 
     public function __construct(
         public string $code,

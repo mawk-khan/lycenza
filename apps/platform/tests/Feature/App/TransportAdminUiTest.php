@@ -199,7 +199,7 @@ class TransportAdminUiTest extends TestCase
         $this->createMembership($user, $school);
         $this->activate($user, $school);
         $this->createTransportVehicle($school, ['registration_number' => 'FINDABLE-REG']);
-        $this->createEmployee($school, ['full_name' => 'Findable Driver']);
+        $this->createEmployedEmployee($school, ['full_name' => 'Findable Driver']);
 
         $this->get('/app/transport/operations/search/vehicles?q=FINDABLE')->assertForbidden();
         $this->get('/app/transport/operations/search/drivers?q=Findable')->assertForbidden();
@@ -211,7 +211,7 @@ class TransportAdminUiTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $this->activate($user, $school);
         $this->createTransportVehicle($school, ['registration_number' => 'FINDABLE-REG']);
-        $this->createEmployee($school, ['full_name' => 'Findable Driver']);
+        $this->createEmployedEmployee($school, ['full_name' => 'Findable Driver']);
 
         $this->get('/app/transport/operations/search/vehicles?q=FINDABLE')
             ->assertOk()

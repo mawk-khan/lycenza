@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\HR\Application\DutyCandidateReader;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Transport\Application\Exceptions\ConcurrentRouteAssignmentConflictException;
 use App\Domain\Transport\Application\Exceptions\DriverNotEligibleException;
@@ -114,20 +115,16 @@ class TransportOperationsController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('transport.vehicles.manage', $school);
 
-        $term = (string) $request->query('q', '');
+        // HR.15A (X-1): only staff who could be given a new duty today (HR's
+        // DutyCandidateReader); the save re-checks with EmploymentCoverage::hold().
+        $term = $request->query('q');
+        $drivers = app(DutyCandidateReader::class)->search($school, is_string($term) ? mb_substr($term, 0, 255) : null, 10, matchNumber: true);
 
-        $employees = Employee::query()
-            ->where('record_status', 'active')
-            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('employee_number', 'ilike', "%{$term}%")
-                ->orWhere('full_name', 'ilike', "%{$term}%")))
-            ->limit(10)
-            ->get();
-
-        return response()->json(['data' => $employees->map(fn (Employee $e) => [
-            'id' => $e->id,
-            'employeeNumber' => $e->employee_number,
-            'fullName' => $e->full_name,
-        ])->all()]);
+        return response()->json(['data' => array_map(fn (array $e) => [
+            'id' => $e['id'],
+            'employeeNumber' => $e['employeeNumber'],
+            'fullName' => $e['fullName'],
+        ], $drivers)]);
     }
 
     public function store(Request $request, TenantContext $context, string $transportRoute, TransportRouteAssignmentService $service): RedirectResponse

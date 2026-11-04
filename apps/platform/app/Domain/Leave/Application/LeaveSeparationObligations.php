@@ -18,6 +18,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class LeaveSeparationObligations implements SeparationObligationSource
 {
+    public function owner(): string
+    {
+        return 'Leave';
+    }
+
     public function obligations(School $school, SeparationSubject $subject): array
     {
         $pending = DB::table('leave_requests')->where('school_id', $school->id)

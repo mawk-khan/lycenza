@@ -181,7 +181,7 @@ class VisitorAdminUiTest extends TestCase
         $this->createMembership($user, $school);
         $this->activate($user, $school);
         $this->createVisitor($school, ['full_name' => 'Findable Visitor', 'phone' => '5551234567']);
-        $this->createEmployee($school, ['full_name' => 'Findable Host']);
+        $this->createEmployedEmployee($school, ['full_name' => 'Findable Host']);
 
         $this->get('/app/visitor/visits/search/visitors?q=Findable')->assertForbidden();
         $this->get('/app/visitor/visits/search/hosts?q=Findable')->assertForbidden();
@@ -193,7 +193,7 @@ class VisitorAdminUiTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $this->activate($user, $school);
         $this->createVisitor($school, ['full_name' => 'Findable Visitor']);
-        $this->createEmployee($school, ['full_name' => 'Findable Host']);
+        $this->createEmployedEmployee($school, ['full_name' => 'Findable Host']);
 
         $this->get('/app/visitor/visits/search/visitors?q=Findable')
             ->assertOk()

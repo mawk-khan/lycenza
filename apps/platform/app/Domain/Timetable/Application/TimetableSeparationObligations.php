@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class TimetableSeparationObligations implements SeparationObligationSource
 {
+    public function owner(): string
+    {
+        return 'Timetable';
+    }
+
     public function obligations(School $school, SeparationSubject $subject): array
     {
         $entries = DB::table('timetable_entries as t')

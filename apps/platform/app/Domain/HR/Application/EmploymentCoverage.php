@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -47,6 +48,28 @@ class EmploymentCoverage
     public const array CURRENT_STATUSES = ['active', 'notice_period'];
 
     public function __construct(private readonly TenantContext $context) {}
+
+    /**
+     * HR.15A: the same answer as hold(), as a constraint on an Employee query
+     * -- an active Employee with a planned or current employment covering
+     * $date -- for READ-ONLY candidate lists (DutyCandidateReader). It never
+     * replaces hold() at write time: a list can be stale, the locked re-read
+     * cannot.
+     *
+     * @param  Builder<Employee>  $employees
+     * @param  string  $date  School-local Y-m-d
+     * @return Builder<Employee>
+     */
+    public static function constrainToCoveredOn(Builder $employees, string $date): Builder
+    {
+        return $employees->where('employees.record_status', 'active')
+            ->whereExists(fn ($q) => $q->selectRaw('1')->from('employment_records as cov')
+                ->whereColumn('cov.employee_id', 'employees.id')
+                ->whereColumn('cov.school_id', 'employees.school_id')
+                ->where('cov.starts_on', '<=', $date)
+                ->where(fn ($e) => $e->whereNull('cov.ends_on')->orWhere('cov.ends_on', '>=', $date))
+                ->whereIn('cov.status', self::PLANNED_OR_CURRENT_STATUSES));
+    }
 
     /**
      * @param  string  $date  School-local Y-m-d

@@ -348,3 +348,28 @@ rollback refuses while any case exists. Residuals: R-HR12-1 (the X-1
 pickers still list separated Employees by name), R-HR12-2 (no
 domain-evidence clearance for Library, Inventory, Finance), R-HR10-1 is now
 **detected** (flagged on the case) but still corrected manually.
+
+## HR.15 amendment (2026-11-04): cross-domain workforce integration (partial)
+
+**Owner decisions (2026-11-04):** Inventory staff custody, Library staff
+borrowing and Finance staff dues are deferred (NOT_INTEGRATED, never clear);
+operational pickers require employment only.
+
+**Decision.**
+1. One HR reader, `DutyCandidateReader`, backs every operational staff
+   picker (Timetable teacher web/API, Transport driver, Visitor host), with
+   the predicate `EmploymentCoverage::constrainToCoveredOn()` -- the read form
+   of `hold()`. Consumers authorize their own capability; saves keep `hold()`.
+2. Separation obligations gain RETAINED (kept access: never clear, never
+   revoked, non-blocking) and UNAVAILABLE (an owner that failed: blocking).
+   Each owner is asked in its own savepoint; `SeparationObligationSource`
+   gains `owner()`.
+
+**Rejected:** a driver-qualification or teaching-assignment rule in the
+pickers (no owner contract); a person reference on Inventory movements; an
+HR-owned shadow of any owner's data; treating a failed read as zero.
+
+**Consequences.** No migration. R-HR12-1 closed. Residual R-HR15-1: Identity
+grants are not locked by HR, so a role granted in the same instant a case
+completes can be missed (the case stays readable and the grant visible).
+

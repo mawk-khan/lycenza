@@ -32,4 +32,6 @@ export const obligationStateLabels: Record<string, { label: string; glyph: strin
         clear: { label: 'Clear', glyph: '✓', tag: 'tag tag-positive' },
         attention: { label: 'Review', glyph: '●', tag: 'tag tag-info' },
         not_integrated: { label: 'Not checked here', glyph: '–', tag: 'tag tag-neutral' },
+        retained: { label: 'Kept on purpose', glyph: '●', tag: 'tag tag-info' },
+        unavailable: { label: 'Could not check', glyph: '!', tag: 'tag tag-attention' },
     };

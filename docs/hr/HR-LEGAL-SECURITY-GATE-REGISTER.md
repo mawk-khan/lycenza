@@ -224,7 +224,8 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 
 | Id | Severity | Finding | Disposition | Owner |
 |---|---|---|---|---|
-| R-HR12-1 | LOW | X-1 pickers (Timetable teacher search, Transport driver and Visitor host selects) still list separated, non-archived Employees by name; any choice is refused at write time | recorded | HR.15 |
-| R-HR12-2 | MEDIUM | Library, Inventory and Finance record no staff obligation, so their clearance is NOT_INTEGRATED (never shown as clear, never blocking) | recorded; needs an Inventory custody contract (D20-30), a staff borrowing decision and a Finance staff-dues decision | HR.15 / owners |
+| R-HR12-1 | LOW | X-1 pickers (Timetable teacher search, Transport driver and Visitor host selects) still list separated, non-archived Employees by name; any choice is refused at write time | **CLOSED (HR.15A, 2026-11-04)**: all four searches use `DutyCandidateReader` (the read form of `EmploymentCoverage::hold()`) | — |
+| R-HR12-2 | MEDIUM | Library, Inventory and Finance record no staff obligation, so their clearance is NOT_INTEGRATED (never shown as clear, never blocking) | **DEFERRED by owner decision (HR.15, 2026-11-04)**: custody, staff borrowing and staff dues are not built; Schools use an administrative clearance item | Inventory / Library / Finance owners |
 | R-HR10-1 | LOW | a backdated end may leave monthly credits for months after the last day | **detected** on the separation case (Leave obligation, ATTENTION); still corrected by an ordinary adjustment that names the credit | Leave (manual) |
-| R-HR12-3 | LOW | a separated person keeps School staff access until someone off-boards them; completion of the case is blocked meanwhile | by owner decision (flag, never automatic) | Identity (rule 92) |
+| R-HR12-3 | LOW | a separated person keeps School staff access until someone off-boards them; completion of the case is blocked meanwhile | by owner decision (flag, never automatic); HR.15E shows kept access as RETAINED, never clear | Identity (rule 92) |
+| R-HR15-1 | LOW | Identity grants are not locked by HR: a School role granted in the same instant a case completes can be missed | recorded; completion re-reads Identity inside its transaction, the case and the grant stay visible | Identity / HR.16 |

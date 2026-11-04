@@ -17,6 +17,9 @@ interface SeparationObligationSource
 {
     public const TAG = 'hr.separation_obligation_sources';
 
+    /** The owning module's name, shown when its answer is unavailable (HR.15F). */
+    public function owner(): string;
+
     /** @return list<SeparationObligation> */
     public function obligations(School $school, SeparationSubject $subject): array;
 }

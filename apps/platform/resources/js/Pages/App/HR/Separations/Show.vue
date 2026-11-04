@@ -17,7 +17,7 @@ interface Obligation {
     code: string;
     owner: string;
     label: string;
-    state: 'open' | 'clear' | 'attention' | 'not_integrated';
+    state: 'open' | 'clear' | 'attention' | 'not_integrated' | 'retained' | 'unavailable';
     count: number | null;
     detail: string | null;
 }
@@ -125,7 +125,9 @@ function clearItem(id: string): void {
     clearForm.post(`${base.value}/items/${id}/clear`, { preserveScroll: true });
 }
 
-const outstanding = computed(() => c.value.obligations.filter((o) => o.state === 'open'));
+const outstanding = computed(() =>
+    c.value.obligations.filter((o) => o.state === 'open' || o.state === 'unavailable'),
+);
 </script>
 
 <template>

@@ -596,6 +596,11 @@ come from the status column of §4, read mechanically: one row per
 | NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
 | **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
 
+HR.15 (2026-11-04) changed no row's status: HR.15A fixed the X-1 pickers (a
+finding, not a row); D20-30 stays XDOM (Inventory custody deferred by owner
+decision); D18-15 / D18-17 stay PART (Library, Inventory, Finance deferred);
+D20-18, D20-29, D20-31, D20-34, D20-37 and D1-35 stay with their owners and gates.
+
 HR.12 (2026-11-04, owner decisions HR-061) closed D18-10, D18-11, D18-12,
 D18-13 and D18-16 (IMP); D18-15 moved XDOM → PART (administrative clearance +
 owners' answers; Library, Inventory, Finance NOT_INTEGRATED); D18-17 stays PART

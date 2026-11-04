@@ -7,6 +7,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\HR\Application\DutyCandidateReader;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Timetable\Application\TimetableScheduleService;
@@ -322,19 +323,14 @@ class TimetableEntryController extends Controller
         $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
-        $query = Employee::query()->where('record_status', 'active')->orderBy('full_name');
+        // HR.15A (X-1): only staff who could be given a new duty today (HR's
+        // DutyCandidateReader); the save re-checks with EmploymentCoverage::hold().
+        $teachers = app(DutyCandidateReader::class)->search($school, $validated['q'] ?? null, 20);
 
-        if (isset($validated['q']) && trim($validated['q']) !== '') {
-            $term = '%'.$validated['q'].'%';
-            $query->where('full_name', 'ilike', $term);
-        }
-
-        $teachers = $query->limit(20)->get();
-
-        return response()->json(['data' => $teachers->map(fn (Employee $e) => [
-            'id' => $e->id,
-            'fullName' => $e->full_name,
-        ])->all()]);
+        return response()->json(['data' => array_map(fn (array $e) => [
+            'id' => $e['id'],
+            'fullName' => $e['fullName'],
+        ], $teachers)]);
     }
 
     public function searchRooms(Request $request, TenantContext $context, TimetableScheduleAccess $access): JsonResponse

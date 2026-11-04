@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\HR\Application\DutyCandidateReader;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Visitor\Application\Exceptions\ConcurrentCheckInConflictException;
 use App\Domain\Visitor\Application\Exceptions\HostEmployeeNotEligibleException;
@@ -106,18 +107,15 @@ class VisitorVisitController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCampusScope('visitor.visits.manage', $school);
 
-        $term = (string) $request->query('q', '');
+        // HR.15A (X-1): only staff who could host a visit today (HR's
+        // DutyCandidateReader); check-in re-checks with EmploymentCoverage::hold().
+        $term = $request->query('q');
+        $hosts = app(DutyCandidateReader::class)->search($school, is_string($term) ? mb_substr($term, 0, 255) : null, 10);
 
-        $employees = Employee::query()
-            ->where('record_status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('full_name', 'ilike', "%{$term}%"))
-            ->limit(10)
-            ->get();
-
-        return response()->json(['data' => $employees->map(fn (Employee $e) => [
-            'id' => $e->id,
-            'fullName' => $e->full_name,
-        ])->all()]);
+        return response()->json(['data' => array_map(fn (array $e) => [
+            'id' => $e['id'],
+            'fullName' => $e['fullName'],
+        ], $hosts)]);
     }
 
     public function store(Request $request, TenantContext $context, VisitorVisitService $service, VisitorVisitAccess $access): RedirectResponse

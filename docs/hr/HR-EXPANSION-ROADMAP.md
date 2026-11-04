@@ -550,6 +550,13 @@ reservation.
 
 ### HR.15 — Cross-ERP integrations
 
+> **Status (2026-11-04): PARTIAL.** HR.15A (one candidate reader for every
+> operational picker; X-1 / R-HR12-1 closed) and HR.15E/F (RETAINED and
+> UNAVAILABLE obligation states, contained owner reads) are built. HR.15B
+> Inventory custody, HR.15C Finance staff dues and HR.15D Library staff
+> borrowing are **deferred by owner decision** (NOT_INTEGRATED, never clear).
+> The other HR.15 items listed below are unchanged.
+
 1. **Prerequisites:** OD-HR-1 / OD-HR-2 (Payroll integrity); HR-050 /
    HR-055 (staff-child / fee) owner decisions; an Inventory custody
    contract; Timetable substitution.

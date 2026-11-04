@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class TransportSeparationObligations implements SeparationObligationSource
 {
+    public function owner(): string
+    {
+        return 'Transport';
+    }
+
     public function obligations(School $school, SeparationSubject $subject): array
     {
         $routes = DB::table('transport_route_assignments')->where('school_id', $school->id)

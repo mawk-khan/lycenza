@@ -4970,3 +4970,58 @@ still LIST separated Employees by name stay recorded for HR.15.
 - A v1 API for cases (web only in HR.12; the API end routes refuse every
   non-deceased end with `SEPARATION_USE_CASE`).
 - Backfill: none. Historical separations are not given fabricated cases.
+
+## Cross-domain workforce integration (HR.15, partial, 2026-11-04)
+
+Owner decisions (2026-11-04, ADR 0028 HR.15 amendment): Inventory staff
+custody, Library staff borrowing and Finance staff dues are **deferred** --
+their clearance stays NOT_INTEGRATED (never clear); operational pickers
+require **employment only**.
+
+### HR.15A -- one answer for every operational picker
+
+`App\Domain\HR\Application\DutyCandidateReader::search()` backs the Timetable
+teacher search (web and API), the Transport driver search and the Visitor host
+search. It lists only active Employees with a planned or current employment
+covering the School-local today, through `EmploymentCoverage::constrainToCoveredOn()`
+-- the same predicate `EmploymentCoverage::hold()` re-checks under lock at save
+(HR.12), so the picker and the write can never disagree (tested employee by
+employee). Directory fields only (id, name, employee number); one bounded,
+ordered query (at most 25); a LIKE wildcard in the search is literal.
+
+- Separated, future-joining, draft, identity-only and archived Employees are
+  never offered; notice-period Employees are, until finalized (HR.12); a
+  rehire is offered through its new employment.
+- Each consumer still authorizes its own capability first; the reader
+  authorizes nothing. No driver-qualification or teaching-assignment rule was
+  added (owner decision: employment only).
+- Every save keeps `EmploymentCoverage::hold()`; a stale list or a forged id
+  is refused.
+- Not built: future-dated duty validation -- Timetable entries are weekly
+  (no dates), and Transport assignments and Visitor check-ins start today.
+
+### HR.15E -- School access, told truthfully
+
+The separation case's `school_access` obligation now distinguishes CLEAR (no
+active School role: revoked or never held), OPEN (active roles, finalized),
+ATTENTION (active roles, not yet finalized) and **RETAINED** (an authorized
+person recorded the access as kept: the roles are still active, so it is never
+shown as clear or revoked; it does not block completion). Nothing is revoked
+automatically.
+
+### HR.15F -- unknown is never clear
+
+Every owner's answer runs in its own savepoint. A failing reader becomes an
+**UNAVAILABLE** obligation (no count) that blocks completion, is reported, and
+never poisons the completion transaction; a retry re-asks. Completion re-reads
+every owner inside its transaction, so access granted after the page loaded
+is caught.
+
+### Blocked (owner decisions, 2026-11-04)
+
+- HR.15B Inventory staff custody (D20-30): needs an Inventory-owned custody
+  model and an E21.2G O5 amendment.
+- HR.15C Finance staff dues and settlement: needs Payroll/Finance and legal
+  rules (ADR 0036, OD-HR-1/2).
+- HR.15D Library staff borrowing: needs a Library product decision.
+

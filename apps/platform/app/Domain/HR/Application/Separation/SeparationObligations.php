@@ -63,9 +63,12 @@ final class SeparationObligations
                 $finalized,
             );
 
-            $obligations = [$this->directReports($school, $subject), $this->schoolAccess($school, $subject, $case->access_retained_at !== null)];
+            $obligations = [
+                ...$this->asked('HR', 'direct_reports', 'Direct reports', fn () => [$this->directReports($school, $subject)]),
+                ...$this->asked('Identity', self::SCHOOL_ACCESS, 'School staff access', fn () => [$this->schoolAccess($school, $subject, $case->access_retained_at !== null)]),
+            ];
             foreach ($this->sources as $source) {
-                array_push($obligations, ...$source->obligations($school, $subject));
+                array_push($obligations, ...$this->asked($source->owner(), strtolower($source->owner()).'_obligations', $source->owner().' obligations', fn () => $source->obligations($school, $subject)));
             }
             foreach (self::NOT_INTEGRATED as $code => [$owner, $label, $detail]) {
                 $obligations[] = new SeparationObligation($code, $owner, $label, SeparationObligation::NOT_INTEGRATED, null, $detail);
@@ -75,10 +78,36 @@ final class SeparationObligations
         });
     }
 
-    /** @param  list<SeparationObligation>  $obligations */
+    /**
+     * Blocking = real open work, or an owner that could not be asked: unknown
+     * is never clear (HR.15F, fail closed).
+     *
+     * @param  list<SeparationObligation>  $obligations
+     */
     public static function blocking(array $obligations): array
     {
-        return array_values(array_filter($obligations, fn (SeparationObligation $o) => $o->state === SeparationObligation::OPEN));
+        return array_values(array_filter($obligations, fn (SeparationObligation $o) => in_array($o->state, [SeparationObligation::OPEN, SeparationObligation::UNAVAILABLE], true)));
+    }
+
+    /**
+     * HR.15F: one owner's answer, contained. It runs in its own savepoint, so a
+     * failed read can never poison the caller's transaction (completion runs
+     * inside one); a failure becomes an UNAVAILABLE obligation that blocks
+     * completion and is reported, never a silent zero.
+     *
+     * @param  callable(): list<SeparationObligation>  $read
+     * @return list<SeparationObligation>
+     */
+    private function asked(string $owner, string $code, string $label, callable $read): array
+    {
+        try {
+            return DB::transaction(fn () => $read());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [new SeparationObligation($code, $owner, $label, SeparationObligation::UNAVAILABLE, null,
+                "{$owner} could not be checked just now, so this is not treated as clear. Reload to try again.")];
+        }
     }
 
     /**
@@ -96,8 +125,9 @@ final class SeparationObligations
                 $subject->userId === null ? 'No user account is linked to this employee.' : null);
         }
         if ($retained) {
-            return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', SeparationObligation::CLEAR, $grants,
-                'Kept deliberately: an authorized person recorded that this School access stays.');
+            // HR.15E: kept is not revoked -- the roles are still active.
+            return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', SeparationObligation::RETAINED, $grants,
+                'Kept on purpose: an authorized person recorded that this access stays. The roles are still active.');
         }
 
         return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access',
