@@ -168,4 +168,11 @@ if __name__ == "__main__":
         left = TOKEN_RE.findall(after)
         if after != before:
             open(path, "w", encoding="utf-8").write(after)
-        print(f"{path}: {'changed' if after != before else 'unchanged'}; palette left: {len(left)}")
+        # Two source hues can map to one token string: a `:class` object would
+        # then carry duplicate keys and silently drop one condition (DS-4g).
+        dupes = []
+        for m in re.finditer(r':class="\s*\{([^}]*)\}', after):
+            keys = re.findall(r"'([^']+)'\s*:", m.group(1))
+            dupes += sorted({k for k in keys if keys.count(k) > 1})
+        note = f"; DUPLICATE :class KEYS (fix by hand): {dupes}" if dupes else ""
+        print(f"{path}: {'changed' if after != before else 'unchanged'}; palette left: {len(left)}{note}")

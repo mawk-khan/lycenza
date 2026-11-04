@@ -67,20 +67,17 @@ function showMore() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <div class="flex items-center justify-between gap-4">
             <h1 class="text-xl font-semibold">Communication Hub</h1>
             <div class="flex gap-2">
                 <a
                     v-if="canAnnounce"
                     href="/app/communications/announcements/create"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600"
+                    class="btn btn-secondary text-ink-muted"
                     >+ Announcement</a
                 >
-                <a
-                    v-if="canSend"
-                    href="/app/communications/conversations"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+                <a v-if="canSend" href="/app/communications/conversations" class="btn btn-primary"
                     >+ New Message</a
                 >
             </div>
@@ -91,7 +88,7 @@ function showMore() {
                 v-model="searchInput"
                 type="text"
                 placeholder="Search communications…"
-                class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input"
             />
         </form>
 
@@ -108,31 +105,23 @@ function showMore() {
 
             <div>
                 <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
-                    <select
-                        v-model="typeFilter"
-                        class="rounded border border-slate-300 px-2 py-1"
-                        @change="applyFilters"
-                    >
+                    <select v-model="typeFilter" class="input w-auto" @change="applyFilters">
                         <option value="">All types</option>
                         <option value="conversation">Conversations</option>
                         <option value="announcement">Announcements</option>
                     </select>
-                    <select
-                        v-model="priorityFilter"
-                        class="rounded border border-slate-300 px-2 py-1"
-                        @change="applyFilters"
-                    >
+                    <select v-model="priorityFilter" class="input w-auto" @change="applyFilters">
                         <option value="">Any priority</option>
                         <option value="normal">Normal</option>
                         <option value="important">Important</option>
                         <option value="urgent">Urgent</option>
                         <option value="critical">Critical</option>
                     </select>
-                    <label class="flex items-center gap-1 text-slate-600">
+                    <label class="flex items-center gap-1 text-ink-muted">
                         <input
                             v-model="attachmentsOnly"
                             type="checkbox"
-                            class="rounded border-slate-300"
+                            class="input w-auto"
                             @change="applyFilters"
                         />
                         Has attachments
@@ -145,7 +134,7 @@ function showMore() {
                     v-if="items.length >= limit"
                     type="button"
                     :disabled="loadingMore"
-                    class="mt-4 w-full rounded border border-slate-200 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    class="mt-4 w-full rounded-xs border border-line py-1.5 text-xs text-ink-muted hover:bg-graphite-100 disabled:opacity-50"
                     @click="showMore"
                 >
                     Show more

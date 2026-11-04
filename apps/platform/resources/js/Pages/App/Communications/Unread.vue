@@ -29,8 +29,8 @@ function showMore() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications"
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications"
             >← Communication Hub</a
         >
         <h1 class="mt-1 text-xl font-semibold">Unread</h1>
@@ -53,7 +53,7 @@ function showMore() {
                     v-if="items.length >= limit"
                     type="button"
                     :disabled="loadingMore"
-                    class="mt-4 w-full rounded border border-slate-200 py-1.5 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    class="mt-4 w-full rounded-xs border border-line py-1.5 text-xs text-ink-muted hover:bg-graphite-100 disabled:opacity-50"
                     @click="showMore"
                 >
                     Show more

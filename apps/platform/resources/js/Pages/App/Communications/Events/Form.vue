@@ -57,12 +57,12 @@ function submit(): void {
 
 <template>
     <Head :title="mode === 'edit' ? 'Edit event' : 'New event'" />
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/communications/events">← Events</a>
         <h1 class="mt-2 text-xl font-semibold">
             {{ mode === 'edit' ? 'Edit event' : 'New event' }}
         </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Saved as a draft. It needs approval by someone else, and publishing only shows it on the
             calendar — no message is sent. An event is information only: it never closes the School,
             cancels classes or changes attendance.
@@ -73,14 +73,8 @@ function submit(): void {
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <label class="block text-sm"
                 >Title
-                <input
-                    v-model="title"
-                    type="text"
-                    required
-                    maxlength="200"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                />
-                <span v-if="errors.title" class="text-xs text-red-700" role="alert">{{
+                <input v-model="title" type="text" required maxlength="200" class="input mt-1" />
+                <span v-if="errors.title" class="text-xs text-danger" role="alert">{{
                     errors.title
                 }}</span>
             </label>
@@ -91,21 +85,16 @@ function submit(): void {
                     rows="5"
                     required
                     maxlength="10000"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
+                    class="input mt-1"
                 ></textarea>
-                <span v-if="errors.body" class="text-xs text-red-700" role="alert">{{
+                <span v-if="errors.body" class="text-xs text-danger" role="alert">{{
                     errors.body
                 }}</span>
             </label>
             <label class="block text-sm"
                 >Location (optional, shown as text; it does not book a room)
-                <input
-                    v-model="location"
-                    type="text"
-                    maxlength="200"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                />
-                <span v-if="errors.location" class="text-xs text-red-700" role="alert">{{
+                <input v-model="location" type="text" maxlength="200" class="input mt-1" />
+                <span v-if="errors.location" class="text-xs text-danger" role="alert">{{
                     errors.location
                 }}</span>
             </label>
@@ -123,14 +112,11 @@ function submit(): void {
                             v-model="startsOn"
                             type="date"
                             required
-                            class="mt-1 block rounded border border-slate-300 px-2 py-1"
+                            class="input mt-1 block w-auto"
                     /></label>
                     <label
                         >Last day
-                        <input
-                            v-model="endsOn"
-                            type="date"
-                            class="mt-1 block rounded border border-slate-300 px-2 py-1"
+                        <input v-model="endsOn" type="date" class="input mt-1 block w-auto"
                     /></label>
                 </div>
                 <div v-else class="mt-2 flex flex-wrap gap-3">
@@ -140,7 +126,7 @@ function submit(): void {
                             v-model="startsAt"
                             type="datetime-local"
                             required
-                            class="mt-1 block rounded border border-slate-300 px-2 py-1"
+                            class="input mt-1 block w-auto"
                     /></label>
                     <label
                         >Ends
@@ -148,14 +134,14 @@ function submit(): void {
                             v-model="endsAt"
                             type="datetime-local"
                             required
-                            class="mt-1 block rounded border border-slate-300 px-2 py-1"
+                            class="input mt-1 block w-auto"
                     /></label>
                 </div>
                 <p
                     v-for="f in ['date_mode', 'starts_on', 'ends_on', 'starts_at', 'ends_at']"
                     :key="f"
                 >
-                    <span v-if="errors[f]" class="text-xs text-red-700" role="alert">{{
+                    <span v-if="errors[f]" class="text-xs text-danger" role="alert">{{
                         errors[f]
                     }}</span>
                 </p>
@@ -163,10 +149,7 @@ function submit(): void {
 
             <label class="block text-sm"
                 >Who can see it
-                <select
-                    v-model="audienceType"
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1"
-                >
+                <select v-model="audienceType" class="input mt-1 block w-auto">
                     <option value="school_wide">Whole School</option>
                     <option value="staff">Staff only (current employees)</option>
                     <option value="grade">Guardians of a Grade</option>
@@ -175,37 +158,23 @@ function submit(): void {
             </label>
             <label v-if="audienceType === 'grade'" class="block text-sm"
                 >Grade
-                <select
-                    v-model="gradeLevelId"
-                    required
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1"
-                >
+                <select v-model="gradeLevelId" required class="input mt-1 block w-auto">
                     <option v-for="g in gradeLevels" :key="g.id" :value="g.id">{{ g.name }}</option>
                 </select>
             </label>
             <label v-if="audienceType === 'section'" class="block text-sm"
                 >Section
-                <select
-                    v-model="sectionId"
-                    required
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1"
-                >
+                <select v-model="sectionId" required class="input mt-1 block w-auto">
                     <option v-for="s in sections" :key="s.id" :value="s.id">{{ s.label }}</option>
                 </select>
             </label>
             <p v-for="f in ['audience_type', 'grade_level_id', 'section_id']" :key="f">
-                <span v-if="errors[f]" class="text-xs text-red-700" role="alert">{{
+                <span v-if="errors[f]" class="text-xs text-danger" role="alert">{{
                     errors[f]
                 }}</span>
             </p>
 
-            <button
-                type="submit"
-                :disabled="saving"
-                class="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
-            >
-                Save draft
-            </button>
+            <button type="submit" :disabled="saving" class="btn btn-primary">Save draft</button>
         </form>
     </main>
 </template>

@@ -144,61 +144,53 @@ function saveTiming() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications"
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications"
             >← Communication Hub</a
         >
         <h1 class="mt-2 text-xl font-semibold">Communication Channels</h1>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="mt-1 text-xs text-ink-muted">
             Controls which channels this school permits and whether members may opt out of optional
             communications on them.
         </p>
 
         <div class="mt-6 space-y-4">
-            <div class="rounded border border-slate-200 p-4">
+            <div class="rounded-xs border border-line p-4">
                 <h2 class="text-sm font-semibold">In-app</h2>
-                <p class="mt-1 text-xs text-slate-500">School communication record.</p>
+                <p class="mt-1 text-xs text-ink-muted">School communication record.</p>
                 <span
-                    class="mt-2 inline-block rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700"
+                    class="mt-2 inline-block rounded-xs bg-graphite-100 px-1.5 py-0.5 text-xs font-medium text-ink"
                 >
                     Enabled
                 </span>
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     Always on -- not configurable. Every member sees their school communications in
                     the Communication Hub.
                 </p>
             </div>
 
-            <div class="rounded border border-slate-200 p-4">
+            <div class="rounded-xs border border-line p-4">
                 <div class="flex items-center justify-between">
                     <h2 class="text-sm font-semibold">Email</h2>
                     <span
                         v-if="!emailChannelEnabled"
-                        class="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700"
+                        class="rounded-xs bg-accent-100 px-1.5 py-0.5 text-xs font-medium text-ink"
                     >
                         Not available at this instance
                     </span>
                 </div>
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     This school-level policy only takes effect if email delivery is available at
                     all; it can never turn email on when it is globally disabled.
                 </p>
 
                 <div class="mt-3 space-y-2 text-sm">
                     <label class="flex items-center gap-2">
-                        <input
-                            v-model="optionalAllowed"
-                            type="checkbox"
-                            class="rounded border-slate-300"
-                        />
+                        <input v-model="optionalAllowed" type="checkbox" class="input w-auto" />
                         Optional communications may use email
                     </label>
                     <label class="flex items-center gap-2">
-                        <input
-                            v-model="requiredAllowed"
-                            type="checkbox"
-                            class="rounded border-slate-300"
-                        />
+                        <input v-model="requiredAllowed" type="checkbox" class="input w-auto" />
                         Required communications may use email
                     </label>
                     <label class="flex items-center gap-2">
@@ -206,7 +198,7 @@ function saveTiming() {
                             v-model="recipientCanOptOut"
                             type="checkbox"
                             :disabled="!optionalAllowed"
-                            class="rounded border-slate-300"
+                            class="input w-auto"
                         />
                         Members may opt out of optional email
                     </label>
@@ -214,18 +206,13 @@ function saveTiming() {
             </div>
         </div>
 
-        <button
-            type="button"
-            :disabled="saving"
-            class="mt-6 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-            @click="save"
-        >
+        <button type="button" :disabled="saving" class="btn btn-primary mt-6" @click="save">
             Save Channel Settings
         </button>
 
-        <div class="mt-10 rounded border border-slate-200 p-4">
+        <div class="mt-10 rounded-xs border border-line p-4">
             <h2 class="text-sm font-semibold">Email delivery timing</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <p class="mt-1 text-xs text-ink-muted">
                 Delays EMAIL transport during a daily quiet window. The in-app Communication Hub
                 record is never delayed -- this only affects when email is sent. Required and
                 Critical communications are still delayed like any other -- quiet hours are not
@@ -234,11 +221,7 @@ function saveTiming() {
             </p>
 
             <label class="mt-3 flex items-center gap-2 text-sm">
-                <input
-                    v-model="quietHoursEnabled"
-                    type="checkbox"
-                    class="rounded border-slate-300"
-                />
+                <input v-model="quietHoursEnabled" type="checkbox" class="input w-auto" />
                 Enabled
             </label>
 
@@ -249,7 +232,7 @@ function saveTiming() {
                         v-model="quietHoursStart"
                         type="time"
                         :disabled="!quietHoursEnabled"
-                        class="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+                        class="input disabled:opacity-50 w-auto"
                     />
                 </label>
                 <label class="flex items-center gap-2">
@@ -258,25 +241,21 @@ function saveTiming() {
                         v-model="quietHoursEnd"
                         type="time"
                         :disabled="!quietHoursEnabled"
-                        class="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+                        class="input disabled:opacity-50 w-auto"
                     />
                 </label>
             </div>
-            <p class="mt-2 text-xs text-slate-400">
+            <p class="mt-2 text-xs text-ink-muted">
                 Times are in this school's timezone ({{ schoolTimezone }}). A window that crosses
                 midnight (e.g. 8:00 PM to 7:00 AM) is supported.
             </p>
 
-            <div class="mt-4 border-t border-slate-100 pt-3">
+            <div class="mt-4 border-t border-line pt-3">
                 <label class="flex items-center gap-2 text-sm">
-                    <input
-                        v-model="emergencyBypassAllowed"
-                        type="checkbox"
-                        class="rounded border-slate-300"
-                    />
+                    <input v-model="emergencyBypassAllowed" type="checkbox" class="input w-auto" />
                     Emergency bypass
                 </label>
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     Allows an explicitly authorized, explicitly declared Emergency communication to
                     bypass Email quiet hours on this channel. Off by default. Standard
                     communications -- including Required and Critical ones -- are never affected by
@@ -284,21 +263,21 @@ function saveTiming() {
                 </p>
             </div>
 
-            <p v-if="timingError" class="mt-2 text-xs text-red-600">{{ timingError }}</p>
+            <p v-if="timingError" class="mt-2 text-xs text-danger">{{ timingError }}</p>
 
             <button
                 type="button"
                 :disabled="savingTiming"
-                class="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary mt-4"
                 @click="saveTiming"
             >
                 Save Timing Settings
             </button>
         </div>
 
-        <div class="mt-10 rounded border border-slate-200 p-4">
+        <div class="mt-10 rounded-xs border border-line p-4">
             <h2 class="text-sm font-semibold">Approval workflow</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <p class="mt-1 text-xs text-ink-muted">
                 When enabled, a matching announcement must be approved by an authorized reviewer
                 before it can be published or scheduled. Off by default -- existing behavior is
                 unchanged until explicitly enabled below. Emergency communications never enter this
@@ -310,7 +289,7 @@ function saveTiming() {
                     <input
                         v-model="requireSchoolWideApproval"
                         type="checkbox"
-                        class="rounded border-slate-300"
+                        class="input w-auto"
                     />
                     Require approval for school-wide and staff-only announcements
                 </label>
@@ -318,7 +297,7 @@ function saveTiming() {
                     <input
                         v-model="requireRequiredCommunicationApproval"
                         type="checkbox"
-                        class="rounded border-slate-300"
+                        class="input w-auto"
                     />
                     Require approval for communications marked Required
                 </label>
@@ -326,7 +305,7 @@ function saveTiming() {
                     <input
                         v-model="requireNonPrivilegedSenderApproval"
                         type="checkbox"
-                        class="rounded border-slate-300"
+                        class="input w-auto"
                     />
                     Require approval when the sender does not have Communication management access
                 </label>
@@ -335,16 +314,16 @@ function saveTiming() {
             <button
                 type="button"
                 :disabled="savingApproval"
-                class="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary mt-4"
                 @click="saveApprovalPolicy"
             >
                 Save Approval Settings
             </button>
         </div>
 
-        <div class="mt-10 rounded border border-slate-200 p-4">
+        <div class="mt-10 rounded-xs border border-line p-4">
             <h2 class="text-sm font-semibold">Private conversations</h2>
-            <p class="mt-1 text-xs text-slate-400">
+            <p class="mt-1 text-xs text-ink-muted">
                 Controls whether staff with the relevant permission may start a private conversation
                 directly with a Guardian or Student who has a linked Lycenza account. A linked
                 account alone never grants this on its own -- the staff member must also hold the
@@ -356,11 +335,11 @@ function saveTiming() {
                     <input
                         v-model="allowGuardianConversations"
                         type="checkbox"
-                        class="rounded border-slate-300"
+                        class="input w-auto"
                     />
                     Guardian conversations
                 </label>
-                <p class="pl-6 text-xs text-slate-400">
+                <p class="pl-6 text-xs text-ink-muted">
                     Allowed by default. Turning this off prevents every staff member from starting a
                     new private conversation with a Guardian, regardless of their permissions.
                 </p>
@@ -369,11 +348,11 @@ function saveTiming() {
                     <input
                         v-model="allowStudentConversations"
                         type="checkbox"
-                        class="rounded border-slate-300"
+                        class="input w-auto"
                     />
                     Student conversations
                 </label>
-                <p class="pl-6 text-xs text-slate-400">
+                <p class="pl-6 text-xs text-ink-muted">
                     Disabled by default -- Student messaging is controlled and requires this school
                     to opt in explicitly, in addition to a staff member holding the separate
                     Student-conversation permission. No Student account currently existing at this
@@ -381,14 +360,14 @@ function saveTiming() {
                 </p>
             </div>
 
-            <p v-if="conversationPolicyError" class="mt-2 text-xs text-red-600">
+            <p v-if="conversationPolicyError" class="mt-2 text-xs text-danger">
                 {{ conversationPolicyError }}
             </p>
 
             <button
                 type="button"
                 :disabled="savingConversationPolicy"
-                class="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary mt-4"
                 @click="saveConversationPolicy"
             >
                 Save Private Conversation Settings

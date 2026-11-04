@@ -38,13 +38,13 @@ function act(path: string, confirmText?: string): void {
 
 <template>
     <Head :title="event.title" />
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/communications/events">← Events</a>
         <h1 class="mt-2 text-xl font-semibold" :class="event.cancelled ? 'line-through' : ''">
             {{ event.title }}
         </h1>
         <p class="mt-1 text-sm">
-            <span class="rounded bg-slate-100 px-2 py-0.5 text-xs">{{
+            <span class="rounded-xs bg-graphite-200 px-2 py-0.5 text-xs">{{
                 EVENT_STATUS_LABELS[event.status] ?? event.status
             }}</span>
         </p>
@@ -55,20 +55,20 @@ function act(path: string, confirmText?: string): void {
         />
 
         <dl class="mt-4 grid grid-cols-3 gap-2 text-sm">
-            <dt class="text-slate-500">When</dt>
+            <dt class="text-ink-muted">When</dt>
             <dd class="col-span-2">{{ eventWhen(event) }} ({{ schoolTimezone }})</dd>
-            <dt class="text-slate-500">Where</dt>
+            <dt class="text-ink-muted">Where</dt>
             <dd class="col-span-2">{{ event.location ?? '—' }}</dd>
-            <dt class="text-slate-500">Who can see it</dt>
+            <dt class="text-ink-muted">Who can see it</dt>
             <dd class="col-span-2">{{ event.audienceLabel }}</dd>
-            <dt class="text-slate-500">Prepared by</dt>
+            <dt class="text-ink-muted">Prepared by</dt>
             <dd class="col-span-2">{{ event.createdByName ?? '—' }}</dd>
         </dl>
         <p class="mt-4 text-sm whitespace-pre-wrap">{{ event.body }}</p>
 
         <section
             v-if="latestApprovalRequest"
-            class="mt-6 rounded border border-slate-200 p-3 text-xs"
+            class="mt-6 rounded-xs border border-line p-3 text-xs"
             aria-label="Approval"
         >
             <p>
@@ -83,7 +83,7 @@ function act(path: string, confirmText?: string): void {
             <p v-if="latestApprovalRequest.decisionNote" class="mt-1">
                 {{ latestApprovalRequest.decisionNote }}
             </p>
-            <p v-if="event.status === 'approved' && !approvalCurrent" class="mt-1 text-red-700">
+            <p v-if="event.status === 'approved' && !approvalCurrent" class="mt-1 text-danger">
                 The approval no longer matches this event; submit it again.
             </p>
         </section>
@@ -91,14 +91,14 @@ function act(path: string, confirmText?: string): void {
         <div class="mt-6 flex flex-wrap gap-2">
             <a
                 v-if="can.edit"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                class="btn btn-secondary"
                 :href="`/app/communications/events/${event.id}/edit`"
                 >Edit</a
             >
             <button
                 v-if="can.submit"
                 type="button"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+                class="btn btn-primary"
                 @click="act('submit-approval')"
             >
                 Submit for approval
@@ -106,7 +106,7 @@ function act(path: string, confirmText?: string): void {
             <button
                 v-if="can.withdraw"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                class="btn btn-secondary"
                 @click="act('withdraw-approval')"
             >
                 Withdraw from approval
@@ -114,7 +114,7 @@ function act(path: string, confirmText?: string): void {
             <button
                 v-if="can.publish"
                 type="button"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+                class="btn btn-primary"
                 @click="act('publish')"
             >
                 Publish to the calendar
@@ -122,7 +122,7 @@ function act(path: string, confirmText?: string): void {
             <button
                 v-if="can.cancel"
                 type="button"
-                class="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700"
+                class="rounded-xs border border-danger/40 px-3 py-1.5 text-sm text-danger"
                 @click="
                     act(
                         'cancel',
@@ -136,7 +136,7 @@ function act(path: string, confirmText?: string): void {
             </button>
             <a
                 v-if="event.status === 'published' || event.status === 'cancelled'"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                class="btn btn-secondary"
                 :href="`/app/communications/events/create?from=${event.id}`"
                 >Create a corrected copy</a
             >

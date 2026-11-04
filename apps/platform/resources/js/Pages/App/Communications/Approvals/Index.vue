@@ -29,36 +29,36 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications"
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications"
             >← Communication Hub</a
         >
         <h1 class="mt-1 text-xl font-semibold">Approvals</h1>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="mt-1 text-xs text-ink-muted">
             Announcements awaiting review. Emergency communications never appear here -- they are
             governed by the separate Emergency capability and policy.
         </p>
 
         <div
             v-if="requests.length === 0"
-            class="mt-6 rounded border border-dashed border-slate-300 p-8 text-center"
+            class="mt-6 rounded-xs border border-dashed border-control-line p-8 text-center"
         >
-            <p class="text-sm text-slate-500">Nothing pending approval.</p>
+            <p class="text-sm text-ink-muted">Nothing pending approval.</p>
         </div>
 
-        <ul v-else class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul v-else class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="r in requests" :key="r.id" class="px-4 py-3">
                 <Link
                     class="text-sm font-medium hover:underline"
                     :href="`/app/communications/approvals/${r.id}`"
                     >{{ r.title }}</Link
                 >
-                <p class="mt-0.5 text-xs text-slate-500">
+                <p class="mt-0.5 text-xs text-ink-muted">
                     submitted by {{ r.requestedByName ?? 'Unknown' }} ·
                     {{ formatDateTime(r.requestedAt) }}
                 </p>
                 <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
-                    <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{{
+                    <span class="rounded-xs bg-graphite-200 px-1.5 py-0.5 text-ink-muted">{{
                         r.audienceType === 'school_wide'
                             ? 'School-wide'
                             : r.audienceType === 'staff'
@@ -71,23 +71,23 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                     }}</span>
                     <span
                         v-if="r.requirement === 'required'"
-                        class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700"
+                        class="rounded-xs bg-accent-100 px-1.5 py-0.5 text-accent-strong"
                         >required</span
                     >
                     <span
                         v-if="r.priority"
-                        class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600"
+                        class="rounded-xs bg-graphite-200 px-1.5 py-0.5 text-ink-muted"
                         >{{ r.priority }}</span
                     >
                     <span
                         v-for="c in r.channels"
                         :key="c"
-                        class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600"
+                        class="rounded-xs bg-graphite-200 px-1.5 py-0.5 text-ink-muted"
                         >{{ channelLabels[c] ?? c }}</span
                     >
                     <span
                         v-if="r.attachmentCount > 0"
-                        class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600"
+                        class="rounded-xs bg-graphite-200 px-1.5 py-0.5 text-ink-muted"
                         >{{ r.attachmentCount }} attachment(s)</span
                     >
                 </div>
@@ -96,7 +96,7 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
 
         <div
             v-if="meta.lastPage > 1"
-            class="mt-4 flex items-center justify-between text-xs text-slate-400"
+            class="mt-4 flex items-center justify-between text-xs text-ink-muted"
         >
             <Link
                 v-if="meta.currentPage > 1"

@@ -291,16 +291,16 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications/announcements"
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications/announcements"
             >← Announcements</a
         >
         <h1 class="mt-2 text-xl font-semibold">New Announcement</h1>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="mt-1 text-xs text-ink-muted">
             Saved as a draft first -- you'll see an audience preview before publishing or
             scheduling.
         </p>
-        <p v-if="template" class="mt-1 text-xs text-slate-400">
+        <p v-if="template" class="mt-1 text-xs text-ink-muted">
             Pre-filled from template. Editing here does not change the template.
         </p>
 
@@ -320,32 +320,18 @@ function submit() {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-xs font-medium text-slate-500">Title</label>
-                <input
-                    v-model="title"
-                    type="text"
-                    required
-                    maxlength="255"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                />
+                <label class="block text-xs font-medium text-ink-muted">Title</label>
+                <input v-model="title" type="text" required maxlength="255" class="input mt-1" />
             </div>
 
             <div>
-                <label class="block text-xs font-medium text-slate-500">Message</label>
-                <textarea
-                    v-model="body"
-                    rows="5"
-                    required
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                ></textarea>
+                <label class="block text-xs font-medium text-ink-muted">Message</label>
+                <textarea v-model="body" rows="5" required class="input mt-1"></textarea>
             </div>
 
             <div>
-                <label class="block text-xs font-medium text-slate-500">Priority</label>
-                <select
-                    v-model="priority"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <label class="block text-xs font-medium text-ink-muted">Priority</label>
+                <select v-model="priority" class="input mt-1 w-auto">
                     <option value="normal">Normal</option>
                     <option value="important">Important</option>
                     <option value="urgent">Urgent</option>
@@ -355,21 +341,21 @@ function submit() {
 
             <section
                 v-if="feeReminder"
-                class="rounded border border-slate-200 bg-slate-50 p-3 text-sm"
+                class="rounded-xs border border-line bg-graphite-100 p-3 text-sm"
                 aria-labelledby="fee-reminder-heading"
             >
                 <h2 id="fee-reminder-heading" class="font-medium">Fee reminder</h2>
                 <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    <dt class="text-slate-500">Who</dt>
+                    <dt class="text-ink-muted">Who</dt>
                     <dd>{{ feeReminder.labels.status }}</dd>
-                    <dt class="text-slate-500">Academic year</dt>
+                    <dt class="text-ink-muted">Academic year</dt>
                     <dd>{{ feeReminder.labels.academicYear }}</dd>
-                    <dt class="text-slate-500">Charge campus</dt>
+                    <dt class="text-ink-muted">Charge campus</dt>
                     <dd>{{ feeReminder.labels.campus }}</dd>
-                    <dt class="text-slate-500">Class</dt>
+                    <dt class="text-ink-muted">Class</dt>
                     <dd>{{ feeReminder.labels.class }}</dd>
                 </dl>
-                <p class="mt-2 text-xs text-slate-600">
+                <p class="mt-2 text-xs text-ink-muted">
                     Each current guardian with an account gets one email listing their own Students
                     in this selection and the amount each still owes, as of the moment it is sent.
                     Students without a guardian account are not emailed. The email subject never
@@ -377,17 +363,14 @@ function submit() {
                     else, and only you can send it after approval. Your message below is added as
                     the school's note (for example, how to pay).
                 </p>
-                <p v-if="!emailChannelEnabled" class="mt-2 text-xs text-red-700" role="alert">
+                <p v-if="!emailChannelEnabled" class="mt-2 text-xs text-danger" role="alert">
                     Email is not enabled for this school, so a fee reminder cannot be prepared.
                 </p>
             </section>
 
             <div v-if="!feeReminder">
-                <label class="block text-xs font-medium text-slate-500">Audience</label>
-                <select
-                    v-model="audienceType"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <label class="block text-xs font-medium text-ink-muted">Audience</label>
+                <select v-model="audienceType" class="input mt-1 w-auto">
                     <option value="school_wide">Entire School</option>
                     <option value="staff">Staff only (current employees)</option>
                     <option value="individual">Selected Members</option>
@@ -404,27 +387,23 @@ function submit() {
                         Subject Offering (Academic Cohort)
                     </option>
                 </select>
-                <p v-if="!currentAcademicYear" class="mt-1 text-xs text-slate-400">
+                <p v-if="!currentAcademicYear" class="mt-1 text-xs text-ink-muted">
                     Grade/Section/Subject Offering audiences are unavailable -- this school has no
                     active academic year set.
                 </p>
             </div>
 
-            <p v-if="audienceType === 'staff'" class="text-xs text-slate-500">
+            <p v-if="audienceType === 'staff'" class="text-xs text-ink-muted">
                 Everyone with a current employment record in HR that is linked to their account.
                 Staff without a linked account are not reached; check the audience preview count
                 before publishing.
             </p>
 
             <div v-if="audienceType === 'individual'">
-                <label class="block text-xs font-medium text-slate-500"
+                <label class="block text-xs font-medium text-ink-muted"
                     >Member user IDs (comma-separated)</label
                 >
-                <input
-                    v-model="memberIds"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                />
+                <input v-model="memberIds" type="text" class="input mt-1" />
             </div>
 
             <div
@@ -434,7 +413,7 @@ function submit() {
                     audienceType === 'guardians_of_students'
                 "
             >
-                <label class="block text-xs font-medium text-slate-500">
+                <label class="block text-xs font-medium text-ink-muted">
                     {{
                         audienceType === 'guardian'
                             ? 'Guardians'
@@ -445,7 +424,7 @@ function submit() {
                 </label>
                 <p
                     v-if="audienceType === 'guardians_of_students'"
-                    class="mt-1 text-xs text-slate-400"
+                    class="mt-1 text-xs text-ink-muted"
                 >
                     Only each Student's primary or legal Guardian is included. A Guardian shared by
                     multiple selected Students is targeted once.
@@ -454,12 +433,12 @@ function submit() {
                     <span
                         v-for="t in selectedDomainTargets"
                         :key="t.id"
-                        class="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                        class="flex items-center gap-1 rounded-xs bg-graphite-200 px-2 py-0.5 text-xs text-ink"
                     >
                         {{ t.label }}
                         <button
                             type="button"
-                            class="text-slate-400 hover:text-slate-700"
+                            class="text-ink-muted hover:text-ink"
                             :aria-label="`Remove ${t.label}`"
                             @click="removeDomainTarget(t.id)"
                         >
@@ -477,10 +456,10 @@ function submit() {
                                 ? 'Search guardians by name…'
                                 : 'Search students by name or student number…'
                         "
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="w-full rounded-xs border border-control-line px-2 py-1 text-sm"
                         :options="domainResults"
                         :option-key="(o) => o.id"
-                        option-class="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                        option-class="cursor-pointer px-2 py-1 hover:bg-graphite-100"
                         @input="searchDomainTargets"
                         @select="addDomainTarget"
                     >
@@ -499,7 +478,7 @@ function submit() {
                     currentAcademicYear
                 "
             >
-                <label class="block text-xs font-medium text-slate-500">
+                <label class="block text-xs font-medium text-ink-muted">
                     {{
                         audienceType === 'grade'
                             ? 'Grade'
@@ -508,7 +487,7 @@ function submit() {
                               : 'Subject Offering'
                     }}
                 </label>
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     Academic year: {{ currentAcademicYear.label }}.
                     <template v-if="audienceType === 'subject_offering'">
                         Recipients are the Students currently on this Subject Offering's roster for
@@ -527,12 +506,12 @@ function submit() {
 
                 <div v-if="selectedCohort" class="mt-2 flex items-center gap-1">
                     <span
-                        class="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                        class="flex items-center gap-1 rounded-xs bg-graphite-200 px-2 py-0.5 text-xs text-ink"
                     >
                         {{ selectedCohort.label }}
                         <button
                             type="button"
-                            class="text-slate-400 hover:text-slate-700"
+                            class="text-ink-muted hover:text-ink"
                             :aria-label="`Remove ${selectedCohort.label}`"
                             @click="selectedCohort = null"
                         >
@@ -552,10 +531,10 @@ function submit() {
                                   ? 'Search sections…'
                                   : 'Search subject offerings by subject name or code…'
                         "
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="w-full rounded-xs border border-control-line px-2 py-1 text-sm"
                         :options="cohortResults"
                         :option-key="(o) => o.id"
-                        option-class="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                        option-class="cursor-pointer px-2 py-1 hover:bg-graphite-100"
                         @focus="searchCohort"
                         @input="searchCohort"
                         @select="selectCohort"
@@ -566,13 +545,13 @@ function submit() {
                     </SearchCombobox>
                 </div>
 
-                <div class="mt-2 space-y-1 text-sm text-slate-600">
+                <div class="mt-2 space-y-1 text-sm text-ink-muted">
                     <label class="flex items-center gap-2">
                         <input
                             v-model="cohortRecipientKind"
                             type="radio"
                             value="student"
-                            class="border-slate-300"
+                            class="input w-auto"
                         />
                         Students
                     </label>
@@ -581,11 +560,11 @@ function submit() {
                             v-model="cohortRecipientKind"
                             type="radio"
                             value="guardian"
-                            class="border-slate-300"
+                            class="input w-auto"
                         />
                         Guardians
                     </label>
-                    <p v-if="cohortRecipientKind === 'guardian'" class="text-xs text-slate-400">
+                    <p v-if="cohortRecipientKind === 'guardian'" class="text-xs text-ink-muted">
                         Only each Student's primary or legal Guardian is included. A Guardian shared
                         by multiple Students in this cohort is targeted once.
                     </p>
@@ -593,24 +572,24 @@ function submit() {
             </div>
 
             <div v-if="!feeReminder">
-                <label class="block text-xs font-medium text-slate-500">Delivery</label>
+                <label class="block text-xs font-medium text-ink-muted">Delivery</label>
                 <div class="mt-1 space-y-1">
-                    <label class="flex items-center gap-2 text-sm text-slate-600">
-                        <input type="checkbox" checked disabled class="rounded border-slate-300" />
+                    <label class="flex items-center gap-2 text-sm text-ink-muted">
+                        <input type="checkbox" checked disabled class="input w-auto" />
                         In-app
                     </label>
                     <label
                         class="flex items-center gap-2 text-sm"
-                        :class="emailChannelEnabled ? 'text-slate-600' : 'text-slate-400'"
+                        :class="emailChannelEnabled ? 'text-ink-muted' : 'text-ink-muted'"
                     >
                         <input
                             v-model="emailSelected"
                             type="checkbox"
                             :disabled="!emailChannelEnabled"
-                            class="rounded border-slate-300"
+                            class="input w-auto"
                         />
                         Email
-                        <span v-if="!emailChannelEnabled" class="text-xs text-slate-400"
+                        <span v-if="!emailChannelEnabled" class="text-xs text-ink-muted"
                             >(not currently available for this school)</span
                         >
                     </label>
@@ -618,19 +597,19 @@ function submit() {
             </div>
 
             <div v-if="canMarkRequired && !feeReminder">
-                <label class="block text-xs font-medium text-slate-500">Delivery policy</label>
-                <div class="mt-1 space-y-1 text-sm text-slate-600">
+                <label class="block text-xs font-medium text-ink-muted">Delivery policy</label>
+                <div class="mt-1 space-y-1 text-sm text-ink-muted">
                     <label class="flex items-start gap-2">
                         <input
                             v-model="requirement"
                             type="radio"
                             value="optional"
                             :disabled="dispatchMode === 'emergency'"
-                            class="mt-0.5 border-slate-300"
+                            class="input mt-0.5 w-auto"
                         />
                         <span>
                             Standard
-                            <span class="block text-xs text-slate-400"
+                            <span class="block text-xs text-ink-muted"
                                 >Respects each recipient's optional-channel preferences.</span
                             >
                         </span>
@@ -641,18 +620,18 @@ function submit() {
                             type="radio"
                             value="required"
                             :disabled="dispatchMode === 'emergency'"
-                            class="mt-0.5 border-slate-300"
+                            class="input mt-0.5 w-auto"
                         />
                         <span>
                             Required communication
-                            <span class="block text-xs text-slate-400"
+                            <span class="block text-xs text-ink-muted"
                                 >May reach recipients on a channel their preference would otherwise
                                 suppress, where school policy still permits that channel for
                                 required communication.</span
                             >
                         </span>
                     </label>
-                    <p v-if="dispatchMode === 'emergency'" class="text-xs text-slate-400">
+                    <p v-if="dispatchMode === 'emergency'" class="text-xs text-ink-muted">
                         Locked to Required because this is an Emergency communication.
                     </p>
                 </div>
@@ -660,13 +639,13 @@ function submit() {
 
             <div
                 v-if="canDispatchEmergency && !feeReminder"
-                class="rounded border border-red-200 bg-red-50 p-3"
+                class="rounded-xs border border-danger/40 bg-danger-tint p-3"
             >
-                <label class="flex items-start gap-2 text-sm font-medium text-red-800">
+                <label class="flex items-start gap-2 text-sm font-medium text-danger">
                     <input
                         :checked="dispatchMode === 'emergency'"
                         type="checkbox"
-                        class="mt-0.5 rounded border-red-300"
+                        class="mt-0.5 rounded-xs border-danger/40"
                         @change="
                             dispatchMode = ($event.target as HTMLInputElement).checked
                                 ? 'emergency'
@@ -675,7 +654,7 @@ function submit() {
                     />
                     Emergency communication
                 </label>
-                <p class="mt-1 text-xs text-red-700">
+                <p class="mt-1 text-xs text-danger">
                     This will mark the announcement as an emergency communication and may bypass
                     configured quiet hours on channels where the school has explicitly enabled that
                     bypass. It will automatically become Required.
@@ -683,7 +662,7 @@ function submit() {
 
                 <div v-if="dispatchMode === 'emergency'" class="mt-3 space-y-3">
                     <div>
-                        <label class="block text-xs font-medium text-red-800"
+                        <label class="block text-xs font-medium text-danger"
                             >Internal justification</label
                         >
                         <textarea
@@ -692,15 +671,15 @@ function submit() {
                             maxlength="500"
                             required
                             placeholder="Short internal reason -- not necessarily shown to recipients."
-                            class="mt-1 w-full rounded border border-red-300 px-2 py-1 text-sm"
+                            class="mt-1 w-full rounded-xs border border-danger/40 px-2 py-1 text-sm"
                         ></textarea>
                     </div>
-                    <label class="flex items-start gap-2 text-xs text-red-800">
+                    <label class="flex items-start gap-2 text-xs text-danger">
                         <input
                             v-model="emergencyAcknowledged"
                             type="checkbox"
                             required
-                            class="mt-0.5 rounded border-red-300"
+                            class="mt-0.5 rounded-xs border-danger/40"
                         />
                         I understand this communication is intended for an emergency situation.
                     </label>
@@ -718,7 +697,7 @@ function submit() {
                         audienceType === 'subject_offering') &&
                         !selectedCohort)
                 "
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary"
             >
                 Save Draft
             </button>

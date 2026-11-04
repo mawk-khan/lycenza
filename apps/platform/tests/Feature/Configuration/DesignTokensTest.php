@@ -169,6 +169,9 @@ class DesignTokensTest extends TestCase
         'resources/js/Pages/App/Inventory', // DS-4f
         'resources/js/Pages/App/Canteen', // DS-4f
         'resources/js/Pages/App/Visitor', // DS-4f
+        'resources/js/Pages/App/Communications', // DS-4g
+        'resources/js/Components/App/Communications', // DS-4g
+        'resources/js/Components/SchoolEventList.vue', // DS-4g
     ];
 
     #[Test]
@@ -181,11 +184,18 @@ class DesignTokensTest extends TestCase
             $files = [...$files, ...(is_dir($full) ? iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($full, \FilesystemIterator::SKIP_DOTS))) : [new \SplFileInfo($full)])];
         }
         $vue = array_filter($files, fn (\SplFileInfo $f) => $f->getExtension() === 'vue');
-        $this->assertGreaterThan(210, count($vue), 'the migrated scope resolves to real files');
+        $this->assertGreaterThan(235, count($vue), 'the migrated scope resolves to real files');
         foreach ($vue as $file) {
             $code = preg_replace(['/<!--.*?-->/s', '/^\s*\/\/.*$/m'], '', (string) file_get_contents($file->getPathname()));
             $this->assertDoesNotMatchRegularExpression($palette, $code, $file->getPathname().' uses a raw palette class');
             $this->assertDoesNotMatchRegularExpression('/(?<![\w:-])rounded(?:-(?:sm|md|lg))?(?![\w-])/', $code, $file->getPathname().' uses a rounded corner (the design is square: rounded-xs)');
+            // DS-4g: two hues mapped to one token string must never leave a
+            // `:class` object with duplicate keys (a condition is silently lost).
+            preg_match_all('/:class="\s*\{([^}]*)\}/', $code, $objects);
+            foreach ($objects[1] as $object) {
+                preg_match_all("/'([^']+)'\s*:/", $object, $keys);
+                $this->assertSame(array_unique($keys[1]), $keys[1], $file->getPathname().' has duplicate :class keys');
+            }
         }
     }
 

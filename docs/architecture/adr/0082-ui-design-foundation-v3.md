@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a to DS-4f implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4g implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -382,3 +382,22 @@ recommended first domain (Students) was taken.
     the same mapping). The danger hue stays on actionable states only: an
     overdue loan, import rows in conflict or invalid, the destructive Write
     off. Visual check on 23 captured pages.
+11. **DS-4g: Communications (2026-11-04).** `Pages/App/Communications`,
+    `Components/App/Communications`, `Components/SchoolEventList.vue` -- 27
+    files on the codemod.
+    - **Codemod defect found and fixed:** two source hues (amber and orange)
+      mapped to the same token string inside one `:class` object, leaving
+      duplicate keys, so one condition was silently dropped. The codemod now
+      warns on duplicate keys, the migrated-pages guard refuses them, and a
+      scan of every earlier slice found none.
+    - **Hand edits, presentation only:** priority and announcement-status
+      badges use the status families (Important = info, Urgent = attention,
+      Critical = negative; Draft = neutral, Pending approval / Scheduled =
+      info, Approved / Published = positive, Rejected = negative, Cancelled =
+      attention); "Required" and a cancelled event are attention tags; a
+      cancelled Charge on the Charges list (missed in DS-4c) is an attention
+      tag.
+    - **Emergency keeps the danger hue** (the ⚠ Emergency label and the
+      emergency option): a safety signal, like the elevation banner -- it
+      joins OD-DS-4.
+    - Visual check on 17 captured pages.

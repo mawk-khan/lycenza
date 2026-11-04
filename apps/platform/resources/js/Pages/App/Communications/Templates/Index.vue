@@ -51,18 +51,15 @@ function statusHref(status: string | null): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <div class="flex items-center justify-between">
             <div>
-                <a class="text-xs text-slate-400 underline" href="/app/communications"
+                <a class="text-xs text-ink-muted underline" href="/app/communications"
                     >← Communication Hub</a
                 >
                 <h1 class="mt-1 text-xl font-semibold">Templates</h1>
             </div>
-            <Link
-                href="/app/communications/templates/create"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-            >
+            <Link href="/app/communications/templates/create" class="btn btn-primary">
                 + New Template
             </Link>
         </div>
@@ -77,11 +74,11 @@ function statusHref(status: string | null): string {
                     ]"
                     :key="tab.label"
                     :href="statusHref(tab.value)"
-                    class="rounded px-2 py-1"
+                    class="rounded-xs px-2 py-1"
                     :class="
                         (filters.status ?? null) === tab.value
-                            ? 'bg-slate-900 font-medium text-white'
-                            : 'text-slate-500 hover:bg-slate-100'
+                            ? 'bg-accent-strong font-medium text-white'
+                            : 'text-ink-muted hover:bg-graphite-200'
                     "
                 >
                     {{ tab.label }}
@@ -92,12 +89,9 @@ function statusHref(status: string | null): string {
                     v-model="search"
                     type="text"
                     placeholder="Search by name"
-                    class="rounded border border-slate-300 px-2 py-1 text-xs"
+                    class="input text-xs w-auto"
                 />
-                <button
-                    type="submit"
-                    class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600"
-                >
+                <button type="submit" class="btn btn-secondary text-xs text-ink-muted">
                     Search
                 </button>
             </form>
@@ -105,31 +99,31 @@ function statusHref(status: string | null): string {
 
         <div
             v-if="templates.data.length === 0"
-            class="mt-6 rounded border border-dashed border-slate-300 p-8 text-center"
+            class="mt-6 rounded-xs border border-dashed border-control-line p-8 text-center"
         >
-            <p class="text-sm text-slate-500">No templates yet.</p>
-            <p class="mt-1 text-xs text-slate-400">Start one with "New Template" above.</p>
+            <p class="text-sm text-ink-muted">No templates yet.</p>
+            <p class="mt-1 text-xs text-ink-muted">Start one with "New Template" above.</p>
         </div>
 
-        <ul v-else class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul v-else class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="template in templates.data" :key="template.id">
                 <a
-                    class="flex items-center justify-between px-4 py-3 hover:bg-slate-50"
+                    class="flex items-center justify-between px-4 py-3 hover:bg-graphite-100"
                     :href="`/app/communications/templates/${template.id}/edit`"
                 >
                     <div>
                         <span class="text-sm font-medium">{{ template.name }}</span>
-                        <p class="mt-0.5 text-xs text-slate-500">
+                        <p class="mt-0.5 text-xs text-ink-muted">
                             by {{ template.createdByName ?? 'Unknown' }} · updated
                             {{ formatDateTime(template.updatedAt) }}
                         </p>
                     </div>
                     <span
-                        class="rounded px-1.5 py-0.5 text-xs font-medium"
+                        class="rounded-xs px-1.5 py-0.5 text-xs font-medium"
                         :class="
                             template.status === 'active'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-slate-100 text-slate-500'
+                                ? 'bg-graphite-100 text-ink'
+                                : 'bg-graphite-200 text-ink-muted'
                         "
                     >
                         {{ template.status }}
@@ -138,7 +132,7 @@ function statusHref(status: string | null): string {
             </li>
         </ul>
 
-        <p v-if="templates.last_page > 1" class="mt-4 text-xs text-slate-400">
+        <p v-if="templates.last_page > 1" class="mt-4 text-xs text-ink-muted">
             Page {{ templates.current_page }} of {{ templates.last_page }} ({{ templates.total }}
             total)
         </p>

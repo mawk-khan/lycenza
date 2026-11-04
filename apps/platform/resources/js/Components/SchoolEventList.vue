@@ -12,32 +12,28 @@ defineProps<{
 </script>
 
 <template>
-    <ul class="divide-y divide-slate-100 rounded border border-slate-200">
+    <ul class="divide-y divide-line rounded-xs border border-line">
         <li v-for="event in events" :key="event.id" class="p-4">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
                 <h3
                     class="font-medium"
-                    :class="event.cancelled ? 'text-slate-500 line-through' : ''"
+                    :class="event.cancelled ? 'text-ink-muted line-through' : ''"
                 >
                     <a v-if="linkTo" class="underline" :href="linkTo(event)">{{ event.title }}</a>
                     <template v-else>{{ event.title }}</template>
                 </h3>
-                <span
-                    v-if="event.cancelled"
-                    class="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700"
-                    >Cancelled</span
-                >
+                <span v-if="event.cancelled" class="tag tag-attention">Cancelled</span>
                 <span
                     v-else-if="showStatus"
-                    class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                    class="rounded-xs bg-graphite-200 px-2 py-0.5 text-xs text-ink"
                     >{{ EVENT_STATUS_LABELS[event.status] ?? event.status }}</span
                 >
             </div>
-            <p class="mt-1 text-sm text-slate-700">{{ eventWhen(event) }}</p>
-            <p class="text-xs text-slate-500">
+            <p class="mt-1 text-sm text-ink">{{ eventWhen(event) }}</p>
+            <p class="text-xs text-ink-muted">
                 <span v-if="event.location">{{ event.location }} · </span>{{ event.audienceLabel }}
             </p>
-            <p v-if="!linkTo" class="mt-2 text-sm whitespace-pre-wrap text-slate-700">
+            <p v-if="!linkTo" class="mt-2 text-sm whitespace-pre-wrap text-ink">
                 {{ event.body }}
             </p>
         </li>

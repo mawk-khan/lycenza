@@ -337,40 +337,41 @@ function formatFileSize(bytes: number): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a
             v-if="canViewHub"
-            class="text-xs text-slate-400 underline"
+            class="text-xs text-ink-muted underline"
             href="/app/communications/announcements"
             >← Announcements</a
         >
-        <a v-else class="text-xs text-slate-400 underline" href="/app/communications">← Inbox</a>
+        <a v-else class="text-xs text-ink-muted underline" href="/app/communications">← Inbox</a>
 
         <div class="mt-2 flex items-center gap-2">
             <h1 class="text-xl font-semibold">{{ announcement.title }}</h1>
             <span
-                class="rounded px-1.5 py-0.5 text-xs font-medium"
+                class="rounded-xs px-1.5 py-0.5 text-xs font-medium"
                 :class="{
-                    'bg-slate-100 text-slate-600': announcement.status === 'draft',
-                    'bg-blue-100 text-blue-700': announcement.status === 'pending_approval',
-                    'bg-teal-100 text-teal-700': announcement.status === 'approved',
-                    'bg-rose-100 text-rose-700': announcement.status === 'rejected',
-                    'bg-amber-100 text-amber-700': announcement.status === 'scheduled',
-                    'bg-emerald-100 text-emerald-700': announcement.status === 'published',
-                    'bg-red-100 text-red-600': announcement.status === 'cancelled',
+                    'tag-neutral': announcement.status === 'draft',
+                    'tag-info':
+                        announcement.status === 'pending_approval' ||
+                        announcement.status === 'scheduled',
+                    'tag-positive':
+                        announcement.status === 'approved' || announcement.status === 'published',
+                    'tag-negative': announcement.status === 'rejected',
+                    'tag-attention': announcement.status === 'cancelled',
                 }"
             >
                 {{ announcement.status.replace('_', ' ') }}
             </span>
             <span
                 v-if="announcement.dispatchMode === 'emergency'"
-                class="rounded bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white"
+                class="rounded-xs bg-danger px-1.5 py-0.5 text-xs font-semibold text-white"
             >
                 ⚠ emergency
             </span>
             <span
                 v-if="announcement.requirement === 'required'"
-                class="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700"
+                class="rounded-xs bg-accent-100 px-1.5 py-0.5 text-xs font-medium text-accent-strong"
             >
                 required
             </span>
@@ -378,7 +379,7 @@ function formatFileSize(bytes: number): string {
 
         <div
             v-if="announcement.emergencyJustification"
-            class="mt-3 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-xs text-danger"
         >
             <p class="font-medium">Internal justification (restricted)</p>
             <p class="mt-1 whitespace-pre-wrap">{{ announcement.emergencyJustification }}</p>
@@ -386,39 +387,42 @@ function formatFileSize(bytes: number): string {
 
         <div
             v-if="approvalRequirement?.required || latestApprovalRequest"
-            class="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs"
+            class="mt-3 rounded-xs border border-line bg-graphite-100 p-3 text-xs"
         >
-            <p v-if="announcement.status === 'pending_approval'" class="font-medium text-blue-700">
+            <p
+                v-if="announcement.status === 'pending_approval'"
+                class="font-medium text-accent-strong"
+            >
                 Pending approval
                 <template v-if="latestApprovalRequest">
                     · submitted by
                     {{ latestApprovalRequest.requestedByName ?? 'Unknown' }}</template
                 >
             </p>
-            <p v-else-if="announcement.status === 'approved'" class="font-medium text-teal-700">
+            <p v-else-if="announcement.status === 'approved'" class="font-medium text-ink">
                 Approved
                 <template v-if="latestApprovalRequest?.decidedByName">
                     · by {{ latestApprovalRequest.decidedByName }}</template
                 >
             </p>
-            <p v-else-if="announcement.status === 'rejected'" class="font-medium text-rose-700">
+            <p v-else-if="announcement.status === 'rejected'" class="font-medium text-danger">
                 Rejected
                 <template v-if="latestApprovalRequest?.decidedByName">
                     · by {{ latestApprovalRequest.decidedByName }}</template
                 >
             </p>
-            <p v-else class="font-medium text-slate-600">Approval required before publishing</p>
+            <p v-else class="font-medium text-ink-muted">Approval required before publishing</p>
 
             <p
                 v-if="announcement.status === 'rejected' && latestApprovalRequest?.decisionNote"
-                class="mt-1 text-rose-700"
+                class="mt-1 text-danger"
             >
                 Reason: {{ latestApprovalRequest.decisionNote }}
             </p>
 
             <p
                 v-if="approvalRequirement && approvalRequirement.reasons.length > 0"
-                class="mt-1 text-slate-500"
+                class="mt-1 text-ink-muted"
             >
                 Required because:
                 {{
@@ -431,7 +435,7 @@ function formatFileSize(bytes: number): string {
                     v-if="canSubmitForApproval"
                     type="button"
                     :disabled="submittingApproval"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary text-xs"
                     @click="submitForApproval"
                 >
                     Submit for approval
@@ -440,21 +444,21 @@ function formatFileSize(bytes: number): string {
                     v-if="canWithdrawApproval"
                     type="button"
                     :disabled="withdrawingApproval"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 disabled:opacity-50"
+                    class="btn btn-secondary text-xs text-ink-muted"
                     @click="withdrawApproval"
                 >
                     Withdraw and edit
                 </button>
                 <a
                     v-if="canApprove && latestApprovalRequest"
-                    class="rounded border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700"
+                    class="rounded-xs border border-accent-300 px-3 py-1.5 text-xs font-medium text-accent-strong"
                     :href="`/app/communications/approvals/${latestApprovalRequest.id}`"
                 >
                     Review approval
                 </a>
             </div>
         </div>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="mt-1 text-xs text-ink-muted">
             by {{ announcement.createdByName ?? 'Unknown' }}
             <template v-if="announcement.sourceTemplateId"> · from a template</template>
             <template v-if="announcement.status === 'scheduled' && announcement.scheduledAt">
@@ -467,11 +471,11 @@ function formatFileSize(bytes: number): string {
             >
         </p>
 
-        <div class="mt-4 rounded border border-slate-200 p-4">
+        <div class="mt-4 rounded-xs border border-line p-4">
             <p class="text-sm whitespace-pre-wrap">{{ announcement.body }}</p>
         </div>
 
-        <div class="mt-4 rounded border border-slate-200 p-4">
+        <div class="mt-4 rounded-xs border border-line p-4">
             <h2 class="text-sm font-semibold">Attachments</h2>
 
             <ul v-if="attachments.length > 0" class="mt-2 space-y-1.5">
@@ -482,43 +486,43 @@ function formatFileSize(bytes: number): string {
                 >
                     <a
                         :href="`/app/communications/attachments/${attachment.id}/download`"
-                        class="truncate text-slate-700 underline"
+                        class="truncate text-ink underline"
                     >
                         {{ attachment.displayName }}
                     </a>
-                    <span class="shrink-0 text-xs text-slate-400">{{
+                    <span class="shrink-0 text-xs text-ink-muted">{{
                         formatFileSize(attachment.sizeBytes)
                     }}</span>
                     <button
                         v-if="canManageAttachments"
                         type="button"
                         :disabled="removingAttachmentId === attachment.id"
-                        class="shrink-0 text-xs text-red-600 underline disabled:opacity-50"
+                        class="shrink-0 text-xs text-danger underline disabled:opacity-50"
                         @click="removeAttachment(attachment.id)"
                     >
                         Remove
                     </button>
                 </li>
             </ul>
-            <p v-else class="mt-1 text-xs text-slate-500">No attachments.</p>
+            <p v-else class="mt-1 text-xs text-ink-muted">No attachments.</p>
 
-            <div v-if="canManageAttachments" class="mt-3 border-t border-slate-100 pt-3">
+            <div v-if="canManageAttachments" class="mt-3 border-t border-line pt-3">
                 <input
                     ref="fileInput"
                     type="file"
                     :disabled="uploading"
-                    class="text-sm text-slate-600"
+                    class="text-sm text-ink-muted"
                     @change="uploadAttachment"
                 />
-                <p class="mt-1 text-xs text-slate-400">
+                <p class="mt-1 text-xs text-ink-muted">
                     PDF, JPEG, PNG, WEBP, Word, or Excel files only.
                 </p>
             </div>
         </div>
 
-        <div class="mt-4 rounded border border-slate-200 p-4">
+        <div class="mt-4 rounded-xs border border-line p-4">
             <h2 class="text-sm font-semibold">Delivery channels</h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 {{ requestedChannels.map((c) => channelLabels[c] ?? c).join(', ') }}
             </p>
         </div>
@@ -527,34 +531,34 @@ function formatFileSize(bytes: number): string {
 
         <section
             v-if="feeReminder"
-            class="mt-4 rounded border border-slate-200 p-4"
+            class="mt-4 rounded-xs border border-line p-4"
             aria-labelledby="fee-reminder-selection"
         >
             <h2 id="fee-reminder-selection" class="text-sm font-semibold">Fee reminder</h2>
             <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <dt class="text-slate-500">Who</dt>
+                <dt class="text-ink-muted">Who</dt>
                 <dd>{{ feeReminder.labels.status }}</dd>
-                <dt class="text-slate-500">Academic year</dt>
+                <dt class="text-ink-muted">Academic year</dt>
                 <dd>{{ feeReminder.labels.academicYear }}</dd>
-                <dt class="text-slate-500">Charge campus</dt>
+                <dt class="text-ink-muted">Charge campus</dt>
                 <dd>{{ feeReminder.labels.campus }}</dd>
-                <dt class="text-slate-500">Class</dt>
+                <dt class="text-ink-muted">Class</dt>
                 <dd>{{ feeReminder.labels.class }}</dd>
             </dl>
-            <p v-if="feeReminder.error" class="mt-2 text-xs text-red-700" role="alert">
+            <p v-if="feeReminder.error" class="mt-2 text-xs text-danger" role="alert">
                 {{ feeReminder.error }}
             </p>
             <dl
                 v-if="preview?.feeReminder"
-                class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-xs"
+                class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-line pt-2 text-xs"
             >
-                <dt class="text-slate-500">Students who owe fees</dt>
+                <dt class="text-ink-muted">Students who owe fees</dt>
                 <dd>{{ preview.feeReminder.students }}</dd>
-                <dt class="text-slate-500">Guardian accounts to email</dt>
+                <dt class="text-ink-muted">Guardian accounts to email</dt>
                 <dd>{{ preview.count }}</dd>
-                <dt class="text-slate-500">Students with no guardian account (not emailed)</dt>
+                <dt class="text-ink-muted">Students with no guardian account (not emailed)</dt>
                 <dd>{{ preview.feeReminder.studentsWithoutRecipient }}</dd>
-                <dt class="text-slate-500">Total outstanding</dt>
+                <dt class="text-ink-muted">Total outstanding</dt>
                 <dd>
                     {{
                         formatMoney(
@@ -563,12 +567,12 @@ function formatFileSize(bytes: number): string {
                         )
                     }}
                 </dd>
-                <dt class="text-slate-500">As of</dt>
+                <dt class="text-ink-muted">As of</dt>
                 <dd>{{ preview.feeReminder.asOf }} ({{ schoolTimezone }})</dd>
-                <dt class="text-slate-500">Channel</dt>
+                <dt class="text-ink-muted">Channel</dt>
                 <dd>Email only · approval required</dd>
             </dl>
-            <p class="mt-2 text-xs text-slate-500">
+            <p class="mt-2 text-xs text-ink-muted">
                 <template v-if="preview?.feeReminder"
                     >This preview is an estimate. Students, guardians and amounts are read again
                     when the reminder is sent; anyone who has paid by then is left out.</template
@@ -579,9 +583,9 @@ function formatFileSize(bytes: number): string {
             </p>
         </section>
 
-        <div v-if="preview" class="mt-4 rounded border border-slate-200 p-4">
+        <div v-if="preview" class="mt-4 rounded-xs border border-line p-4">
             <h2 class="text-sm font-semibold">Audience</h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 {{
                     {
                         school_wide: 'Entire School',
@@ -598,8 +602,8 @@ function formatFileSize(bytes: number): string {
                 }}
             </p>
 
-            <div v-if="preview.academicCohort" class="mt-2 rounded bg-slate-50 p-2 text-xs">
-                <p class="text-slate-600">
+            <div v-if="preview.academicCohort" class="mt-2 rounded-xs bg-graphite-100 p-2 text-xs">
+                <p class="text-ink-muted">
                     <span v-if="preview.academicCohort.cohortType === 'grade_level'">
                         Grade: {{ preview.academicCohort.gradeLevelName }}
                     </span>
@@ -619,7 +623,7 @@ function formatFileSize(bytes: number): string {
                             : 'Students'
                     }}
                 </p>
-                <p class="mt-1 text-slate-400">
+                <p class="mt-1 text-ink-muted">
                     Recipient counts reflect current enrollment and are re-resolved again at
                     publication{{
                         announcement.status === 'scheduled'
@@ -639,50 +643,50 @@ function formatFileSize(bytes: number): string {
                 <li
                     v-for="(count, label) in preview.categoryBreakdown"
                     :key="label"
-                    class="flex justify-between text-slate-500"
+                    class="flex justify-between text-ink-muted"
                 >
                     <span>{{ label }}</span>
                     <span>{{ count }}</span>
                 </li>
             </ul>
 
-            <div v-if="preview.email" class="mt-3 border-t border-slate-100 pt-2 text-xs">
-                <div class="flex justify-between text-slate-500">
+            <div v-if="preview.email" class="mt-3 border-t border-line pt-2 text-xs">
+                <div class="flex justify-between text-ink-muted">
                     <span>Email eligible</span>
                     <span>{{ preview.email.eligible }}</span>
                 </div>
-                <div v-if="preview.email.missing > 0" class="flex justify-between text-amber-600">
+                <div v-if="preview.email.missing > 0" class="flex justify-between text-ink">
                     <span>Missing email</span>
                     <span>{{ preview.email.missing }}</span>
                 </div>
                 <div
                     v-if="preview.email.policySuppressed > 0"
-                    class="flex justify-between text-slate-500"
+                    class="flex justify-between text-ink-muted"
                 >
                     <span>Optional email disabled (policy/preference)</span>
                     <span>{{ preview.email.policySuppressed }}</span>
                 </div>
             </div>
 
-            <div v-if="preview.domain" class="mt-3 border-t border-slate-100 pt-2 text-xs">
-                <p class="text-slate-400">
+            <div v-if="preview.domain" class="mt-3 border-t border-line pt-2 text-xs">
+                <p class="text-ink-muted">
                     Students/Guardians have a different reachability profile from School members --
                     they have no in-app inbox unless a portal account is linked.
                 </p>
-                <div class="mt-1 flex justify-between text-slate-500">
+                <div class="mt-1 flex justify-between text-ink-muted">
                     <span>In-app reachable</span>
                     <span>{{ preview.domain.inAppReachable }}</span>
                 </div>
                 <div
                     v-if="preview.domain.guardianCount > 0"
-                    class="flex justify-between text-slate-500"
+                    class="flex justify-between text-ink-muted"
                 >
                     <span>Guardian email eligible</span>
                     <span>{{ preview.domain.guardianEmailEligible }}</span>
                 </div>
                 <div
                     v-if="preview.domain.guardianEmailUnavailable > 0"
-                    class="flex justify-between text-amber-600"
+                    class="flex justify-between text-ink"
                 >
                     <span>Guardian email unavailable</span>
                     <span>{{ preview.domain.guardianEmailUnavailable }}</span>
@@ -692,20 +696,20 @@ function formatFileSize(bytes: number): string {
 
         <div
             v-else-if="announcement.recipientCount !== null"
-            class="mt-4 rounded border border-slate-200 p-4"
+            class="mt-4 rounded-xs border border-line p-4"
         >
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold">Delivered to</h2>
                 <div v-if="canViewAnalytics || canViewAudit" class="flex gap-3 text-xs">
                     <a
                         v-if="canViewAnalytics"
-                        class="text-slate-500 underline"
+                        class="text-ink-muted underline"
                         :href="`/app/communications/announcements/${announcement.id}/analytics`"
                         >View analytics</a
                     >
                     <a
                         v-if="canViewAudit"
-                        class="text-slate-500 underline"
+                        class="text-ink-muted underline"
                         :href="`/app/communications/announcements/${announcement.id}/audit`"
                         >View audit</a
                     >
@@ -715,28 +719,25 @@ function formatFileSize(bytes: number): string {
                 {{ announcement.recipientCount }} recipients (resolved at publish time)
             </p>
 
-            <div
-                v-if="channelDeliverySummary"
-                class="mt-3 space-y-3 border-t border-slate-100 pt-3"
-            >
+            <div v-if="channelDeliverySummary" class="mt-3 space-y-3 border-t border-line pt-3">
                 <div
                     v-for="(rows, channel) in channelDeliverySummary"
                     :key="channel"
                     class="text-xs"
                 >
-                    <p class="font-medium text-slate-600">
+                    <p class="font-medium text-ink-muted">
                         {{ channelLabels[channel] ?? channel }}
                     </p>
-                    <p v-if="channel === 'in_app'" class="mt-1 text-slate-500">
+                    <p v-if="channel === 'in_app'" class="mt-1 text-ink-muted">
                         {{ channelSucceeded(rows) }} / {{ channelTotal(rows) }}
                         <span v-if="channelSuppressed(rows) > 0" class="text-xs"
                             >({{ channelSuppressed(rows) }} ineligible)</span
                         >
                     </p>
-                    <ul v-else class="mt-1 space-y-0.5 text-slate-500">
+                    <ul v-else class="mt-1 space-y-0.5 text-ink-muted">
                         <li v-if="channelSucceeded(rows) > 0">{{ channelSucceeded(rows) }} sent</li>
                         <li v-if="channelPending(rows) > 0">{{ channelPending(rows) }} pending</li>
-                        <li v-if="channelFailed(rows) > 0" class="text-red-600">
+                        <li v-if="channelFailed(rows) > 0" class="text-danger">
                             {{ channelFailed(rows) }} failed
                         </li>
                         <li v-if="channelUnavailable(rows) > 0">
@@ -752,26 +753,22 @@ function formatFileSize(bytes: number): string {
 
         <div
             v-if="canSchedule && ['draft', 'approved', 'scheduled'].includes(announcement.status)"
-            class="mt-6 rounded border border-slate-200 p-4"
+            class="mt-6 rounded-xs border border-line p-4"
         >
             <h2 class="text-sm font-semibold">
                 {{ announcement.status === 'scheduled' ? 'Reschedule' : 'Schedule for later' }}
             </h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 Enter a time in the school's timezone ({{ schoolTimezone }}). The audience is
                 resolved again, authoritatively, when the schedule becomes due -- this preview is
                 only an estimate.
             </p>
             <div class="mt-2 flex items-center gap-2">
-                <input
-                    v-model="scheduledAtInput"
-                    type="datetime-local"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
-                />
+                <input v-model="scheduledAtInput" type="datetime-local" class="input w-auto" />
                 <button
                     type="button"
                     :disabled="scheduling"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 disabled:opacity-50"
+                    class="btn btn-secondary text-ink-muted"
                     @click="submitSchedule"
                 >
                     {{ announcement.status === 'scheduled' ? 'Update schedule' : 'Schedule' }}
@@ -785,14 +782,14 @@ function formatFileSize(bytes: number): string {
                 announcement.status === 'draft' &&
                 announcement.dispatchMode === 'emergency'
             "
-            class="mt-6 rounded border border-red-200 bg-red-50 p-3"
+            class="mt-6 rounded-xs border border-danger/40 bg-danger-tint p-3"
         >
-            <label class="flex items-start gap-2 text-xs text-red-800">
+            <label class="flex items-start gap-2 text-xs text-danger">
                 <input
                     v-model="publishAcknowledged"
                     type="checkbox"
                     required
-                    class="mt-0.5 rounded border-red-300"
+                    class="mt-0.5 rounded-xs border-danger/40"
                 />
                 I understand this will publish an Emergency communication and may bypass configured
                 quiet hours on channels the school has explicitly enabled that for.
@@ -820,7 +817,7 @@ function formatFileSize(bytes: number): string {
                     (announcement.dispatchMode === 'emergency' &&
                         (!publishAcknowledged || !hasMfaFactor))
                 "
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary"
                 @click="publish"
             >
                 Publish
@@ -829,7 +826,7 @@ function formatFileSize(bytes: number): string {
                 v-if="canCancel"
                 type="button"
                 :disabled="cancelling"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 disabled:opacity-50"
+                class="btn btn-secondary text-ink-muted"
                 @click="cancelAnnouncement"
             >
                 {{ announcement.status === 'scheduled' ? 'Cancel Schedule' : 'Cancel Draft' }}

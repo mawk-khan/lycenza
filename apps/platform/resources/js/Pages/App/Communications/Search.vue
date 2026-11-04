@@ -24,8 +24,8 @@ function submitSearch() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications"
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications"
             >← Communication Hub</a
         >
         <h1 class="mt-1 text-xl font-semibold">Search</h1>
@@ -35,7 +35,7 @@ function submitSearch() {
                 v-model="searchInput"
                 type="text"
                 placeholder="Search communications…"
-                class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input"
             />
         </form>
 
@@ -51,7 +51,7 @@ function submitSearch() {
             />
 
             <div>
-                <p v-if="!query" class="text-sm text-slate-500">
+                <p v-if="!query" class="text-sm text-ink-muted">
                     Enter a search term to find conversations, announcements, and templates.
                 </p>
                 <InboxItemList

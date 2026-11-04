@@ -303,19 +303,15 @@ function submitSearch() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <div class="flex items-center justify-between">
             <div>
-                <a class="text-xs text-slate-400 underline" href="/app/communications"
+                <a class="text-xs text-ink-muted underline" href="/app/communications"
                     >← Communication Hub</a
                 >
                 <h1 class="mt-1 text-xl font-semibold">Conversations</h1>
             </div>
-            <button
-                v-if="canSend"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-                @click="showCompose = !showCompose"
-            >
+            <button v-if="canSend" class="btn btn-primary" @click="showCompose = !showCompose">
                 + New Message
             </button>
         </div>
@@ -334,25 +330,18 @@ function submitSearch() {
             <div>
                 <form
                     v-if="showCompose"
-                    class="mb-6 space-y-3 rounded border border-slate-200 p-4"
+                    class="mb-6 space-y-3 rounded-xs border border-line p-4"
                     @submit.prevent="submitCompose"
                 >
                     <div>
-                        <label class="block text-xs font-medium text-slate-500"
+                        <label class="block text-xs font-medium text-ink-muted"
                             >Subject (optional)</label
                         >
-                        <input
-                            v-model="subject"
-                            type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                        />
+                        <input v-model="subject" type="text" class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-500">Type</label>
-                        <select
-                            v-model="threadType"
-                            class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                        >
+                        <label class="block text-xs font-medium text-ink-muted">Type</label>
+                        <select v-model="threadType" class="input mt-1 w-auto">
                             <option value="direct">Direct</option>
                             <option value="group">Group</option>
                         </select>
@@ -360,7 +349,7 @@ function submitSearch() {
                     <div>
                         <span
                             id="participants-label"
-                            class="block text-xs font-medium text-slate-500"
+                            class="block text-xs font-medium text-ink-muted"
                             >Participants</span
                         >
 
@@ -371,28 +360,30 @@ function submitSearch() {
                             <span
                                 v-for="p in selectedParticipants"
                                 :key="`${p.kind}-${p.id}`"
-                                class="flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                                class="flex max-w-full items-center gap-1 rounded-xs bg-graphite-200 px-2 py-0.5 text-xs text-ink"
                             >
                                 <span class="truncate">
                                     {{ p.label }}
                                     <span
-                                        class="ml-0.5 rounded px-1 py-px text-[10px] font-medium"
+                                        class="ml-0.5 rounded-xs px-1 py-px text-[10px] font-medium"
                                         :class="{
-                                            'bg-slate-200 text-slate-600': p.kind === 'membership',
-                                            'bg-sky-100 text-sky-700': p.kind === 'guardian',
-                                            'bg-emerald-100 text-emerald-700': p.kind === 'student',
+                                            'bg-graphite-200 text-ink-muted':
+                                                p.kind === 'membership',
+                                            'bg-accent-100 text-accent-strong':
+                                                p.kind === 'guardian',
+                                            'bg-graphite-100 text-ink': p.kind === 'student',
                                         }"
                                         >{{ categoryLabel(p.kind) }}</span
                                     >
                                     <span
                                         v-if="p.context"
-                                        class="block text-[10px] text-slate-400"
+                                        class="block text-[10px] text-ink-muted"
                                         >{{ p.context }}</span
                                     >
                                 </span>
                                 <button
                                     type="button"
-                                    class="shrink-0 text-slate-400 hover:text-slate-700"
+                                    class="shrink-0 text-ink-muted hover:text-ink"
                                     :aria-label="`Remove ${p.label}`"
                                     @click="removeParticipant(p)"
                                 >
@@ -415,11 +406,11 @@ function submitSearch() {
                                 type="button"
                                 role="tab"
                                 :aria-selected="participantCategory === 'membership'"
-                                class="rounded px-2 py-1 text-xs font-medium"
+                                class="rounded-xs px-2 py-1 text-xs font-medium"
                                 :class="
                                     participantCategory === 'membership'
-                                        ? 'bg-slate-900 text-white'
-                                        : 'bg-slate-100 text-slate-600'
+                                        ? 'bg-accent-strong text-white'
+                                        : 'bg-graphite-200 text-ink-muted'
                                 "
                                 @click="switchCategory('membership')"
                             >
@@ -430,11 +421,11 @@ function submitSearch() {
                                 type="button"
                                 role="tab"
                                 :aria-selected="participantCategory === 'guardian'"
-                                class="rounded px-2 py-1 text-xs font-medium"
+                                class="rounded-xs px-2 py-1 text-xs font-medium"
                                 :class="
                                     participantCategory === 'guardian'
-                                        ? 'bg-slate-900 text-white'
-                                        : 'bg-slate-100 text-slate-600'
+                                        ? 'bg-accent-strong text-white'
+                                        : 'bg-graphite-200 text-ink-muted'
                                 "
                                 @click="switchCategory('guardian')"
                             >
@@ -445,11 +436,11 @@ function submitSearch() {
                                 type="button"
                                 role="tab"
                                 :aria-selected="participantCategory === 'student'"
-                                class="rounded px-2 py-1 text-xs font-medium"
+                                class="rounded-xs px-2 py-1 text-xs font-medium"
                                 :class="
                                     participantCategory === 'student'
-                                        ? 'bg-slate-900 text-white'
-                                        : 'bg-slate-100 text-slate-600'
+                                        ? 'bg-accent-strong text-white'
+                                        : 'bg-graphite-200 text-ink-muted'
                                 "
                                 @click="switchCategory('student')"
                             >
@@ -461,7 +452,7 @@ function submitSearch() {
                              is explained, never a silently empty list. -->
                         <p
                             v-if="categoryUnavailableReason(participantCategory)"
-                            class="mt-1 rounded bg-amber-50 p-2 text-xs text-amber-700"
+                            class="mt-1 rounded-xs bg-accent-100 p-2 text-xs text-ink"
                         >
                             {{ categoryUnavailableReason(participantCategory) }}
                         </p>
@@ -479,16 +470,16 @@ function submitSearch() {
                                               ? 'Search Guardians by name…'
                                               : 'Search Students by name…'
                                     "
-                                    class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                    class="input"
                                     @input="searchParticipants"
                                 />
                                 <ul
                                     v-if="participantQuery.trim() !== ''"
-                                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                                    class="absolute z-10 mt-1 w-full rounded-xs border border-line bg-white text-sm shadow"
                                 >
                                     <li
                                         v-if="!searching && participantResults.length === 0"
-                                        class="px-2 py-1.5 text-xs text-slate-400"
+                                        class="px-2 py-1.5 text-xs text-ink-muted"
                                     >
                                         {{ emptyResultsMessage(participantCategory) }}
                                     </li>
@@ -498,8 +489,8 @@ function submitSearch() {
                                             class="flex w-full flex-col items-start px-2 py-1 text-left"
                                             :class="
                                                 result.accountLinked
-                                                    ? 'cursor-pointer hover:bg-slate-50'
-                                                    : 'cursor-not-allowed text-slate-400'
+                                                    ? 'cursor-pointer hover:bg-graphite-100'
+                                                    : 'cursor-not-allowed text-ink-muted'
                                             "
                                             :disabled="!result.accountLinked"
                                             @click="addParticipant(result)"
@@ -507,12 +498,12 @@ function submitSearch() {
                                             <span>{{ result.label }}</span>
                                             <span
                                                 v-if="result.context"
-                                                class="text-xs text-slate-400"
+                                                class="text-xs text-ink-muted"
                                                 >{{ result.context }}</span
                                             >
                                             <span
                                                 v-if="!result.accountLinked"
-                                                class="text-xs text-amber-600"
+                                                class="text-xs text-ink"
                                                 >No Lycenza account linked</span
                                             >
                                         </button>
@@ -524,7 +515,7 @@ function submitSearch() {
                                  conversation, never implementation detail. -->
                             <p
                                 v-if="participantCategory === 'student'"
-                                class="mt-1 text-xs text-slate-400"
+                                class="mt-1 text-xs text-ink-muted"
                             >
                                 Student conversations are limited to Students with a linked, active
                                 Lycenza account and are subject to your school's communication
@@ -533,12 +524,12 @@ function submitSearch() {
                         </template>
                     </div>
 
-                    <p v-if="composeError" class="text-xs text-red-600">{{ composeError }}</p>
+                    <p v-if="composeError" class="text-xs text-danger">{{ composeError }}</p>
 
                     <button
                         type="submit"
                         :disabled="submitting || selectedParticipants.length === 0"
-                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Start conversation
                     </button>
@@ -550,12 +541,12 @@ function submitSearch() {
                             v-model="searchInput"
                             type="text"
                             placeholder="Search conversations…"
-                            class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input"
                         />
                     </form>
                     <button
                         type="button"
-                        class="shrink-0 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600"
+                        class="btn btn-secondary shrink-0 text-xs text-ink-muted"
                         @click="toggleArchivedView"
                     >
                         {{ filters.archived ? 'Show active' : 'Show archived' }}
@@ -564,9 +555,9 @@ function submitSearch() {
 
                 <div
                     v-if="threads.data.length === 0"
-                    class="rounded border border-dashed border-slate-300 p-8 text-center"
+                    class="rounded-xs border border-dashed border-control-line p-8 text-center"
                 >
-                    <p class="text-sm text-slate-500">
+                    <p class="text-sm text-ink-muted">
                         {{
                             filters.q
                                 ? 'No matching conversations.'
@@ -577,17 +568,17 @@ function submitSearch() {
                     </p>
                     <p
                         v-if="canSend && !filters.archived && !filters.q"
-                        class="mt-1 text-xs text-slate-400"
+                        class="mt-1 text-xs text-ink-muted"
                     >
                         Start one with "New Message" above.
                     </p>
                 </div>
 
-                <ul v-else class="divide-y divide-slate-200 rounded border border-slate-200">
+                <ul v-else class="divide-y divide-line rounded-xs border border-line">
                     <li v-for="thread in threads.data" :key="thread.id">
                         <a
-                            class="block px-4 py-3 hover:bg-slate-50"
-                            :class="{ 'bg-slate-50': thread.unread }"
+                            class="block px-4 py-3 hover:bg-graphite-100"
+                            :class="{ 'bg-graphite-100': thread.unread }"
                             :href="`/app/communications/${thread.id}`"
                         >
                             <div class="flex items-center justify-between gap-2">
@@ -602,19 +593,19 @@ function submitSearch() {
                                     }}
                                 </span>
                                 <span
-                                    class="flex shrink-0 items-center gap-1 text-xs text-slate-400"
+                                    class="flex shrink-0 items-center gap-1 text-xs text-ink-muted"
                                 >
                                     <span v-if="thread.hasAttachment" title="Has attachment"
                                         >📎</span
                                     >
                                     <span
                                         v-if="thread.unread"
-                                        class="h-1.5 w-1.5 rounded-full bg-slate-900"
+                                        class="h-1.5 w-1.5 rounded-full bg-accent-strong"
                                     ></span>
                                     {{ formatDateTime(thread.lastActivityAt) }}
                                 </span>
                             </div>
-                            <p class="mt-0.5 truncate text-xs text-slate-500">
+                            <p class="mt-0.5 truncate text-xs text-ink-muted">
                                 {{ thread.latestMessagePreview ?? 'No messages yet.' }}
                             </p>
                         </a>
@@ -623,7 +614,7 @@ function submitSearch() {
 
                 <div
                     v-if="meta.lastPage > 1"
-                    class="mt-4 flex items-center justify-between text-xs text-slate-400"
+                    class="mt-4 flex items-center justify-between text-xs text-ink-muted"
                 >
                     <Link
                         v-if="meta.currentPage > 1"

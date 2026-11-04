@@ -154,8 +154,8 @@ function formatFileSize(bytes: number): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications"
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications"
             >← Communication Hub</a
         >
 
@@ -170,31 +170,31 @@ function formatFileSize(bytes: number): string {
                 v-if="isParticipant"
                 type="button"
                 :disabled="archiving"
-                class="shrink-0 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50"
+                class="btn btn-secondary shrink-0 text-xs text-ink-muted"
                 @click="toggleArchive"
             >
                 {{ isArchivedByMe ? 'Unarchive' : 'Archive' }}
             </button>
         </div>
-        <p class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-slate-500">
+        <p class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-ink-muted">
             <template v-for="(p, index) in participants.filter((p) => p.active)" :key="p.userId">
                 <span v-if="index > 0">, </span>
                 <span
                     >{{ p.name
                     }}<span
                         v-if="participantBadgeLabel(p.domainParticipantType)"
-                        class="ml-0.5 rounded px-1 py-px text-[10px] font-medium"
+                        class="ml-0.5 rounded-xs px-1 py-px text-[10px] font-medium"
                         :class="
                             p.domainParticipantType === 'guardian'
-                                ? 'bg-sky-100 text-sky-700'
-                                : 'bg-emerald-100 text-emerald-700'
+                                ? 'bg-accent-100 text-accent-strong'
+                                : 'bg-graphite-100 text-ink'
                         "
                         >{{ participantBadgeLabel(p.domainParticipantType) }}</span
                     ></span
                 >
             </template>
             ·
-            <span :class="thread.status === 'open' ? 'text-emerald-600' : 'text-slate-400'">{{
+            <span :class="thread.status === 'open' ? 'text-ink' : 'text-ink-muted'">{{
                 thread.status
             }}</span>
         </p>
@@ -202,7 +202,7 @@ function formatFileSize(bytes: number): string {
         <button
             v-if="messagesMeta.hasOlder"
             type="button"
-            class="mt-4 w-full rounded border border-slate-200 py-1.5 text-xs text-slate-500 hover:bg-slate-50"
+            class="mt-4 w-full rounded-xs border border-line py-1.5 text-xs text-ink-muted hover:bg-graphite-100"
             @click="loadOlder"
         >
             Load older messages
@@ -211,29 +211,29 @@ function formatFileSize(bytes: number): string {
         <ul class="mt-6 space-y-3">
             <li
                 v-if="messages.length === 0"
-                class="rounded border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500"
+                class="rounded-xs border border-dashed border-control-line p-6 text-center text-sm text-ink-muted"
             >
                 No messages yet.
             </li>
             <li
                 v-for="message in messages"
                 :key="message.id"
-                class="rounded border border-slate-200 p-3"
+                class="rounded-xs border border-line p-3"
             >
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-medium">{{ message.senderName ?? 'Unknown' }}</span>
-                    <span class="text-xs text-slate-400">{{
+                    <span class="text-xs text-ink-muted">{{
                         formatDateTime(message.createdAt)
                     }}</span>
                 </div>
                 <p class="mt-1 text-sm whitespace-pre-wrap">{{ message.body }}</p>
                 <span
                     v-if="message.priority !== 'normal'"
-                    class="mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-medium"
+                    class="mt-1 inline-block rounded-xs px-1.5 py-0.5 text-xs font-medium"
                     :class="{
-                        'bg-amber-100 text-amber-700': message.priority === 'important',
-                        'bg-orange-100 text-orange-700': message.priority === 'urgent',
-                        'bg-red-100 text-red-700': message.priority === 'critical',
+                        'tag-info': message.priority === 'important',
+                        'tag-attention': message.priority === 'urgent',
+                        'tag-negative': message.priority === 'critical',
                     }"
                 >
                     {{ message.priority }}
@@ -241,7 +241,7 @@ function formatFileSize(bytes: number): string {
 
                 <ul
                     v-if="message.attachments.length > 0"
-                    class="mt-2 space-y-1 border-t border-slate-100 pt-2"
+                    class="mt-2 space-y-1 border-t border-line pt-2"
                 >
                     <li
                         v-for="attachment in message.attachments"
@@ -250,11 +250,11 @@ function formatFileSize(bytes: number): string {
                     >
                         <a
                             :href="`/app/communications/attachments/${attachment.id}/download`"
-                            class="truncate text-slate-700 underline"
+                            class="truncate text-ink underline"
                         >
                             📎 {{ attachment.displayName }}
                         </a>
-                        <span class="shrink-0 text-slate-400">{{
+                        <span class="shrink-0 text-ink-muted">{{
                             formatFileSize(attachment.sizeBytes)
                         }}</span>
                     </li>
@@ -264,7 +264,7 @@ function formatFileSize(bytes: number): string {
 
         <form
             v-if="canReply"
-            class="mt-6 space-y-2 rounded border border-slate-200 p-4"
+            class="mt-6 space-y-2 rounded-xs border border-line p-4"
             @submit.prevent="submitReply"
         >
             <textarea
@@ -272,14 +272,14 @@ function formatFileSize(bytes: number): string {
                 rows="3"
                 required
                 placeholder="Write a message..."
-                class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                class="input"
             ></textarea>
 
             <ul v-if="pendingAttachments.length > 0" class="space-y-1">
                 <li
                     v-for="a in pendingAttachments"
                     :key="a.id"
-                    class="flex items-center justify-between gap-2 text-xs text-slate-500"
+                    class="flex items-center justify-between gap-2 text-xs text-ink-muted"
                 >
                     <span class="truncate">📎 {{ a.displayName }}</span>
                     <span class="flex shrink-0 items-center gap-2">
@@ -287,7 +287,7 @@ function formatFileSize(bytes: number): string {
                         <button
                             type="button"
                             :disabled="removingAttachmentId === a.id"
-                            class="text-red-600 underline disabled:opacity-50"
+                            class="text-danger underline disabled:opacity-50"
                             @click="removePendingAttachment(a.id)"
                         >
                             Remove
@@ -298,10 +298,7 @@ function formatFileSize(bytes: number): string {
 
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                    <select
-                        v-model="priority"
-                        class="rounded border border-slate-300 px-2 py-1 text-xs"
-                    >
+                    <select v-model="priority" class="input text-xs w-auto">
                         <option value="normal">Normal</option>
                         <option value="important">Important</option>
                         <option value="urgent">Urgent</option>
@@ -309,7 +306,7 @@ function formatFileSize(bytes: number): string {
                     </select>
                     <label
                         v-if="pendingAttachments.length < maxAttachments"
-                        class="cursor-pointer text-xs text-slate-500 underline"
+                        class="cursor-pointer text-xs text-ink-muted underline"
                     >
                         {{ uploading ? 'Uploading…' : 'Attach file' }}
                         <input
@@ -321,16 +318,10 @@ function formatFileSize(bytes: number): string {
                         />
                     </label>
                 </div>
-                <button
-                    type="submit"
-                    :disabled="submitting"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                >
-                    Send
-                </button>
+                <button type="submit" :disabled="submitting" class="btn btn-primary">Send</button>
             </div>
         </form>
-        <p v-else class="mt-6 text-xs text-slate-400">
+        <p v-else class="mt-6 text-xs text-ink-muted">
             You do not have permission to reply in this conversation.
         </p>
     </main>

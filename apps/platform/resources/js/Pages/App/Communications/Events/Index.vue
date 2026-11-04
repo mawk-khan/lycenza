@@ -36,30 +36,22 @@ function apply(page = 1): void {
 
 <template>
     <Head title="Events" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/communications">← Communication Hub</a>
         <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
             <h1 class="text-xl font-semibold">Events</h1>
-            <a
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
-                href="/app/communications/events/create"
-                >New event</a
-            >
+            <a class="btn btn-primary" href="/app/communications/events/create">New event</a>
         </div>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             School calendar events. Every event is approved by someone else before it is published;
             publishing shows it on the calendar and sends nothing. Times are in the School's
             timezone ({{ schoolTimezone }}).
         </p>
 
         <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="apply()">
-            <label class="text-xs text-slate-600"
+            <label class="text-xs text-ink-muted"
                 >State
-                <select
-                    v-model="status"
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
-                    @change="apply()"
-                >
+                <select v-model="status" class="input mt-1 block w-auto" @change="apply()">
                     <option value="">Any</option>
                     <option value="draft">Draft</option>
                     <option value="pending_approval">Waiting for approval</option>
@@ -69,25 +61,17 @@ function apply(page = 1): void {
                     <option value="cancelled">Cancelled</option>
                 </select>
             </label>
-            <label class="text-xs text-slate-600"
+            <label class="text-xs text-ink-muted"
                 >When
-                <select
-                    v-model="when"
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
-                    @change="apply()"
-                >
+                <select v-model="when" class="input mt-1 block w-auto" @change="apply()">
                     <option value="">Any</option>
                     <option value="upcoming">Upcoming</option>
                     <option value="past">Past</option>
                 </select>
             </label>
-            <label class="text-xs text-slate-600"
+            <label class="text-xs text-ink-muted"
                 >Audience
-                <select
-                    v-model="audience"
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
-                    @change="apply()"
-                >
+                <select v-model="audience" class="input mt-1 block w-auto" @change="apply()">
                     <option value="">Any</option>
                     <option value="school_wide">Whole School</option>
                     <option value="staff">Staff</option>
@@ -95,12 +79,12 @@ function apply(page = 1): void {
                     <option value="section">Guardians of a Section</option>
                 </select>
             </label>
-            <label class="text-xs text-slate-600"
+            <label class="text-xs text-ink-muted"
                 >Month
                 <input
                     v-model="month"
                     type="month"
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input mt-1 block w-auto"
                     @change="apply()"
                 />
             </label>

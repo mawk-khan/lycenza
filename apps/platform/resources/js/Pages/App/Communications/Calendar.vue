@@ -30,10 +30,10 @@ function go(when: 'upcoming' | 'past'): void {
 
 <template>
     <Head title="School calendar" />
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">School calendar</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             School events for you. Times are in the School's timezone ({{ schoolTimezone }}). Events
             are information only; they do not change attendance, the timetable or leave.
         </p>
@@ -41,11 +41,11 @@ function go(when: 'upcoming' | 'past'): void {
         <nav class="mt-4 flex flex-wrap items-end gap-3" aria-label="Calendar filters">
             <button
                 type="button"
-                class="rounded border px-3 py-1.5 text-sm"
+                class="rounded-xs border px-3 py-1.5 text-sm"
                 :class="
                     filters.when === 'upcoming'
-                        ? 'border-slate-900 font-medium'
-                        : 'border-slate-300'
+                        ? 'border-accent-strong font-medium'
+                        : 'border-control-line'
                 "
                 :aria-pressed="filters.when === 'upcoming'"
                 @click="go('upcoming')"
@@ -54,21 +54,23 @@ function go(when: 'upcoming' | 'past'): void {
             </button>
             <button
                 type="button"
-                class="rounded border px-3 py-1.5 text-sm"
+                class="rounded-xs border px-3 py-1.5 text-sm"
                 :class="
-                    filters.when === 'past' ? 'border-slate-900 font-medium' : 'border-slate-300'
+                    filters.when === 'past'
+                        ? 'border-accent-strong font-medium'
+                        : 'border-control-line'
                 "
                 :aria-pressed="filters.when === 'past'"
                 @click="go('past')"
             >
                 Past
             </button>
-            <label class="text-xs text-slate-600"
+            <label class="text-xs text-ink-muted"
                 >Month
                 <input
                     v-model="month"
                     type="month"
-                    class="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input mt-1 block w-auto"
                     @change="go(filters.when)"
                 />
             </label>

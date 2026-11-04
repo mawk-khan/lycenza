@@ -227,9 +227,7 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                         </td>
                         <td class="py-3 text-ink-muted">{{ charge.dueDate ?? '—' }}</td>
                         <td class="py-3">
-                            <span
-                                v-if="charge.cancelledAt"
-                                class="inline-flex items-center gap-1.5 rounded-xs bg-danger-tint px-2 py-0.5 text-xs font-medium text-danger"
+                            <span v-if="charge.cancelledAt" class="tag tag-attention"
                                 >Cancelled</span
                             >
                             <span

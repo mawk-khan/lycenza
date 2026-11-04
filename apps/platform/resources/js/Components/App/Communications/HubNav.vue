@@ -34,11 +34,11 @@ defineProps<Props>();
             <li>
                 <a
                     href="/app/communications"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'inbox'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Inbox</a
                 >
@@ -46,17 +46,17 @@ defineProps<Props>();
             <li>
                 <a
                     href="/app/communications/unread"
-                    class="flex items-center justify-between rounded px-2 py-1"
+                    class="flex items-center justify-between rounded-xs px-2 py-1"
                     :class="
                         active === 'unread'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                 >
                     <span>Unread</span>
                     <span
                         v-if="totalUnreadCount > 0"
-                        class="rounded-full bg-slate-900 px-1.5 py-0.5 text-xs font-medium text-white"
+                        class="rounded-xs bg-accent-strong px-1.5 py-0.5 text-xs font-medium text-white"
                         >{{ totalUnreadCount }}</span
                     >
                 </a>
@@ -64,11 +64,11 @@ defineProps<Props>();
             <li>
                 <a
                     href="/app/communications/conversations"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'conversations'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Conversations</a
                 >
@@ -76,11 +76,11 @@ defineProps<Props>();
             <li v-if="canViewHub">
                 <a
                     href="/app/communications/announcements"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'announcements'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Announcements</a
                 >
@@ -88,11 +88,11 @@ defineProps<Props>();
             <li v-if="canAnnounce">
                 <a
                     href="/app/communications/announcements?status=scheduled"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'scheduled'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Scheduled</a
                 >
@@ -100,11 +100,11 @@ defineProps<Props>();
             <li v-if="canViewHub">
                 <a
                     href="/app/communications/sent"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'sent'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Sent</a
                 >
@@ -112,11 +112,11 @@ defineProps<Props>();
             <li v-if="canApprove">
                 <a
                     href="/app/communications/approvals"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'approvals'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Approvals</a
                 >
@@ -124,11 +124,11 @@ defineProps<Props>();
             <li v-if="canManage">
                 <a
                     href="/app/communications/failed"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'failed'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Failed</a
                 >
@@ -136,11 +136,11 @@ defineProps<Props>();
             <li v-if="canManage">
                 <a
                     href="/app/communications/analytics"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'analytics'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Analytics</a
                 >
@@ -148,11 +148,11 @@ defineProps<Props>();
             <li v-if="canManageTemplates">
                 <a
                     href="/app/communications/templates"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'templates'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Templates</a
                 >
@@ -160,11 +160,11 @@ defineProps<Props>();
             <li>
                 <a
                     href="/app/communications/preferences"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'preferences'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Preferences</a
                 >
@@ -172,11 +172,11 @@ defineProps<Props>();
             <li v-if="canManage">
                 <a
                     href="/app/communications/settings/channels"
-                    class="block rounded px-2 py-1"
+                    class="block rounded-xs px-2 py-1"
                     :class="
                         active === 'settings'
-                            ? 'bg-slate-100 font-medium text-slate-900'
-                            : 'text-slate-600 hover:text-slate-900'
+                            ? 'bg-graphite-200 font-medium text-ink'
+                            : 'text-ink-muted hover:text-ink'
                     "
                     >Settings</a
                 >

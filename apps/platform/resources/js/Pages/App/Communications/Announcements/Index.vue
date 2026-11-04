@@ -64,10 +64,10 @@ function tabHref(value: string | null): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <div class="flex items-center justify-between">
             <div>
-                <a class="text-xs text-slate-400 underline" href="/app/communications"
+                <a class="text-xs text-ink-muted underline" href="/app/communications"
                     >← Communication Hub</a
                 >
                 <h1 class="mt-1 text-xl font-semibold">Announcements</h1>
@@ -75,7 +75,7 @@ function tabHref(value: string | null): string {
             <Link
                 v-if="canAnnounce"
                 href="/app/communications/announcements/create"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+                class="btn btn-primary"
             >
                 + New Announcement
             </Link>
@@ -86,11 +86,11 @@ function tabHref(value: string | null): string {
                 v-for="tab in tabs"
                 :key="tab.label"
                 :href="tabHref(tab.value)"
-                class="rounded px-2 py-1"
+                class="rounded-xs px-2 py-1"
                 :class="
                     (filters.status ?? null) === tab.value
-                        ? 'bg-slate-900 font-medium text-white'
-                        : 'text-slate-500 hover:bg-slate-100'
+                        ? 'bg-accent-strong font-medium text-white'
+                        : 'text-ink-muted hover:bg-graphite-200'
                 "
             >
                 {{ tab.label }}
@@ -99,40 +99,40 @@ function tabHref(value: string | null): string {
 
         <div
             v-if="announcements.data.length === 0"
-            class="mt-6 rounded border border-dashed border-slate-300 p-8 text-center"
+            class="mt-6 rounded-xs border border-dashed border-control-line p-8 text-center"
         >
-            <p class="text-sm text-slate-500">No announcements yet.</p>
-            <p v-if="canAnnounce" class="mt-1 text-xs text-slate-400">
+            <p class="text-sm text-ink-muted">No announcements yet.</p>
+            <p v-if="canAnnounce" class="mt-1 text-xs text-ink-muted">
                 Start one with "New Announcement" above.
             </p>
         </div>
 
-        <ul v-else class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul v-else class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="announcement in announcements.data" :key="announcement.id">
                 <a
-                    class="block px-4 py-3 hover:bg-slate-50"
+                    class="block px-4 py-3 hover:bg-graphite-100"
                     :href="`/app/communications/announcements/${announcement.id}`"
                 >
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium">{{ announcement.title }}</span>
                         <span
-                            class="rounded px-1.5 py-0.5 text-xs font-medium"
+                            class="rounded-xs px-1.5 py-0.5 text-xs font-medium"
                             :class="{
-                                'bg-slate-100 text-slate-600': announcement.status === 'draft',
-                                'bg-blue-100 text-blue-700':
-                                    announcement.status === 'pending_approval',
-                                'bg-teal-100 text-teal-700': announcement.status === 'approved',
-                                'bg-rose-100 text-rose-700': announcement.status === 'rejected',
-                                'bg-amber-100 text-amber-700': announcement.status === 'scheduled',
-                                'bg-emerald-100 text-emerald-700':
+                                'tag-neutral': announcement.status === 'draft',
+                                'tag-info':
+                                    announcement.status === 'pending_approval' ||
+                                    announcement.status === 'scheduled',
+                                'tag-positive':
+                                    announcement.status === 'approved' ||
                                     announcement.status === 'published',
-                                'bg-red-100 text-red-600': announcement.status === 'cancelled',
+                                'tag-negative': announcement.status === 'rejected',
+                                'tag-attention': announcement.status === 'cancelled',
                             }"
                         >
                             {{ announcement.status.replace('_', ' ') }}
                         </span>
                     </div>
-                    <p class="mt-0.5 text-xs text-slate-500">
+                    <p class="mt-0.5 text-xs text-ink-muted">
                         {{ audienceLabel(announcement.audienceType) }}
                         <template v-if="announcement.recipientCount !== null">
                             · {{ announcement.recipientCount }} recipients</template
@@ -148,7 +148,7 @@ function tabHref(value: string | null): string {
             </li>
         </ul>
 
-        <p v-if="announcements.last_page > 1" class="mt-4 text-xs text-slate-400">
+        <p v-if="announcements.last_page > 1" class="mt-4 text-xs text-ink-muted">
             Page {{ announcements.current_page }} of {{ announcements.last_page }} ({{
                 announcements.total
             }}

@@ -62,12 +62,12 @@ function readRate(bucket: ChannelBucket): string | null {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications"
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
+        <a class="text-xs text-ink-muted underline" href="/app/communications"
             >← Communication Hub</a
         >
         <h1 class="mt-1 text-xl font-semibold">Communication Analytics</h1>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="mt-1 text-xs text-ink-muted">
             System operations only -- not a student/educational outcome measure. Timezone:
             {{ schoolTimezone }}.
         </p>
@@ -89,11 +89,11 @@ function readRate(bucket: ChannelBucket): string | null {
                         v-for="key in ['today', '7d', '30d']"
                         :key="key"
                         type="button"
-                        class="rounded border px-2 py-1"
+                        class="rounded-xs border px-2 py-1"
                         :class="
                             range.key === key
-                                ? 'border-slate-900 bg-slate-900 text-white'
-                                : 'border-slate-300 text-slate-600'
+                                ? 'border-accent-strong bg-accent-strong text-white'
+                                : 'border-control-line text-ink-muted'
                         "
                         @click="selectRange(key)"
                     >
@@ -106,34 +106,34 @@ function readRate(bucket: ChannelBucket): string | null {
                         }}
                     </button>
                 </div>
-                <p class="mt-1 text-xs text-slate-400">{{ range.from }} – {{ range.to }}</p>
+                <p class="mt-1 text-xs text-ink-muted">{{ range.from }} – {{ range.to }}</p>
 
                 <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <div class="rounded border border-slate-200 p-3">
-                        <p class="text-xs text-slate-500">Published</p>
+                    <div class="rounded-xs border border-line p-3">
+                        <p class="text-xs text-ink-muted">Published</p>
                         <p class="text-lg font-semibold">{{ summary.published }}</p>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <p class="text-xs text-slate-500">Recipients</p>
+                    <div class="rounded-xs border border-line p-3">
+                        <p class="text-xs text-ink-muted">Recipients</p>
                         <p class="text-lg font-semibold">{{ summary.recipients }}</p>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <p class="text-xs text-slate-500">Deferred (quiet hours)</p>
+                    <div class="rounded-xs border border-line p-3">
+                        <p class="text-xs text-ink-muted">Deferred (quiet hours)</p>
                         <p class="text-lg font-semibold">{{ summary.deferredQuietHours }}</p>
                     </div>
-                    <div class="rounded border border-slate-200 p-3">
-                        <p class="text-xs text-slate-500">Suppressed by policy</p>
+                    <div class="rounded-xs border border-line p-3">
+                        <p class="text-xs text-ink-muted">Suppressed by policy</p>
                         <p class="text-lg font-semibold">{{ summary.suppressed }}</p>
                     </div>
-                    <div class="rounded border border-red-200 bg-red-50 p-3">
-                        <p class="text-xs text-red-600">Emergency communications</p>
-                        <p class="text-lg font-semibold text-red-700">
+                    <div class="rounded-xs border border-danger/40 bg-danger-tint p-3">
+                        <p class="text-xs text-danger">Emergency communications</p>
+                        <p class="text-lg font-semibold text-danger">
                             {{ summary.emergency.announcements }}
                         </p>
                     </div>
-                    <div class="rounded border border-red-200 bg-red-50 p-3">
-                        <p class="text-xs text-red-600">Quiet-hours bypass events</p>
-                        <p class="text-lg font-semibold text-red-700">
+                    <div class="rounded-xs border border-danger/40 bg-danger-tint p-3">
+                        <p class="text-xs text-danger">Quiet-hours bypass events</p>
+                        <p class="text-lg font-semibold text-danger">
                             {{ summary.emergency.bypassEvents }}
                         </p>
                     </div>
@@ -143,7 +143,7 @@ function readRate(bucket: ChannelBucket): string | null {
                     <div
                         v-for="(bucket, channel) in summary.channels"
                         :key="channel"
-                        class="rounded border border-slate-200 p-4"
+                        class="rounded-xs border border-line p-4"
                     >
                         <h2 class="text-sm font-semibold">
                             {{ channelLabels[channel] ?? channel }}
@@ -151,50 +151,50 @@ function readRate(bucket: ChannelBucket): string | null {
 
                         <dl v-if="channel === 'in_app'" class="mt-2 grid grid-cols-3 gap-2 text-xs">
                             <div>
-                                <dt class="text-slate-500">Available</dt>
+                                <dt class="text-ink-muted">Available</dt>
                                 <dd class="font-medium">{{ bucket.available }}</dd>
                             </div>
                             <div>
-                                <dt class="text-slate-500">Read</dt>
+                                <dt class="text-ink-muted">Read</dt>
                                 <dd class="font-medium">
                                     {{ bucket.read }}
-                                    <span v-if="readRate(bucket)" class="text-slate-400"
+                                    <span v-if="readRate(bucket)" class="text-ink-muted"
                                         >({{ readRate(bucket) }})</span
                                     >
                                 </dd>
                             </div>
                             <div>
-                                <dt class="text-slate-500">Unread</dt>
+                                <dt class="text-ink-muted">Unread</dt>
                                 <dd class="font-medium">{{ bucket.unread }}</dd>
                             </div>
                         </dl>
 
                         <dl v-else class="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                             <div>
-                                <dt class="text-slate-500">Planned</dt>
+                                <dt class="text-ink-muted">Planned</dt>
                                 <dd class="font-medium">{{ bucket.planned }}</dd>
                             </div>
                             <div>
-                                <dt class="text-slate-500">Sent to transport</dt>
+                                <dt class="text-ink-muted">Sent to transport</dt>
                                 <dd class="font-medium">
                                     {{ bucket.sent }}
-                                    <span v-if="sendRate(bucket)" class="text-slate-400"
+                                    <span v-if="sendRate(bucket)" class="text-ink-muted"
                                         >({{ sendRate(bucket) }})</span
                                     >
                                 </dd>
                             </div>
                             <div>
-                                <dt class="text-slate-500">Failed</dt>
-                                <dd class="font-medium text-red-600">{{ bucket.failed }}</dd>
+                                <dt class="text-ink-muted">Failed</dt>
+                                <dd class="font-medium text-danger">{{ bucket.failed }}</dd>
                             </div>
                             <div>
-                                <dt class="text-slate-500">Queued / in progress</dt>
+                                <dt class="text-ink-muted">Queued / in progress</dt>
                                 <dd class="font-medium">{{ bucket.inProgress }}</dd>
                             </div>
                         </dl>
                         <p
                             v-if="channel !== 'in_app' && (bucket.suppressed ?? 0) > 0"
-                            class="mt-2 text-xs text-slate-500"
+                            class="mt-2 text-xs text-ink-muted"
                         >
                             {{ bucket.suppressed }} suppressed by policy/preference
                         </p>
@@ -202,13 +202,13 @@ function readRate(bucket: ChannelBucket): string | null {
 
                     <p
                         v-if="Object.keys(summary.channels).length === 0"
-                        class="text-sm text-slate-500"
+                        class="text-sm text-ink-muted"
                     >
                         No published Announcements in this range.
                     </p>
                 </div>
 
-                <p class="mt-6 text-xs text-slate-400">
+                <p class="mt-6 text-xs text-ink-muted">
                     "Sent to transport" means the configured application mail transport accepted the
                     send -- not that it reached a mailbox. Delivered, bounced, opened and clicked
                     figures are not shown on this page.

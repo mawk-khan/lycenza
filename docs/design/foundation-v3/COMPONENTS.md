@@ -66,6 +66,7 @@ from the start.
 
 ## Not yet themed
 
-- `ElevationBanner` keeps its amber security styling (OD-DS-4).
+- `ElevationBanner` keeps its amber security styling, and the Emergency
+  communication label keeps the danger hue (OD-DS-4).
 - Pages outside `DesignTokensTest::MIGRATED` still use the Tailwind palette.
 - The page area stays white until every domain is migrated (ADR 0082 §10.3).

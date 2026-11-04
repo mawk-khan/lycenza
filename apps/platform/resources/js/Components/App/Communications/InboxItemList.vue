@@ -33,26 +33,26 @@ const typeLabels: Record<InboxItem['type'], string> = {
 <template>
     <div
         v-if="items.length === 0"
-        class="rounded border border-dashed border-slate-300 p-8 text-center"
+        class="rounded-xs border border-dashed border-control-line p-8 text-center"
     >
-        <p class="text-sm text-slate-500">{{ emptyMessage }}</p>
+        <p class="text-sm text-ink-muted">{{ emptyMessage }}</p>
     </div>
 
-    <ul v-else class="divide-y divide-slate-200 rounded border border-slate-200">
+    <ul v-else class="divide-y divide-line rounded-xs border border-line">
         <li v-for="item in items" :key="`${item.type}-${item.id}`">
             <a
-                class="block px-4 py-3 hover:bg-slate-50"
-                :class="{ 'bg-slate-50': item.unread }"
+                class="block px-4 py-3 hover:bg-graphite-100"
+                :class="{ 'bg-graphite-100': item.unread }"
                 :href="item.route"
             >
                 <div class="flex items-center justify-between gap-2">
                     <div class="flex min-w-0 items-center gap-2">
                         <span
-                            class="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
+                            class="shrink-0 rounded-xs px-1.5 py-0.5 text-xs font-medium"
                             :class="{
-                                'bg-sky-100 text-sky-700': item.type === 'conversation',
-                                'bg-purple-100 text-purple-700': item.type === 'announcement',
-                                'bg-slate-100 text-slate-600': item.type === 'template',
+                                'bg-accent-100 text-accent-strong':
+                                    item.type === 'conversation' || item.type === 'announcement',
+                                'bg-graphite-200 text-ink-muted': item.type === 'template',
                             }"
                         >
                             {{ typeLabels[item.type] }}
@@ -65,35 +65,35 @@ const typeLabels: Record<InboxItem['type'], string> = {
                         </span>
                         <span
                             v-if="item.isEmergency"
-                            class="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white"
+                            class="shrink-0 rounded-xs bg-danger px-1.5 py-0.5 text-xs font-semibold text-white"
                             >⚠ Emergency</span
                         >
                         <span
                             v-if="item.requirement === 'required'"
-                            class="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700"
+                            class="tag tag-attention shrink-0"
                             >Required</span
                         >
                         <span
                             v-if="item.priority && item.priority !== 'normal'"
-                            class="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
+                            class="shrink-0 rounded-xs px-1.5 py-0.5 text-xs font-medium"
                             :class="{
-                                'bg-amber-100 text-amber-700': item.priority === 'important',
-                                'bg-orange-100 text-orange-700': item.priority === 'urgent',
-                                'bg-red-100 text-red-700': item.priority === 'critical',
+                                'tag-info': item.priority === 'important',
+                                'tag-attention': item.priority === 'urgent',
+                                'tag-negative': item.priority === 'critical',
                             }"
                             >{{ item.priority }}</span
                         >
                     </div>
-                    <span class="flex shrink-0 items-center gap-1 text-xs text-slate-400">
+                    <span class="flex shrink-0 items-center gap-1 text-xs text-ink-muted">
                         <span v-if="item.hasAttachments" title="Has attachment">📎</span>
                         <span
                             v-if="item.unread"
-                            class="h-1.5 w-1.5 rounded-full bg-slate-900"
+                            class="h-1.5 w-1.5 rounded-full bg-accent-strong"
                         ></span>
                         {{ formatDateTime(item.latestActivityAt) }}
                     </span>
                 </div>
-                <p class="mt-0.5 truncate text-xs text-slate-500">
+                <p class="mt-0.5 truncate text-xs text-ink-muted">
                     <template v-if="item.actorName">{{ item.actorName }} · </template
                     >{{ item.preview ?? 'No content yet.' }}
                 </p>

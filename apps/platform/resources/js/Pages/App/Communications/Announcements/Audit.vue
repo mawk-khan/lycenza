@@ -31,42 +31,42 @@ function formatMetadataKey(key: string): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <Link
-            class="text-xs text-slate-400 underline"
+            class="text-xs text-ink-muted underline"
             :href="`/app/communications/announcements/${announcement.id}`"
             >← {{ announcement.title }}</Link
         >
         <h1 class="mt-1 text-xl font-semibold">Audit Timeline</h1>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="mt-1 text-xs text-ink-muted">
             Every recorded action against this Announcement, in order. Historical events are never
             fabricated or backfilled from current state.
         </p>
 
-        <ol class="mt-6 space-y-4 border-l border-slate-200 pl-4">
+        <ol class="mt-6 space-y-4 border-l border-line pl-4">
             <li v-for="(entry, idx) in entries" :key="idx" class="relative">
                 <span
                     class="absolute top-1 -left-[21px] h-2.5 w-2.5 rounded-full"
-                    :class="entry.isEmergency ? 'bg-red-600' : 'bg-slate-400'"
+                    :class="entry.isEmergency ? 'bg-danger' : 'bg-graphite-300'"
                 ></span>
 
-                <p class="text-xs text-slate-400">{{ formatDateTime(entry.occurredAt) }}</p>
+                <p class="text-xs text-ink-muted">{{ formatDateTime(entry.occurredAt) }}</p>
                 <p
                     class="text-sm font-medium"
-                    :class="entry.isEmergency ? 'text-red-700' : 'text-slate-900'"
+                    :class="entry.isEmergency ? 'text-danger' : 'text-ink'"
                 >
                     {{ entry.label }}
                     <span
                         v-if="entry.isEmergency"
-                        class="ml-1 rounded bg-red-100 px-1 py-0.5 text-xs font-semibold text-red-700"
+                        class="ml-1 rounded-xs bg-danger-tint px-1 py-0.5 text-xs font-semibold text-danger"
                         >emergency</span
                     >
                 </p>
-                <p class="text-xs text-slate-500">by {{ entry.actorName ?? 'Unknown' }}</p>
+                <p class="text-xs text-ink-muted">by {{ entry.actorName ?? 'Unknown' }}</p>
 
                 <dl
                     v-if="Object.keys(entry.metadata).length > 0"
-                    class="mt-1 space-y-0.5 text-xs text-slate-500"
+                    class="mt-1 space-y-0.5 text-xs text-ink-muted"
                 >
                     <div v-for="(value, key) in entry.metadata" :key="key" class="flex gap-1">
                         <dt class="font-medium">{{ formatMetadataKey(String(key)) }}:</dt>
@@ -75,14 +75,14 @@ function formatMetadataKey(key: string): string {
                 </dl>
             </li>
 
-            <li v-if="entries.length === 0" class="text-sm text-slate-500">
+            <li v-if="entries.length === 0" class="text-sm text-ink-muted">
                 No audit events recorded.
             </li>
         </ol>
 
         <div
             v-if="meta.lastPage > 1"
-            class="mt-4 flex items-center justify-between text-xs text-slate-400"
+            class="mt-4 flex items-center justify-between text-xs text-ink-muted"
         >
             <Link
                 v-if="meta.currentPage > 1"
