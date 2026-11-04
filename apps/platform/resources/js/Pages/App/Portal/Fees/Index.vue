@@ -16,7 +16,7 @@ defineProps<Props>();
 <template>
     <main class="mx-auto max-w-3xl px-6 py-10">
         <a class="text-sm underline" href="/app">Back</a>
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">Fees · {{ schoolName }}</h1>
+        <h1 class="mt-4 text-xl font-semibold text-ink">Fees · {{ schoolName }}</h1>
 
         <EmptyState
             v-if="students.length === 0"
@@ -25,7 +25,7 @@ defineProps<Props>();
             description="There is no student whose fees you can see in this School."
         />
 
-        <ul v-else class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul v-else class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="student in students" :key="student.id" class="px-4 py-3">
                 <a class="underline" :href="`/app/portal/fees/students/${student.id}`">{{
                     student.name

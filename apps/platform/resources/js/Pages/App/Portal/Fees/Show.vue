@@ -55,10 +55,8 @@ function paymentUrl(paymentId: string): string {
 <template>
     <main class="mx-auto max-w-4xl px-6 py-10">
         <a class="text-sm underline" href="/app/portal/fees">Back</a>
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">
-            Fees · {{ statement.student.name }}
-        </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <h1 class="mt-4 text-xl font-semibold text-ink">Fees · {{ statement.student.name }}</h1>
+        <p class="mt-1 text-sm text-ink-muted">
             {{ schoolName }} · this academic year, and fees of other years still due. Amounts in
             {{ statement.currency }}.
         </p>
@@ -79,19 +77,19 @@ function paymentUrl(paymentId: string): string {
 
         <dl class="mt-6 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div>
-                <dt class="text-xs text-slate-500">Charged</dt>
+                <dt class="text-xs text-ink-muted">Charged</dt>
                 <dd class="font-medium">{{ statement.totals.charged }}</dd>
             </div>
             <div>
-                <dt class="text-xs text-slate-500">Adjustments</dt>
+                <dt class="text-xs text-ink-muted">Adjustments</dt>
                 <dd class="font-medium">{{ statement.totals.adjusted }}</dd>
             </div>
             <div>
-                <dt class="text-xs text-slate-500">Paid</dt>
+                <dt class="text-xs text-ink-muted">Paid</dt>
                 <dd class="font-medium">{{ statement.totals.paid }}</dd>
             </div>
             <div>
-                <dt class="text-xs text-slate-500">Due</dt>
+                <dt class="text-xs text-ink-muted">Due</dt>
                 <dd class="font-semibold">{{ statement.totals.outstanding }}</dd>
             </div>
         </dl>
@@ -107,27 +105,27 @@ function paymentUrl(paymentId: string): string {
             <li
                 v-for="(line, index) in statement.lines"
                 :key="index"
-                class="rounded border border-slate-200 p-4 text-sm"
+                class="rounded-xs border border-line p-4 text-sm"
             >
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
-                    <span class="font-medium text-slate-900">
+                    <span class="font-medium text-ink">
                         {{ line.feeHeadName ?? line.description }}
                         <template v-if="line.billingPeriodLabel">
                             · {{ line.billingPeriodLabel }}</template
                         >
                     </span>
-                    <span class="text-xs text-slate-500">
+                    <span class="text-xs text-ink-muted">
                         <template v-if="!line.currentYear">Other academic year · </template>
                         <template v-if="line.dueDate">Due {{ line.dueDate }} · </template>
                         {{ statusLabels[line.status] }}
                     </span>
                 </div>
-                <p class="mt-1 text-slate-600">
+                <p class="mt-1 text-ink-muted">
                     Amount {{ line.amount }} · Adjustments {{ line.adjustedTotal }} · Paid
                     {{ line.paidTotal }} · Due
                     {{ line.outstanding }}
                 </p>
-                <ul v-if="line.payments.length > 0" class="mt-2 space-y-1 text-xs text-slate-600">
+                <ul v-if="line.payments.length > 0" class="mt-2 space-y-1 text-xs text-ink-muted">
                     <li v-for="payment in line.payments" :key="payment.paymentId">
                         <a class="underline" :href="paymentUrl(payment.paymentId)">{{
                             payment.settledOn

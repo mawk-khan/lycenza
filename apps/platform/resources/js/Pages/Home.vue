@@ -11,15 +11,13 @@ const productName = computed(() => page.props.product.name);
 
 <template>
     <Head title="Welcome" />
-    <main
-        class="mx-auto flex min-h-screen max-w-xl flex-col justify-center p-8 font-sans text-slate-900"
-    >
+    <main class="mx-auto flex min-h-screen max-w-xl flex-col justify-center p-8 font-sans text-ink">
         <h1 class="text-3xl font-semibold" data-testid="product-name">{{ productName }}</h1>
-        <p class="mt-3 text-slate-600">School management for staff, administrators and families.</p>
+        <p class="mt-3 text-ink-muted">School management for staff, administrators and families.</p>
         <p class="mt-8">
             <a
                 href="/login"
-                class="inline-block rounded bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+                class="btn btn-primary inline-block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
                 data-testid="sign-in"
                 >Sign in</a
             >

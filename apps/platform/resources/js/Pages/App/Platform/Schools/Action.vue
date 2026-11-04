@@ -66,7 +66,7 @@ function schoolError(): string | undefined {
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/platform/schools/${school.id}`"
             >← {{ school.name }}</a
         >
@@ -74,33 +74,33 @@ function schoolError(): string | undefined {
 
         <dl class="mt-6 space-y-2 text-sm">
             <div>
-                <dt class="text-slate-500">School</dt>
+                <dt class="text-ink-muted">School</dt>
                 <dd class="font-medium" data-testid="action-school">
                     {{ school.name }} ({{ school.slug }})
                 </dd>
             </div>
             <div>
-                <dt class="text-slate-500">Status</dt>
+                <dt class="text-ink-muted">Status</dt>
                 <dd data-testid="action-transition">
                     {{ school.status
                     }}<template v-if="targetStatus"> → {{ targetStatus }}</template>
                 </dd>
             </div>
             <div v-if="action === 'bootstrap-admin' && bootstrapAdmins.length">
-                <dt class="text-slate-500">Current bootstrap School Administrator</dt>
+                <dt class="text-ink-muted">Current bootstrap School Administrator</dt>
                 <dd v-for="a in bootstrapAdmins" :key="a.email">{{ a.name }} ({{ a.email }})</dd>
             </div>
         </dl>
 
-        <p class="mt-4 text-sm text-slate-600">{{ effects[action] }}</p>
-        <p v-if="schoolError()" class="mt-4 text-sm text-red-700" data-testid="action-error">
+        <p class="mt-4 text-sm text-ink-muted">{{ effects[action] }}</p>
+        <p v-if="schoolError()" class="mt-4 text-sm text-danger" data-testid="action-error">
             {{ schoolError() }}
         </p>
 
         <p
             v-if="!mfaEnrolled"
             role="status"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+            class="mt-6 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm"
         >
             This action requires multi-factor authentication. Enroll a factor under
             <a class="underline" href="/app/account/security">Account security</a> first.
@@ -108,31 +108,23 @@ function schoolError(): string | undefined {
 
         <form v-else class="mt-6 space-y-4" @submit.prevent="submit">
             <div v-if="action === 'suspend' || action === 'close'">
-                <label class="block text-sm text-slate-600" for="reason_code">Reason</label>
-                <select
-                    id="reason_code"
-                    v-model="form.reason_code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                >
+                <label class="block text-sm text-ink-muted" for="reason_code">Reason</label>
+                <select id="reason_code" v-model="form.reason_code" class="input mt-1">
                     <option value="" disabled>Choose a reason</option>
                     <option v-for="r in reasons" :key="r.value" :value="r.value">
                         {{ r.label }}
                     </option>
                 </select>
-                <p v-if="form.errors.reason_code" class="mt-1 text-sm text-red-700">
+                <p v-if="form.errors.reason_code" class="mt-1 text-sm text-danger">
                     {{ form.errors.reason_code }}
                 </p>
             </div>
             <div v-if="action === 'bootstrap-admin'">
-                <label class="block text-sm text-slate-600" for="admin">
+                <label class="block text-sm text-ink-muted" for="admin">
                     New School Administrator (exact email or account id)
                 </label>
-                <input
-                    id="admin"
-                    v-model="form.admin"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                />
-                <p v-if="form.errors.admin" class="mt-1 text-sm text-red-700">
+                <input id="admin" v-model="form.admin" class="input mt-1" />
+                <p v-if="form.errors.admin" class="mt-1 text-sm text-danger">
                     {{ form.errors.admin }}
                 </p>
             </div>
@@ -140,29 +132,25 @@ function schoolError(): string | undefined {
                 <input v-model="form.confirmed" type="checkbox" class="mt-1" />
                 <span>I confirm: {{ title.toLowerCase() }} — {{ school.name }}.</span>
             </label>
-            <p v-if="form.errors.confirmed" class="text-sm text-red-700">
+            <p v-if="form.errors.confirmed" class="text-sm text-danger">
                 {{ form.errors.confirmed }}
             </p>
             <div>
-                <label class="block text-sm text-slate-600" for="mfa_code">
+                <label class="block text-sm text-ink-muted" for="mfa_code">
                     Authentication code (or a recovery code)
                 </label>
                 <input
                     id="mfa_code"
                     v-model="form.mfa_code"
                     autocomplete="one-time-code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.mfa_code" class="mt-1 text-sm text-red-700">
+                <p v-if="form.errors.mfa_code" class="mt-1 text-sm text-danger">
                     {{ form.errors.mfa_code }}
                 </p>
             </div>
             <div class="flex items-center gap-4">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ title }}
                 </button>
                 <a class="text-sm underline" :href="`/app/platform/schools/${school.id}`">Cancel</a>

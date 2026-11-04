@@ -27,34 +27,34 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">School Settings</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="name">Name</label>
+                <label class="block text-sm text-ink-muted" for="name">Name</label>
                 <input
                     id="name"
                     v-model="form.name"
                     :disabled="!canManage"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100"
+                    class="input mt-1 disabled:bg-graphite-200"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="timezone">Timezone</label>
+                <label class="block text-sm text-ink-muted" for="timezone">Timezone</label>
                 <select
                     id="timezone"
                     v-model="form.timezone"
                     :disabled="!canManage"
                     :aria-invalid="!!form.errors.timezone"
                     aria-describedby="timezone-error"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100"
+                    class="input mt-1 disabled:bg-graphite-200"
                 >
                     <option v-for="zone in timezoneOptions" :key="zone" :value="zone">
                         {{ zone }}
                     </option>
                 </select>
-                <p id="timezone-error" class="mt-1 text-sm text-red-600">
+                <p id="timezone-error" class="mt-1 text-sm text-danger">
                     {{ form.errors.timezone }}
                 </p>
             </div>
@@ -62,11 +62,11 @@ function submit() {
                 v-if="canManage"
                 type="submit"
                 :disabled="form.processing"
-                class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                class="btn btn-primary"
             >
                 Save
             </button>
-            <p v-else class="text-sm text-slate-500">
+            <p v-else class="text-sm text-ink-muted">
                 You have read-only access to these settings.
             </p>
         </form>

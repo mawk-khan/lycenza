@@ -91,22 +91,22 @@ function ruleLabel(key: string | null): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Automation</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Rules that react to events in this School. Each rule is defined by Lycenza, not written
             here, and runs as its accountable owner — never with more access than that person has at
             the time. Rules here only add review items; they change nothing and send nothing.
         </p>
 
         <p
-            class="mt-3 rounded border px-3 py-2 text-sm"
+            class="mt-3 rounded-xs border px-3 py-2 text-sm"
             :class="
                 automation.schoolEnabled
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                    : 'border-amber-300 bg-amber-50 text-amber-900'
+                    ? 'border-graphite-300 bg-graphite-100 text-ink'
+                    : 'border-accent-300 bg-accent-100 text-ink'
             "
             data-testid="school-automation-state"
         >
@@ -125,7 +125,7 @@ function ruleLabel(key: string | null): string {
                 <li
                     v-for="rule in automation.rules"
                     :key="rule.key"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                     data-testid="automation-rule"
                 >
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -134,20 +134,20 @@ function ruleLabel(key: string | null): string {
                             {{ rule.instance ? rule.instance.status : 'not configured' }}
                         </span>
                     </div>
-                    <p class="mt-1 text-sm text-slate-600">{{ rule.description }}</p>
-                    <p class="mt-1 font-mono text-xs text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">{{ rule.description }}</p>
+                    <p class="mt-1 font-mono text-xs text-ink-muted">
                         Trigger: {{ rule.triggerEventType }} · Needs:
                         {{ rule.requiredCapabilities.join(', ') }}
                     </p>
                     <p v-if="rule.instance" class="mt-2 text-sm">
                         Accountable owner: {{ rule.instance.ownerName ?? '—' }}
-                        <span v-if="rule.instance.status === 'enabled'" class="text-slate-500">
+                        <span v-if="rule.instance.status === 'enabled'" class="text-ink-muted">
                             · enabled {{ formatTime(rule.instance.enabledAt) }}
                         </span>
                     </p>
                     <p
                         v-if="rule.instance?.status === 'suspended'"
-                        class="mt-2 text-sm text-red-700"
+                        class="mt-2 text-sm text-danger"
                         data-testid="rule-suspended"
                     >
                         Suspended {{ formatTime(rule.instance.suspendedAt) }} because
@@ -161,7 +161,7 @@ function ruleLabel(key: string | null): string {
                         <button
                             v-if="!rule.instance || rule.instance.status !== 'enabled'"
                             type="button"
-                            class="rounded bg-slate-900 px-3 py-1 text-white"
+                            class="btn btn-primary"
                             data-testid="rule-enable"
                             @click="act(rule, 'enable')"
                         >
@@ -170,7 +170,7 @@ function ruleLabel(key: string | null): string {
                         <button
                             v-if="rule.instance?.status === 'enabled'"
                             type="button"
-                            class="rounded border border-slate-300 px-3 py-1"
+                            class="btn btn-secondary"
                             data-testid="rule-disable"
                             @click="act(rule, 'disable')"
                         >
@@ -182,7 +182,7 @@ function ruleLabel(key: string | null): string {
                                 rule.instance.ownerUserId !== automation.viewerUserId
                             "
                             type="button"
-                            class="rounded border border-slate-300 px-3 py-1"
+                            class="btn btn-secondary"
                             data-testid="rule-take-ownership"
                             @click="act(rule, 'take-ownership')"
                         >
@@ -195,7 +195,7 @@ function ruleLabel(key: string | null): string {
 
         <section class="mt-8">
             <h2 class="text-base font-semibold">Review items</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Informational. Reviewing an item is up to you; nothing was set up automatically.
             </p>
             <EmptyState
@@ -206,14 +206,14 @@ function ruleLabel(key: string | null): string {
             />
             <table v-else class="mt-3 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 pr-4 font-medium">Created</th>
                         <th scope="col" class="py-2 pr-4 font-medium">Rule</th>
                         <th scope="col" class="py-2 pr-4 font-medium">Review</th>
                         <th scope="col" class="py-2 font-medium">Record</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr
                         v-for="item in automation.reviewItems"
                         :key="item.id"
@@ -247,7 +247,7 @@ function ruleLabel(key: string | null): string {
             />
             <table v-else class="mt-3 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 pr-4 font-medium">Created</th>
                         <th scope="col" class="py-2 pr-4 font-medium">Rule</th>
                         <th scope="col" class="py-2 pr-4 font-medium">Status</th>
@@ -255,7 +255,7 @@ function ruleLabel(key: string | null): string {
                         <th scope="col" class="py-2 font-medium">Attempts</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr
                         v-for="execution in automation.executions"
                         :key="execution.id"

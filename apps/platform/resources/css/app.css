@@ -144,6 +144,33 @@
     h4 {
         font-family: var(--ds-font-heading);
     }
+
+    /* DS-4h: native controls (progress bars, checkboxes, radios, ranges)
+       follow the accent instead of the browser's default blue/green. */
+    progress,
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='range'] {
+        accent-color: var(--ds-accent-strong);
+    }
+
+    /* A sized <progress> loses its native look in Chromium, and accent-color
+       with it -- draw the track and fill from the tokens. */
+    progress {
+        appearance: none;
+        border: 0;
+        background-color: var(--ds-graphite-300);
+        color: var(--ds-accent-strong);
+    }
+    progress::-webkit-progress-bar {
+        background-color: var(--ds-graphite-300);
+    }
+    progress::-webkit-progress-value {
+        background-color: var(--ds-accent-strong);
+    }
+    progress::-moz-progress-bar {
+        background-color: var(--ds-accent-strong);
+    }
 }
 
 /*

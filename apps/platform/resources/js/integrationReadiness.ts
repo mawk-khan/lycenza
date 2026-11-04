@@ -51,42 +51,42 @@ export const integrationStatusPresentation: Record<
     healthy: {
         label: 'Healthy',
         icon: '✓',
-        classes: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+        classes: 'bg-graphite-100 text-ink ring-graphite-300',
     },
     configured: {
         label: 'Configured',
         icon: '●',
-        classes: 'bg-sky-50 text-sky-800 ring-sky-200',
+        classes: 'bg-accent-100 text-accent-strong ring-accent-300',
     },
     not_configured: {
         label: 'Not configured',
         icon: '○',
-        classes: 'bg-slate-50 text-slate-700 ring-slate-300',
+        classes: 'bg-graphite-100 text-ink ring-control-line',
     },
     degraded: {
         label: 'Degraded',
         icon: '◐',
-        classes: 'bg-amber-50 text-amber-900 ring-amber-200',
+        classes: 'bg-accent-100 text-ink ring-accent-300',
     },
     attention_required: {
         label: 'Needs attention',
         icon: '⚠',
-        classes: 'bg-amber-50 text-amber-900 ring-amber-200',
+        classes: 'bg-accent-100 text-ink ring-accent-300',
     },
     error: {
         label: 'Status unavailable',
         icon: '✕',
-        classes: 'bg-rose-50 text-rose-800 ring-rose-200',
+        classes: 'bg-danger-tint text-danger ring-danger/40',
     },
     not_applicable: {
         label: 'Module not enabled',
         icon: '–',
-        classes: 'bg-slate-50 text-slate-600 ring-slate-200',
+        classes: 'bg-graphite-100 text-ink-muted ring-line',
     },
     not_available: {
         label: 'Not available',
         icon: '⊘',
-        classes: 'bg-slate-100 text-slate-700 ring-slate-300',
+        classes: 'bg-graphite-200 text-ink ring-control-line',
     },
 };
 

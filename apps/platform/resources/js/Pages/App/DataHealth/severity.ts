@@ -32,10 +32,11 @@ export const severityHelp: Record<Severity, string> = {
 };
 
 export const severityClasses: Record<Severity, string> = {
-    blocking: 'bg-red-50 text-red-800 ring-red-200',
-    action_required: 'bg-amber-50 text-amber-900 ring-amber-200',
-    review: 'bg-sky-50 text-sky-900 ring-sky-200',
-    advisory: 'bg-slate-100 text-slate-700 ring-slate-200',
+    // DS-4h: a severity is a status family (OD-DS-1), the strongest mono one.
+    blocking: 'bg-accent-900 text-ground ring-accent-900',
+    action_required: 'bg-accent-100 text-ink ring-accent-300',
+    review: 'bg-accent-100 text-accent-strong ring-accent-300',
+    advisory: 'bg-graphite-200 text-ink ring-line',
 };
 
 export const kindLabels: Record<Kind, string> = {

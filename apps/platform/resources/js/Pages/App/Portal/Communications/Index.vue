@@ -35,7 +35,7 @@ function formatDate(value: string | null): string {
 <template>
     <main class="mx-auto max-w-3xl px-6 py-10">
         <a class="text-sm underline" href="/app">Back</a>
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">Messages from {{ schoolName }}</h1>
+        <h1 class="mt-4 text-xl font-semibold text-ink">Messages from {{ schoolName }}</h1>
 
         <nav class="mt-4 flex gap-4 text-sm" aria-label="Filter">
             <a
@@ -61,23 +61,22 @@ function formatDate(value: string | null): string {
             "
         />
 
-        <ul v-else class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul v-else class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="item in items" :key="item.id" class="px-4 py-3">
                 <a class="block" :href="`/app/portal/communications/announcements/${item.id}`">
                     <span class="flex items-center gap-2">
-                        <span v-if="item.unread" class="text-xs font-semibold text-blue-700"
+                        <span v-if="item.unread" class="text-xs font-semibold text-accent-strong"
                             >New</span
                         >
-                        <span
-                            :class="item.unread ? 'font-semibold text-slate-900' : 'text-slate-800'"
-                            >{{ item.title }}</span
-                        >
-                        <span v-if="item.hasAttachments" class="text-xs text-slate-500"
+                        <span :class="item.unread ? 'font-semibold text-ink' : 'text-ink'">{{
+                            item.title
+                        }}</span>
+                        <span v-if="item.hasAttachments" class="text-xs text-ink-muted"
                             >(attachment)</span
                         >
                     </span>
-                    <span class="mt-1 block text-sm text-slate-600">{{ item.preview }}</span>
-                    <span class="mt-1 block text-xs text-slate-500">
+                    <span class="mt-1 block text-sm text-ink-muted">{{ item.preview }}</span>
+                    <span class="mt-1 block text-xs text-ink-muted">
                         {{ item.sender ?? 'School' }} · {{ formatDate(item.publishedAt) }}
                     </span>
                 </a>

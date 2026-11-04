@@ -13,7 +13,7 @@ function signOut() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">No access to this School</h1>
         <p class="mt-4 text-sm" data-testid="school-host-no-access">
             You are signed in, but your account does not have access to the School at this web

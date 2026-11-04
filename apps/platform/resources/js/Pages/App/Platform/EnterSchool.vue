@@ -33,12 +33,12 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Enter a School (elevated access)</h1>
-        <p v-if="group" class="mt-1 text-sm text-slate-600" data-testid="authority-group">
+        <p v-if="group" class="mt-1 text-sm text-ink-muted" data-testid="authority-group">
             Under the authority of the School Group {{ group.name }}.
         </p>
-        <p class="mt-2 text-sm text-slate-600">
+        <p class="mt-2 text-sm text-ink-muted">
             Elevated access establishes one School's context for at most
             {{ maxMinutes }} minutes. It grants no School permissions, and every entry is recorded.
         </p>
@@ -46,7 +46,7 @@ function submit() {
         <p
             v-if="!mfaEnrolled"
             role="status"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+            class="mt-6 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm"
             data-testid="mfa-required"
         >
             Entering a School requires multi-factor authentication. Enroll a factor under
@@ -56,14 +56,14 @@ function submit() {
         <p
             v-else-if="hasActiveElevation"
             role="status"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+            class="mt-6 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm"
         >
             You already have elevated access active. Exit it before entering another School.
         </p>
 
         <form v-else class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="target">
+                <label class="block text-sm text-ink-muted" for="target">
                     School domain or identifier (exact)
                 </label>
                 <input
@@ -72,32 +72,24 @@ function submit() {
                     autocomplete="off"
                     spellcheck="false"
                     :readonly="!!group"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 read-only:bg-slate-100"
+                    class="input mt-1 read-only:bg-graphite-200"
                 />
-                <p v-if="errors.target" class="mt-1 text-sm text-red-700">{{ errors.target }}</p>
+                <p v-if="errors.target" class="mt-1 text-sm text-danger">{{ errors.target }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="reason_code">Reason</label>
-                <select
-                    id="reason_code"
-                    v-model="form.reason_code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                >
+                <label class="block text-sm text-ink-muted" for="reason_code">Reason</label>
+                <select id="reason_code" v-model="form.reason_code" class="input mt-1">
                     <option value="" disabled>Choose a reason</option>
                     <option v-for="r in reasons" :key="r.value" :value="r.value">
                         {{ r.label }}
                     </option>
                 </select>
-                <p v-if="errors.reason_code" class="mt-1 text-sm text-red-700">
+                <p v-if="errors.reason_code" class="mt-1 text-sm text-danger">
                     {{ errors.reason_code }}
                 </p>
             </div>
             <div class="flex items-center gap-4">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     Continue
                 </button>
                 <a class="text-sm underline" :href="group ? `/app/groups/${group.id}` : '/app'"

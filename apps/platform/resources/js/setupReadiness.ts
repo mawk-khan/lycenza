@@ -53,32 +53,32 @@ export const statusPresentation: Record<
     configured: {
         label: 'Configured',
         icon: '✓',
-        classes: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+        classes: 'bg-graphite-100 text-ink ring-graphite-300',
     },
     partially_configured: {
         label: 'Partially configured',
         icon: '◐',
-        classes: 'bg-sky-50 text-sky-800 ring-sky-200',
+        classes: 'bg-accent-100 text-accent-strong ring-accent-300',
     },
     not_configured: {
         label: 'Not configured',
         icon: '○',
-        classes: 'bg-slate-50 text-slate-700 ring-slate-300',
+        classes: 'bg-graphite-100 text-ink ring-control-line',
     },
     blocked: {
         label: 'Blocked',
         icon: '⛔',
-        classes: 'bg-rose-50 text-rose-800 ring-rose-200',
+        classes: 'bg-white text-accent-900 ring-accent-strong',
     },
     attention_required: {
         label: 'Needs attention',
         icon: '⚠',
-        classes: 'bg-amber-50 text-amber-900 ring-amber-200',
+        classes: 'bg-accent-100 text-ink ring-accent-300',
     },
     not_applicable: {
         label: 'Not enabled',
         icon: '–',
-        classes: 'bg-slate-50 text-slate-500 ring-slate-200',
+        classes: 'bg-graphite-100 text-ink-muted ring-line',
     },
 };
 

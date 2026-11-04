@@ -24,10 +24,10 @@ const integrationCounts = computed(() => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Organization report</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             How {{ report.school.name }} is configured, worked out from each module's own records
             each time you open this page. This report shows configuration only. It never gives
             access, and it shows no people, records or amounts.
@@ -66,7 +66,7 @@ const integrationCounts = computed(() => {
                     <caption class="sr-only">
                         Setup areas by category
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="py-2 pr-3">Category</th>
                             <th scope="col" class="py-2 pr-3 text-right">Configured</th>
@@ -75,7 +75,7 @@ const integrationCounts = computed(() => {
                             <th scope="col" class="py-2 pr-3 text-right">Blocked</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="category in setup.categories" :key="category.key">
                             <th scope="row" class="py-2 pr-3 font-normal">{{ category.label }}</th>
                             <td class="py-2 pr-3 text-right tabular-nums">
@@ -94,11 +94,11 @@ const integrationCounts = computed(() => {
                     </tbody>
                 </table>
             </div>
-            <p v-if="setup.notEnabled.length" class="mt-2 text-xs text-slate-600">
+            <p v-if="setup.notEnabled.length" class="mt-2 text-xs text-ink-muted">
                 Optional modules not enabled (not counted, and never a gap):
                 {{ setup.notEnabled.join(', ') }}.
             </p>
-            <p v-if="setup.overview.hiddenAreas > 0" class="mt-1 text-xs text-slate-500">
+            <p v-if="setup.overview.hiddenAreas > 0" class="mt-1 text-xs text-ink-muted">
                 {{ setup.overview.hiddenAreas }} setup
                 {{ setup.overview.hiddenAreas === 1 ? 'area is' : 'areas are' }} not shown because
                 they need access you do not have.
@@ -119,7 +119,7 @@ const integrationCounts = computed(() => {
                     <caption class="sr-only">
                         Setup areas that are not configured, blocked first
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="py-2 pr-3">Area</th>
                             <th scope="col" class="py-2 pr-3">Owner</th>
@@ -130,11 +130,11 @@ const integrationCounts = computed(() => {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="gap in report.gaps" :key="gap.key" class="align-top">
                             <th scope="row" class="py-2 pr-3 font-medium">
                                 {{ gap.title }}
-                                <span class="block text-xs font-normal text-slate-500"
+                                <span class="block text-xs font-normal text-ink-muted"
                                     >{{ gap.category
                                     }}<template v-if="!gap.core"> · Optional module</template></span
                                 >
@@ -142,7 +142,7 @@ const integrationCounts = computed(() => {
                             <td class="py-2 pr-3">{{ gap.owner }}</td>
                             <td class="py-2 pr-3">
                                 <span
-                                    class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset"
+                                    class="inline-flex items-center gap-1 rounded-xs px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset"
                                     :class="statusPresentation[gap.status].classes"
                                 >
                                     <span aria-hidden="true">{{
@@ -151,7 +151,7 @@ const integrationCounts = computed(() => {
                                     {{ statusPresentation[gap.status].label }}
                                 </span>
                             </td>
-                            <td class="py-2 pr-3 text-slate-700">
+                            <td class="py-2 pr-3 text-ink">
                                 {{ gap.explanation }}
                                 <span v-if="gap.prerequisites.length" class="block text-xs"
                                     >Complete {{ gap.prerequisites.join(', ') }} first.</span
@@ -173,7 +173,7 @@ const integrationCounts = computed(() => {
                     </tbody>
                 </table>
             </div>
-            <p v-else class="mt-2 text-sm text-slate-600">
+            <p v-else class="mt-2 text-sm text-ink-muted">
                 No configuration gaps in the areas you can see.
             </p>
         </section>
@@ -193,7 +193,7 @@ const integrationCounts = computed(() => {
                 </ul>
                 <p
                     v-if="report.integrations.verificationRequired.length"
-                    class="mt-2 text-xs text-amber-900"
+                    class="mt-2 text-xs text-ink"
                 >
                     Verify your sign-in to see:
                     {{ report.integrations.verificationRequired.join(', ') }}.
@@ -202,7 +202,7 @@ const integrationCounts = computed(() => {
                     >Open Integrations &amp; devices</a
                 >
             </template>
-            <p v-else class="mt-2 text-sm text-slate-600">
+            <p v-else class="mt-2 text-sm text-ink-muted">
                 This summary could not be read right now.
             </p>
         </section>
@@ -212,36 +212,36 @@ const integrationCounts = computed(() => {
             <h2 id="presentation-heading" class="text-base font-semibold">Presentation</h2>
             <dl v-if="report.presentation.available" class="mt-2 grid gap-2 text-sm sm:grid-cols-2">
                 <div>
-                    <dt class="text-slate-600">Brand</dt>
+                    <dt class="text-ink-muted">Brand</dt>
                     <dd>
                         {{ brandSourceLabels[report.presentation.brandSource] }}
                         <template v-if="report.presentation.networkName"
                             >({{ report.presentation.networkName }})</template
                         >
-                        <span v-if="report.presentation.attention" class="block text-amber-900">{{
+                        <span v-if="report.presentation.attention" class="block text-ink">{{
                             report.presentation.attention
                         }}</span>
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-600">Navigation preferences</dt>
+                    <dt class="text-ink-muted">Navigation preferences</dt>
                     <dd>
                         Staff: {{ report.presentation.navigation.staff_web || 'none' }} · Guardian
                         portal: {{ report.presentation.navigation.guardian_portal || 'none' }}
                     </dd>
                 </div>
                 <div class="sm:col-span-2">
-                    <dt class="text-slate-600">Logo and banner</dt>
+                    <dt class="text-ink-muted">Logo and banner</dt>
                     <dd>Not available yet: there is no governed media pipeline.</dd>
                 </div>
-                <div class="sm:col-span-2 text-xs text-slate-500">
+                <div class="sm:col-span-2 text-xs text-ink-muted">
                     Presentation never changes who can open what.
                     <a class="underline" :href="report.presentation.href"
                         >Branding &amp; navigation</a
                     >
                 </div>
             </dl>
-            <p v-else class="mt-2 text-sm text-slate-600">
+            <p v-else class="mt-2 text-sm text-ink-muted">
                 This summary could not be read right now.
             </p>
         </section>
@@ -251,21 +251,21 @@ const integrationCounts = computed(() => {
             <h2 id="access-heading" class="text-base font-semibold">Access administration</h2>
             <dl v-if="report.access.available" class="mt-2 grid gap-2 text-sm sm:grid-cols-3">
                 <div>
-                    <dt class="text-slate-600">Role templates</dt>
+                    <dt class="text-ink-muted">Role templates</dt>
                     <dd class="text-lg font-semibold">{{ report.access.roleTemplates }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-600">Whole-School role assignments</dt>
+                    <dt class="text-ink-muted">Whole-School role assignments</dt>
                     <dd class="text-lg font-semibold">
                         {{ report.access.wholeSchoolAssignments }}
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-600">Campus role assignments</dt>
+                    <dt class="text-ink-muted">Campus role assignments</dt>
                     <dd class="text-lg font-semibold">{{ report.access.campusAssignments }}</dd>
                 </div>
                 <div class="sm:col-span-3">
-                    <dt class="text-slate-600">Sensitive data</dt>
+                    <dt class="text-ink-muted">Sensitive data</dt>
                     <dd>
                         {{ report.access.sensitiveData.status }} ({{
                             report.access.sensitiveData.families
@@ -273,11 +273,11 @@ const integrationCounts = computed(() => {
                         families described)
                     </dd>
                 </div>
-                <div class="sm:col-span-3 text-xs text-slate-500">
+                <div class="sm:col-span-3 text-xs text-ink-muted">
                     <a class="underline" :href="report.access.href">Open the Access Center</a>
                 </div>
             </dl>
-            <p v-else class="mt-2 text-sm text-slate-600">
+            <p v-else class="mt-2 text-sm text-ink-muted">
                 This summary could not be read right now.
             </p>
         </section>

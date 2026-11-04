@@ -60,13 +60,15 @@ python3 -I docs/design/foundation-v3/ds_migrate.py apps/platform/resources/js/Pa
 npx prettier --write <the same files>
 ```
 
-Then add the folder to `DesignTokensTest::MIGRATED`. ADR 0082 §10 records the
-mapping. New pages in a migrated domain are written with the classes above
+ADR 0082 §10 records the mapping. Since DS-4h every page is migrated and the
+guard covers all of `resources/js`, so a new page must use the classes above
 from the start.
 
 ## Not yet themed
 
 - `ElevationBanner` keeps its amber security styling, and the Emergency
   communication label keeps the danger hue (OD-DS-4).
-- Pages outside `DesignTokensTest::MIGRATED` still use the Tailwind palette.
+- Every page and component is migrated; `DesignTokensTest` refuses a raw
+  palette class anywhere under `resources/js` (exemption: the elevation
+  banner).
 - The page area stays white until every domain is migrated (ADR 0082 §10.3).

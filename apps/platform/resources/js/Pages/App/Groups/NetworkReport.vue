@@ -77,10 +77,10 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="`/app/groups/${group.id}`">← {{ group.name }}</a>
         <h1 class="mt-2 text-xl font-semibold">Network report</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Governance facts about the member Schools of {{ group.name }}, computed from the
             Network's own records each time you open this page.
             <template v-if="scope.type === 'scoped'"
@@ -97,22 +97,19 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
             <a class="underline" href="#setup-heading">Setup</a>
         </nav>
 
-        <section
-            aria-labelledby="overview-heading"
-            class="mt-6 rounded border border-slate-200 p-4"
-        >
+        <section aria-labelledby="overview-heading" class="mt-6 rounded-xs border border-line p-4">
             <h2 id="overview-heading" class="text-base font-semibold">Overview</h2>
             <dl class="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
-                    <dt class="text-sm text-slate-600">Member Schools</dt>
+                    <dt class="text-sm text-ink-muted">Member Schools</dt>
                     <dd class="text-lg font-semibold">{{ overview.schools.total }}</dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-slate-600">Active</dt>
+                    <dt class="text-sm text-ink-muted">Active</dt>
                     <dd class="text-lg font-semibold">{{ overview.schools.active }}</dd>
                 </div>
                 <div>
-                    <dt class="text-sm text-slate-600">Regions · Zones</dt>
+                    <dt class="text-sm text-ink-muted">Regions · Zones</dt>
                     <dd class="text-lg font-semibold">
                         {{ overview.regions.length }} · {{ overview.zones.length }}
                     </dd>
@@ -129,7 +126,7 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
                             <th scope="col">Schools</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="[key, label] in relationshipRows" :key="key">
                             <th scope="row" class="py-1 pr-3 font-normal">{{ label }}</th>
                             <td class="py-1 text-right tabular-nums">
@@ -152,7 +149,7 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
                             <th scope="col">Schools</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="(count, status) in lifecycle" :key="status">
                             <th scope="row" class="py-1 pr-3 font-normal">
                                 {{ lifecycleLabels[status] ?? status }}
@@ -162,7 +159,7 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
                     </tbody>
                 </table>
             </div>
-            <p class="mt-3 text-xs text-slate-500">
+            <p class="mt-3 text-xs text-ink-muted">
                 A relationship describes how the School relates to the Network. It gives no one any
                 access to the School.
             </p>
@@ -191,18 +188,18 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
                     <caption class="text-left font-medium">
                         Schools by Region and Zone
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="py-2 pr-3">Region / Zone</th>
                             <th scope="col" class="py-2 pr-3 text-right">Schools</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <template v-for="region in distribution.regions" :key="region.code">
                             <tr>
                                 <th scope="row" class="py-2 pr-3 font-semibold">
                                     {{ region.name }}
-                                    <span v-if="region.status === 'inactive'" class="text-amber-800"
+                                    <span v-if="region.status === 'inactive'" class="text-ink"
                                         >(inactive)</span
                                     >
                                 </th>
@@ -213,7 +210,7 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
                             <tr v-for="zone in region.zones" :key="zone.code">
                                 <th scope="row" class="py-1 pr-3 pl-6 font-normal">
                                     {{ zone.name }}
-                                    <span v-if="zone.status === 'inactive'" class="text-amber-800"
+                                    <span v-if="zone.status === 'inactive'" class="text-ink"
                                         >(inactive)</span
                                     >
                                 </th>
@@ -250,14 +247,14 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
                 <caption class="text-left font-medium">
                     Governance attention
                 </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
+                <thead class="border-b border-control-line text-ink-muted">
                     <tr>
                         <th scope="col" class="py-2 pr-3">Attention</th>
                         <th scope="col" class="py-2 pr-3 text-right">Schools</th>
                         <th scope="col" class="py-2 pr-3"><span class="sr-only">List</span></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="row in attentionRows" :key="row.key">
                         <th scope="row" class="py-2 pr-3 font-normal">{{ row.label }}</th>
                         <td class="py-2 pr-3 text-right tabular-nums">{{ row.count }}</td>
@@ -275,9 +272,9 @@ const attentionRows: Array<{ key: string; label: string; count: number }> = [
             </table>
         </section>
 
-        <section aria-labelledby="setup-heading" class="mt-8 rounded border border-slate-200 p-4">
+        <section aria-labelledby="setup-heading" class="mt-8 rounded-xs border border-line p-4">
             <h2 id="setup-heading" class="text-base font-semibold">Setup</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Setup readiness and Campus counts are not shown here. Both come from each School's
                 own records, which the Network does not read. Each School sees its own setup in
                 School setup → Setup &amp; readiness.

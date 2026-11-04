@@ -120,72 +120,24 @@ class DesignTokensTest extends TestCase
     }
 
     /**
-     * DS-4 (ADR 0082 §10): the page areas already migrated onto the tokens.
-     * Each DS-4 slice appends its folders; when every page is listed, the
-     * guard becomes "all of resources/js" (ADR 0082 §2.7).
+     * DS-4h (ADR 0082 §10.12): every page, layout, component and class-map
+     * helper is on the design tokens. The only file allowed a raw palette is
+     * the elevation banner, whose amber security styling waits on the owner
+     * decision OD-DS-4 (ADR 0082 §9.6).
      */
-    private const MIGRATED = [
-        'resources/js/Pages/App/Students',          // DS-4a
-        'resources/js/Components/Students',         // DS-4a
-        'resources/js/Components/StudentIdentityFields.vue', // DS-4a
-        'resources/js/Pages/App/Guardians',         // DS-4b
-        'resources/js/Pages/App/Enrollments',       // DS-4b
-        'resources/js/Pages/App/Admissions',        // DS-4b
-        'resources/js/Pages/App/EnrollmentRollovers', // DS-4b
-        'resources/js/Components/GuardianIdentityFields.vue', // DS-4b
-        'resources/js/Components/RelationshipFlags.vue', // DS-4b
-        'resources/js/Pages/App/Finance',           // DS-4c
-        'resources/js/Components/Fees',             // DS-4c
-        'resources/js/Components/ChargeEndForm.vue', // DS-4c
-        'resources/js/Pages/App/HR',                // DS-4d
-        'resources/js/Pages/App/Leave',             // DS-4d
-        'resources/js/Pages/App/Payroll',           // DS-4d
-        'resources/js/Pages/App/StaffAttendance',   // DS-4d
-        'resources/js/Pages/App/StaffAccounts',     // DS-4d
-        'resources/js/Pages/App/My',                // DS-4d
-        'resources/js/Components/HR',               // DS-4d
-        'resources/js/Pages/App/Attendance', // DS-4e
-        'resources/js/Pages/App/Timetable', // DS-4e
-        'resources/js/Pages/App/Examinations', // DS-4e
-        'resources/js/Pages/App/CurriculumDelivery', // DS-4e
-        'resources/js/Pages/App/Syllabus', // DS-4e
-        'resources/js/Pages/App/LMS', // DS-4e
-        'resources/js/Pages/App/TeachingAssignments', // DS-4e
-        'resources/js/Pages/App/SubjectOfferings', // DS-4e
-        'resources/js/Pages/App/ElectiveGroups', // DS-4e
-        'resources/js/Components/SubjectOfferings', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/AcademicYearDates.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/AcademicYears.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/Terms.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/TermDates.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/GradeLevels.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/Sections.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/Subjects.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/Departments.vue', // DS-4e
-        'resources/js/Pages/App/SchoolSetup/Rooms.vue', // DS-4e
-        'resources/js/Pages/App/Library', // DS-4f
-        'resources/js/Pages/App/Transport', // DS-4f
-        'resources/js/Pages/App/Hostel', // DS-4f
-        'resources/js/Pages/App/Inventory', // DS-4f
-        'resources/js/Pages/App/Canteen', // DS-4f
-        'resources/js/Pages/App/Visitor', // DS-4f
-        'resources/js/Pages/App/Communications', // DS-4g
-        'resources/js/Components/App/Communications', // DS-4g
-        'resources/js/Components/SchoolEventList.vue', // DS-4g
+    private const EXEMPT = [
+        'resources/js/Components/ElevationBanner.vue' => 'OD-DS-4: amber security banner, owner decision pending',
     ];
 
     #[Test]
-    public function migrated_pages_are_styled_only_through_the_design_tokens(): void
+    public function every_page_and_component_is_styled_only_through_the_design_tokens(): void
     {
         $palette = '/\b(?:bg|text|border|outline|ring|divide|placeholder|decoration|accent|fill|stroke|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/';
-        $files = [];
-        foreach (self::MIGRATED as $path) {
-            $full = base_path($path);
-            $files = [...$files, ...(is_dir($full) ? iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($full, \FilesystemIterator::SKIP_DOTS))) : [new \SplFileInfo($full)])];
-        }
-        $vue = array_filter($files, fn (\SplFileInfo $f) => $f->getExtension() === 'vue');
-        $this->assertGreaterThan(235, count($vue), 'the migrated scope resolves to real files');
-        foreach ($vue as $file) {
+        $files = iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(base_path('resources/js'), \FilesystemIterator::SKIP_DOTS)));
+        $exempt = array_map(fn (string $path) => base_path($path), array_keys(self::EXEMPT));
+        $sources = array_filter($files, fn (\SplFileInfo $f) => in_array($f->getExtension(), ['vue', 'ts'], true) && ! in_array($f->getPathname(), $exempt, true));
+        $this->assertGreaterThan(300, count($sources), 'the guard reads the real page tree');
+        foreach ($sources as $file) {
             $code = preg_replace(['/<!--.*?-->/s', '/^\s*\/\/.*$/m'], '', (string) file_get_contents($file->getPathname()));
             $this->assertDoesNotMatchRegularExpression($palette, $code, $file->getPathname().' uses a raw palette class');
             $this->assertDoesNotMatchRegularExpression('/(?<![\w:-])rounded(?:-(?:sm|md|lg))?(?![\w-])/', $code, $file->getPathname().' uses a rounded corner (the design is square: rounded-xs)');

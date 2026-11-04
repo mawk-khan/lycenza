@@ -51,7 +51,7 @@ function apply() {
         <h2 id="directory-heading" class="text-base font-semibold">Member Schools</h2>
         <form class="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-6" @submit.prevent="apply">
             <div class="sm:col-span-2">
-                <label class="block text-sm text-slate-700" for="directory-q">{{
+                <label class="block text-sm text-ink" for="directory-q">{{
                     withAttention ? 'School name, code or Network reference' : 'School name or code'
                 }}</label>
                 <input
@@ -59,18 +59,14 @@ function apply() {
                     v-model="state.q"
                     type="search"
                     maxlength="100"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-700" for="directory-relationship"
+                <label class="block text-sm text-ink" for="directory-relationship"
                     >Relationship</label
                 >
-                <select
-                    id="directory-relationship"
-                    v-model="state.relationship"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                >
+                <select id="directory-relationship" v-model="state.relationship" class="input mt-1">
                     <option value="">Any</option>
                     <option v-for="r in relationships" :key="r.code" :value="r.code">
                         {{ r.label }}
@@ -79,34 +75,22 @@ function apply() {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-700" for="directory-region">Region</label>
-                <select
-                    id="directory-region"
-                    v-model="state.region_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                >
+                <label class="block text-sm text-ink" for="directory-region">Region</label>
+                <select id="directory-region" v-model="state.region_id" class="input mt-1">
                     <option value="">Any</option>
                     <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.name }}</option>
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-700" for="directory-zone">Zone</label>
-                <select
-                    id="directory-zone"
-                    v-model="state.zone_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                >
+                <label class="block text-sm text-ink" for="directory-zone">Zone</label>
+                <select id="directory-zone" v-model="state.zone_id" class="input mt-1">
                     <option value="">Any</option>
                     <option v-for="z in zones" :key="z.id" :value="z.id">{{ z.name }}</option>
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-700" for="directory-status">Lifecycle</label>
-                <select
-                    id="directory-status"
-                    v-model="state.status"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                >
+                <label class="block text-sm text-ink" for="directory-status">Lifecycle</label>
+                <select id="directory-status" v-model="state.status" class="input mt-1">
                     <option value="">Any</option>
                     <option value="active">Active</option>
                     <option value="provisioning">Provisioning</option>
@@ -115,14 +99,10 @@ function apply() {
                 </select>
             </div>
             <div v-if="withAttention">
-                <label class="block text-sm text-slate-700" for="directory-attention"
+                <label class="block text-sm text-ink" for="directory-attention"
                     >Governance attention</label
                 >
-                <select
-                    id="directory-attention"
-                    v-model="state.attention"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                >
+                <select id="directory-attention" v-model="state.attention" class="input mt-1">
                     <option value="">Any</option>
                     <option value="any">Needs attention</option>
                     <option value="unclassified">Unclassified</option>
@@ -131,21 +111,15 @@ function apply() {
                 </select>
             </div>
             <div v-if="sorts && sorts.length">
-                <label class="block text-sm text-slate-700" for="directory-sort">Sort by</label>
-                <select
-                    id="directory-sort"
-                    v-model="state.sort"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                >
+                <label class="block text-sm text-ink" for="directory-sort">Sort by</label>
+                <select id="directory-sort" v-model="state.sort" class="input mt-1">
                     <option v-for="key in sorts" :key="key" :value="key">
                         {{ sortLabels[key] ?? key }}
                     </option>
                 </select>
             </div>
             <div class="sm:col-span-3 lg:col-span-6">
-                <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
-                    Apply filters
-                </button>
+                <button type="submit" class="btn btn-secondary">Apply filters</button>
             </div>
         </form>
 
@@ -159,7 +133,7 @@ function apply() {
                 <caption class="sr-only">
                     Member Schools of this Group
                 </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
+                <thead class="border-b border-control-line text-ink-muted">
                     <tr>
                         <th scope="col" class="py-2 pr-3">School</th>
                         <th scope="col" class="py-2 pr-3">Code</th>
@@ -170,37 +144,37 @@ function apply() {
                         <th scope="col" class="py-2 pr-3"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <tr v-for="s in directory.data" :key="s.id">
                         <td class="py-2 pr-3 font-medium">
                             {{ s.name }}
                             <span
                                 v-if="s.networkReference"
-                                class="block text-xs font-normal text-slate-500"
+                                class="block text-xs font-normal text-ink-muted"
                                 >{{ s.networkReference }}</span
                             >
                         </td>
                         <td class="py-2 pr-3">{{ s.code ?? '—' }}</td>
                         <td class="py-2 pr-3">
                             <span
-                                class="rounded px-1.5 py-0.5 text-xs ring-1 ring-inset"
+                                class="rounded-xs px-1.5 py-0.5 text-xs ring-1 ring-inset"
                                 :class="
                                     s.relationship
-                                        ? 'ring-slate-300'
-                                        : 'bg-amber-50 text-amber-900 ring-amber-200'
+                                        ? 'ring-control-line'
+                                        : 'bg-accent-100 text-ink ring-accent-300'
                                 "
                                 >{{ s.relationshipLabel }}</span
                             >
                         </td>
                         <td class="py-2 pr-3">
                             {{ s.region?.name ?? '—'
-                            }}<span v-if="s.region?.status === 'inactive'" class="text-amber-800">
+                            }}<span v-if="s.region?.status === 'inactive'" class="text-ink">
                                 (inactive)</span
                             >
                         </td>
                         <td class="py-2 pr-3">
                             {{ s.zone?.name ?? '—'
-                            }}<span v-if="s.zone?.status === 'inactive'" class="text-amber-800">
+                            }}<span v-if="s.zone?.status === 'inactive'" class="text-ink">
                                 (inactive)</span
                             >
                         </td>
@@ -210,7 +184,7 @@ function apply() {
                 </tbody>
             </table>
         </div>
-        <p v-if="!directory.data.length" class="mt-2 text-sm text-slate-600">
+        <p v-if="!directory.data.length" class="mt-2 text-sm text-ink-muted">
             No member Schools match.
         </p>
         <Pagination

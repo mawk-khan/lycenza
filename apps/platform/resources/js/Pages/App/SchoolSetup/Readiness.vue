@@ -34,25 +34,22 @@ function needsWork(items: SetupCard[]): boolean {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
 
         <h1 class="mt-2 text-xl font-semibold">Setup &amp; readiness</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             How {{ center.school.name }} is configured, worked out from each module's own records
             each time you open this page. Status here never gives access: each area is configured in
             its own module, by people allowed to do so.
         </p>
 
         <!-- Overview -->
-        <section
-            aria-labelledby="overview-heading"
-            class="mt-6 rounded border border-slate-200 p-4"
-        >
+        <section aria-labelledby="overview-heading" class="mt-6 rounded-xs border border-line p-4">
             <h2 id="overview-heading" class="text-base font-semibold">Overview</h2>
             <p class="mt-1 text-sm" role="status">
                 <span class="font-medium">{{ overallStateLabels[overview.state] }}</span>
-                <span class="text-slate-500"> · School: {{ center.school.name }}</span>
+                <span class="text-ink-muted"> · School: {{ center.school.name }}</span>
             </p>
 
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -66,7 +63,7 @@ function needsWork(items: SetupCard[]): boolean {
                     >
                         {{ percent(overview.core) }}%
                     </progress>
-                    <p class="mt-1 text-xs text-slate-600">
+                    <p class="mt-1 text-xs text-ink-muted">
                         {{ overview.core.configured }} of {{ overview.core.total }} core areas
                         configured
                     </p>
@@ -82,12 +79,12 @@ function needsWork(items: SetupCard[]): boolean {
                         >
                             {{ percent(overview.optional) }}%
                         </progress>
-                        <p class="mt-1 text-xs text-slate-600">
+                        <p class="mt-1 text-xs text-ink-muted">
                             {{ overview.optional.configured }} of
                             {{ overview.optional.total }} enabled module areas configured
                         </p>
                     </template>
-                    <p v-else class="mt-1 text-xs text-slate-600">
+                    <p v-else class="mt-1 text-xs text-ink-muted">
                         No optional modules you can see are enabled.
                     </p>
                 </div>
@@ -107,7 +104,7 @@ function needsWork(items: SetupCard[]): boolean {
                     {{ overview.notEnabled }} optional modules not enabled
                 </li>
             </ul>
-            <p v-if="overview.hiddenAreas > 0" class="mt-3 text-xs text-slate-500">
+            <p v-if="overview.hiddenAreas > 0" class="mt-3 text-xs text-ink-muted">
                 {{ overview.hiddenAreas }} setup
                 {{ overview.hiddenAreas === 1 ? 'area is' : 'areas are' }} not shown because they
                 need access you do not have.
@@ -121,21 +118,21 @@ function needsWork(items: SetupCard[]): boolean {
                 <li
                     v-for="(next, index) in center.nextActions"
                     :key="next.key"
-                    class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 px-4 py-3"
+                    class="flex flex-wrap items-center justify-between gap-2 rounded-xs border border-line px-4 py-3"
                 >
                     <div class="min-w-0">
                         <p class="text-sm font-medium">{{ index + 1 }}. {{ next.title }}</p>
-                        <p class="text-xs text-slate-600">{{ next.reason }}</p>
+                        <p class="text-xs text-ink-muted">{{ next.reason }}</p>
                     </div>
                     <a
-                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+                        class="btn btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-control-line focus-visible:ring-offset-2"
                         :href="next.href"
                         :aria-label="`Configure ${next.title}`"
                         >Configure</a
                     >
                 </li>
             </ol>
-            <p v-else class="mt-2 text-sm text-slate-600">
+            <p v-else class="mt-2 text-sm text-ink-muted">
                 Nothing you can configure needs doing right now.
             </p>
         </section>
@@ -146,50 +143,47 @@ function needsWork(items: SetupCard[]): boolean {
             <details
                 v-for="category in center.categories"
                 :key="category.key"
-                class="mt-4 rounded border border-slate-200"
+                class="mt-4 rounded-xs border border-line"
                 :open="needsWork(category.items)"
             >
                 <summary
-                    class="cursor-pointer px-4 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                    class="cursor-pointer px-4 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-control-line"
                 >
                     <h3 class="inline">{{ category.label }}</h3>
-                    <span class="font-normal text-slate-500">
+                    <span class="font-normal text-ink-muted">
                         ·
                         {{ category.items.filter((i) => i.status === 'configured').length }} of
                         {{ category.items.length }} configured</span
                     >
                 </summary>
-                <ul class="divide-y divide-slate-100 border-t border-slate-100">
+                <ul class="divide-y divide-line border-t border-line">
                     <li
                         v-for="card in category.items"
                         :key="card.key"
                         class="flex flex-wrap items-start justify-between gap-3 px-4 py-4"
                     >
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs text-slate-500">
+                            <p class="text-xs text-ink-muted">
                                 {{ card.owner }} · {{ card.scope }}
                                 <span v-if="!card.core"> · Optional module</span>
                             </p>
                             <h4 class="font-medium">{{ card.title }}</h4>
-                            <p class="mt-0.5 text-sm text-slate-600">{{ card.description }}</p>
+                            <p class="mt-0.5 text-sm text-ink-muted">{{ card.description }}</p>
                             <p class="mt-2 text-sm">{{ card.explanation }}</p>
-                            <p v-if="checks(card)" class="mt-1 text-xs text-slate-500">
+                            <p v-if="checks(card)" class="mt-1 text-xs text-ink-muted">
                                 {{ checks(card) }}
                             </p>
-                            <p
-                                v-if="card.prerequisites.length > 0"
-                                class="mt-1 text-xs text-slate-700"
-                            >
+                            <p v-if="card.prerequisites.length > 0" class="mt-1 text-xs text-ink">
                                 Complete
                                 {{ card.prerequisites.map((p) => p.title).join(', ') }} first.
                             </p>
-                            <p v-if="card.hiddenPrerequisite" class="mt-1 text-xs text-slate-700">
+                            <p v-if="card.hiddenPrerequisite" class="mt-1 text-xs text-ink">
                                 A prerequisite setup area must be completed first.
                             </p>
                         </div>
                         <div class="flex shrink-0 flex-col items-end gap-2">
                             <span
-                                class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                                class="inline-flex items-center gap-1 rounded-xs px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                                 :class="statusPresentation[card.status].classes"
                             >
                                 <span aria-hidden="true">{{
@@ -200,12 +194,12 @@ function needsWork(items: SetupCard[]): boolean {
                             </span>
                             <a
                                 v-if="card.action.kind !== 'none' && card.action.href"
-                                class="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                                class="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-control-line"
                                 :href="card.action.href"
                                 :aria-label="`${card.action.kind === 'configure' ? 'Configure' : 'View'} ${card.title}`"
                                 >{{ card.action.kind === 'configure' ? 'Configure' : 'View' }}</a
                             >
-                            <span v-else class="text-xs text-slate-500">
+                            <span v-else class="text-xs text-ink-muted">
                                 Managed in its own module by people with access.
                             </span>
                         </div>
@@ -219,13 +213,13 @@ function needsWork(items: SetupCard[]): boolean {
             <h2 id="optional-heading" class="text-base font-semibold">
                 Optional modules not enabled
             </h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 These modules are not enabled for the School, so they do not count towards setup
                 progress. Module availability is managed by Lycenza, not on this page.
             </p>
             <ul
                 v-if="center.notEnabled.length > 0"
-                class="mt-3 divide-y divide-slate-100 rounded border border-slate-200"
+                class="mt-3 divide-y divide-line rounded-xs border border-line"
             >
                 <li
                     v-for="module in center.notEnabled"
@@ -234,10 +228,10 @@ function needsWork(items: SetupCard[]): boolean {
                 >
                     <div class="min-w-0">
                         <p class="text-sm font-medium">{{ module.title }}</p>
-                        <p class="text-xs text-slate-500">{{ module.owner }}</p>
+                        <p class="text-xs text-ink-muted">{{ module.owner }}</p>
                     </div>
                     <span
-                        class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                        class="inline-flex items-center gap-1 rounded-xs px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                         :class="statusPresentation.not_applicable.classes"
                     >
                         <span aria-hidden="true">{{ statusPresentation.not_applicable.icon }}</span>
@@ -245,7 +239,7 @@ function needsWork(items: SetupCard[]): boolean {
                     </span>
                 </li>
             </ul>
-            <p v-else class="mt-2 text-sm text-slate-600">Every optional module is enabled.</p>
+            <p v-else class="mt-2 text-sm text-ink-muted">Every optional module is enabled.</p>
         </section>
     </main>
 </template>

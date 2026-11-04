@@ -56,10 +56,10 @@ function time(iso: string): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" :href="`/app/groups/${group.id}`">← {{ group.name }}</a>
         <h1 class="mt-2 text-xl font-semibold">Curriculum coverage</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Syllabus units completed out of those planned, for each member School's own active
             academic year. Figures count syllabus units, never people. Schools are read one at a
             time, so this is a sequence of readings, not one simultaneous view.
@@ -68,7 +68,7 @@ function time(iso: string): string {
         <p
             v-if="!report"
             role="alert"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+            class="mt-6 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm"
             data-testid="report-unavailable"
         >
             The report could not be produced right now. No partial figures are shown. Try again
@@ -76,16 +76,16 @@ function time(iso: string): string {
         </p>
 
         <template v-else>
-            <p class="mt-4 text-xs text-slate-500" data-testid="generated-at">
+            <p class="mt-4 text-xs text-ink-muted" data-testid="generated-at">
                 Generated {{ time(report.generatedAt) }}
             </p>
 
             <section class="mt-6" data-testid="group-totals">
-                <h2 class="text-sm font-medium text-slate-500">Group total</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Group total</h2>
                 <p class="mt-1 text-2xl font-semibold">
                     {{ percent(report.totals.coveragePercent) }}
                 </p>
-                <p class="text-sm text-slate-600">
+                <p class="text-sm text-ink-muted">
                     {{ report.totals.completed }} completed, {{ report.totals.inProgress }} in
                     progress, {{ report.totals.notStarted }} not started of
                     {{ report.totals.planned }} planned —
@@ -95,7 +95,7 @@ function time(iso: string): string {
 
             <table class="mt-6 w-full text-left text-sm" data-testid="school-rows">
                 <thead>
-                    <tr class="text-slate-500">
+                    <tr class="text-ink-muted">
                         <th class="py-1 font-medium">School</th>
                         <th class="py-1 font-medium">Academic year</th>
                         <th class="py-1 font-medium">Coverage</th>
@@ -107,7 +107,7 @@ function time(iso: string): string {
                     <tr
                         v-for="s in report.schools"
                         :key="s.schoolId"
-                        class="border-t border-slate-200"
+                        class="border-t border-line"
                         :data-state="s.state"
                     >
                         <td class="py-2">{{ s.name }}</td>
@@ -122,11 +122,11 @@ function time(iso: string): string {
                             Unavailable
                         </td>
                         <td v-else class="py-2" colspan="3">No active academic year</td>
-                        <td class="py-2 text-xs text-slate-500">{{ time(s.observedAt) }}</td>
+                        <td class="py-2 text-xs text-ink-muted">{{ time(s.observedAt) }}</td>
                     </tr>
                 </tbody>
             </table>
-            <p v-if="!report.schools.length" class="mt-2 text-sm text-slate-600">
+            <p v-if="!report.schools.length" class="mt-2 text-sm text-ink-muted">
                 No member Schools.
             </p>
         </template>

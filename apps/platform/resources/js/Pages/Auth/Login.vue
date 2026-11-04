@@ -60,16 +60,16 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-sm p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Sign in</h1>
-        <p v-if="hostSchool" class="mt-1 text-sm text-slate-600" data-testid="host-school">
+        <p v-if="hostSchool" class="mt-1 text-sm text-ink-muted" data-testid="host-school">
             {{ hostSchool.name }}
         </p>
 
         <p
             v-if="sessionEnded"
             role="status"
-            class="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-control-line bg-graphite-100 px-3 py-2 text-sm text-ink"
             data-testid="session-ended"
         >
             Your session has ended. Please sign in again.
@@ -78,7 +78,7 @@ function submit() {
         <p
             v-if="statusMessage"
             role="status"
-            class="mt-4 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            class="mt-4 rounded-xs border border-graphite-300 bg-graphite-100 px-3 py-2 text-sm text-ink"
             data-testid="status-message"
         >
             {{ statusMessage }}
@@ -86,27 +86,27 @@ function submit() {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="email">Email</label>
+                <label class="block text-sm text-ink-muted" for="email">Email</label>
                 <input
                     id="email"
                     v-model="form.email"
                     type="email"
                     autocomplete="username"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.email" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.email" class="mt-1 text-sm text-danger">
                     {{ form.errors.email }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="password">Password</label>
+                <label class="block text-sm text-ink-muted" for="password">Password</label>
                 <input
                     id="password"
                     v-model="form.password"
                     type="password"
                     autocomplete="current-password"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
             </div>
 
@@ -114,53 +114,51 @@ function submit() {
                 ref="submitButton"
                 type="submit"
                 :disabled="form.processing"
-                class="w-full rounded bg-slate-900 px-3 py-2 text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
+                class="btn btn-primary w-full focus:ring-2 focus:ring-accent-300 focus:ring-offset-2 focus:outline-none"
             >
                 Sign in
             </button>
         </form>
 
         <p v-if="recoveryUrl" class="mt-4 text-sm">
-            <a :href="recoveryUrl" class="text-slate-700 underline" data-testid="forgot-password"
+            <a :href="recoveryUrl" class="text-ink underline" data-testid="forgot-password"
                 >Forgot password?</a
             >
         </p>
 
         <section
             v-if="demo && demo.accounts.length > 0"
-            class="mt-8 rounded border border-amber-300 bg-amber-50 p-4"
+            class="mt-8 rounded-xs border border-accent-300 bg-accent-100 p-4"
             aria-labelledby="demo-accounts-heading"
             data-testid="demo-accounts"
         >
-            <h2 id="demo-accounts-heading" class="text-sm font-semibold text-amber-900">
-                Demo accounts
-            </h2>
-            <p class="mt-1 text-xs text-amber-900">
+            <h2 id="demo-accounts-heading" class="text-sm font-semibold text-ink">Demo accounts</h2>
+            <p class="mt-1 text-xs text-ink">
                 Local DDEV demo only. Choosing an account fills the form above; then press Sign in.
             </p>
 
             <div v-for="[group, accounts] in demoGroups" :key="group" class="mt-4">
-                <h3 class="text-xs font-medium tracking-wide text-amber-800 uppercase">
+                <h3 class="text-xs font-medium tracking-wide text-ink uppercase">
                     {{ group }}
                 </h3>
                 <ul class="mt-2 space-y-2">
                     <li v-for="account in accounts" :key="account.email">
                         <button
                             type="button"
-                            class="w-full rounded border bg-white px-3 py-2 text-left hover:border-amber-500"
+                            class="w-full rounded-xs border bg-white px-3 py-2 text-left hover:border-accent-300"
                             :class="
                                 selectedEmail === account.email
-                                    ? 'border-amber-500'
-                                    : 'border-amber-200'
+                                    ? 'border-accent-300'
+                                    : 'border-accent-300'
                             "
                             :data-demo-email="account.email"
                             @click="useDemoAccount(account)"
                         >
-                            <span class="block text-sm font-medium text-slate-900">{{
+                            <span class="block text-sm font-medium text-ink">{{
                                 account.persona
                             }}</span>
-                            <span class="block text-xs text-slate-600">{{ account.email }}</span>
-                            <span class="mt-1 block text-xs text-slate-500">{{
+                            <span class="block text-xs text-ink-muted">{{ account.email }}</span>
+                            <span class="mt-1 block text-xs text-ink-muted">{{
                                 account.hint
                             }}</span>
                         </button>

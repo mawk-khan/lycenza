@@ -97,12 +97,12 @@ const notices: Record<string, string> = {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-4xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/platform/schools">← School Registry</a>
         <div class="mt-2 flex flex-wrap items-center gap-3">
             <h1 class="text-xl font-semibold">{{ school.name }}</h1>
             <span
-                class="rounded px-2 py-0.5 text-xs font-medium"
+                class="rounded-xs px-2 py-0.5 text-xs font-medium"
                 :class="readinessStyles[registry.state]?.badge"
                 data-testid="school-readiness"
                 >{{ readinessStyles[registry.state]?.label ?? registry.state }}</span
@@ -112,7 +112,7 @@ const notices: Record<string, string> = {
         <p
             v-if="notice && notices[notice]"
             role="status"
-            class="mt-4 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm"
+            class="mt-4 rounded-xs border border-graphite-300 bg-graphite-100 px-3 py-2 text-sm"
             data-testid="lifecycle-notice"
         >
             {{ notices[notice] }}
@@ -126,11 +126,11 @@ const notices: Record<string, string> = {
             <li
                 v-for="w in registry.warnings"
                 :key="w.key"
-                class="rounded px-3 py-2"
+                class="rounded-xs px-3 py-2"
                 :class="
                     w.severity === 'warning'
-                        ? 'border border-amber-200 bg-amber-50 text-amber-900'
-                        : 'border border-slate-200 bg-slate-50 text-slate-700'
+                        ? 'border border-accent-300 bg-accent-100 text-ink'
+                        : 'border border-line bg-graphite-100 text-ink'
                 "
             >
                 {{ warningLabels[w.key] ?? w.key }}
@@ -139,54 +139,54 @@ const notices: Record<string, string> = {
 
         <div class="mt-6 grid gap-6 md:grid-cols-2">
             <section aria-labelledby="identity-heading">
-                <h2 id="identity-heading" class="text-sm font-medium text-slate-500">Identity</h2>
+                <h2 id="identity-heading" class="text-sm font-medium text-ink-muted">Identity</h2>
                 <dl class="mt-2 space-y-2 text-sm">
                     <div v-if="registry.legalName">
-                        <dt class="text-slate-500">Legal name</dt>
+                        <dt class="text-ink-muted">Legal name</dt>
                         <dd>{{ registry.legalName }}</dd>
                     </div>
                     <div>
-                        <dt class="text-slate-500">Slug</dt>
+                        <dt class="text-ink-muted">Slug</dt>
                         <dd>{{ school.slug }}</dd>
                     </div>
                     <div v-if="school.code">
-                        <dt class="text-slate-500">Code</dt>
+                        <dt class="text-ink-muted">Code</dt>
                         <dd>{{ school.code }}</dd>
                     </div>
                     <div>
-                        <dt class="text-slate-500">Time zone · locale</dt>
+                        <dt class="text-ink-muted">Time zone · locale</dt>
                         <dd>{{ registry.timezone }} · {{ registry.locale }}</dd>
                     </div>
                     <div v-if="registry.groups.length">
-                        <dt class="text-slate-500">School Groups</dt>
+                        <dt class="text-ink-muted">School Groups</dt>
                         <dd>{{ registry.groups.map((g) => g.name).join(', ') }}</dd>
                     </div>
                     <div>
-                        <dt class="text-slate-500">Identifier</dt>
+                        <dt class="text-ink-muted">Identifier</dt>
                         <dd class="font-mono text-xs">{{ school.id }}</dd>
                     </div>
                 </dl>
             </section>
 
             <section aria-labelledby="lifecycle-heading">
-                <h2 id="lifecycle-heading" class="text-sm font-medium text-slate-500">Lifecycle</h2>
+                <h2 id="lifecycle-heading" class="text-sm font-medium text-ink-muted">Lifecycle</h2>
                 <dl class="mt-2 space-y-2 text-sm">
                     <div>
-                        <dt class="text-slate-500">Status</dt>
+                        <dt class="text-ink-muted">Status</dt>
                         <dd class="font-medium" data-testid="school-status">{{ school.status }}</dd>
                     </div>
                     <div v-if="school.closedAt">
-                        <dt class="text-slate-500">Closed</dt>
+                        <dt class="text-ink-muted">Closed</dt>
                         <dd data-testid="school-closure">
                             {{ school.closedAt }} ({{ school.closureReason }})
                         </dd>
                     </div>
                     <div v-if="registry.createdAt">
-                        <dt class="text-slate-500">Created</dt>
+                        <dt class="text-ink-muted">Created</dt>
                         <dd>{{ registry.createdAt.slice(0, 10) }}</dd>
                     </div>
                     <div v-if="bootstrapAdmins.length">
-                        <dt class="text-slate-500">Bootstrap School Administrator</dt>
+                        <dt class="text-ink-muted">Bootstrap School Administrator</dt>
                         <dd
                             v-for="a in bootstrapAdmins"
                             :key="a.email"
@@ -199,7 +199,7 @@ const notices: Record<string, string> = {
             </section>
 
             <section aria-labelledby="setup-heading">
-                <h2 id="setup-heading" class="text-sm font-medium text-slate-500">
+                <h2 id="setup-heading" class="text-sm font-medium text-ink-muted">
                     Setup (advisory)
                 </h2>
                 <ul class="mt-2 space-y-1 text-sm" data-testid="school-checks">
@@ -213,22 +213,22 @@ const notices: Record<string, string> = {
                 <p class="mt-2 text-sm" data-testid="school-administrator">
                     {{ administratorLabels[registry.administrator] ?? registry.administrator }}
                 </p>
-                <p class="mt-2 text-xs text-slate-500">
+                <p class="mt-2 text-xs text-ink-muted">
                     Readiness is a guide only. It never blocks activation.
                 </p>
             </section>
 
             <section aria-labelledby="structure-heading">
-                <h2 id="structure-heading" class="text-sm font-medium text-slate-500">Structure</h2>
+                <h2 id="structure-heading" class="text-sm font-medium text-ink-muted">Structure</h2>
                 <dl class="mt-2 space-y-2 text-sm">
                     <div>
-                        <dt class="text-slate-500">Active academic year</dt>
+                        <dt class="text-ink-muted">Active academic year</dt>
                         <dd data-testid="school-academic-year">
                             {{ registry.academicYear ?? 'None active' }}
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-slate-500">Campuses</dt>
+                        <dt class="text-ink-muted">Campuses</dt>
                         <dd data-testid="school-campuses">
                             {{ registry.campuses.active }} active,
                             {{ registry.campuses.inactive }} inactive
@@ -236,7 +236,7 @@ const notices: Record<string, string> = {
                         <dd
                             v-for="c in registry.campusList"
                             :key="c.code"
-                            class="text-xs text-slate-500"
+                            class="text-xs text-ink-muted"
                         >
                             {{ c.name }} ({{ c.code }}){{
                                 c.status === 'active' ? '' : ' · inactive'
@@ -244,7 +244,7 @@ const notices: Record<string, string> = {
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-slate-500">Custom domain</dt>
+                        <dt class="text-ink-muted">Custom domain</dt>
                         <dd data-testid="school-domain">
                             {{ domainLabels[registry.domain] ?? registry.domain
                             }}<template v-if="!registry.domainsEnabled">
@@ -257,33 +257,33 @@ const notices: Record<string, string> = {
         </div>
 
         <section class="mt-8" aria-labelledby="audit-heading">
-            <h2 id="audit-heading" class="text-sm font-medium text-slate-500">
+            <h2 id="audit-heading" class="text-sm font-medium text-ink-muted">
                 Recent platform events
             </h2>
             <p v-if="!audit.available && audit.reason === 'mfa'" class="mt-2 text-sm">
                 Confirm your sign-in with MFA to see this School's platform events.
             </p>
-            <p v-else-if="!audit.available" class="mt-2 text-sm text-slate-500">
+            <p v-else-if="!audit.available" class="mt-2 text-sm text-ink-muted">
                 Platform audit review is not part of your access.
             </p>
-            <p v-else-if="audit.entries.length === 0" class="mt-2 text-sm text-slate-500">
+            <p v-else-if="audit.entries.length === 0" class="mt-2 text-sm text-ink-muted">
                 No platform events for this School yet.
             </p>
             <ul v-else class="mt-2 space-y-1 text-sm" data-testid="school-audit">
                 <li v-for="e in audit.entries" :key="e.id">
-                    <span class="font-mono text-xs text-slate-500">{{ e.occurredAt }}</span>
+                    <span class="font-mono text-xs text-ink-muted">{{ e.occurredAt }}</span>
                     {{ e.eventType }}
                 </li>
             </ul>
         </section>
 
         <section v-if="modules" class="mt-8" aria-labelledby="modules-heading">
-            <h2 id="modules-heading" class="text-sm font-medium text-slate-500">Modules</h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <h2 id="modules-heading" class="text-sm font-medium text-ink-muted">Modules</h2>
+            <p class="mt-1 text-xs text-ink-muted">
                 Core modules are always available. Disabling an optional module removes access only;
                 nothing is deleted.
             </p>
-            <ul class="mt-2 divide-y divide-slate-100 text-sm" data-testid="school-modules">
+            <ul class="mt-2 divide-y divide-line text-sm" data-testid="school-modules">
                 <li
                     v-for="m in modules"
                     :key="m.key"
@@ -292,14 +292,14 @@ const notices: Record<string, string> = {
                 >
                     <span>
                         <span class="font-medium">{{ m.label }}</span>
-                        <span v-if="m.core" class="ml-2 text-xs text-slate-500">Core</span>
+                        <span v-if="m.core" class="ml-2 text-xs text-ink-muted">Core</span>
                         <span
                             v-else
-                            class="ml-2 rounded px-1.5 py-0.5 text-xs"
+                            class="ml-2 rounded-xs px-1.5 py-0.5 text-xs"
                             :class="
                                 m.enabled
-                                    ? 'bg-emerald-50 text-emerald-800'
-                                    : 'bg-slate-100 text-slate-600'
+                                    ? 'bg-graphite-100 text-ink'
+                                    : 'bg-graphite-200 text-ink-muted'
                             "
                             >{{ m.enabled ? 'Enabled' : 'Disabled' }}</span
                         >
@@ -316,14 +316,14 @@ const notices: Record<string, string> = {
 
         <p
             v-if="school.status === 'provisioning' && !canManage"
-            class="mt-8 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+            class="mt-8 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm text-accent-strong"
             data-testid="awaiting-activation"
         >
             This School is provisioning. Only a Platform Admin can activate it.
         </p>
 
         <section v-if="canManage || canOnboard" class="mt-8" aria-labelledby="actions-heading">
-            <h2 id="actions-heading" class="text-sm font-medium text-slate-500">
+            <h2 id="actions-heading" class="text-sm font-medium text-ink-muted">
                 Lifecycle actions
             </h2>
             <ul class="mt-2 space-y-1 text-sm" data-testid="lifecycle-actions">
@@ -374,7 +374,7 @@ const notices: Record<string, string> = {
                 No lifecycle change is available for this School.
             </p>
         </section>
-        <p v-if="school.status !== 'provisioning'" class="mt-4 text-sm text-slate-600">
+        <p v-if="school.status !== 'provisioning'" class="mt-4 text-sm text-ink-muted">
             Its members and roles are managed by the School itself.
         </p>
     </main>

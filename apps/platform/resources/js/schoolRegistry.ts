@@ -2,9 +2,12 @@
 // derived values. Readiness is advisory: it never blocks activation.
 
 export const readinessStyles: Record<string, { label: string; badge: string }> = {
-    ready: { label: 'Ready', badge: 'bg-emerald-50 text-emerald-700' },
-    partially_configured: { label: 'Partially configured', badge: 'bg-sky-50 text-sky-700' },
-    needs_attention: { label: 'Needs attention', badge: 'bg-amber-50 text-amber-800' },
+    ready: { label: 'Ready', badge: 'bg-graphite-100 text-ink' },
+    partially_configured: {
+        label: 'Partially configured',
+        badge: 'bg-accent-100 text-accent-strong',
+    },
+    needs_attention: { label: 'Needs attention', badge: 'bg-accent-100 text-ink' },
 };
 
 export const domainLabels: Record<string, string> = {

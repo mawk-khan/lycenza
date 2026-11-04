@@ -49,10 +49,10 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Access Center</h1>
-        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+        <p class="mt-1 max-w-3xl text-sm text-ink-muted">
             How access works in this School. Roles are fixed templates; each assignment is for the
             whole School or one Campus. Menus never grant access — every page checks the capability
             itself.
@@ -72,9 +72,11 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                 role="tab"
                 :aria-selected="tab === t.key"
                 :aria-controls="`panel-${t.key}`"
-                class="rounded border px-3 py-1.5 text-sm"
+                class="rounded-xs border px-3 py-1.5 text-sm"
                 :class="
-                    tab === t.key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300'
+                    tab === t.key
+                        ? 'border-accent-strong bg-accent-strong text-white'
+                        : 'border-control-line'
                 "
                 @click="tab = t.key"
             >
@@ -93,21 +95,21 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                 <li
                     v-for="r in roles"
                     :key="r.key"
-                    class="rounded border border-slate-200 p-4 text-sm"
+                    class="rounded-xs border border-line p-4 text-sm"
                     :data-testid="`role-${r.key}`"
                 >
                     <h2 class="text-base font-semibold">
                         {{ r.name }}
-                        <span v-if="r.addOn" class="text-xs font-normal text-slate-600"
+                        <span v-if="r.addOn" class="text-xs font-normal text-ink-muted"
                             >(add-on)</span
                         >
                     </h2>
-                    <p class="text-xs text-slate-500">{{ r.group }}</p>
-                    <p v-if="r.purpose" class="mt-1 text-slate-700">{{ r.purpose }}</p>
+                    <p class="text-xs text-ink-muted">{{ r.group }}</p>
+                    <p v-if="r.purpose" class="mt-1 text-ink">{{ r.purpose }}</p>
                     <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                        <dt class="text-slate-500">Capabilities</dt>
+                        <dt class="text-ink-muted">Capabilities</dt>
                         <dd>{{ r.capabilityCount }}</dd>
-                        <dt class="text-slate-500">Assignment scope</dt>
+                        <dt class="text-ink-muted">Assignment scope</dt>
                         <dd>
                             {{
                                 r.campusScopable
@@ -115,13 +117,13 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                                     : 'Whole School only'
                             }}
                         </dd>
-                        <dt class="text-slate-500">Access administration</dt>
+                        <dt class="text-ink-muted">Access administration</dt>
                         <dd>{{ r.adminAuthority ? 'Yes' : 'No' }}</dd>
-                        <dt class="text-slate-500">Modules</dt>
+                        <dt class="text-ink-muted">Modules</dt>
                         <dd>{{ r.modules.join(', ') || '—' }}</dd>
                     </dl>
                     <p v-if="r.sensitivity.length" class="mt-2 text-xs">
-                        <span class="text-slate-500">Reaches:</span> {{ r.sensitivity.join(', ') }}
+                        <span class="text-ink-muted">Reaches:</span> {{ r.sensitivity.join(', ') }}
                     </p>
                     <button
                         type="button"
@@ -135,13 +137,13 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                     </button>
                     <div v-if="openRole === r.key" :id="`role-details-${r.key}`" class="mt-2">
                         <div v-for="g in r.capabilities" :key="g.module" class="mt-2">
-                            <h3 class="text-xs font-semibold uppercase text-slate-600">
+                            <h3 class="text-xs font-semibold uppercase text-ink-muted">
                                 {{ g.module }}
                             </h3>
                             <ul class="mt-1 space-y-0.5">
                                 <li v-for="c in g.capabilities" :key="c.key">
                                     {{ c.label }}
-                                    <span class="text-xs text-slate-500">
+                                    <span class="text-xs text-ink-muted">
                                         · {{ c.read ? 'Read' : 'Manage' }}
                                         <template v-if="c.sensitive"> · Sensitive</template>
                                         <template v-if="c.approval"> · Approval</template>
@@ -152,7 +154,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                             </ul>
                         </div>
                         <p v-if="r.sensitiveFamilies.length" class="mt-2 text-xs">
-                            <span class="text-slate-500">Sensitive data reached:</span>
+                            <span class="text-ink-muted">Sensitive data reached:</span>
                             {{ r.sensitiveFamilies.map(familyLabel).join(', ') }}
                         </p>
                     </div>
@@ -167,7 +169,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
             aria-labelledby="tab-matrix"
             class="mt-4"
         >
-            <p class="text-sm text-slate-600">
+            <p class="text-sm text-ink-muted">
                 Each cell summarises what a role can do in a module: Read, Manage or nothing.
             </p>
             <div
@@ -180,7 +182,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                     <caption class="sr-only">
                         Role templates by module
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="sticky left-0 bg-white py-2 pr-3">Role</th>
                             <th
@@ -193,7 +195,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in matrix" :key="row.role">
                             <th
                                 scope="row"
@@ -209,7 +211,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                                     cell === 'manage'
                                         ? 'font-semibold'
                                         : cell === 'none'
-                                          ? 'text-slate-400'
+                                          ? 'text-ink-muted'
                                           : ''
                                 "
                             >
@@ -230,12 +232,8 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
         >
             <form class="grid gap-3 sm:grid-cols-4" @submit.prevent>
                 <div>
-                    <label class="block text-sm text-slate-700" for="cap-module">Module</label>
-                    <select
-                        id="cap-module"
-                        v-model="moduleFilter"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <label class="block text-sm text-ink" for="cap-module">Module</label>
+                    <select id="cap-module" v-model="moduleFilter" class="input mt-1">
                         <option value="">All modules</option>
                         <option v-for="m in modules" :key="m.key" :value="m.key">
                             {{ m.label }}
@@ -243,12 +241,8 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="cap-kind">Kind</label>
-                    <select
-                        id="cap-kind"
-                        v-model="kindFilter"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <label class="block text-sm text-ink" for="cap-kind">Kind</label>
+                    <select id="cap-kind" v-model="kindFilter" class="input mt-1">
                         <option value="">Read and manage</option>
                         <option value="read">Read</option>
                         <option value="manage">Manage</option>
@@ -264,15 +258,15 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
             <div v-for="m in filteredModules" :key="m.key" class="mt-5">
                 <h2 class="text-base font-semibold">
                     {{ m.label }}
-                    <span class="text-xs font-normal text-slate-500">{{
+                    <span class="text-xs font-normal text-ink-muted">{{
                         m.core ? 'Core' : 'Optional module'
                     }}</span>
                 </h2>
-                <p class="text-xs text-slate-600">{{ m.description }}</p>
-                <ul class="mt-2 divide-y divide-slate-100 rounded border border-slate-200 text-sm">
+                <p class="text-xs text-ink-muted">{{ m.description }}</p>
+                <ul class="mt-2 divide-y divide-line rounded-xs border border-line text-sm">
                     <li v-for="c in m.capabilities" :key="c.key" class="px-3 py-2">
                         {{ c.label }}
-                        <span class="block text-xs text-slate-500">
+                        <span class="block text-xs text-ink-muted">
                             {{ c.read ? 'Read' : 'Manage' }}
                             <template v-if="c.sensitive"> · Sensitive</template>
                             <template v-if="c.approval"> · Approval decision</template>
@@ -284,7 +278,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                     </li>
                 </ul>
             </div>
-            <p v-if="!filteredModules.length" class="mt-4 text-sm text-slate-600">
+            <p v-if="!filteredModules.length" class="mt-4 text-sm text-ink-muted">
                 No capability matches these filters.
             </p>
         </section>
@@ -296,7 +290,7 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
             aria-labelledby="tab-sensitive"
             class="mt-4"
         >
-            <p class="max-w-3xl text-sm text-slate-600">
+            <p class="max-w-3xl text-sm text-ink-muted">
                 The sensitive personal data Lycenza holds, and the capability that already protects
                 each. A School-specific restriction can only ever narrow access, and is offered only
                 once every page, API, search and export showing the data enforces it on the server —
@@ -306,11 +300,11 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
                 <li
                     v-for="f in sensitive.families"
                     :key="f.key"
-                    class="rounded border border-slate-200 p-4 text-sm"
+                    class="rounded-xs border border-line p-4 text-sm"
                     :data-testid="`family-${f.key}`"
                 >
                     <h2 class="font-semibold">{{ f.label }}</h2>
-                    <p class="text-xs text-slate-500">{{ f.domain }} · {{ f.classification }}</p>
+                    <p class="text-xs text-ink-muted">{{ f.domain }} · {{ f.classification }}</p>
                     <p class="mt-1">{{ f.fields.join(', ') }}</p>
                     <p class="mt-2 text-xs">
                         <span class="font-medium">School restriction:</span>
@@ -321,13 +315,13 @@ const cellText = { none: '—', read: 'Read', manage: 'Manage' };
             <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
                     <h2 class="text-sm font-semibold">Never shown anywhere</h2>
-                    <ul class="mt-1 list-disc pl-5 text-sm text-slate-700">
+                    <ul class="mt-1 list-disc pl-5 text-sm text-ink">
                         <li v-for="x in sensitive.neverExposed" :key="x">{{ x }}</li>
                     </ul>
                 </div>
                 <div>
                     <h2 class="text-sm font-semibold">Not stored by Lycenza</h2>
-                    <ul class="mt-1 list-disc pl-5 text-sm text-slate-700">
+                    <ul class="mt-1 list-disc pl-5 text-sm text-ink">
                         <li v-for="x in sensitive.notStored" :key="x">{{ x }}</li>
                     </ul>
                 </div>

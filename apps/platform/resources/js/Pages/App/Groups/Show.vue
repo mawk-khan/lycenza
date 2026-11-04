@@ -79,9 +79,9 @@ const scopeLabel = computed(() => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <h1 class="text-xl font-semibold" data-testid="group-name">{{ group.name }}</h1>
-        <p class="mt-1 text-sm text-slate-600">School Group (network) — {{ group.status }}</p>
+        <p class="mt-1 text-sm text-ink-muted">School Group (network) — {{ group.status }}</p>
         <p class="mt-2 text-sm" data-testid="group-scope">
             You see <strong>{{ scopeLabel }}</strong
             >.
@@ -128,7 +128,7 @@ const scopeLabel = computed(() => {
                     :href="`${pageUrl}/elevation?school=${school.id}`"
                     >Enter (elevated access)<span class="sr-only"> {{ school.name }}</span></a
                 >
-                <span v-else-if="school.isMember" class="text-slate-500"
+                <span v-else-if="school.isMember" class="text-ink-muted"
                     >You are a member — select it from your School list</span
                 >
             </template>
@@ -136,14 +136,14 @@ const scopeLabel = computed(() => {
 
         <section aria-labelledby="network-brand-heading" class="mt-8" data-testid="network-brand">
             <h2 id="network-brand-heading" class="text-base font-semibold">Network brand</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 A label and accent colour that member Schools may choose to use. It never applies to
                 a School by itself, and it never changes a School's name or access.
             </p>
             <p class="mt-2 text-sm">
                 <span
                     v-if="networkBrand.accent"
-                    class="mr-2 inline-block h-4 w-4 rounded align-middle"
+                    class="mr-2 inline-block h-4 w-4 rounded-xs align-middle"
                     :style="{ backgroundColor: networkBrand.accent }"
                     aria-hidden="true"
                 ></span>
@@ -155,21 +155,21 @@ const scopeLabel = computed(() => {
                 @submit.prevent="saveBrand"
             >
                 <div>
-                    <label class="block text-sm text-slate-700" for="network-brand-label"
+                    <label class="block text-sm text-ink" for="network-brand-label"
                         >Brand label</label
                     >
                     <input
                         id="network-brand-label"
                         v-model="brandForm.display_label"
                         maxlength="60"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="brandForm.errors.display_label" class="mt-1 text-sm text-red-700">
+                    <p v-if="brandForm.errors.display_label" class="mt-1 text-sm text-danger">
                         {{ brandForm.errors.display_label }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="network-brand-accent"
+                    <label class="block text-sm text-ink" for="network-brand-accent"
                         >Accent colour</label
                     >
                     <input
@@ -177,27 +177,25 @@ const scopeLabel = computed(() => {
                         v-model="brandForm.primary_accent"
                         maxlength="7"
                         placeholder="#1D4E89"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="brandForm.errors.primary_accent" class="mt-1 text-sm text-red-700">
+                    <p v-if="brandForm.errors.primary_accent" class="mt-1 text-sm text-danger">
                         {{ brandForm.errors.primary_accent }}
                     </p>
                 </div>
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="network-brand-reason"
-                        >Reason</label
-                    >
+                    <label class="block text-sm text-ink" for="network-brand-reason">Reason</label>
                     <select
                         id="network-brand-reason"
                         v-model="brandForm.reason_code"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in networkBrand.reasons" :key="r.code" :value="r.code">
                             {{ r.label }}
                         </option>
                     </select>
-                    <p v-if="brandForm.errors.reason_code" class="mt-1 text-sm text-red-700">
+                    <p v-if="brandForm.errors.reason_code" class="mt-1 text-sm text-danger">
                         {{ brandForm.errors.reason_code }}
                     </p>
                 </div>
@@ -210,14 +208,14 @@ const scopeLabel = computed(() => {
                         :error="brandForm.errors.mfa_code"
                     />
                 </div>
-                <p v-if="brandError" class="text-sm text-red-700 sm:col-span-2" role="alert">
+                <p v-if="brandError" class="text-sm text-danger sm:col-span-2" role="alert">
                     {{ brandError }}
                 </p>
                 <div class="sm:col-span-2">
                     <button
                         type="submit"
                         :disabled="brandForm.processing || !hasMfaFactor"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Save Network brand
                     </button>
@@ -236,7 +234,7 @@ const scopeLabel = computed(() => {
             >
         </p>
 
-        <p class="mt-6 text-sm text-slate-600">
+        <p class="mt-6 text-sm text-ink-muted">
             Network roles, Regions and Zones organise the network; they never give anyone access to
             a School. Entering a School uses elevated access (Group Admin only): at most 30 minutes,
             a fresh multi-factor code, and no School permissions.

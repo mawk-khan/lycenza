@@ -67,12 +67,12 @@ function activate(schoolId: string) {
 
 <template>
     <Head title="Home" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <header>
             <h1 class="text-2xl font-semibold" data-testid="dashboard-heading">
                 {{ productName }}
             </h1>
-            <p class="mt-1 text-slate-600" data-testid="active-school">
+            <p class="mt-1 text-ink-muted" data-testid="active-school">
                 {{ props.activeSchool ? props.activeSchool.name : 'No School selected' }}
             </p>
         </header>
@@ -80,7 +80,7 @@ function activate(schoolId: string) {
         <p
             v-if="schoolContextNotice && !activeSchool"
             role="status"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+            class="mt-6 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm"
             data-testid="school-context-notice"
         >
             <template v-if="schoolContextNotice === 'not_saved'"
@@ -93,14 +93,14 @@ function activate(schoolId: string) {
         <p
             v-if="platformElevation.notice && elevationNotices[platformElevation.notice]"
             role="status"
-            class="mt-6 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm"
+            class="mt-6 rounded-xs border border-control-line bg-graphite-100 px-3 py-2 text-sm"
             data-testid="elevation-notice"
         >
             {{ elevationNotices[platformElevation.notice] }}
         </p>
 
         <section v-if="platformElevation.isElevated" class="mt-6" data-testid="elevated-state">
-            <h2 class="text-sm font-medium text-slate-500">Elevated access</h2>
+            <h2 class="text-sm font-medium text-ink-muted">Elevated access</h2>
             <p class="mt-1 text-sm">
                 Elevated access is active (see the banner above). It grants no School permissions,
                 and School pages are not available under elevated access. Exit elevated access
@@ -113,7 +113,7 @@ function activate(schoolId: string) {
             class="mt-6"
             data-testid="elevated-elsewhere"
         >
-            <h2 class="text-sm font-medium text-slate-500">Elevated access</h2>
+            <h2 class="text-sm font-medium text-ink-muted">Elevated access</h2>
             <p class="mt-1 text-sm">
                 Elevated access into {{ platformElevation.activeElsewhere.schoolName }} is active in
                 another session until
@@ -125,14 +125,14 @@ function activate(schoolId: string) {
         </section>
 
         <section v-else-if="platformElevation.canStart" class="mt-6" data-testid="enter-school">
-            <h2 class="text-sm font-medium text-slate-500">Platform</h2>
+            <h2 class="text-sm font-medium text-ink-muted">Platform</h2>
             <a class="mt-1 inline-block text-sm underline" href="/app/platform/elevation">
                 Enter a School (elevated access)
             </a>
         </section>
 
         <section v-if="memberships.length === 0" class="mt-6" data-testid="no-school-state">
-            <h2 class="text-sm font-medium text-slate-500">No School access</h2>
+            <h2 class="text-sm font-medium text-ink-muted">No School access</h2>
             <p class="mt-1 text-sm">
                 This account is not an active member of any School, so no School pages or School
                 data are available to it.
@@ -146,14 +146,14 @@ function activate(schoolId: string) {
             v-else-if="!platformElevation.isElevated && (memberships.length > 1 || !activeSchool)"
             class="mt-6"
         >
-            <h2 class="text-sm font-medium text-slate-500">
+            <h2 class="text-sm font-medium text-ink-muted">
                 {{ activeSchool ? 'Switch School' : 'Select a School' }}
             </h2>
             <ul class="mt-2 space-y-1">
                 <li v-for="m in memberships" :key="m.schoolId">
                     <button
                         type="button"
-                        class="text-sm underline disabled:text-slate-400 disabled:no-underline"
+                        class="text-sm underline disabled:text-ink-muted disabled:no-underline"
                         :disabled="m.isActive || !m.available"
                         @click="activate(m.schoolId)"
                     >
@@ -168,7 +168,7 @@ function activate(schoolId: string) {
 
         <p
             v-if="activeSchool && !platformElevation.isElevated && !hasSchoolModules"
-            class="mt-8 text-sm text-slate-600"
+            class="mt-8 text-sm text-ink-muted"
             data-testid="no-modules"
         >
             No modules are available to your account in this School.
@@ -185,7 +185,7 @@ function activate(schoolId: string) {
                 <section
                     v-for="group in overview"
                     :key="group.key"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                     :aria-labelledby="`overview-${group.key}`"
                 >
                     <h3 :id="`overview-${group.key}`" class="text-sm font-semibold">
@@ -195,7 +195,7 @@ function activate(schoolId: string) {
                         <li v-for="item in group.items" :key="item.key">
                             <InertiaLink
                                 :href="item.href"
-                                class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+                                class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
                                 >{{
                                     item.section ? `${item.section}: ${item.label}` : item.label
                                 }}</InertiaLink

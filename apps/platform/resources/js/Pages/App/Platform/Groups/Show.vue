@@ -103,24 +103,18 @@ function archive() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <h1 class="text-xl font-semibold" data-testid="group-name">{{ group.name }}</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ group.slug }} · {{ group.status }} · School Group (network)
         </p>
 
         <form v-if="editable" class="mt-4 flex gap-2" @submit.prevent="rename">
             <label class="sr-only" for="group-name-input">Group name</label>
-            <input
-                id="group-name-input"
-                v-model="renameForm.name"
-                class="w-full rounded border border-slate-300 px-3 py-2"
-            />
-            <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
-                Rename
-            </button>
+            <input id="group-name-input" v-model="renameForm.name" class="input" />
+            <button type="submit" class="btn btn-secondary">Rename</button>
         </form>
-        <p v-if="renameForm.errors.name" class="mt-1 text-sm text-red-700">
+        <p v-if="renameForm.errors.name" class="mt-1 text-sm text-danger">
             {{ renameForm.errors.name }}
         </p>
 
@@ -142,47 +136,47 @@ function archive() {
             <h2 id="add-school-heading" class="text-base font-semibold">Add a School</h2>
             <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="addSchool">
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="add-school">School</label>
+                    <label class="block text-sm text-ink" for="add-school">School</label>
                     <input
                         id="add-school"
                         v-model="addForm.school"
                         placeholder="Exact School id or verified domain"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="addForm.errors.school" class="mt-1 text-sm text-red-700">
+                    <p v-if="addForm.errors.school" class="mt-1 text-sm text-danger">
                         {{ addForm.errors.school }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="add-relationship"
+                    <label class="block text-sm text-ink" for="add-relationship"
                         >Relationship</label
                     >
                     <select
                         id="add-relationship"
                         v-model="addForm.relationship_type"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in relationships" :key="r.code" :value="r.code">
                             {{ r.label }}
                         </option>
                     </select>
-                    <p v-if="addForm.errors.relationship_type" class="mt-1 text-sm text-red-700">
+                    <p v-if="addForm.errors.relationship_type" class="mt-1 text-sm text-danger">
                         {{ addForm.errors.relationship_type }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="add-reference"
+                    <label class="block text-sm text-ink" for="add-reference"
                         >Network reference (optional)</label
                     >
                     <input
                         id="add-reference"
                         v-model="addForm.network_reference"
                         maxlength="40"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="addForm.errors.network_reference" class="mt-1 text-sm text-red-700">
+                    <p v-if="addForm.errors.network_reference" class="mt-1 text-sm text-danger">
                         {{ addForm.errors.network_reference }}
                     </p>
                 </div>
@@ -199,7 +193,7 @@ function archive() {
                     <button
                         type="submit"
                         :disabled="addForm.processing || !hasMfaFactor"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
+                        class="btn btn-secondary"
                     >
                         Add School
                     </button>
@@ -220,23 +214,19 @@ function archive() {
                     </button>
                 </li>
             </ul>
-            <p v-if="!grants.length" class="mt-2 text-sm text-slate-600">No active grants.</p>
+            <p v-if="!grants.length" class="mt-2 text-sm text-ink-muted">No active grants.</p>
             <div
                 v-if="canManageGrants && grants.some((g) => g.role !== 'group_admin')"
                 class="mt-3 grid gap-3 sm:grid-cols-2"
             >
-                <p class="text-sm text-slate-600 sm:col-span-2">
+                <p class="text-sm text-ink-muted sm:col-span-2">
                     Revoking a Network role needs a reason and a fresh authentication code.
                 </p>
                 <div>
-                    <label class="block text-sm text-slate-700" for="revoke-reason"
+                    <label class="block text-sm text-ink" for="revoke-reason"
                         >Revocation reason</label
                     >
-                    <select
-                        id="revoke-reason"
-                        v-model="revokeForm.reason_code"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <select id="revoke-reason" v-model="revokeForm.reason_code" class="input mt-1">
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in grantReasons" :key="r.code" :value="r.code">
                             {{ r.label }}
@@ -252,7 +242,7 @@ function archive() {
                 />
                 <p
                     v-if="grantError || revokeForm.errors.reason_code"
-                    class="text-sm text-red-700 sm:col-span-2"
+                    class="text-sm text-danger sm:col-span-2"
                     role="alert"
                 >
                     {{ grantError ?? revokeForm.errors.reason_code }}
@@ -264,44 +254,38 @@ function archive() {
                 @submit.prevent="grant"
             >
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="grant-user"
-                        >Person to grant</label
-                    >
+                    <label class="block text-sm text-ink" for="grant-user">Person to grant</label>
                     <input
                         id="grant-user"
                         v-model="grantForm.user"
                         placeholder="Exact email or account id"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="grantForm.errors.user" class="mt-1 text-sm text-red-700">
+                    <p v-if="grantForm.errors.user" class="mt-1 text-sm text-danger">
                         {{ grantForm.errors.user }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="grant-role">Group role</label>
-                    <select
-                        id="grant-role"
-                        v-model="grantForm.role"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <label class="block text-sm text-ink" for="grant-role">Group role</label>
+                    <select id="grant-role" v-model="grantForm.role" class="input mt-1">
                         <option v-for="r in groupRoles" :key="r.code" :value="r.code">
                             {{ r.label }}
                         </option>
                     </select>
-                    <p v-if="grantForm.errors.role" class="mt-1 text-sm text-red-700">
+                    <p v-if="grantForm.errors.role" class="mt-1 text-sm text-danger">
                         {{ grantForm.errors.role }}
                     </p>
                 </div>
                 <template v-if="grantForm.role === 'network_viewer'">
                     <div>
-                        <label class="block text-sm text-slate-700" for="grant-region"
+                        <label class="block text-sm text-ink" for="grant-region"
                             >Region scope (optional)</label
                         >
                         <select
                             id="grant-region"
                             v-model="grantForm.region_id"
                             :disabled="grantForm.zone_id !== ''"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                            class="input mt-1"
                         >
                             <option value="">Whole Group</option>
                             <option v-for="r in overview.regions" :key="r.id" :value="r.id">
@@ -310,14 +294,14 @@ function archive() {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-700" for="grant-zone"
+                        <label class="block text-sm text-ink" for="grant-zone"
                             >Zone scope (optional)</label
                         >
                         <select
                             id="grant-zone"
                             v-model="grantForm.zone_id"
                             :disabled="grantForm.region_id !== ''"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                            class="input mt-1"
                         >
                             <option value="">Whole Group</option>
                             <option v-for="z in overview.zones" :key="z.id" :value="z.id">
@@ -326,7 +310,7 @@ function archive() {
                         </select>
                         <p
                             v-if="grantForm.errors.zone_id || grantForm.errors.region_id"
-                            class="mt-1 text-sm text-red-700"
+                            class="mt-1 text-sm text-danger"
                         >
                             {{ grantForm.errors.zone_id ?? grantForm.errors.region_id }}
                         </p>
@@ -334,20 +318,18 @@ function archive() {
                 </template>
                 <template v-if="networkRole">
                     <div class="sm:col-span-2">
-                        <label class="block text-sm text-slate-700" for="grant-reason"
-                            >Reason</label
-                        >
+                        <label class="block text-sm text-ink" for="grant-reason">Reason</label>
                         <select
                             id="grant-reason"
                             v-model="grantForm.reason_code"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                            class="input mt-1"
                         >
                             <option value="" disabled>Choose…</option>
                             <option v-for="r in grantReasons" :key="r.code" :value="r.code">
                                 {{ r.label }}
                             </option>
                         </select>
-                        <p v-if="grantForm.errors.reason_code" class="mt-1 text-sm text-red-700">
+                        <p v-if="grantForm.errors.reason_code" class="mt-1 text-sm text-danger">
                             {{ grantForm.errors.reason_code }}
                         </p>
                     </div>
@@ -365,7 +347,7 @@ function archive() {
                     <button
                         type="submit"
                         :disabled="grantForm.processing || (networkRole && !hasMfaFactor)"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
+                        class="btn btn-secondary"
                     >
                         Grant role
                     </button>
@@ -374,7 +356,7 @@ function archive() {
         </section>
 
         <p v-if="editable" class="mt-8">
-            <button class="text-sm text-red-800 underline" @click="archive">
+            <button class="text-sm text-danger underline" @click="archive">
                 Archive this Group
             </button>
         </p>

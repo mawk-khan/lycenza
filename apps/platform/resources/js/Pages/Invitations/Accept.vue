@@ -36,10 +36,10 @@ function confirm(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-sm p-8 font-sans text-ink">
         <template v-if="!valid">
             <h1 class="text-xl font-semibold">Invitation not valid</h1>
-            <p class="mt-4 text-sm text-slate-600">
+            <p class="mt-4 text-sm text-ink-muted">
                 This invitation link is no longer valid. It may have expired, been revoked, or
                 already been used. Ask the school to send a new one.
             </p>
@@ -47,32 +47,32 @@ function confirm(): void {
 
         <template v-else>
             <h1 class="text-xl font-semibold">Join {{ schoolName }} on Lycenza</h1>
-            <p class="mt-2 text-sm text-slate-600">Invitation for {{ email }}</p>
+            <p class="mt-2 text-sm text-ink-muted">Invitation for {{ email }}</p>
 
             <!-- Existing account: must already be authenticated as this exact user. -->
             <template v-if="accountAlreadyExists">
                 <template v-if="authenticatedAsMatchingUser">
-                    <p class="mt-6 text-sm text-slate-600">
+                    <p class="mt-6 text-sm text-ink-muted">
                         You're signed in as {{ authenticatedEmail }}. Confirm to link this account
                         to your Guardian record at {{ schoolName }}.
                     </p>
                     <button
                         type="button"
                         :disabled="form.processing"
-                        class="mt-4 w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                        class="btn btn-primary mt-4 w-full"
                         @click="confirm"
                     >
                         Confirm
                     </button>
                 </template>
                 <template v-else>
-                    <p class="mt-6 text-sm text-slate-600">
+                    <p class="mt-6 text-sm text-ink-muted">
                         An account already exists for this email. Log in with that account, then
                         return to this link to confirm.
                     </p>
                     <a href="/login" class="mt-4 block text-center underline">Log in</a>
                 </template>
-                <p v-if="invitationError.invitation" class="mt-4 text-sm text-red-600">
+                <p v-if="invitationError.invitation" class="mt-4 text-sm text-danger">
                     {{ invitationError.invitation }}
                 </p>
             </template>
@@ -81,21 +81,21 @@ function confirm(): void {
             <template v-else>
                 <form class="mt-6 space-y-4" @submit.prevent="submit">
                     <div>
-                        <label class="block text-sm text-slate-600" for="password">Password</label>
+                        <label class="block text-sm text-ink-muted" for="password">Password</label>
                         <input
                             id="password"
                             v-model="form.password"
                             type="password"
                             autocomplete="new-password"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                            class="input mt-1"
                         />
-                        <p v-if="form.errors.password" class="mt-1 text-sm text-red-600">
+                        <p v-if="form.errors.password" class="mt-1 text-sm text-danger">
                             {{ form.errors.password }}
                         </p>
                     </div>
 
                     <div>
-                        <label class="block text-sm text-slate-600" for="password_confirmation">
+                        <label class="block text-sm text-ink-muted" for="password_confirmation">
                             Confirm password
                         </label>
                         <input
@@ -103,18 +103,18 @@ function confirm(): void {
                             v-model="form.password_confirmation"
                             type="password"
                             autocomplete="new-password"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                            class="input mt-1"
                         />
                     </div>
 
-                    <p v-if="invitationError.invitation" class="text-sm text-red-600">
+                    <p v-if="invitationError.invitation" class="text-sm text-danger">
                         {{ invitationError.invitation }}
                     </p>
 
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                        class="btn btn-primary w-full"
                     >
                         Create account
                     </button>

@@ -67,9 +67,9 @@ function revoke(a: Assignment) {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <h1 class="text-xl font-semibold">Network access — {{ group.name }}</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Who can see and govern this network. Network roles never give access to a School's
             records; School access is managed by each School.
         </p>
@@ -79,7 +79,7 @@ function revoke(a: Assignment) {
             <ul class="mt-2 space-y-1 text-sm" data-testid="own-roles">
                 <li v-for="(r, i) in own.roles" :key="i">{{ r.roleName }} — {{ r.scope }}</li>
             </ul>
-            <p class="mt-2 text-sm text-slate-600">
+            <p class="mt-2 text-sm text-ink-muted">
                 {{
                     own.canManage
                         ? 'You can manage this network’s Regions, Zones and member-School classification.'
@@ -95,14 +95,14 @@ function revoke(a: Assignment) {
                 <li
                     v-for="r in roles"
                     :key="r.key"
-                    class="rounded border border-slate-200 p-3 text-sm"
+                    class="rounded-xs border border-line p-3 text-sm"
                     :data-testid="`group-role-${r.key}`"
                 >
                     <h3 class="font-medium">{{ r.name }}</h3>
-                    <ul class="mt-1 list-disc pl-5 text-slate-700">
+                    <ul class="mt-1 list-disc pl-5 text-ink">
                         <li v-for="c in r.capabilities" :key="c">{{ c }}</li>
                     </ul>
-                    <p class="mt-2 text-xs text-slate-600">
+                    <p class="mt-2 text-xs text-ink-muted">
                         Scope:
                         {{ r.scopable ? 'whole Group, one Region or one Zone' : 'whole Group' }}
                         · School capabilities: none
@@ -123,7 +123,7 @@ function revoke(a: Assignment) {
                     <caption class="sr-only">
                         Active Network roles in this Group
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="py-2 pr-3">Person</th>
                             <th scope="col" class="py-2 pr-3">Role</th>
@@ -134,11 +134,11 @@ function revoke(a: Assignment) {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="a in assignments" :key="a.id">
                             <td class="py-2 pr-3">
                                 {{ a.userName }}
-                                <span class="block text-xs text-slate-500">{{ a.userEmail }}</span>
+                                <span class="block text-xs text-ink-muted">{{ a.userEmail }}</span>
                             </td>
                             <td class="py-2 pr-3">{{ a.roleName }}</td>
                             <td class="py-2 pr-3">{{ a.scope }}</td>
@@ -160,22 +160,18 @@ function revoke(a: Assignment) {
                     </tbody>
                 </table>
             </div>
-            <p v-if="!assignments.length" class="mt-2 text-sm text-slate-600">
+            <p v-if="!assignments.length" class="mt-2 text-sm text-ink-muted">
                 No Network roles yet.
             </p>
             <div v-if="canManageOperators" class="mt-3 grid gap-3 sm:grid-cols-2">
-                <p class="text-sm text-slate-600 sm:col-span-2">
+                <p class="text-sm text-ink-muted sm:col-span-2">
                     Revoking a Network Viewer needs a reason and a fresh authentication code.
                 </p>
                 <div>
-                    <label class="block text-sm text-slate-700" for="revoke-reason"
+                    <label class="block text-sm text-ink" for="revoke-reason"
                         >Revocation reason</label
                     >
-                    <select
-                        id="revoke-reason"
-                        v-model="revokeForm.reason_code"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <select id="revoke-reason" v-model="revokeForm.reason_code" class="input mt-1">
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in reasons" :key="r.code" :value="r.code">
                             {{ r.label }}
@@ -191,7 +187,7 @@ function revoke(a: Assignment) {
                 />
                 <p
                     v-if="revokeError || revokeForm.errors.reason_code"
-                    class="text-sm text-red-700 sm:col-span-2"
+                    class="text-sm text-danger sm:col-span-2"
                     role="alert"
                 >
                     {{ revokeError ?? revokeForm.errors.reason_code }}
@@ -205,34 +201,34 @@ function revoke(a: Assignment) {
             class="mt-8"
         >
             <h2 id="grant-heading" class="text-base font-semibold">Add a Network Viewer</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Read-only access to the network directory — the whole Group, one Region or one Zone.
                 It never opens a School.
             </p>
             <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="grant">
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="operator-user"
+                    <label class="block text-sm text-ink" for="operator-user"
                         >Person (exact email)</label
                     >
                     <input
                         id="operator-user"
                         v-model="grantForm.user"
                         type="email"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="grantForm.errors.user" class="mt-1 text-sm text-red-700">
+                    <p v-if="grantForm.errors.user" class="mt-1 text-sm text-danger">
                         {{ grantForm.errors.user }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="operator-region"
+                    <label class="block text-sm text-ink" for="operator-region"
                         >Region (optional)</label
                     >
                     <select
                         id="operator-region"
                         v-model="grantForm.region_id"
                         :disabled="grantForm.zone_id !== ''"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="">Whole Group</option>
                         <option
@@ -243,19 +239,19 @@ function revoke(a: Assignment) {
                             {{ r.name }}
                         </option>
                     </select>
-                    <p v-if="grantForm.errors.region_id" class="mt-1 text-sm text-red-700">
+                    <p v-if="grantForm.errors.region_id" class="mt-1 text-sm text-danger">
                         {{ grantForm.errors.region_id }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="operator-zone"
+                    <label class="block text-sm text-ink" for="operator-zone"
                         >Zone (optional)</label
                     >
                     <select
                         id="operator-zone"
                         v-model="grantForm.zone_id"
                         :disabled="grantForm.region_id !== ''"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="">Whole Group</option>
                         <option
@@ -266,23 +262,19 @@ function revoke(a: Assignment) {
                             {{ z.name }}
                         </option>
                     </select>
-                    <p v-if="grantForm.errors.zone_id" class="mt-1 text-sm text-red-700">
+                    <p v-if="grantForm.errors.zone_id" class="mt-1 text-sm text-danger">
                         {{ grantForm.errors.zone_id }}
                     </p>
                 </div>
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="operator-reason">Reason</label>
-                    <select
-                        id="operator-reason"
-                        v-model="grantForm.reason_code"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <label class="block text-sm text-ink" for="operator-reason">Reason</label>
+                    <select id="operator-reason" v-model="grantForm.reason_code" class="input mt-1">
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in reasons" :key="r.code" :value="r.code">
                             {{ r.label }}
                         </option>
                     </select>
-                    <p v-if="grantForm.errors.reason_code" class="mt-1 text-sm text-red-700">
+                    <p v-if="grantForm.errors.reason_code" class="mt-1 text-sm text-danger">
                         {{ grantForm.errors.reason_code }}
                     </p>
                 </div>
@@ -299,7 +291,7 @@ function revoke(a: Assignment) {
                     <button
                         type="submit"
                         :disabled="grantForm.processing || !hasMfaFactor"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Add Network Viewer
                     </button>

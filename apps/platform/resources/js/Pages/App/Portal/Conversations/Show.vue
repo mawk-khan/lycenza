@@ -76,10 +76,10 @@ function downloadUrl(attachmentId: string): string {
 <template>
     <main class="mx-auto max-w-3xl px-6 py-10">
         <a class="text-sm underline" href="/app/portal/conversations">Back to conversations</a>
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">
+        <h1 class="mt-4 text-xl font-semibold text-ink">
             {{ conversation.subject ?? 'Conversation' }}
         </h1>
-        <p class="mt-1 text-xs text-slate-500">With {{ conversation.participants.join(', ') }}</p>
+        <p class="mt-1 text-xs text-ink-muted">With {{ conversation.participants.join(', ') }}</p>
 
         <a
             v-if="conversation.hasOlder"
@@ -92,16 +92,16 @@ function downloadUrl(attachmentId: string): string {
             <li
                 v-for="message in conversation.messages"
                 :key="message.id"
-                class="rounded border px-4 py-3"
-                :class="message.mine ? 'border-blue-200 bg-blue-50' : 'border-slate-200'"
+                class="rounded-xs border px-4 py-3"
+                :class="message.mine ? 'border-accent-300 bg-accent-100' : 'border-line'"
             >
-                <p class="text-xs text-slate-500">
+                <p class="text-xs text-ink-muted">
                     {{ message.sender }}
                     <template v-if="message.sentAt">
                         · {{ new Date(message.sentAt).toLocaleString() }}</template
                     >
                 </p>
-                <div class="mt-1 whitespace-pre-line text-sm text-slate-800">
+                <div class="mt-1 whitespace-pre-line text-sm text-ink">
                     {{ message.body }}
                 </div>
                 <ul v-if="message.attachments.length > 0" class="mt-2 space-y-1 text-sm">
@@ -109,7 +109,7 @@ function downloadUrl(attachmentId: string): string {
                         <a class="underline" :href="downloadUrl(attachment.id)">{{
                             attachment.name
                         }}</a>
-                        <span class="text-xs text-slate-500">
+                        <span class="text-xs text-ink-muted">
                             ({{ formatSize(attachment.sizeBytes) }})</span
                         >
                     </li>
@@ -125,28 +125,24 @@ function downloadUrl(attachmentId: string): string {
         >
 
         <form v-if="conversation.canReply" class="mt-8" @submit.prevent="submit">
-            <label class="block text-sm font-medium text-slate-700" for="reply-body">Reply</label>
+            <label class="block text-sm font-medium text-ink" for="reply-body">Reply</label>
             <textarea
                 id="reply-body"
                 v-model="form.body"
-                class="mt-1 block w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input mt-1 block"
                 rows="4"
                 :maxlength="maxLength"
                 required
             ></textarea>
-            <p v-if="form.errors.body" class="mt-1 text-sm text-red-700">{{ form.errors.body }}</p>
-            <p v-if="form.errors.idempotency_key" class="mt-1 text-sm text-red-700">
+            <p v-if="form.errors.body" class="mt-1 text-sm text-danger">{{ form.errors.body }}</p>
+            <p v-if="form.errors.idempotency_key" class="mt-1 text-sm text-danger">
                 {{ form.errors.idempotency_key }}
             </p>
-            <button
-                type="submit"
-                class="mt-3 rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
-                :disabled="form.processing"
-            >
+            <button type="submit" class="btn btn-primary mt-3" :disabled="form.processing">
                 Send reply
             </button>
         </form>
-        <p v-else-if="!conversation.open" class="mt-8 text-sm text-slate-600">
+        <p v-else-if="!conversation.open" class="mt-8 text-sm text-ink-muted">
             This conversation is closed to replies.
         </p>
     </main>

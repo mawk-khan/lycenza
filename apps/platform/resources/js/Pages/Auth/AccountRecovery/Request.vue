@@ -17,9 +17,9 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-sm p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Reset your password</h1>
-        <p class="mt-2 text-sm text-slate-600">
+        <p class="mt-2 text-sm text-ink-muted">
             Enter the email address you sign in with. If it belongs to an eligible account, we will
             send a link to choose a new password.
         </p>
@@ -27,7 +27,7 @@ function submit() {
         <p
             v-if="status"
             role="status"
-            class="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-control-line bg-graphite-100 px-3 py-2 text-sm text-ink"
             data-testid="recovery-status"
         >
             {{ status }}
@@ -35,30 +35,26 @@ function submit() {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="email">Email</label>
+                <label class="block text-sm text-ink-muted" for="email">Email</label>
                 <input
                     id="email"
                     v-model="form.email"
                     type="email"
                     autocomplete="username"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.email" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.email" class="mt-1 text-sm text-danger">
                     {{ form.errors.email }}
                 </p>
             </div>
 
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary w-full">
                 Send reset link
             </button>
         </form>
 
         <p class="mt-4 text-sm">
-            <a href="/login" class="text-slate-700 underline">Back to sign in</a>
+            <a href="/login" class="text-ink underline">Back to sign in</a>
         </p>
     </main>
 </template>

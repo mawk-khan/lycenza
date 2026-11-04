@@ -51,15 +51,15 @@ function submit(mode: 'new' | 'existing') {
 </script>
 
 <template>
-    <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-sm p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Staff account invitation</h1>
-        <p v-if="schoolName" class="mt-2 text-sm text-slate-600">
+        <p v-if="schoolName" class="mt-2 text-sm text-ink-muted">
             You were invited to a staff account at <strong>{{ schoolName }}</strong
             >.
         </p>
 
         <noscript>
-            <p class="mt-4 text-sm text-slate-700">
+            <p class="mt-4 text-sm text-ink">
                 This page needs JavaScript to read your invitation link. {{ invalidMessage }}
             </p>
         </noscript>
@@ -67,23 +67,23 @@ function submit(mode: 'new' | 'existing') {
         <p
             v-if="ready && (!linkUsable || form.errors.secret)"
             role="alert"
-            class="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-control-line bg-graphite-100 px-3 py-2 text-sm text-ink"
             data-testid="staff-invitation-invalid"
         >
             {{ form.errors.secret || invalidMessage }}
         </p>
 
         <template v-if="ready && linkUsable && !form.errors.secret">
-            <section v-if="signedInName" class="mt-6 rounded border border-slate-200 p-4">
+            <section v-if="signedInName" class="mt-6 rounded-xs border border-line p-4">
                 <h2 class="font-medium">Use your current account</h2>
-                <p class="mt-1 text-sm text-slate-600">
+                <p class="mt-1 text-sm text-ink-muted">
                     You are signed in as {{ signedInName }}. If the invitation was sent to this
                     account's address, accept it here.
                 </p>
                 <button
                     type="button"
                     :disabled="form.processing"
-                    class="mt-3 w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3 w-full"
                     data-testid="accept-existing"
                     @click="submit('existing')"
                 >
@@ -93,39 +93,39 @@ function submit(mode: 'new' | 'existing') {
 
             <form class="mt-6 space-y-4" @submit.prevent="submit('new')">
                 <h2 class="font-medium">Create your account</h2>
-                <p class="text-sm text-slate-600">
+                <p class="text-sm text-ink-muted">
                     New here? Choose your name and a password. Already have an account under this
                     address? <a href="/login" class="underline">Sign in</a>, then open the link from
                     your email again.
                 </p>
                 <div>
-                    <label class="block text-sm text-slate-600" for="name">Your name</label>
+                    <label class="block text-sm text-ink-muted" for="name">Your name</label>
                     <input
                         id="name"
                         v-model="form.name"
                         type="text"
                         autocomplete="name"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">
+                    <p v-if="form.errors.name" class="mt-1 text-sm text-danger">
                         {{ form.errors.name }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="password">Password</label>
+                    <label class="block text-sm text-ink-muted" for="password">Password</label>
                     <input
                         id="password"
                         v-model="form.password"
                         type="password"
                         autocomplete="new-password"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="form.errors.password" class="mt-1 text-sm text-red-600">
+                    <p v-if="form.errors.password" class="mt-1 text-sm text-danger">
                         {{ form.errors.password }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="password_confirmation"
+                    <label class="block text-sm text-ink-muted" for="password_confirmation"
                         >Confirm password</label
                     >
                     <input
@@ -133,13 +133,13 @@ function submit(mode: 'new' | 'existing') {
                         v-model="form.password_confirmation"
                         type="password"
                         autocomplete="new-password"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
                 </div>
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                    class="btn btn-primary w-full"
                     data-testid="accept-new"
                 >
                     Create account and accept

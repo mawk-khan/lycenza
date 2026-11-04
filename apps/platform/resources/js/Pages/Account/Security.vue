@@ -101,31 +101,29 @@ async function submitDisable() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Account security</h1>
-        <p class="mt-1 text-sm text-slate-600">Multi-factor authentication for your own account.</p>
+        <p class="mt-1 text-sm text-ink-muted">Multi-factor authentication for your own account.</p>
 
-        <p v-if="error" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">{{ error }}</p>
+        <p v-if="error" class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger">
+            {{ error }}
+        </p>
 
-        <section v-if="step === 'idle'" class="mt-6 rounded border border-slate-200 p-4">
-            <p v-if="props.mfa.enabled" class="text-sm text-slate-700">
+        <section v-if="step === 'idle'" class="mt-6 rounded-xs border border-line p-4">
+            <p v-if="props.mfa.enabled" class="text-sm text-ink">
                 MFA is <strong>enabled</strong> ({{ props.mfa.recoveryCodesRemaining }} recovery
                 codes remaining).
             </p>
-            <p v-else class="text-sm text-slate-700">
+            <p v-else class="text-sm text-ink">
                 MFA is <strong>not enabled</strong> on this account.
             </p>
 
-            <button
-                v-if="!props.mfa.enabled"
-                class="mt-3 rounded bg-slate-900 px-3 py-2 text-sm text-white"
-                @click="startEnrollment"
-            >
+            <button v-if="!props.mfa.enabled" class="btn btn-primary mt-3" @click="startEnrollment">
                 Enable MFA
             </button>
             <button
                 v-else
-                class="mt-3 rounded border border-red-300 px-3 py-2 text-sm text-red-700"
+                class="mt-3 rounded-xs border border-danger/40 px-3 py-2 text-sm text-danger"
                 @click="startDisable"
             >
                 Disable MFA
@@ -134,9 +132,9 @@ async function submitDisable() {
 
         <section
             v-else-if="step === 'confirm-password'"
-            class="mt-6 rounded border border-slate-200 p-4"
+            class="mt-6 rounded-xs border border-line p-4"
         >
-            <label class="block text-sm text-slate-600" for="confirm-password"
+            <label class="block text-sm text-ink-muted" for="confirm-password"
                 >Confirm your password</label
             >
             <input
@@ -144,29 +142,26 @@ async function submitDisable() {
                 v-model="password"
                 type="password"
                 autocomplete="current-password"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                class="input mt-1"
             />
-            <button
-                class="mt-3 rounded bg-slate-900 px-3 py-2 text-sm text-white"
-                @click="confirmPasswordThenContinue"
-            >
+            <button class="btn btn-primary mt-3" @click="confirmPasswordThenContinue">
                 Continue
             </button>
         </section>
 
         <section
             v-else-if="step === 'begin' && enrollment"
-            class="mt-6 rounded border border-slate-200 p-4"
+            class="mt-6 rounded-xs border border-line p-4"
         >
-            <p class="text-sm text-slate-700">
+            <p class="text-sm text-ink">
                 Scan this QR code with your authenticator app, then enter the 6-digit code.
             </p>
             <div class="mt-3" v-html="enrollment.qrCodeSvg" />
-            <p class="mt-2 break-all text-xs text-slate-500">
+            <p class="mt-2 break-all text-xs text-ink-muted">
                 Manual entry: {{ enrollment.secret }}
             </p>
 
-            <label class="mt-4 block text-sm text-slate-600" for="enroll-code"
+            <label class="mt-4 block text-sm text-ink-muted" for="enroll-code"
                 >Authentication code</label
             >
             <input
@@ -174,49 +169,36 @@ async function submitDisable() {
                 v-model="codeForm"
                 type="text"
                 inputmode="numeric"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                class="input mt-1"
             />
-            <button
-                class="mt-3 rounded bg-slate-900 px-3 py-2 text-sm text-white"
-                @click="confirmEnrollment"
-            >
-                Confirm
-            </button>
+            <button class="btn btn-primary mt-3" @click="confirmEnrollment">Confirm</button>
         </section>
 
         <section
             v-else-if="step === 'recovery-codes'"
-            class="mt-6 rounded border border-slate-200 p-4"
+            class="mt-6 rounded-xs border border-line p-4"
         >
-            <p class="text-sm font-medium text-slate-700">
+            <p class="text-sm font-medium text-ink">
                 Save these recovery codes now -- they will not be shown again.
             </p>
             <ul class="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">
                 <li v-for="code in recoveryCodes" :key="code">{{ code }}</li>
             </ul>
-            <button
-                class="mt-4 rounded bg-slate-900 px-3 py-2 text-sm text-white"
-                @click="finishEnrollment"
-            >
+            <button class="btn btn-primary mt-4" @click="finishEnrollment">
                 I've saved my codes
             </button>
         </section>
 
-        <section v-else-if="step === 'disable'" class="mt-6 rounded border border-slate-200 p-4">
-            <label class="block text-sm text-slate-600" for="disable-code"
+        <section v-else-if="step === 'disable'" class="mt-6 rounded-xs border border-line p-4">
+            <label class="block text-sm text-ink-muted" for="disable-code"
                 >Current authentication or recovery code</label
             >
-            <input
-                id="disable-code"
-                v-model="disableCode"
-                type="text"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            />
-            <p class="mt-2 text-xs text-slate-500">
+            <input id="disable-code" v-model="disableCode" type="text" class="input mt-1" />
+            <p class="mt-2 text-xs text-ink-muted">
                 Your password has already been confirmed for this action.
             </p>
             <button
-                class="mt-3 rounded border border-red-300 px-3 py-2 text-sm text-red-700"
+                class="mt-3 rounded-xs border border-danger/40 px-3 py-2 text-sm text-danger"
                 @click="submitDisable"
             >
                 Disable MFA

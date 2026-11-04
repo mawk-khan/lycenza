@@ -72,22 +72,18 @@ function toggle(id: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Analytics · Curriculum Coverage</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             How much of each required Subject Offering's syllabus the Sections have covered. Figures
             count syllabus units (unit × Section), never students or staff.
         </p>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-year">Academic Year</label>
-            <select
-                id="filter-year"
-                v-model="academicYearId"
-                class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
-            >
+            <label class="block text-sm text-ink-muted" for="filter-year">Academic Year</label>
+            <select id="filter-year" v-model="academicYearId" class="input mt-1 w-64">
                 <option v-if="report.academicYears.length === 0" value="">No academic years</option>
                 <option v-for="year in report.academicYears" :key="year.id" :value="year.id">
                     {{ year.name }} ({{ year.code }}){{ year.isActive ? ' — active' : '' }}
@@ -107,34 +103,34 @@ function toggle(id: string): void {
                 class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4"
                 data-testid="coverage-totals"
             >
-                <div class="rounded border border-slate-200 p-4">
-                    <p class="text-xs text-slate-500">Coverage</p>
+                <div class="rounded-xs border border-line p-4">
+                    <p class="text-xs text-ink-muted">Coverage</p>
                     <p class="mt-1 text-2xl font-semibold">
                         {{ percent(report.totals.coveragePercent) }}
                     </p>
                 </div>
-                <div class="rounded border border-slate-200 p-4">
-                    <p class="text-xs text-slate-500">Completed</p>
+                <div class="rounded-xs border border-line p-4">
+                    <p class="text-xs text-ink-muted">Completed</p>
                     <p class="mt-1 text-2xl font-semibold">{{ report.totals.completed }}</p>
-                    <p class="text-xs text-slate-500">of {{ report.totals.planned }} planned</p>
+                    <p class="text-xs text-ink-muted">of {{ report.totals.planned }} planned</p>
                 </div>
-                <div class="rounded border border-slate-200 p-4">
-                    <p class="text-xs text-slate-500">In progress</p>
+                <div class="rounded-xs border border-line p-4">
+                    <p class="text-xs text-ink-muted">In progress</p>
                     <p class="mt-1 text-2xl font-semibold">{{ report.totals.inProgress }}</p>
                 </div>
-                <div class="rounded border border-slate-200 p-4">
-                    <p class="text-xs text-slate-500">Not started</p>
+                <div class="rounded-xs border border-line p-4">
+                    <p class="text-xs text-ink-muted">Not started</p>
                     <p class="mt-1 text-2xl font-semibold">{{ report.totals.notStarted }}</p>
                 </div>
             </section>
-            <p class="mt-2 text-xs text-slate-500">
+            <p class="mt-2 text-xs text-ink-muted">
                 {{ report.totals.offerings }} required Subject Offerings;
                 {{ report.totals.offeringsWithoutSyllabus }} have no active syllabus units yet.
             </p>
 
-            <h2 class="mt-8 text-sm font-medium text-slate-500">By grade level</h2>
+            <h2 class="mt-8 text-sm font-medium text-ink-muted">By grade level</h2>
             <table class="mt-2 w-full text-left text-sm">
-                <thead class="border-b border-slate-200 text-slate-500">
+                <thead class="border-b border-line text-ink-muted">
                     <tr>
                         <th class="py-2">Grade level</th>
                         <th class="py-2 text-right">Planned</th>
@@ -148,7 +144,7 @@ function toggle(id: string): void {
                     <tr
                         v-for="grade in report.byGradeLevel"
                         :key="grade.gradeLevelName"
-                        class="border-b border-slate-100"
+                        class="border-b border-line"
                     >
                         <td class="py-2">{{ grade.gradeLevelName }}</td>
                         <td class="py-2 text-right">{{ grade.planned }}</td>
@@ -160,9 +156,9 @@ function toggle(id: string): void {
                 </tbody>
             </table>
 
-            <h2 class="mt-8 text-sm font-medium text-slate-500">By Subject Offering</h2>
+            <h2 class="mt-8 text-sm font-medium text-ink-muted">By Subject Offering</h2>
             <table class="mt-2 w-full text-left text-sm">
-                <thead class="border-b border-slate-200 text-slate-500">
+                <thead class="border-b border-line text-ink-muted">
                     <tr>
                         <th class="py-2">Subject Offering</th>
                         <th class="py-2 text-right">Units</th>
@@ -178,11 +174,11 @@ function toggle(id: string): void {
                         v-for="offering in report.offerings"
                         :key="offering.subjectOfferingId"
                     >
-                        <tr class="border-b border-slate-100">
+                        <tr class="border-b border-line">
                             <td class="py-2">
                                 <button
                                     v-if="offering.sections.length > 0"
-                                    class="mr-1 text-slate-500"
+                                    class="mr-1 text-ink-muted"
                                     :aria-label="`Toggle sections for ${offering.subjectCode}`"
                                     @click="toggle(offering.subjectOfferingId)"
                                 >
@@ -202,7 +198,7 @@ function toggle(id: string): void {
                             <tr
                                 v-for="section in offering.sections"
                                 :key="section.sectionId"
-                                class="border-b border-slate-100 bg-slate-50 text-slate-600"
+                                class="border-b border-line bg-graphite-100 text-ink-muted"
                             >
                                 <td class="py-1 pl-8">Section {{ section.sectionName }}</td>
                                 <td class="py-1 text-right">{{ section.planned }}</td>

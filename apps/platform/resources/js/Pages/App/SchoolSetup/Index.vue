@@ -35,28 +35,28 @@ const steps = [
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">School setup</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Configure School → Campus → Academic Year → Grade → Subjects, then the Terms, Sections,
             Rooms and Subject Offerings each year needs.
         </p>
 
-        <p class="mt-6 rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+        <p class="mt-6 rounded-xs border border-line bg-graphite-100 px-4 py-3 text-sm">
             See what is configured, what needs attention and what to do next in
             <a class="font-medium underline" href="/app/school-setup/readiness"
                 >Setup &amp; readiness</a
             >.
         </p>
 
-        <ul class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="step in steps" :key="step.href" class="px-4 py-3">
                 <a class="text-sm underline" :href="step.href">{{ step.label }}</a>
             </li>
         </ul>
 
         <section v-if="more.some((m) => m.show())" class="mt-8" aria-labelledby="structure-heading">
-            <h2 id="structure-heading" class="text-sm font-semibold text-slate-700">
+            <h2 id="structure-heading" class="text-sm font-semibold text-ink">
                 Academic structure
             </h2>
             <ul class="mt-2 space-y-1 text-sm">

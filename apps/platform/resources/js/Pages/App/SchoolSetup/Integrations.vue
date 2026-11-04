@@ -23,11 +23,11 @@ const counts = computed(() =>
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
 
         <h1 class="mt-2 text-xl font-semibold">Integrations &amp; devices</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Which integrations {{ hub.school.name }} uses and how they are doing, read from each
             module's own records each time you open this page. Nothing here connects to a provider
             or device, and no credential is ever shown. Each integration is managed in its own
@@ -35,10 +35,7 @@ const counts = computed(() =>
         </p>
 
         <!-- Overview -->
-        <section
-            aria-labelledby="overview-heading"
-            class="mt-6 rounded border border-slate-200 p-4"
-        >
+        <section aria-labelledby="overview-heading" class="mt-6 rounded-xs border border-line p-4">
             <h2 id="overview-heading" class="text-base font-semibold">Overview</h2>
             <ul class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <li v-for="entry in counts" :key="entry.status">
@@ -51,18 +48,18 @@ const counts = computed(() =>
             </ul>
             <div
                 v-if="hub.overview.setupArea"
-                class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"
+                class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3"
             >
                 <div class="min-w-0">
                     <p class="text-sm font-medium">
                         Setup area: {{ hub.overview.setupArea.title }}
                     </p>
-                    <p class="text-xs text-slate-600">{{ hub.overview.setupArea.explanation }}</p>
+                    <p class="text-xs text-ink-muted">{{ hub.overview.setupArea.explanation }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-3">
                     <span
                         v-if="hub.overview.setupArea.status"
-                        class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                        class="inline-flex items-center gap-1 rounded-xs px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                         :class="statusPresentation[hub.overview.setupArea.status].classes"
                     >
                         <span aria-hidden="true">{{
@@ -73,7 +70,7 @@ const counts = computed(() =>
                     </span>
                     <a
                         v-if="hub.overview.setupArea.href"
-                        class="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                        class="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-control-line"
                         :href="hub.overview.setupArea.href"
                         >Setup &amp; readiness</a
                     >
@@ -81,7 +78,7 @@ const counts = computed(() =>
             </div>
             <div
                 v-if="hub.overview.verificationRequired.length > 0"
-                class="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                class="mt-3 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm text-ink"
             >
                 <p>Verify your sign-in (multi-factor authentication) to see the status of:</p>
                 <ul class="mt-1 list-inside list-disc">
@@ -89,7 +86,7 @@ const counts = computed(() =>
                         {{ item.title }}
                         <a
                             v-if="item.href"
-                            class="font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                            class="font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-300"
                             :href="item.href"
                             :aria-label="`Verify to view ${item.title}`"
                             >Verify</a
@@ -97,7 +94,7 @@ const counts = computed(() =>
                     </li>
                 </ul>
             </div>
-            <p v-if="hub.overview.hiddenFamilies > 0" class="mt-3 text-xs text-slate-500">
+            <p v-if="hub.overview.hiddenFamilies > 0" class="mt-3 text-xs text-ink-muted">
                 {{ hub.overview.hiddenFamilies }}
                 {{ hub.overview.hiddenFamilies === 1 ? 'integration is' : 'integrations are' }} not
                 shown because they need access you do not have.
@@ -114,14 +111,14 @@ const counts = computed(() =>
             <h2 :id="`section-${section.key}`" class="text-base font-semibold">
                 {{ section.label }}
             </h2>
-            <ul class="mt-3 divide-y divide-slate-100 rounded border border-slate-200">
+            <ul class="mt-3 divide-y divide-line rounded-xs border border-line">
                 <li
                     v-for="card in section.items"
                     :key="card.key"
                     class="flex flex-wrap items-start justify-between gap-3 px-4 py-4"
                 >
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-ink-muted">
                             {{ card.owner }}
                             <template v-if="card.status !== 'not_available'">
                                 ·
@@ -133,12 +130,12 @@ const counts = computed(() =>
                             </template>
                         </p>
                         <h3 class="font-medium">{{ card.title }}</h3>
-                        <p class="mt-0.5 text-sm text-slate-600">{{ card.description }}</p>
+                        <p class="mt-0.5 text-sm text-ink-muted">{{ card.description }}</p>
                         <p class="mt-2 text-sm">{{ card.explanation }}</p>
                     </div>
                     <div class="flex shrink-0 flex-col items-end gap-2">
                         <span
-                            class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                            class="inline-flex items-center gap-1 rounded-xs px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                             :class="integrationStatusPresentation[card.status].classes"
                         >
                             <span aria-hidden="true">{{
@@ -149,7 +146,7 @@ const counts = computed(() =>
                         </span>
                         <a
                             v-if="card.action.kind !== 'none' && card.action.href"
-                            class="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+                            class="text-sm font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-control-line"
                             :href="card.action.href"
                             :aria-label="`${card.action.kind === 'configure' ? 'Manage' : 'View'} ${card.title}`"
                             >{{ card.action.kind === 'configure' ? 'Manage' : 'View' }}</a

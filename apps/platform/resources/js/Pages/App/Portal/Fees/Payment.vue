@@ -32,29 +32,29 @@ defineProps<Props>();
         <a class="text-sm underline" :href="`/app/portal/fees/students/${payment.student.id}`"
             >Back to fees</a
         >
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">
+        <h1 class="mt-4 text-xl font-semibold text-ink">
             Payment applied to {{ payment.student.name }}
         </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ schoolName }} · {{ payment.settledOn }}
             <template v-if="payment.method"> · {{ payment.method }}</template>
             <template v-if="payment.receiptNumber">
                 · School receipt {{ payment.receiptNumber }}</template
             >
         </p>
-        <p class="mt-2 text-xs text-slate-500">
+        <p class="mt-2 text-xs text-ink-muted">
             Only the part of this payment applied to this child is shown here. This is not the
             receipt itself.
         </p>
 
         <table class="mt-6 w-full text-left text-sm">
-            <thead class="text-xs text-slate-500">
+            <thead class="text-xs text-ink-muted">
                 <tr>
                     <th class="py-2">Fee</th>
                     <th class="py-2 text-right">Applied ({{ payment.currency }})</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200">
+            <tbody class="divide-y divide-line">
                 <tr v-for="(line, index) in payment.lines" :key="index">
                     <td class="py-2">
                         {{ line.feeHeadName ?? line.description }}

@@ -59,10 +59,10 @@ function revoke(role: PlatformRole, id: string) {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-2xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Platform roles</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             <strong>Platform Admin</strong> is the root role. It is provisioned outside the
             application and can never be granted or revoked here. The roles below are granted to an
             exactly identified person; none of them gives access to any School.
@@ -75,11 +75,11 @@ function revoke(role: PlatformRole, id: string) {
             :aria-labelledby="`role-${role.key}`"
             data-testid="platform-role"
         >
-            <h2 :id="`role-${role.key}`" class="text-sm font-medium text-slate-700">
+            <h2 :id="`role-${role.key}`" class="text-sm font-medium text-ink">
                 {{ role.name }}
             </h2>
-            <p class="mt-1 text-sm text-slate-600">{{ role.description }}</p>
-            <p v-if="exclusive[role.key]" class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">{{ role.description }}</p>
+            <p v-if="exclusive[role.key]" class="mt-1 text-xs text-ink-muted">
                 Never held together with {{ roleName(exclusive[role.key]) }}.
             </p>
             <ul class="mt-2 space-y-1 text-sm" :data-testid="`role-grants-${role.key}`">
@@ -88,34 +88,30 @@ function revoke(role: PlatformRole, id: string) {
                     <button class="underline" @click="revoke(role, g.id)">Revoke</button>
                 </li>
             </ul>
-            <p v-if="!role.grants.length" class="mt-2 text-sm text-slate-600">No active grants.</p>
+            <p v-if="!role.grants.length" class="mt-2 text-sm text-ink-muted">No active grants.</p>
         </section>
 
         <div class="mt-8">
-            <label class="block text-sm text-slate-600" for="mfa_code">
+            <label class="block text-sm text-ink-muted" for="mfa_code">
                 Authentication code (or a recovery code) — required to grant or revoke
             </label>
             <input
                 id="mfa_code"
                 v-model="form.mfa_code"
                 autocomplete="one-time-code"
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                class="input mt-1"
             />
-            <p v-if="form.errors.mfa_code" class="mt-1 text-sm text-red-700">
+            <p v-if="form.errors.mfa_code" class="mt-1 text-sm text-danger">
                 {{ form.errors.mfa_code }}
             </p>
-            <p v-if="fieldError('grant')" class="mt-1 text-sm text-red-700">
+            <p v-if="fieldError('grant')" class="mt-1 text-sm text-danger">
                 {{ fieldError('grant') }}
             </p>
         </div>
 
         <form class="mt-4 flex flex-wrap gap-2" @submit.prevent="grant">
             <label class="sr-only" for="grant-role">Role to grant</label>
-            <select
-                id="grant-role"
-                v-model="form.role"
-                class="rounded border border-slate-300 px-3 py-2 text-sm"
-            >
+            <select id="grant-role" v-model="form.role" class="input w-auto">
                 <option v-for="role in roles" :key="role.key" :value="role.key">
                     {{ role.name }}
                 </option>
@@ -124,13 +120,11 @@ function revoke(role: PlatformRole, id: string) {
                 v-model="form.user"
                 aria-label="Person to grant"
                 placeholder="Exact email or account id"
-                class="min-w-0 flex-1 rounded border border-slate-300 px-3 py-2"
+                class="input min-w-0 flex-1 w-auto"
             />
-            <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
-                Grant {{ roleName(form.role) }}
-            </button>
+            <button type="submit" class="btn btn-secondary">Grant {{ roleName(form.role) }}</button>
         </form>
-        <p v-if="form.errors.user" class="mt-1 text-sm text-red-700">{{ form.errors.user }}</p>
-        <p v-if="fieldError('role')" class="mt-1 text-sm text-red-700">{{ fieldError('role') }}</p>
+        <p v-if="form.errors.user" class="mt-1 text-sm text-danger">{{ form.errors.user }}</p>
+        <p v-if="fieldError('role')" class="mt-1 text-sm text-danger">{{ fieldError('role') }}</p>
     </main>
 </template>

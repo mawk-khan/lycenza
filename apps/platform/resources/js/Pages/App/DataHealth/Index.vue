@@ -39,11 +39,11 @@ const needsAttention = computed(() => props.checks.filter((c) => c.hasFindings).
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <h1 class="mt-2 text-xl font-semibold">Data health</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Checks of your School's records for problems that get in the way of day-to-day work.
             This page only reports; each problem is fixed in the record's own page. You see only the
             checks for information you are allowed to view.
@@ -58,11 +58,11 @@ const needsAttention = computed(() => props.checks.filter((c) => c.hasFindings).
 
         <template v-else>
             <p
-                class="mt-6 rounded border px-4 py-3 text-sm"
+                class="mt-6 rounded-xs border px-4 py-3 text-sm"
                 :class="
                     needsAttention
-                        ? 'border-amber-200 bg-amber-50 text-amber-900'
-                        : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                        ? 'border-accent-300 bg-accent-100 text-ink'
+                        : 'border-graphite-300 bg-graphite-100 text-ink'
                 "
                 role="status"
             >
@@ -76,18 +76,18 @@ const needsAttention = computed(() => props.checks.filter((c) => c.hasFindings).
             <section v-for="group in groups" :key="group.severity" class="mt-8">
                 <h2 class="text-sm font-semibold">
                     {{ severityLabels[group.severity] }}
-                    <span class="font-normal text-slate-500"
+                    <span class="font-normal text-ink-muted"
                         >— {{ severityHelp[group.severity] }}</span
                     >
                 </h2>
-                <ul class="mt-3 divide-y divide-slate-100 border-y border-slate-100">
+                <ul class="mt-3 divide-y divide-line border-y border-line">
                     <li
                         v-for="check in group.checks"
                         :key="check.definition.code"
                         class="flex flex-wrap items-start justify-between gap-3 py-4"
                     >
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs text-slate-500">
+                            <p class="text-xs text-ink-muted">
                                 {{ check.definition.area }} ·
                                 {{ kindLabels[check.definition.kind] }}
                             </p>
@@ -96,16 +96,16 @@ const needsAttention = computed(() => props.checks.filter((c) => c.hasFindings).
                                 :href="`/app/data-health/${check.definition.code}`"
                                 >{{ check.definition.title }}</a
                             >
-                            <p class="mt-1 text-sm text-slate-600">
+                            <p class="mt-1 text-sm text-ink-muted">
                                 {{ check.definition.condition }}
                             </p>
                         </div>
                         <span
-                            class="inline-flex shrink-0 rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                            class="inline-flex shrink-0 rounded-xs px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                             :class="
                                 check.hasFindings
                                     ? severityClasses[check.definition.severity]
-                                    : 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+                                    : 'bg-graphite-100 text-ink ring-graphite-300'
                             "
                         >
                             {{ check.hasFindings ? 'Needs attention' : 'No problems found' }}

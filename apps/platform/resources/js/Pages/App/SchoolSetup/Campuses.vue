@@ -52,13 +52,13 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
 
 <template>
     <Head title="Campuses" />
-    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Campuses</h1>
 
         <ErrorSummary :errors="statusForm.errors" :fields="['status', 'code', 'name']" />
 
-        <p v-if="props.campuses.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.campuses.length === 0" class="mt-4 text-sm text-ink-muted">
             No Campus exists yet.
         </p>
         <div v-else class="relative overflow-x-auto mt-4">
@@ -66,7 +66,7 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                 <caption class="sr-only">
                     Campuses
                 </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
+                <thead class="border-b border-control-line text-ink-muted">
                     <tr>
                         <th scope="col" class="pr-3 py-2">Name</th>
                         <th scope="col" class="pr-3 py-2">Code</th>
@@ -78,7 +78,7 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <tr v-for="campus in props.campuses" :key="campus.id">
                         <td class="pr-3 py-2 font-medium">
                             <a
@@ -88,11 +88,11 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                             >
                         </td>
                         <td class="pr-3 py-2">{{ campus.code }}</td>
-                        <td class="pr-3 py-2 text-slate-600">{{ campus.city ?? '—' }}</td>
+                        <td class="pr-3 py-2 text-ink-muted">{{ campus.city ?? '—' }}</td>
                         <td class="pr-3 py-2">
                             {{ campus.status === 'active' ? 'Active' : 'Inactive' }}
                         </td>
-                        <td class="pr-3 py-2 text-slate-600">
+                        <td class="pr-3 py-2 text-ink-muted">
                             {{ campus.services.map(serviceLabel).join(', ') || '—' }}
                         </td>
                         <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
@@ -102,7 +102,7 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                             <button
                                 v-if="campus.status === 'active'"
                                 type="button"
-                                class="text-red-700 underline"
+                                class="text-danger underline"
                                 @click="askDeactivate(campus)"
                             >
                                 Deactivate<span class="sr-only"> {{ campus.name }}</span>
@@ -124,7 +124,7 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
 
         <section v-if="props.canManage" class="mt-8" aria-labelledby="add-campus-heading">
             <h2 id="add-campus-heading" class="font-semibold">Add a Campus</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Add the address, contact details, location and services on the Campus's page.
             </p>
             <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitCreate">
@@ -145,11 +145,7 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                     :error="create.errors.code"
                 />
                 <div class="sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="create.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="create.processing" class="btn btn-primary">
                         Add Campus
                     </button>
                 </div>

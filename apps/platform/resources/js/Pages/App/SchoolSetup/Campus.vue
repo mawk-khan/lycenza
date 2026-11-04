@@ -67,15 +67,15 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
 
 <template>
     <Head :title="campus.name" />
-    <main class="mx-auto max-w-3xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-3xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup/campuses">← Campuses</a>
         <h1 class="mt-2 text-xl font-semibold">{{ campus.name }}</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Code {{ campus.code }} · {{ campus.status === 'active' ? 'Active' : 'Inactive' }}
         </p>
 
         <div class="mt-6 grid gap-4 sm:grid-cols-2">
-            <section aria-labelledby="address-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="address-heading" class="rounded-xs border border-line p-4">
                 <h2 id="address-heading" class="text-sm font-semibold">Address</h2>
                 <address class="mt-2 text-sm not-italic break-words">
                     <span v-if="campus.addressLine1" class="block">{{ campus.addressLine1 }}</span>
@@ -88,20 +88,20 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                     <span class="block">{{ campus.countryCode ?? schoolCountryCode }}</span>
                 </address>
             </section>
-            <section aria-labelledby="contact-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="contact-heading" class="rounded-xs border border-line p-4">
                 <h2 id="contact-heading" class="text-sm font-semibold">Contact</h2>
                 <dl class="mt-2 space-y-1 text-sm break-words">
                     <div>
-                        <dt class="inline text-slate-500">Phone:</dt>
+                        <dt class="inline text-ink-muted">Phone:</dt>
                         <dd class="inline">{{ show(campus.phone) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Email:</dt>
+                        <dt class="inline text-ink-muted">Email:</dt>
                         <dd class="inline">{{ show(campus.email) }}</dd>
                     </div>
                 </dl>
             </section>
-            <section aria-labelledby="location-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="location-heading" class="rounded-xs border border-line p-4">
                 <h2 id="location-heading" class="text-sm font-semibold">Location</h2>
                 <p class="mt-2 text-sm">
                     {{
@@ -111,7 +111,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                     }}
                 </p>
             </section>
-            <section aria-labelledby="services-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="services-heading" class="rounded-xs border border-line p-4">
                 <h2 id="services-heading" class="text-sm font-semibold">Services offered</h2>
                 <ul v-if="campus.services.length > 0" class="mt-2 list-inside list-disc text-sm">
                     <li v-for="code in campus.services" :key="code">{{ serviceLabel(code) }}</li>
@@ -210,7 +210,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                 />
                 <fieldset class="sm:col-span-2">
                     <legend class="text-sm font-medium">Services offered</legend>
-                    <p class="text-xs text-slate-500">
+                    <p class="text-xs text-ink-muted">
                         Describes this Campus. It does not enable a module or give anyone access.
                     </p>
                     <div class="mt-2 grid gap-2 sm:grid-cols-2">
@@ -223,21 +223,17 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                             @update:model-value="(on) => toggleService(option.code, on)"
                         />
                     </div>
-                    <p v-if="form.errors.services" class="mt-1 text-sm text-red-700">
+                    <p v-if="form.errors.services" class="mt-1 text-sm text-danger">
                         {{ form.errors.services }}
                     </p>
                 </fieldset>
                 <div class="sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="form.processing" class="btn btn-primary">
                         Save Campus
                     </button>
                 </div>
             </form>
         </section>
-        <p v-else class="mt-8 text-sm text-slate-600">You have read-only access to this Campus.</p>
+        <p v-else class="mt-8 text-sm text-ink-muted">You have read-only access to this Campus.</p>
     </main>
 </template>

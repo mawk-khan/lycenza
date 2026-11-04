@@ -39,24 +39,24 @@ function downloadUrl(attachmentId: string): string {
 <template>
     <main class="mx-auto max-w-3xl px-6 py-10">
         <a class="text-sm underline" href="/app/portal/communications">Back to messages</a>
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">{{ announcement.title }}</h1>
-        <p class="mt-1 text-xs text-slate-500">
+        <h1 class="mt-4 text-xl font-semibold text-ink">{{ announcement.title }}</h1>
+        <p class="mt-1 text-xs text-ink-muted">
             {{ announcement.sender ?? schoolName }}
             <template v-if="announcement.publishedAt">
                 · {{ new Date(announcement.publishedAt).toLocaleString() }}</template
             >
         </p>
 
-        <div class="mt-6 whitespace-pre-line text-sm text-slate-800">{{ announcement.body }}</div>
+        <div class="mt-6 whitespace-pre-line text-sm text-ink">{{ announcement.body }}</div>
 
         <section v-if="announcement.attachments.length > 0" class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Attachments</h2>
+            <h2 class="text-sm font-medium text-ink-muted">Attachments</h2>
             <ul class="mt-2 space-y-1 text-sm">
                 <li v-for="attachment in announcement.attachments" :key="attachment.id">
                     <a class="underline" :href="downloadUrl(attachment.id)">{{
                         attachment.name
                     }}</a>
-                    <span class="text-xs text-slate-500">
+                    <span class="text-xs text-ink-muted">
                         ({{ formatSize(attachment.sizeBytes) }})</span
                     >
                 </li>

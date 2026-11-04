@@ -102,21 +102,18 @@ function campusLabel(row: RegistryRow): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-6xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">School Registry</h1>
-                <p class="mt-1 max-w-2xl text-sm text-slate-500">
+                <p class="mt-1 max-w-2xl text-sm text-ink-muted">
                     Every School on the platform, with its lifecycle and setup state. Platform
                     access shows School metadata only and never grants access to any School.
                 </p>
             </div>
-            <a
-                v-if="canCreate"
-                href="/app/platform/schools/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            <a v-if="canCreate" href="/app/platform/schools/create" class="btn btn-primary shrink-0"
                 >Create a School</a
             >
         </div>
@@ -127,22 +124,22 @@ function campusLabel(row: RegistryRow): string {
             @submit.prevent="applyFilters"
         >
             <div class="w-full sm:w-auto">
-                <label class="block text-sm text-slate-600" for="registry-search">Search</label>
+                <label class="block text-sm text-ink-muted" for="registry-search">Search</label>
                 <input
                     id="registry-search"
                     v-model="q"
                     type="search"
                     maxlength="100"
                     placeholder="Name, legal name, slug or code"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                    class="input mt-1 sm:w-72"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="registry-status">Status</label>
+                <label class="block text-sm text-ink-muted" for="registry-status">Status</label>
                 <select
                     id="registry-status"
                     v-model="status"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -152,13 +149,13 @@ function campusLabel(row: RegistryRow): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="registry-domain"
+                <label class="block text-sm text-ink-muted" for="registry-domain"
                     >Custom domain</label
                 >
                 <select
                     id="registry-domain"
                     v-model="domain"
-                    class="mt-1 w-44 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-44"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -168,13 +165,13 @@ function campusLabel(row: RegistryRow): string {
                 </select>
             </div>
             <div v-if="options.groups.length">
-                <label class="block text-sm text-slate-600" for="registry-group"
+                <label class="block text-sm text-ink-muted" for="registry-group"
                     >School Group</label
                 >
                 <select
                     id="registry-group"
                     v-model="group"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                     @change="applyFilters"
                 >
                     <option value="">All</option>
@@ -207,7 +204,7 @@ function campusLabel(row: RegistryRow): string {
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table" data-testid="school-list">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">School</th>
                         <th scope="col" class="py-2 font-medium">Status</th>
                         <th scope="col" class="py-2 font-medium">Campuses</th>
@@ -217,18 +214,14 @@ function campusLabel(row: RegistryRow): string {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr
-                        v-for="s in schools"
-                        :key="s.id"
-                        class="border-b border-slate-100 align-top"
-                    >
+                    <tr v-for="s in schools" :key="s.id" class="border-b border-line align-top">
                         <td class="py-3 pr-4">
                             <a
                                 class="font-medium underline"
                                 :href="`/app/platform/schools/${s.id}`"
                                 >{{ s.name }}</a
                             >
-                            <p class="text-xs text-slate-500">
+                            <p class="text-xs text-ink-muted">
                                 {{ s.slug }}<template v-if="s.code"> · {{ s.code }}</template>
                                 <template v-if="s.groups.length">
                                     · {{ s.groups.map((g) => g.name).join(', ') }}</template
@@ -239,18 +232,18 @@ function campusLabel(row: RegistryRow): string {
                         <td class="py-3 pr-4">{{ campusLabel(s) }}</td>
                         <td class="py-3 pr-4">
                             <span v-if="s.academicYear">{{ s.academicYear }}</span>
-                            <span v-else class="text-slate-400">None active</span>
+                            <span v-else class="text-ink-muted">None active</span>
                         </td>
                         <td class="py-3 pr-4">{{ domainLabels[s.domain] ?? s.domain }}</td>
                         <td class="py-3">
                             <span
-                                class="rounded px-2 py-0.5 text-xs font-medium"
+                                class="rounded-xs px-2 py-0.5 text-xs font-medium"
                                 :class="readinessStyles[s.readiness]?.badge"
                                 >{{ readinessStyles[s.readiness]?.label ?? s.readiness }}</span
                             >
                             <span
                                 v-if="s.warningCount"
-                                class="ml-2 text-xs text-amber-700"
+                                class="ml-2 text-xs text-ink"
                                 :aria-label="`${s.warningCount} warnings`"
                                 >⚠ {{ s.warningCount }}</span
                             >
@@ -260,24 +253,24 @@ function campusLabel(row: RegistryRow): string {
             </table>
 
             <ul class="mt-6 space-y-3 md:hidden">
-                <li v-for="s in schools" :key="s.id" class="rounded border border-slate-200 p-3">
+                <li v-for="s in schools" :key="s.id" class="rounded-xs border border-line p-3">
                     <a class="font-medium underline" :href="`/app/platform/schools/${s.id}`">{{
                         s.name
                     }}</a>
-                    <p class="text-xs text-slate-500">
+                    <p class="text-xs text-ink-muted">
                         {{ s.slug }} · {{ statusLabel(s.status, s.closed) }}
                     </p>
                     <p class="mt-1 text-sm">
                         <span
-                            class="rounded px-2 py-0.5 text-xs font-medium"
+                            class="rounded-xs px-2 py-0.5 text-xs font-medium"
                             :class="readinessStyles[s.readiness]?.badge"
                             >{{ readinessStyles[s.readiness]?.label ?? s.readiness }}</span
                         >
-                        <span v-if="s.warningCount" class="ml-2 text-xs text-amber-700"
+                        <span v-if="s.warningCount" class="ml-2 text-xs text-ink"
                             >⚠ {{ s.warningCount }}</span
                         >
                     </p>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-ink-muted">
                         {{ campusLabel(s) }} campuses · {{ s.academicYear ?? 'No active year' }}
                     </p>
                 </li>

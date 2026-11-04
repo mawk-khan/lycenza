@@ -48,10 +48,10 @@ function rangeUrl(): string {
 <template>
     <main class="mx-auto max-w-3xl px-6 py-10">
         <a class="text-sm underline" href="/app/portal/attendance">Back</a>
-        <h1 class="mt-4 text-xl font-semibold text-slate-900">
+        <h1 class="mt-4 text-xl font-semibold text-ink">
             Attendance · {{ attendance.student.name }}
         </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ schoolName }}
             <template v-if="attendance.academicYear">
                 · {{ attendance.academicYear.name }}</template
@@ -78,19 +78,15 @@ function rangeUrl(): string {
             @submit.prevent
         >
             <label class="block">
-                <span class="block text-xs text-slate-500">From</span>
-                <input
-                    v-model="from"
-                    type="date"
-                    class="rounded border border-slate-300 px-2 py-1"
-                />
+                <span class="block text-xs text-ink-muted">From</span>
+                <input v-model="from" type="date" class="input w-auto" />
             </label>
             <label class="block">
-                <span class="block text-xs text-slate-500">To</span>
-                <input v-model="to" type="date" class="rounded border border-slate-300 px-2 py-1" />
+                <span class="block text-xs text-ink-muted">To</span>
+                <input v-model="to" type="date" class="input w-auto" />
             </label>
             <a class="underline" :href="rangeUrl()">Show</a>
-            <span class="text-xs text-slate-500"
+            <span class="text-xs text-ink-muted"
                 >This academic year only; up to {{ maxDays }} days at a time.</span
             >
         </form>
@@ -103,14 +99,14 @@ function rangeUrl(): string {
         />
 
         <table v-else class="mt-6 w-full text-left text-sm">
-            <thead class="text-xs text-slate-500">
+            <thead class="text-xs text-ink-muted">
                 <tr>
                     <th class="py-2">Date</th>
                     <th class="py-2">Period</th>
                     <th class="py-2">Status</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200">
+            <tbody class="divide-y divide-line">
                 <tr v-for="(record, index) in attendance.records" :key="index">
                     <td class="py-2">{{ record.date }}</td>
                     <td class="py-2">{{ record.periodStart }}–{{ record.periodEnd }}</td>

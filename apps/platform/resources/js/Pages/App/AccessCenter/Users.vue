@@ -36,10 +36,10 @@ function search() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/settings/access">← Access Center</a>
         <h1 class="mt-2 text-xl font-semibold">Users &amp; effective access</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Staff of this School and their role assignments. Roles are granted on
             <a class="underline" href="/app/settings/staff">Staff accounts</a>.
         </p>
@@ -51,11 +51,9 @@ function search() {
                 type="search"
                 maxlength="100"
                 placeholder="Name or email"
-                class="w-full rounded border border-slate-300 px-3 py-2"
+                class="input"
             />
-            <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
-                Search
-            </button>
+            <button type="submit" class="btn btn-secondary">Search</button>
         </form>
         <div
             class="relative mt-4 overflow-x-auto"
@@ -67,7 +65,7 @@ function search() {
                 <caption class="sr-only">
                     Staff role assignments in this School
                 </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
+                <thead class="border-b border-control-line text-ink-muted">
                     <tr>
                         <th scope="col" class="py-2 pr-3">Person</th>
                         <th scope="col" class="py-2 pr-3">Assignments</th>
@@ -75,11 +73,11 @@ function search() {
                         <th scope="col" class="py-2 pr-3"><span class="sr-only">Details</span></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <tr v-for="m in members.data" :key="m.membershipId">
                         <td class="py-2 pr-3">
                             {{ m.name ?? 'Former user' }}
-                            <span v-if="m.email" class="block text-xs text-slate-500">{{
+                            <span v-if="m.email" class="block text-xs text-ink-muted">{{
                                 m.email
                             }}</span>
                         </td>
@@ -87,11 +85,11 @@ function search() {
                             <ul>
                                 <li v-for="(a, i) in m.assignments" :key="i">
                                     {{ a.roleName }} — {{ a.scope
-                                    }}<span v-if="!a.effective" class="text-amber-800">
+                                    }}<span v-if="!a.effective" class="text-ink">
                                         (inactive Campus)</span
                                     >
                                 </li>
-                                <li v-if="!m.assignments.length" class="text-slate-500">
+                                <li v-if="!m.assignments.length" class="text-ink-muted">
                                     No active role
                                 </li>
                             </ul>
@@ -116,7 +114,7 @@ function search() {
                 </tbody>
             </table>
         </div>
-        <p v-if="!members.data.length" class="mt-2 text-sm text-slate-600">Nobody matches.</p>
+        <p v-if="!members.data.length" class="mt-2 text-sm text-ink-muted">Nobody matches.</p>
         <Pagination
             :links="members.links"
             :from="members.from"

@@ -41,14 +41,14 @@ defineProps<{
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/data-health">← Data health</a>
 
-        <p class="mt-2 text-xs text-slate-500">{{ check.area }} · {{ kindLabels[check.kind] }}</p>
+        <p class="mt-2 text-xs text-ink-muted">{{ check.area }} · {{ kindLabels[check.kind] }}</p>
         <div class="flex flex-wrap items-center gap-3">
             <h1 class="text-xl font-semibold">{{ check.title }}</h1>
             <span
-                class="inline-flex rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                class="inline-flex rounded-xs px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                 :class="severityClasses[check.severity]"
                 >{{ severityLabels[check.severity] }}</span
             >
@@ -57,15 +57,15 @@ defineProps<{
         <dl class="mt-4 grid gap-3 text-sm">
             <div>
                 <dt class="font-medium">What this check looks for</dt>
-                <dd class="mt-0.5 text-slate-600">{{ check.condition }}</dd>
+                <dd class="mt-0.5 text-ink-muted">{{ check.condition }}</dd>
             </div>
             <div>
                 <dt class="font-medium">Why it matters</dt>
-                <dd class="mt-0.5 text-slate-600">{{ check.whyItMatters }}</dd>
+                <dd class="mt-0.5 text-ink-muted">{{ check.whyItMatters }}</dd>
             </div>
             <div>
                 <dt class="font-medium">How to fix it</dt>
-                <dd class="mt-0.5 text-slate-600">{{ check.repair }}</dd>
+                <dd class="mt-0.5 text-ink-muted">{{ check.repair }}</dd>
             </div>
         </dl>
 
@@ -77,7 +77,7 @@ defineProps<{
         />
 
         <template v-else>
-            <ul class="mt-6 divide-y divide-slate-100 border-y border-slate-100">
+            <ul class="mt-6 divide-y divide-line border-y border-line">
                 <li
                     v-for="finding in findings.data"
                     :key="finding.entityId"
@@ -85,14 +85,14 @@ defineProps<{
                 >
                     <div class="min-w-0 flex-1">
                         <p class="font-medium">{{ finding.label }}</p>
-                        <p class="mt-0.5 text-slate-500">{{ finding.detail }}</p>
+                        <p class="mt-0.5 text-ink-muted">{{ finding.detail }}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                         <a
                             v-for="link in finding.links"
                             :key="link.label"
                             class="underline"
-                            :class="link.isRepair ? 'font-medium' : 'text-slate-600'"
+                            :class="link.isRepair ? 'font-medium' : 'text-ink-muted'"
                             :href="link.url"
                             :aria-label="`${link.label}: ${finding.label}`"
                             >{{ link.label }}</a

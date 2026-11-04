@@ -8,7 +8,7 @@ defineProps<{ code: string }>();
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Multi-factor authentication required</h1>
         <p
             v-if="code === 'mfa_required_not_enrolled'"

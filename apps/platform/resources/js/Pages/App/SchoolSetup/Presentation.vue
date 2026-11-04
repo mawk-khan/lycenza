@@ -169,10 +169,10 @@ const sourceText: Record<string, string> = {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Branding &amp; navigation</h1>
-        <p class="mt-1 max-w-3xl text-sm text-slate-600">
+        <p class="mt-1 max-w-3xl text-sm text-ink-muted">
             How {{ school.name }} looks to its staff and Guardians. These are presentation choices
             only: they never give or remove access. To see why someone can or cannot open a page,
             use the <a class="underline" href="/app/settings/access">Access Center</a>.
@@ -187,9 +187,11 @@ const sourceText: Record<string, string> = {
                 role="tab"
                 :aria-selected="tab === t.key"
                 :aria-controls="`panel-${t.key}`"
-                class="rounded border px-3 py-1.5 text-sm"
+                class="rounded-xs border px-3 py-1.5 text-sm"
                 :class="
-                    tab === t.key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300'
+                    tab === t.key
+                        ? 'border-accent-strong bg-accent-strong text-white'
+                        : 'border-control-line'
                 "
                 @click="tab = t.key"
             >
@@ -204,7 +206,7 @@ const sourceText: Record<string, string> = {
             aria-labelledby="tab-brand"
             class="mt-4"
         >
-            <div class="rounded border border-slate-200 p-4">
+            <div class="rounded-xs border border-line p-4">
                 <h2 class="text-base font-semibold">Effective branding</h2>
                 <p class="mt-1 text-sm" data-testid="brand-source">
                     Source: <strong>{{ sourceText[brandProfile.source] }}</strong
@@ -212,24 +214,24 @@ const sourceText: Record<string, string> = {
                         ({{ brandProfile.network.name }})</template
                     >
                 </p>
-                <p v-if="brandProfile.attention" class="mt-2 text-sm text-amber-800" role="status">
+                <p v-if="brandProfile.attention" class="mt-2 text-sm text-ink" role="status">
                     {{ brandProfile.attention }}
                 </p>
-                <p class="mt-3 text-sm text-slate-600">Preview (not saved until you save):</p>
+                <p class="mt-3 text-sm text-ink-muted">Preview (not saved until you save):</p>
                 <div
-                    class="mt-1 rounded border-t-4 border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    class="mt-1 rounded-xs border-t-4 border-line bg-graphite-100 px-3 py-2 text-sm"
                     :style="{ borderTopColor: previewAccent }"
                     data-testid="brand-preview"
                 >
                     <span class="font-semibold">Lycenza</span>
-                    <span class="ml-2 text-slate-600">{{ school.name }}</span>
+                    <span class="ml-2 text-ink-muted">{{ school.name }}</span>
                     <span
-                        class="ml-2 rounded px-2 py-0.5 text-xs font-medium"
+                        class="ml-2 rounded-xs px-2 py-0.5 text-xs font-medium"
                         :style="{ backgroundColor: previewAccent, color: previewForeground }"
                         >{{ previewLabel }}</span
                     >
                 </div>
-                <p class="mt-2 text-xs text-slate-600">
+                <p class="mt-2 text-xs text-ink-muted">
                     Text on the accent is always shown in white or near-black, whichever is easier
                     to read. The School's name and legal identity never change.
                 </p>
@@ -241,46 +243,46 @@ const sourceText: Record<string, string> = {
                 @submit.prevent="saveBrand"
             >
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="brand-source"
+                    <label class="block text-sm text-ink" for="brand-source"
                         >School Group brand</label
                     >
                     <select
                         id="brand-source"
                         v-model="brandForm.brand_source_group_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="">None (Lycenza default)</option>
                         <option v-for="g in brandSources" :key="g.id" :value="g.id">
                             Use the {{ g.name }} brand
                         </option>
                     </select>
-                    <p class="mt-1 text-xs text-slate-600">
+                    <p class="mt-1 text-xs text-ink-muted">
                         Only School Groups this School belongs to. Joining a Group never applies its
                         brand by itself.
                     </p>
                     <p
                         v-if="brandForm.errors.brand_source_group_id"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ brandForm.errors.brand_source_group_id }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="brand-label"
+                    <label class="block text-sm text-ink" for="brand-label"
                         >This School's brand label (optional)</label
                     >
                     <input
                         id="brand-label"
                         v-model="brandForm.display_label"
                         maxlength="60"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="brandForm.errors.display_label" class="mt-1 text-sm text-red-700">
+                    <p v-if="brandForm.errors.display_label" class="mt-1 text-sm text-danger">
                         {{ brandForm.errors.display_label }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="brand-accent"
+                    <label class="block text-sm text-ink" for="brand-accent"
                         >This School's accent colour (optional)</label
                     >
                     <input
@@ -288,31 +290,27 @@ const sourceText: Record<string, string> = {
                         v-model="brandForm.primary_accent"
                         maxlength="7"
                         placeholder="#1D4E89"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
-                    <p v-if="brandForm.errors.primary_accent" class="mt-1 text-sm text-red-700">
+                    <p v-if="brandForm.errors.primary_accent" class="mt-1 text-sm text-danger">
                         {{ brandForm.errors.primary_accent }}
                     </p>
                 </div>
                 <p
                     v-if="err(brandForm, 'brand')"
-                    class="text-sm text-red-700 sm:col-span-2"
+                    class="text-sm text-danger sm:col-span-2"
                     role="alert"
                 >
                     {{ err(brandForm, 'brand') }}
                 </p>
                 <div class="flex flex-wrap gap-3 sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="brandForm.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="brandForm.processing" class="btn btn-primary">
                         Save branding
                     </button>
                     <button
                         v-if="brandForm.brand_source_group_id"
                         type="button"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="btn btn-secondary"
                         @click="useNetworkValues"
                     >
                         Use the School Group brand for label and colour
@@ -330,20 +328,18 @@ const sourceText: Record<string, string> = {
             :aria-labelledby="`tab-${audience}`"
             class="mt-4"
         >
-            <p class="rounded border border-slate-200 bg-slate-50 p-3 text-sm" role="note">
+            <p class="rounded-xs border border-line bg-graphite-100 p-3 text-sm" role="note">
                 Navigation preferences do not change permissions. People only ever see the items
                 they may open, and a hidden item's page stays reachable for those who may open it.
             </p>
-            <p v-if="profile.stale" class="mt-2 text-sm text-amber-800">
+            <p v-if="profile.stale" class="mt-2 text-sm text-ink">
                 {{ profile.stale }} saved preference(s) refer to items that no longer exist. They
                 are ignored; resetting removes them.
             </p>
             <form class="mt-4" @submit.prevent="saveNavigation(audience as string)">
                 <div v-for="g in groupsOf(audience as string)" :key="g.key" class="mt-5">
                     <h2 class="text-sm font-semibold">{{ g.label }}</h2>
-                    <ul
-                        class="mt-2 divide-y divide-slate-100 rounded border border-slate-200 text-sm"
-                    >
+                    <ul class="mt-2 divide-y divide-line rounded-xs border border-line text-sm">
                         <li
                             v-for="(item, i) in g.items"
                             :key="item.key"
@@ -352,10 +348,10 @@ const sourceText: Record<string, string> = {
                         >
                             <span>
                                 {{ item.label || item.defaultLabel }}
-                                <span v-if="item.label" class="block text-xs text-slate-500"
+                                <span v-if="item.label" class="block text-xs text-ink-muted"
                                     >Default: {{ item.defaultLabel }}</span
                                 >
-                                <span v-if="item.required" class="block text-xs text-slate-500">{{
+                                <span v-if="item.required" class="block text-xs text-ink-muted">{{
                                     item.required
                                 }}</span>
                             </span>
@@ -377,13 +373,13 @@ const sourceText: Record<string, string> = {
                                     :disabled="!canManage"
                                     maxlength="40"
                                     :placeholder="item.defaultLabel"
-                                    class="w-full rounded border border-slate-300 px-2 py-1"
+                                    class="input"
                                 />
                             </span>
                             <span v-if="canManage" class="flex gap-1">
                                 <button
                                     type="button"
-                                    class="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+                                    class="btn btn-secondary"
                                     :disabled="i === 0"
                                     @click="move(audience as string, item, -1)"
                                 >
@@ -391,7 +387,7 @@ const sourceText: Record<string, string> = {
                                 </button>
                                 <button
                                     type="button"
-                                    class="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+                                    class="btn btn-secondary"
                                     :disabled="i === g.items.length - 1"
                                     @click="move(audience as string, item, 1)"
                                 >
@@ -403,7 +399,7 @@ const sourceText: Record<string, string> = {
                 </div>
                 <p
                     v-if="err(navForms[audience as string], 'navigation')"
-                    class="mt-3 text-sm text-red-700"
+                    class="mt-3 text-sm text-danger"
                     role="alert"
                 >
                     {{ err(navForms[audience as string], 'navigation') }}
@@ -412,13 +408,13 @@ const sourceText: Record<string, string> = {
                     <button
                         type="submit"
                         :disabled="navForms[audience as string].processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Save navigation
                     </button>
                     <button
                         type="button"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="btn btn-secondary"
                         @click="resetNavigation(audience as string)"
                     >
                         Reset to defaults

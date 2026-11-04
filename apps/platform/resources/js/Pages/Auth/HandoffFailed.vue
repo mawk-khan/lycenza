@@ -5,7 +5,7 @@
 </script>
 
 <template>
-    <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-lg p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">This sign-in link cannot be used</h1>
         <p class="mt-4 text-sm" data-testid="handoff-failed">
             It has expired or was already used, or you are signed in here as someone else. Sign in

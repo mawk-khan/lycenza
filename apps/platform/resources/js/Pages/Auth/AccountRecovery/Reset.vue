@@ -47,11 +47,11 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-sm p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Choose a new password</h1>
 
         <noscript>
-            <p class="mt-4 text-sm text-slate-700">
+            <p class="mt-4 text-sm text-ink">
                 This page needs JavaScript to read your reset link. {{ invalidMessage }}
             </p>
         </noscript>
@@ -59,7 +59,7 @@ function submit() {
         <p
             v-if="ready && (!linkUsable || form.errors.secret)"
             role="alert"
-            class="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-control-line bg-graphite-100 px-3 py-2 text-sm text-ink"
             data-testid="recovery-invalid"
         >
             {{ invalidMessage }}
@@ -72,21 +72,21 @@ function submit() {
             @submit.prevent="submit"
         >
             <div>
-                <label class="block text-sm text-slate-600" for="password">New password</label>
+                <label class="block text-sm text-ink-muted" for="password">New password</label>
                 <input
                     id="password"
                     v-model="form.password"
                     type="password"
                     autocomplete="new-password"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.password" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.password" class="mt-1 text-sm text-danger">
                     {{ form.errors.password }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="password_confirmation"
+                <label class="block text-sm text-ink-muted" for="password_confirmation"
                     >Confirm new password</label
                 >
                 <input
@@ -94,15 +94,11 @@ function submit() {
                     v-model="form.password_confirmation"
                     type="password"
                     autocomplete="new-password"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
             </div>
 
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary w-full">
                 Change password
             </button>
         </form>

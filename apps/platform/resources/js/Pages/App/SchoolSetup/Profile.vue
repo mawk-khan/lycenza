@@ -84,54 +84,54 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-3xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">School profile</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             The School's identity and institutional contact details. These describe the School, not
             any person's account.
         </p>
 
         <div class="mt-6 grid gap-4 sm:grid-cols-2">
-            <section aria-labelledby="identity-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="identity-heading" class="rounded-xs border border-line p-4">
                 <h2 id="identity-heading" class="text-sm font-semibold">Identity</h2>
                 <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
-                        <dt class="inline text-slate-500">Display name:</dt>
+                        <dt class="inline text-ink-muted">Display name:</dt>
                         <dd class="inline">{{ school.name }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Legal name:</dt>
+                        <dt class="inline text-ink-muted">Legal name:</dt>
                         <dd class="inline">{{ show(school.legalName) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">School code:</dt>
+                        <dt class="inline text-ink-muted">School code:</dt>
                         <dd class="inline">{{ show(school.code) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Status:</dt>
+                        <dt class="inline text-ink-muted">Status:</dt>
                         <dd class="inline capitalize">{{ school.status }}</dd>
                     </div>
                 </dl>
             </section>
-            <section aria-labelledby="contact-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="contact-heading" class="rounded-xs border border-line p-4">
                 <h2 id="contact-heading" class="text-sm font-semibold">Contact</h2>
                 <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
-                        <dt class="inline text-slate-500">Email:</dt>
+                        <dt class="inline text-ink-muted">Email:</dt>
                         <dd class="inline">{{ show(school.email) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Phone:</dt>
+                        <dt class="inline text-ink-muted">Phone:</dt>
                         <dd class="inline">{{ show(school.phone) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Website:</dt>
+                        <dt class="inline text-ink-muted">Website:</dt>
                         <dd class="inline">{{ show(school.website) }}</dd>
                     </div>
                 </dl>
             </section>
-            <section aria-labelledby="address-heading" class="rounded border border-slate-200 p-4">
+            <section aria-labelledby="address-heading" class="rounded-xs border border-line p-4">
                 <h2 id="address-heading" class="text-sm font-semibold">Address</h2>
                 <address class="mt-2 text-sm not-italic">
                     <span v-if="school.addressLine1" class="block">{{ school.addressLine1 }}</span>
@@ -146,46 +146,46 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
             </section>
             <section
                 aria-labelledby="institution-heading"
-                class="rounded border border-slate-200 p-4"
+                class="rounded-xs border border-line p-4"
             >
                 <h2 id="institution-heading" class="text-sm font-semibold">
                     Institutional details
                 </h2>
                 <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
-                        <dt class="inline text-slate-500">Education board:</dt>
+                        <dt class="inline text-ink-muted">Education board:</dt>
                         <dd class="inline">{{ show(boardName(school.educationBoardId)) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Affiliation reference:</dt>
+                        <dt class="inline text-ink-muted">Affiliation reference:</dt>
                         <dd class="inline">{{ show(school.affiliationReference) }}</dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Registration reference:</dt>
+                        <dt class="inline text-ink-muted">Registration reference:</dt>
                         <dd class="inline">{{ show(school.registrationReference) }}</dd>
                     </div>
                 </dl>
             </section>
             <section
                 aria-labelledby="defaults-heading"
-                class="rounded border border-slate-200 p-4 sm:col-span-2"
+                class="rounded-xs border border-line p-4 sm:col-span-2"
             >
                 <h2 id="defaults-heading" class="text-sm font-semibold">Operating defaults</h2>
                 <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
-                        <dt class="inline text-slate-500">Time zone:</dt>
+                        <dt class="inline text-ink-muted">Time zone:</dt>
                         <dd class="inline">
                             {{ school.timezone }}
-                            <span class="text-slate-500"
+                            <span class="text-ink-muted"
                                 >(changed in School settings; every Campus uses it)</span
                             >
                         </dd>
                     </div>
                     <div>
-                        <dt class="inline text-slate-500">Currency:</dt>
+                        <dt class="inline text-ink-muted">Currency:</dt>
                         <dd class="inline">
                             {{ school.currency }}
-                            <span class="text-slate-500">(set for every School by Finance)</span>
+                            <span class="text-ink-muted">(set for every School by Finance)</span>
                         </dd>
                     </div>
                 </dl>
@@ -271,11 +271,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                         :error="form.errors.education_board_id"
                     />
                     <div class="sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="form.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="form.processing" class="btn btn-primary">
                             Save contact and address
                         </button>
                     </div>
@@ -284,12 +280,12 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
 
             <section
                 aria-labelledby="identity-edit-heading"
-                class="mt-10 rounded border border-amber-200 bg-amber-50/40 p-4"
+                class="mt-10 rounded-xs border border-accent-300 bg-accent-100/40 p-4"
             >
                 <h2 id="identity-edit-heading" class="text-base font-semibold">
                     Change institutional identity
                 </h2>
-                <p class="mt-1 text-sm text-slate-600">
+                <p class="mt-1 text-sm text-ink-muted">
                     The legal name and the registration and affiliation references identify the
                     School as an institution. Changing them needs a reason and a fresh
                     authentication code, and is recorded. These are not tax identifiers.
@@ -344,7 +340,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                         <button
                             type="submit"
                             :disabled="identity.processing || !hasMfaFactor"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Change institutional identity
                         </button>
@@ -352,7 +348,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                 </form>
             </section>
         </template>
-        <p v-else class="mt-8 text-sm text-slate-600">
+        <p v-else class="mt-8 text-sm text-ink-muted">
             You have read-only access to the School profile.
         </p>
     </main>

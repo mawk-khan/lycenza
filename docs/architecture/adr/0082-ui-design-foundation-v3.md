@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a to DS-4g implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4h implemented (2026-11-04, §10): every page is on the design system.** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -401,3 +401,32 @@ recommended first domain (Students) was taken.
       emergency option): a safety signal, like the elevation banner -- it
       joins OD-DS-4.
     - Visual check on 17 captured pages.
+12. **DS-4h: Platform, Organization and everything else (2026-11-04).** The
+    remaining 63 Vue files -- the rest of `SchoolSetup` (index, profile,
+    campuses, readiness, presentation, integrations, organization report),
+    `SchoolSettings`, `AccessCenter`, `DataHealth`, `Compliance`,
+    `Analytics`, `Automation`, `Integrations`, `Domains`, `Groups`,
+    `Platform`, the Guardian `Portal`, `Dashboard`, `SchoolHostNoAccess`,
+    `Account`, `Auth`, `Invitations`, `Home`, `Components/Groups` and
+    `Components/Reports` -- plus the class-map helpers
+    `integrationReadiness.ts`, `schoolRegistry.ts`, `setupReadiness.ts` and
+    `Pages/App/DataHealth/severity.ts`.
+    - **Hand edits, presentation only:** setup-readiness "Blocked" is an
+      attention state and Data Health "Blocking" severity the negative
+      family (statuses, not errors); integration "Status unavailable" keeps
+      the danger hue (the hub could not evaluate: an error); the Access
+      Center's not-effective capability reads muted.
+    - **Native controls:** `progress`, checkboxes, radios and ranges follow
+      `accent-strong` (`accent-color`); a sized `<progress>` loses its
+      native look in Chromium, so its track and fill are drawn from the
+      tokens.
+    - **The guard now covers everything.** `DesignTokensTest` reads every
+      `.vue` and `.ts` file under `resources/js` (no folder list); the one
+      exemption is `ElevationBanner.vue` (OD-DS-4). This is the §2.7 guard.
+    - Visual check on 22 captured pages: guest (home, sign-in, account
+      recovery), School (dashboard, setup index, profile, campuses,
+      readiness, presentation, integrations, organization report, Access
+      Center, domains, audit log, automation, analytics, settings, account
+      security) and platform (registry, groups, roles, dashboard).
+    - **Still to do (closing slice):** the page area onto the ground, and
+      the CLAUDE.md rule.

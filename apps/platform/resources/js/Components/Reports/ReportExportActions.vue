@@ -87,24 +87,20 @@ async function download(): Promise<void> {
     <div class="flex flex-wrap items-center gap-3">
         <button
             type="button"
-            class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-60"
+            class="btn btn-secondary"
             :disabled="busy"
             :aria-busy="busy"
             @click="download"
         >
             {{ busy ? 'Preparing…' : 'Download CSV' }}
         </button>
-        <a
-            class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-            :href="printUrl"
-            target="_blank"
-            rel="noopener"
+        <a class="btn btn-secondary" :href="printUrl" target="_blank" rel="noopener"
             >Print view<span class="sr-only"> (opens in a new tab)</span></a
         >
         <p
             v-if="message"
             class="w-full text-sm"
-            :class="failed ? 'text-red-700' : 'text-slate-600'"
+            :class="failed ? 'text-danger' : 'text-ink-muted'"
             :role="failed ? 'alert' : 'status'"
         >
             {{ message }}

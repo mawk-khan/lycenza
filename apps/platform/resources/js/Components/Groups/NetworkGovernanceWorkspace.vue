@@ -122,15 +122,13 @@ const zonesForRegion = computed(() =>
     <div>
         <section aria-labelledby="structure-heading" class="mt-8">
             <h2 id="structure-heading" class="text-base font-semibold">Regions and Zones</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Optional groupings for running the network. Inactivating one moves no School.
             </p>
             <div class="mt-3 grid gap-6 lg:grid-cols-2">
                 <div>
                     <h3 class="text-sm font-medium">Regions</h3>
-                    <ul
-                        class="mt-2 divide-y divide-slate-100 rounded border border-slate-200 text-sm"
-                    >
+                    <ul class="mt-2 divide-y divide-line rounded-xs border border-line text-sm">
                         <li
                             v-for="r in overview.regions"
                             :key="r.id"
@@ -138,10 +136,10 @@ const zonesForRegion = computed(() =>
                         >
                             <span
                                 >{{ r.name }}
-                                <span class="text-slate-500"
+                                <span class="text-ink-muted"
                                     >· {{ r.code }} · {{ r.schools }} School(s)</span
                                 >
-                                <span v-if="r.status === 'inactive'" class="text-amber-800">
+                                <span v-if="r.status === 'inactive'" class="text-ink">
                                     · inactive</span
                                 ></span
                             >
@@ -161,7 +159,7 @@ const zonesForRegion = computed(() =>
                                 }}<span class="sr-only"> {{ r.name }}</span>
                             </button>
                         </li>
-                        <li v-if="!overview.regions.length" class="px-3 py-2 text-slate-600">
+                        <li v-if="!overview.regions.length" class="px-3 py-2 text-ink-muted">
                             No Regions.
                         </li>
                     </ul>
@@ -171,54 +169,43 @@ const zonesForRegion = computed(() =>
                         @submit.prevent="addRegion"
                     >
                         <div>
-                            <label class="block text-sm text-slate-700" for="region-code"
-                                >Code</label
-                            >
+                            <label class="block text-sm text-ink" for="region-code">Code</label>
                             <input
                                 id="region-code"
                                 v-model="regionForm.code"
                                 maxlength="32"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                                class="input mt-1"
                                 :aria-invalid="!!regionForm.errors.code"
                                 aria-describedby="region-code-error"
                             />
                             <p
                                 v-if="regionForm.errors.code"
                                 id="region-code-error"
-                                class="mt-1 text-sm text-red-700"
+                                class="mt-1 text-sm text-danger"
                             >
                                 {{ regionForm.errors.code }}
                             </p>
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-700" for="region-name"
-                                >Name</label
-                            >
+                            <label class="block text-sm text-ink" for="region-name">Name</label>
                             <input
                                 id="region-name"
                                 v-model="regionForm.name"
                                 maxlength="150"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                                class="input mt-1"
                             />
-                            <p v-if="regionForm.errors.name" class="mt-1 text-sm text-red-700">
+                            <p v-if="regionForm.errors.name" class="mt-1 text-sm text-danger">
                                 {{ regionForm.errors.name }}
                             </p>
                         </div>
                         <div class="sm:col-span-2">
-                            <button
-                                type="submit"
-                                class="rounded border border-slate-300 px-3 py-2 text-sm"
-                            >
-                                Add Region
-                            </button>
+                            <button type="submit" class="btn btn-secondary">Add Region</button>
                         </div>
                     </form>
                 </div>
                 <div>
                     <h3 class="text-sm font-medium">Zones</h3>
-                    <ul
-                        class="mt-2 divide-y divide-slate-100 rounded border border-slate-200 text-sm"
-                    >
+                    <ul class="mt-2 divide-y divide-line rounded-xs border border-line text-sm">
                         <li
                             v-for="z in overview.zones"
                             :key="z.id"
@@ -226,11 +213,11 @@ const zonesForRegion = computed(() =>
                         >
                             <span
                                 >{{ z.name }}
-                                <span class="text-slate-500"
+                                <span class="text-ink-muted"
                                     >· {{ z.code }} · {{ regionName(z.regionId) }} ·
                                     {{ z.schools }} School(s)</span
                                 >
-                                <span v-if="z.status === 'inactive'" class="text-amber-800">
+                                <span v-if="z.status === 'inactive'" class="text-ink">
                                     · inactive</span
                                 ></span
                             >
@@ -250,7 +237,7 @@ const zonesForRegion = computed(() =>
                                 }}<span class="sr-only"> {{ z.name }}</span>
                             </button>
                         </li>
-                        <li v-if="!overview.zones.length" class="px-3 py-2 text-slate-600">
+                        <li v-if="!overview.zones.length" class="px-3 py-2 text-ink-muted">
                             No Zones.
                         </li>
                     </ul>
@@ -260,37 +247,37 @@ const zonesForRegion = computed(() =>
                         @submit.prevent="addZone"
                     >
                         <div>
-                            <label class="block text-sm text-slate-700" for="zone-code">Code</label>
+                            <label class="block text-sm text-ink" for="zone-code">Code</label>
                             <input
                                 id="zone-code"
                                 v-model="zoneForm.code"
                                 maxlength="32"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                                class="input mt-1"
                             />
-                            <p v-if="zoneForm.errors.code" class="mt-1 text-sm text-red-700">
+                            <p v-if="zoneForm.errors.code" class="mt-1 text-sm text-danger">
                                 {{ zoneForm.errors.code }}
                             </p>
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-700" for="zone-name">Name</label>
+                            <label class="block text-sm text-ink" for="zone-name">Name</label>
                             <input
                                 id="zone-name"
                                 v-model="zoneForm.name"
                                 maxlength="150"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                                class="input mt-1"
                             />
-                            <p v-if="zoneForm.errors.name" class="mt-1 text-sm text-red-700">
+                            <p v-if="zoneForm.errors.name" class="mt-1 text-sm text-danger">
                                 {{ zoneForm.errors.name }}
                             </p>
                         </div>
                         <div class="sm:col-span-2">
-                            <label class="block text-sm text-slate-700" for="zone-region"
+                            <label class="block text-sm text-ink" for="zone-region"
                                 >Region (optional)</label
                             >
                             <select
                                 id="zone-region"
                                 v-model="zoneForm.region_id"
-                                class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                                class="input mt-1"
                             >
                                 <option value="">No Region</option>
                                 <option
@@ -303,17 +290,12 @@ const zonesForRegion = computed(() =>
                                     {{ r.name }}
                                 </option>
                             </select>
-                            <p v-if="zoneForm.errors.region_id" class="mt-1 text-sm text-red-700">
+                            <p v-if="zoneForm.errors.region_id" class="mt-1 text-sm text-danger">
                                 {{ zoneForm.errors.region_id }}
                             </p>
                         </div>
                         <div class="sm:col-span-2">
-                            <button
-                                type="submit"
-                                class="rounded border border-slate-300 px-3 py-2 text-sm"
-                            >
-                                Add Zone
-                            </button>
+                            <button type="submit" class="btn btn-secondary">Add Zone</button>
                         </div>
                     </form>
                 </div>
@@ -339,7 +321,7 @@ const zonesForRegion = computed(() =>
                     </button>
                     <button
                         type="button"
-                        class="text-red-800 underline"
+                        class="text-danger underline"
                         @click="open(school, 'remove')"
                     >
                         Remove<span class="sr-only"> {{ school.name }}</span>
@@ -351,7 +333,7 @@ const zonesForRegion = computed(() =>
         <section
             v-if="selected && mode"
             aria-labelledby="membership-heading"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
         >
             <h2 id="membership-heading" class="text-base font-semibold">
                 {{
@@ -363,7 +345,7 @@ const zonesForRegion = computed(() =>
                 }}
                 — {{ selected.name }}
             </h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Current: {{ selected.relationshipLabel }} ·
                 {{ selected.region?.name ?? 'No Region' }} · {{ selected.zone?.name ?? 'No Zone' }}
             </p>
@@ -373,14 +355,14 @@ const zonesForRegion = computed(() =>
                 @submit.prevent="submitClassify"
             >
                 <div>
-                    <label class="block text-sm text-slate-700" for="classify-relationship"
+                    <label class="block text-sm text-ink" for="classify-relationship"
                         >New relationship</label
                     >
                     <select
                         id="classify-relationship"
                         v-model="classifyForm.relationship_type"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in relationships" :key="r.code" :value="r.code">
@@ -389,42 +371,42 @@ const zonesForRegion = computed(() =>
                     </select>
                     <p
                         v-if="classifyForm.errors.relationship_type"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ classifyForm.errors.relationship_type }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="classify-reference"
+                    <label class="block text-sm text-ink" for="classify-reference"
                         >Network reference (optional)</label
                     >
                     <input
                         id="classify-reference"
                         v-model="classifyForm.network_reference"
                         maxlength="40"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
                     <p
                         v-if="classifyForm.errors.network_reference"
-                        class="mt-1 text-sm text-red-700"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ classifyForm.errors.network_reference }}
                     </p>
                 </div>
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="classify-reason">Reason</label>
+                    <label class="block text-sm text-ink" for="classify-reason">Reason</label>
                     <select
                         id="classify-reason"
                         v-model="classifyForm.reason_code"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in reasons" :key="r.code" :value="r.code">
                             {{ r.label }}
                         </option>
                     </select>
-                    <p v-if="classifyForm.errors.reason_code" class="mt-1 text-sm text-red-700">
+                    <p v-if="classifyForm.errors.reason_code" class="mt-1 text-sm text-danger">
                         {{ classifyForm.errors.reason_code }}
                     </p>
                 </div>
@@ -439,7 +421,7 @@ const zonesForRegion = computed(() =>
                 </div>
                 <p
                     v-if="err(classifyForm, 'membership')"
-                    class="text-sm text-red-700 sm:col-span-2"
+                    class="text-sm text-danger sm:col-span-2"
                     role="alert"
                 >
                     {{ err(classifyForm, 'membership') }}
@@ -448,17 +430,11 @@ const zonesForRegion = computed(() =>
                     <button
                         type="submit"
                         :disabled="classifyForm.processing || !hasMfaFactor"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Save classification
                     </button>
-                    <button
-                        type="button"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                        @click="close"
-                    >
-                        Cancel
-                    </button>
+                    <button type="button" class="btn btn-secondary" @click="close">Cancel</button>
                 </div>
             </form>
             <form
@@ -467,76 +443,58 @@ const zonesForRegion = computed(() =>
                 @submit.prevent="submitPlace"
             >
                 <div>
-                    <label class="block text-sm text-slate-700" for="place-region">Region</label>
-                    <select
-                        id="place-region"
-                        v-model="placeForm.region_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <label class="block text-sm text-ink" for="place-region">Region</label>
+                    <select id="place-region" v-model="placeForm.region_id" class="input mt-1">
                         <option value="">No Region</option>
                         <option v-for="r in overview.regions" :key="r.id" :value="r.id">
                             {{ r.name }}{{ r.status === 'inactive' ? ' (inactive)' : '' }}
                         </option>
                     </select>
-                    <p v-if="placeForm.errors.region_id" class="mt-1 text-sm text-red-700">
+                    <p v-if="placeForm.errors.region_id" class="mt-1 text-sm text-danger">
                         {{ placeForm.errors.region_id }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="place-zone">Zone</label>
-                    <select
-                        id="place-zone"
-                        v-model="placeForm.zone_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
-                    >
+                    <label class="block text-sm text-ink" for="place-zone">Zone</label>
+                    <select id="place-zone" v-model="placeForm.zone_id" class="input mt-1">
                         <option value="">No Zone</option>
                         <option v-for="z in zonesForRegion" :key="z.id" :value="z.id">
                             {{ z.name }}{{ z.status === 'inactive' ? ' (inactive)' : '' }}
                         </option>
                     </select>
-                    <p v-if="placeForm.errors.zone_id" class="mt-1 text-sm text-red-700">
+                    <p v-if="placeForm.errors.zone_id" class="mt-1 text-sm text-danger">
                         {{ placeForm.errors.zone_id }}
                     </p>
                 </div>
                 <div class="sm:col-span-2">
-                    <label class="block text-sm text-slate-700" for="place-reason">Reason</label>
+                    <label class="block text-sm text-ink" for="place-reason">Reason</label>
                     <select
                         id="place-reason"
                         v-model="placeForm.reason_code"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose…</option>
                         <option v-for="r in reasons" :key="r.code" :value="r.code">
                             {{ r.label }}
                         </option>
                     </select>
-                    <p v-if="placeForm.errors.reason_code" class="mt-1 text-sm text-red-700">
+                    <p v-if="placeForm.errors.reason_code" class="mt-1 text-sm text-danger">
                         {{ placeForm.errors.reason_code }}
                     </p>
                 </div>
                 <p
                     v-if="err(placeForm, 'membership')"
-                    class="text-sm text-red-700 sm:col-span-2"
+                    class="text-sm text-danger sm:col-span-2"
                     role="alert"
                 >
                     {{ err(placeForm, 'membership') }}
                 </p>
                 <div class="flex gap-3 sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="placeForm.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="placeForm.processing" class="btn btn-primary">
                         Save placement
                     </button>
-                    <button
-                        type="button"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                        @click="close"
-                    >
-                        Cancel
-                    </button>
+                    <button type="button" class="btn btn-secondary" @click="close">Cancel</button>
                 </div>
             </form>
             <form v-else class="mt-3 grid gap-3" @submit.prevent="submitRemove">
@@ -545,12 +503,12 @@ const zonesForRegion = computed(() =>
                     untouched; Group-derived elevated access into it ends now.
                 </p>
                 <div>
-                    <label class="block text-sm text-slate-700" for="remove-reason">Reason</label>
+                    <label class="block text-sm text-ink" for="remove-reason">Reason</label>
                     <select
                         id="remove-reason"
                         v-model="removeForm.reason_code"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                        class="input mt-1"
                     >
                         <option v-for="r in reasons" :key="r.code" :value="r.code">
                             {{ r.label }}
@@ -564,24 +522,18 @@ const zonesForRegion = computed(() =>
                     action="remove this School from the Group"
                     :error="removeForm.errors.mfa_code"
                 />
-                <p v-if="err(removeForm, 'school')" class="text-sm text-red-700" role="alert">
+                <p v-if="err(removeForm, 'school')" class="text-sm text-danger" role="alert">
                     {{ err(removeForm, 'school') }}
                 </p>
                 <div class="flex gap-3">
                     <button
                         type="submit"
                         :disabled="removeForm.processing || !hasMfaFactor"
-                        class="rounded bg-red-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+                        class="btn btn-danger"
                     >
                         Remove from Group
                     </button>
-                    <button
-                        type="button"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                        @click="close"
-                    >
-                        Cancel
-                    </button>
+                    <button type="button" class="btn btn-secondary" @click="close">Cancel</button>
                 </div>
             </form>
         </section>

@@ -11,15 +11,15 @@ function submit() {
 </script>
 
 <template>
-    <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-sm p-8 font-sans text-ink">
         <h1 class="text-xl font-semibold">Verify your identity</h1>
-        <p class="mt-2 text-sm text-slate-600">
+        <p class="mt-2 text-sm text-ink-muted">
             Enter the 6-digit code from your authenticator app, or one of your recovery codes.
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="code">Authentication code</label>
+                <label class="block text-sm text-ink-muted" for="code">Authentication code</label>
                 <input
                     id="code"
                     v-model="form.code"
@@ -27,18 +27,14 @@ function submit() {
                     inputmode="numeric"
                     autocomplete="one-time-code"
                     autofocus
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1"
                 />
-                <p v-if="form.errors.code" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.code" class="mt-1 text-sm text-danger">
                     {{ form.errors.code }}
                 </p>
             </div>
 
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary w-full">
                 Verify
             </button>
         </form>

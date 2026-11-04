@@ -41,16 +41,16 @@ function nextHref(): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Platform audit log</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Platform events — sign-ins, MFA, elevated access, School Group governance, platform
             roles — newest first. Only the event envelope is shown, never the event's details.
         </p>
         <p
-            class="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            class="mt-3 rounded-xs border border-accent-300 bg-accent-100 px-3 py-2 text-sm text-ink"
             data-testid="highly-sensitive-notice"
         >
             Highly sensitive: this page shows who did what across the platform. Your review is
@@ -69,7 +69,7 @@ function nextHref(): string {
         <div v-else class="mt-6 overflow-x-auto">
             <table class="w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 pr-4 font-medium">Time</th>
                         <th scope="col" class="py-2 pr-4 font-medium">Event</th>
                         <th scope="col" class="py-2 pr-4 font-medium">Actor (user id)</th>
@@ -78,7 +78,7 @@ function nextHref(): string {
                         <th scope="col" class="py-2 font-medium">Event id</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="entry in log.entries" :key="entry.id" data-testid="audit-row">
                         <td class="py-2 pr-4 whitespace-nowrap">
                             <time :datetime="entry.occurredAt">{{

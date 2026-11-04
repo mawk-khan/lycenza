@@ -49,14 +49,14 @@ const visibleModules = computed(() =>
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/settings/access/users"
             >← Users &amp; effective access</a
         >
         <h1 class="mt-2 text-xl font-semibold">
             Effective access — {{ person.name ?? 'Former user' }}
         </h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ person.email }} ·
             {{
                 person.accountDisabled
@@ -73,9 +73,9 @@ const visibleModules = computed(() =>
             <ul class="mt-2 space-y-1 text-sm" data-testid="effective-assignments">
                 <li v-for="(a, i) in assignments" :key="i">
                     {{ a.roleName }} — {{ a.scope
-                    }}<span v-if="!a.effective" class="text-amber-800"> (inactive Campus)</span>
+                    }}<span v-if="!a.effective" class="text-ink"> (inactive Campus)</span>
                 </li>
-                <li v-if="!assignments.length" class="text-slate-600">No active role.</li>
+                <li v-if="!assignments.length" class="text-ink-muted">No active role.</li>
             </ul>
             <p class="mt-2 text-sm" role="status">
                 {{ summary.wholeSchool }} whole-School · {{ summary.campus }} Campus-only ·
@@ -101,18 +101,16 @@ const visibleModules = computed(() =>
         >
             <h2 :id="`mod-${m.key}`" class="text-base font-semibold">
                 {{ m.label }}
-                <span v-if="!m.enabled" class="text-xs font-normal text-amber-800"
+                <span v-if="!m.enabled" class="text-xs font-normal text-ink"
                     >Module not enabled</span
                 >
             </h2>
-            <ul class="mt-2 divide-y divide-slate-100 rounded border border-slate-200 text-sm">
+            <ul class="mt-2 divide-y divide-line rounded-xs border border-line text-sm">
                 <li v-for="c in m.capabilities" :key="c.key" class="px-3 py-2">
                     <span class="font-medium">{{ c.label }}</span>
                     <span
                         class="ml-2 text-xs"
-                        :class="
-                            c.effective === 'not_effective' ? 'text-amber-800' : 'text-emerald-800'
-                        "
+                        :class="c.effective === 'not_effective' ? 'text-ink-muted' : 'text-ink'"
                     >
                         {{
                             c.effective === 'whole_school'
@@ -122,10 +120,10 @@ const visibleModules = computed(() =>
                                   : 'Not currently effective'
                         }}
                     </span>
-                    <span class="block text-xs text-slate-600"
+                    <span class="block text-xs text-ink-muted"
                         >From: {{ c.sources.join('; ') }}</span
                     >
-                    <span v-if="c.reasons.length" class="block text-xs text-slate-600">
+                    <span v-if="c.reasons.length" class="block text-xs text-ink-muted">
                         Why not: {{ c.reasons.map((r) => reasonLabels[r] ?? r).join('; ') }}
                     </span>
                 </li>
