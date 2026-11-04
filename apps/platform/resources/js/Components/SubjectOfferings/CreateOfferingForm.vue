@@ -54,7 +54,7 @@ function submit() {
 
 <template>
     <section
-        class="mt-8 rounded border border-slate-300 p-4"
+        class="mt-8 rounded-xs border border-control-line p-4"
         aria-labelledby="create-offering-heading"
     >
         <h2 id="create-offering-heading" class="font-semibold">
@@ -112,11 +112,7 @@ function submit() {
                 :error="form.errors.is_required"
             />
             <div class="sm:col-span-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     Add Subject Offering
                 </button>
             </div>

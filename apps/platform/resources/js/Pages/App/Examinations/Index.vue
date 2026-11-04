@@ -103,22 +103,18 @@ function submitEdit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <a class="ml-4 text-sm underline" href="/app/examinations/grade-scales">Grade Scales →</a>
 
         <h1 class="mt-2 text-xl font-semibold">Examinations</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             The named assessment windows this School holds in each Academic Year.
         </p>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-year">Academic Year</label>
-            <select
-                id="filter-year"
-                v-model="academicYearId"
-                class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
-            >
+            <label class="block text-sm text-ink-muted" for="filter-year">Academic Year</label>
+            <select id="filter-year" v-model="academicYearId" class="input mt-1 w-64">
                 <option value="">Select a year</option>
                 <option v-for="year in academicYears" :key="year.id" :value="year.id">
                     {{ year.name }} ({{ year.code }})
@@ -134,7 +130,7 @@ function submitEdit(): void {
         />
 
         <template v-else>
-            <h2 class="mt-8 text-sm font-semibold text-slate-700">Examination windows</h2>
+            <h2 class="mt-8 text-sm font-semibold text-ink">Examination windows</h2>
 
             <EmptyState
                 v-if="examinations.length === 0"
@@ -145,7 +141,7 @@ function submitEdit(): void {
 
             <table v-else class="mt-2 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Code</th>
                         <th class="py-2">Name</th>
                         <th class="py-2">Starts</th>
@@ -158,7 +154,7 @@ function submitEdit(): void {
                     <tr
                         v-for="examination in examinations"
                         :key="examination.id"
-                        class="border-b border-slate-100"
+                        class="border-b border-line"
                     >
                         <td class="py-2 font-medium">{{ examination.code }}</td>
                         <td class="py-2">{{ examination.name }}</td>
@@ -186,7 +182,7 @@ function submitEdit(): void {
 
             <form
                 v-if="canManage && editingId !== null"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitEdit"
             >
                 <h3 class="text-sm font-semibold">Edit examination</h3>
@@ -195,54 +191,39 @@ function submitEdit(): void {
                         v-model="editForm.code"
                         type="text"
                         placeholder="Code"
-                        class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-32"
                     />
                     <input
                         v-model="editForm.name"
                         type="text"
                         placeholder="Name"
-                        class="w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-72"
                     />
-                    <input
-                        v-model="editForm.starts_on"
-                        type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <input
-                        v-model="editForm.ends_on"
-                        type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <select
-                        v-model="editForm.status"
-                        class="w-32 rounded border border-slate-300 px-3 py-2 text-sm capitalize"
-                    >
+                    <input v-model="editForm.starts_on" type="date" class="input w-auto" />
+                    <input v-model="editForm.ends_on" type="date" class="input w-auto" />
+                    <select v-model="editForm.status" class="input w-32 capitalize">
                         <option v-for="status in statuses" :key="status" :value="status">
                             {{ status }}
                         </option>
                     </select>
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="editForm.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="editForm.processing">
                         Save
                     </button>
                     <button type="button" class="text-sm underline" @click="editingId = null">
                         Cancel
                     </button>
                 </div>
-                <p v-if="editForm.errors.starts_on" class="mt-2 text-sm text-red-700">
+                <p v-if="editForm.errors.starts_on" class="mt-2 text-sm text-danger">
                     {{ editForm.errors.starts_on }}
                 </p>
-                <p v-if="editForm.errors.code" class="mt-2 text-sm text-red-700">
+                <p v-if="editForm.errors.code" class="mt-2 text-sm text-danger">
                     {{ editForm.errors.code }}
                 </p>
             </form>
 
             <form
                 v-if="canManage"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitCreate"
             >
                 <h3 class="text-sm font-semibold">Add an examination</h3>
@@ -251,36 +232,24 @@ function submitEdit(): void {
                         v-model="createForm.code"
                         type="text"
                         placeholder="Code"
-                        class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-32"
                     />
                     <input
                         v-model="createForm.name"
                         type="text"
                         placeholder="Name"
-                        class="w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-72"
                     />
-                    <input
-                        v-model="createForm.starts_on"
-                        type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <input
-                        v-model="createForm.ends_on"
-                        type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="createForm.processing"
-                    >
+                    <input v-model="createForm.starts_on" type="date" class="input w-auto" />
+                    <input v-model="createForm.ends_on" type="date" class="input w-auto" />
+                    <button type="submit" class="btn btn-primary" :disabled="createForm.processing">
                         Add examination
                     </button>
                 </div>
-                <p v-if="createForm.errors.code" class="mt-2 text-sm text-red-700">
+                <p v-if="createForm.errors.code" class="mt-2 text-sm text-danger">
                     {{ createForm.errors.code }}
                 </p>
-                <p v-if="createForm.errors.starts_on" class="mt-2 text-sm text-red-700">
+                <p v-if="createForm.errors.starts_on" class="mt-2 text-sm text-danger">
                     {{ createForm.errors.starts_on }}
                 </p>
             </form>

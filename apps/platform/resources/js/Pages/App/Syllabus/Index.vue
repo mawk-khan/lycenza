@@ -110,22 +110,18 @@ function submitEdit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Syllabus</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             The ordered units of instructional content each Subject Offering is expected to cover.
         </p>
 
         <div class="mt-6 flex flex-wrap gap-4">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-year">Academic Year</label>
-                <select
-                    id="filter-year"
-                    v-model="academicYearId"
-                    class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="filter-year">Academic Year</label>
+                <select id="filter-year" v-model="academicYearId" class="input mt-1 w-64">
                     <option value="">Select a year</option>
                     <option v-for="year in academicYears" :key="year.id" :value="year.id">
                         {{ year.name }} ({{ year.code }})
@@ -133,14 +129,10 @@ function submitEdit(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-offering">
+                <label class="block text-sm text-ink-muted" for="filter-offering">
                     Subject Offering
                 </label>
-                <select
-                    id="filter-offering"
-                    v-model="subjectOfferingId"
-                    class="mt-1 w-96 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select id="filter-offering" v-model="subjectOfferingId" class="input mt-1 w-96">
                     <option value="">Select a Subject Offering</option>
                     <option v-for="offering in offerings" :key="offering.id" :value="offering.id">
                         {{ offering.subjectCode }} · {{ offering.subjectName }} —
@@ -159,7 +151,7 @@ function submitEdit(): void {
         />
 
         <template v-else>
-            <h2 class="mt-8 text-sm font-semibold text-slate-700">Units</h2>
+            <h2 class="mt-8 text-sm font-semibold text-ink">Units</h2>
 
             <EmptyState
                 v-if="units.length === 0"
@@ -170,7 +162,7 @@ function submitEdit(): void {
 
             <table v-else class="mt-2 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">#</th>
                         <th class="py-2">Code</th>
                         <th class="py-2">Title</th>
@@ -179,7 +171,7 @@ function submitEdit(): void {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="unit in units" :key="unit.id" class="border-b border-slate-100">
+                    <tr v-for="unit in units" :key="unit.id" class="border-b border-line">
                         <td class="py-2">{{ unit.sequence }}</td>
                         <td class="py-2 font-medium">{{ unit.code }}</td>
                         <td class="py-2">{{ unit.title }}</td>
@@ -195,7 +187,7 @@ function submitEdit(): void {
 
             <form
                 v-if="canManage && editingId !== null"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitEdit"
             >
                 <h3 class="text-sm font-semibold">Edit unit</h3>
@@ -204,47 +196,40 @@ function submitEdit(): void {
                         v-model="editForm.code"
                         type="text"
                         placeholder="Code"
-                        class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-32"
                     />
                     <input
                         v-model="editForm.title"
                         type="text"
                         placeholder="Title"
-                        class="w-80 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-80"
                     />
                     <input
                         v-model.number="editForm.sequence"
                         type="number"
                         min="0"
-                        class="w-24 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-24"
                     />
-                    <select
-                        v-model="editForm.status"
-                        class="w-32 rounded border border-slate-300 px-3 py-2 text-sm capitalize"
-                    >
+                    <select v-model="editForm.status" class="input w-32 capitalize">
                         <option v-for="status in statuses" :key="status" :value="status">
                             {{ status }}
                         </option>
                     </select>
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="editForm.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="editForm.processing">
                         Save
                     </button>
                     <button type="button" class="text-sm underline" @click="editingId = null">
                         Cancel
                     </button>
                 </div>
-                <p v-if="editForm.errors.code" class="mt-2 text-sm text-red-700">
+                <p v-if="editForm.errors.code" class="mt-2 text-sm text-danger">
                     {{ editForm.errors.code }}
                 </p>
             </form>
 
             <form
                 v-if="canManage"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitCreate"
             >
                 <h3 class="text-sm font-semibold">Add a unit</h3>
@@ -253,29 +238,25 @@ function submitEdit(): void {
                         v-model="createForm.code"
                         type="text"
                         placeholder="Code"
-                        class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-32"
                     />
                     <input
                         v-model="createForm.title"
                         type="text"
                         placeholder="Title"
-                        class="w-80 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-80"
                     />
                     <input
                         v-model.number="createForm.sequence"
                         type="number"
                         min="0"
-                        class="w-24 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-24"
                     />
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="createForm.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="createForm.processing">
                         Add unit
                     </button>
                 </div>
-                <p v-if="createForm.errors.code" class="mt-2 text-sm text-red-700">
+                <p v-if="createForm.errors.code" class="mt-2 text-sm text-danger">
                     {{ createForm.errors.code }}
                 </p>
             </form>

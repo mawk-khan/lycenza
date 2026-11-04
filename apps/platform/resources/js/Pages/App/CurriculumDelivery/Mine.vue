@@ -174,11 +174,11 @@ function submitCorrect(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">My Curriculum Delivery</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Record which syllabus units your classes have covered. Only the classes and dates of
             your Teaching Assignments appear here.
         </p>
@@ -199,11 +199,11 @@ function submitCorrect(): void {
 
         <template v-else>
             <div class="mt-6">
-                <label class="block text-sm text-slate-600" for="my-class">Class</label>
+                <label class="block text-sm text-ink-muted" for="my-class">Class</label>
                 <select
                     id="my-class"
                     v-model="selectedKey"
-                    class="mt-1 w-full max-w-xl rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 max-w-xl"
                     @change="choose"
                 >
                     <option value="">Select one of your classes</option>
@@ -217,7 +217,7 @@ function submitCorrect(): void {
                         {{ context.current ? '' : '(not current)' }}
                     </option>
                 </select>
-                <p v-if="selectedContext" class="mt-2 text-sm text-slate-500">
+                <p v-if="selectedContext" class="mt-2 text-sm text-ink-muted">
                     Your assignment:
                     {{ selectedContext.periods.map(periodLabel).join(', ') }}
                 </p>
@@ -240,7 +240,7 @@ function submitCorrect(): void {
 
                 <table v-else class="mt-6 w-full border-collapse text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                        <tr class="border-b border-line text-left text-ink-muted">
                             <th class="py-2">#</th>
                             <th class="py-2">Code</th>
                             <th class="py-2">Title</th>
@@ -254,7 +254,7 @@ function submitCorrect(): void {
                         <tr
                             v-for="row in rows"
                             :key="row.syllabusUnitId"
-                            class="border-b border-slate-100"
+                            class="border-b border-line"
                         >
                             <td class="py-2">{{ row.sequence }}</td>
                             <td class="py-2 font-medium">{{ row.code }}</td>
@@ -302,21 +302,21 @@ function submitCorrect(): void {
 
                 <form
                     v-if="startingUnitId !== null"
-                    class="mt-6 rounded border border-slate-300 p-4"
+                    class="mt-6 rounded-xs border border-control-line p-4"
                     @submit.prevent="submitStart"
                 >
                     <h2 class="text-sm font-semibold">Start delivery</h2>
                     <div class="mt-3 flex flex-wrap items-center gap-3">
-                        <label class="text-sm text-slate-600" for="start-date">Started on</label>
+                        <label class="text-sm text-ink-muted" for="start-date">Started on</label>
                         <input
                             id="start-date"
                             v-model="startForm.started_on"
                             type="date"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         />
                         <button
                             type="submit"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                            class="btn btn-primary"
                             :disabled="startForm.processing"
                         >
                             Start
@@ -329,30 +329,30 @@ function submitCorrect(): void {
                             Cancel
                         </button>
                     </div>
-                    <p v-if="startForm.errors.started_on" class="mt-2 text-sm text-red-700">
+                    <p v-if="startForm.errors.started_on" class="mt-2 text-sm text-danger">
                         {{ startForm.errors.started_on }}
                     </p>
                 </form>
 
                 <form
                     v-if="completingRow !== null"
-                    class="mt-6 rounded border border-slate-300 p-4"
+                    class="mt-6 rounded-xs border border-control-line p-4"
                     @submit.prevent="submitComplete"
                 >
                     <h2 class="text-sm font-semibold">Mark completed</h2>
                     <div class="mt-3 flex flex-wrap items-center gap-3">
-                        <label class="text-sm text-slate-600" for="complete-date">
+                        <label class="text-sm text-ink-muted" for="complete-date">
                             Completed on
                         </label>
                         <input
                             id="complete-date"
                             v-model="transitionForm.completed_on"
                             type="date"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         />
                         <button
                             type="submit"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                            class="btn btn-primary"
                             :disabled="transitionForm.processing"
                         >
                             Complete
@@ -365,44 +365,39 @@ function submitCorrect(): void {
                             Cancel
                         </button>
                     </div>
-                    <p v-if="transitionForm.errors.new_status" class="mt-2 text-sm text-red-700">
+                    <p v-if="transitionForm.errors.new_status" class="mt-2 text-sm text-danger">
                         {{ transitionForm.errors.new_status }}
                     </p>
                 </form>
 
                 <form
                     v-if="correctingRow !== null"
-                    class="mt-6 rounded border border-slate-300 p-4"
+                    class="mt-6 rounded-xs border border-control-line p-4"
                     @submit.prevent="submitCorrect"
                 >
                     <h2 class="text-sm font-semibold">Correct dates</h2>
                     <div class="mt-3 flex flex-wrap items-center gap-3">
-                        <label class="text-sm text-slate-600" for="correct-started">
+                        <label class="text-sm text-ink-muted" for="correct-started">
                             Started on
                         </label>
                         <input
                             id="correct-started"
                             v-model="correctForm.started_on"
                             type="date"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         />
                         <template v-if="correctingRow.state === 'completed'">
-                            <label class="text-sm text-slate-600" for="correct-completed">
+                            <label class="text-sm text-ink-muted" for="correct-completed">
                                 Completed on
                             </label>
                             <input
                                 id="correct-completed"
                                 v-model="correctForm.completed_on"
                                 type="date"
-                                class="rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input w-auto"
                             />
                         </template>
-                        <button
-                            type="submit"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        >
-                            Save
-                        </button>
+                        <button type="submit" class="btn btn-primary">Save</button>
                         <button
                             type="button"
                             class="text-sm underline"
@@ -411,7 +406,7 @@ function submitCorrect(): void {
                             Cancel
                         </button>
                     </div>
-                    <p v-if="correctForm.errors.started_on" class="mt-2 text-sm text-red-700">
+                    <p v-if="correctForm.errors.started_on" class="mt-2 text-sm text-danger">
                         {{ correctForm.errors.started_on }}
                     </p>
                 </form>

@@ -140,27 +140,27 @@ function confirmCorrection(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" :href="baseUrl">← Registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">
             {{ session.classLabel ?? session.sectionCode }} · {{ session.subjectName }}
         </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ DAY_NAMES[session.dayOfWeek] }} {{ formatCalendarDate(session.attendanceDate) }} ·
             {{ session.periodName }} ({{
                 formatTimeRange(session.periodStartTime, session.periodEndTime)
             }}) ·
             {{ session.teacherName }}
         </p>
-        <p class="mt-1 text-xs text-slate-400">
+        <p class="mt-1 text-xs text-ink-muted">
             {{ session.academicYearName }} · {{ session.campusName }} ·
             {{ session.gradeLevelName }} · submitted {{ formatDateTime(session.submittedAt) }}
         </p>
 
         <p
             v-if="correctionError"
-            class="mt-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900"
+            class="mt-4 rounded-xs border border-danger/40 bg-danger-tint px-3 py-2 text-sm text-danger"
             role="alert"
         >
             <span class="font-semibold">Not corrected:</span> {{ correctionError }} Reload the page
@@ -168,27 +168,23 @@ function confirmCorrection(): void {
         </p>
 
         <div v-if="canManage" class="mt-6">
-            <label class="block text-sm text-slate-600" for="correction-reason">
+            <label class="block text-sm text-ink-muted" for="correction-reason">
                 Reason for correction
             </label>
-            <select
-                id="correction-reason"
-                v-model="reasonCode"
-                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
-            >
+            <select id="correction-reason" v-model="reasonCode" class="input mt-1 sm:w-72">
                 <option value="" disabled>Choose a reason before correcting</option>
                 <option v-for="r in correctionReasons" :key="r" :value="r">
                     {{ REASON_LABELS[r] ?? r }}
                 </option>
             </select>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 Changing a recorded status is kept with this reason and your name.
             </p>
         </div>
 
         <table class="mt-6 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th class="py-2">Roll</th>
                     <th class="py-2">Student</th>
                     <th class="py-2">Status</th>
@@ -196,11 +192,7 @@ function confirmCorrection(): void {
                 </tr>
             </thead>
             <tbody>
-                <tr
-                    v-for="record in session.records"
-                    :key="record.id"
-                    class="border-b border-slate-100"
-                >
+                <tr v-for="record in session.records" :key="record.id" class="border-b border-line">
                     <td class="py-2">{{ record.rollNumber }}</td>
                     <td class="py-2">
                         <a
@@ -213,7 +205,7 @@ function confirmCorrection(): void {
                     </td>
                     <td class="py-2 capitalize">
                         {{ record.status }}
-                        <span v-if="record.correctedAt" class="ml-1 text-xs text-slate-400">
+                        <span v-if="record.correctedAt" class="ml-1 text-xs text-ink-muted">
                             (corrected)
                         </span>
                     </td>
@@ -222,7 +214,7 @@ function confirmCorrection(): void {
                             v-for="status in statuses"
                             :key="status"
                             type="button"
-                            class="mr-2 rounded border border-slate-300 px-2 py-1 text-xs capitalize disabled:opacity-40"
+                            class="btn btn-secondary mr-2 text-xs capitalize"
                             :disabled="
                                 status === record.status ||
                                 correcting === record.id ||

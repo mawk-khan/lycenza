@@ -46,7 +46,7 @@ function setStatus(status: 'active' | 'inactive') {
 
 <template>
     <section
-        class="mt-8 rounded border border-slate-300 p-4"
+        class="mt-8 rounded-xs border border-control-line p-4"
         aria-labelledby="offering-settings-heading"
     >
         <h2 id="offering-settings-heading" class="font-semibold">Offering settings</h2>
@@ -75,11 +75,7 @@ function setStatus(status: 'active' | 'inactive') {
                 :error="form.errors.weekly_periods_target"
             />
             <div class="sm:col-span-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     Save settings
                 </button>
             </div>
@@ -90,7 +86,7 @@ function setStatus(status: 'active' | 'inactive') {
             <button
                 v-if="props.offering.status === 'active'"
                 type="button"
-                class="text-red-700 underline"
+                class="text-danger underline"
                 :disabled="statusForm.processing"
                 @click="dialog?.open()"
             >

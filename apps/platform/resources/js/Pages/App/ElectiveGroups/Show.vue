@@ -62,10 +62,10 @@ function runRemove() {
 
 <template>
     <Head :title="props.group.name" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/elective-groups">← Elective groups</a>
         <h1 class="mt-2 text-xl font-semibold">{{ props.group.name }} ({{ props.group.code }})</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ props.group.academicYear }} · {{ props.group.gradeLevel }} · {{ props.group.campus }}
         </p>
 
@@ -73,7 +73,7 @@ function runRemove() {
 
         <section class="mt-6" aria-labelledby="assigned-heading">
             <h2 id="assigned-heading" class="font-semibold">Offerings in this group</h2>
-            <p v-if="props.assigned.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="props.assigned.length === 0" class="mt-2 text-sm text-ink-muted">
                 No Offering is in this group yet.
             </p>
             <div v-else class="relative overflow-x-auto mt-2">
@@ -84,7 +84,7 @@ function runRemove() {
                             props.group.name
                         }}
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="pr-3 py-2">Subject</th>
                             <th scope="col" class="pr-3 py-2">Status</th>
@@ -93,7 +93,7 @@ function runRemove() {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="offering in props.assigned" :key="offering.id">
                             <td class="pr-3 py-2">
                                 <a
@@ -108,7 +108,7 @@ function runRemove() {
                             <td v-if="props.canManage" class="pr-3 py-2 text-right">
                                 <button
                                     type="button"
-                                    class="text-red-700 underline"
+                                    class="text-danger underline"
                                     :disabled="remove.processing"
                                     @click="askRemove(offering)"
                                 >
@@ -123,7 +123,7 @@ function runRemove() {
 
         <section v-if="props.canManage" class="mt-8" aria-labelledby="assign-heading">
             <h2 id="assign-heading" class="font-semibold">Assign an elective Offering</h2>
-            <p v-if="props.candidates.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="props.candidates.length === 0" class="mt-2 text-sm text-ink-muted">
                 No other active elective Offering exists for this Grade level and Campus in this
                 Year.
             </p>
@@ -139,11 +139,7 @@ function runRemove() {
                         :error="assign.errors.subject_offering_id"
                     />
                 </div>
-                <button
-                    type="submit"
-                    :disabled="assign.processing"
-                    class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="assign.processing" class="btn btn-primary">
                     Assign
                 </button>
             </form>

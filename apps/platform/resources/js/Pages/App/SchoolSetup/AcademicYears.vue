@@ -76,13 +76,13 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
 
 <template>
     <Head title="Academic years" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Academic years</h1>
 
         <ErrorSummary :errors="transition.errors" :fields="['academic_year']" />
 
-        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-ink-muted">
             No Academic Year exists yet. Create the first one to configure Terms and Sections.
         </p>
         <div v-else class="relative overflow-x-auto mt-4">
@@ -90,7 +90,7 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                 <caption class="sr-only">
                     Academic years, newest first
                 </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
+                <thead class="border-b border-control-line text-ink-muted">
                     <tr>
                         <th scope="col" class="pr-3 py-2">Name</th>
                         <th scope="col" class="pr-3 py-2">Code</th>
@@ -101,7 +101,7 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <tr v-for="year in props.academicYears" :key="year.id">
                         <td class="pr-3 py-2 font-medium">{{ year.name }}</td>
                         <td class="pr-3 py-2">{{ year.code }}</td>
@@ -129,13 +129,13 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                             >
                                 Activate<span class="sr-only"> {{ year.name }}</span>
                             </button>
-                            <span v-else-if="year.status === 'draft'" class="text-slate-500">
+                            <span v-else-if="year.status === 'draft'" class="text-ink-muted">
                                 Can be activated from {{ formatCalendarDate(year.startsOn) }}
                             </span>
                             <button
                                 v-if="year.status === 'active'"
                                 type="button"
-                                class="text-red-700 underline"
+                                class="text-danger underline"
                                 :disabled="transition.processing"
                                 @click="ask(year, 'close')"
                             >
@@ -149,11 +149,11 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
 
         <section
             v-if="editing"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             aria-labelledby="edit-year-heading"
         >
             <h2 id="edit-year-heading" class="font-semibold">Rename {{ editing.name }}</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 Status has its own controls. A draft year's dates are corrected with
                 <strong>Correct dates</strong>; an active or closed year's dates are fixed.
             </p>
@@ -174,18 +174,10 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                     :error="edit.errors.code"
                 />
                 <div class="flex gap-3 sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="edit.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="edit.processing" class="btn btn-primary">
                         Save
                     </button>
-                    <button
-                        type="button"
-                        class="rounded border border-slate-300 px-3 py-2"
-                        @click="editing = null"
-                    >
+                    <button type="button" class="btn btn-secondary" @click="editing = null">
                         Cancel
                     </button>
                 </div>
@@ -229,11 +221,7 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                     :error="create.errors.ends_on"
                 />
                 <div class="sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="create.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="create.processing" class="btn btn-primary">
                         Add Academic year
                     </button>
                 </div>

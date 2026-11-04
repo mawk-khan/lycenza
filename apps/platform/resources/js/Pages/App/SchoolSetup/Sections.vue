@@ -146,11 +146,11 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
 
 <template>
     <Head title="Sections" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Sections</h1>
 
-        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-ink-muted">
             Sections belong to an Academic Year. Create an Academic Year first.
         </p>
         <template v-else>
@@ -163,16 +163,14 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                         :options="yearOptions"
                     />
                 </div>
-                <button type="submit" class="rounded border border-slate-300 px-3 py-2">
-                    Show sections
-                </button>
+                <button type="submit" class="btn btn-secondary">Show sections</button>
             </form>
 
             <ErrorSummary :errors="statusForm.errors" :fields="['status']" />
 
             <p
                 v-if="!props.sections || props.sections.data.length === 0"
-                class="mt-4 text-sm text-slate-600"
+                class="mt-4 text-sm text-ink-muted"
             >
                 {{ yearName }} has no Section yet.
             </p>
@@ -185,7 +183,7 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                                 yearName
                             }}
                         </caption>
-                        <thead class="border-b border-slate-300 text-slate-600">
+                        <thead class="border-b border-control-line text-ink-muted">
                             <tr>
                                 <th scope="col" class="pr-3 py-2">Name</th>
                                 <th scope="col" class="pr-3 py-2">Code</th>
@@ -201,7 +199,7 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                                 </th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-200">
+                        <tbody class="divide-y divide-line">
                             <tr v-for="section in props.sections.data" :key="section.id">
                                 <td class="pr-3 py-2 font-medium">{{ section.name }}</td>
                                 <td class="pr-3 py-2">{{ section.code }}</td>
@@ -227,7 +225,7 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                                     <button
                                         v-if="section.status === 'active'"
                                         type="button"
-                                        class="text-red-700 underline"
+                                        class="text-danger underline"
                                         @click="askDeactivate(section)"
                                     >
                                         Deactivate<span class="sr-only"> {{ section.name }}</span>
@@ -251,11 +249,11 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
 
             <section
                 v-if="editing"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 aria-labelledby="edit-section-heading"
             >
                 <h2 id="edit-section-heading" class="font-semibold">Edit {{ editing.name }}</h2>
-                <p class="mt-1 text-sm text-slate-600">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{ editing.gradeLevel.name }} · {{ editing.campus.name }} — the Year, Campus and
                     Grade level of a Section never change.
                 </p>
@@ -285,23 +283,15 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                         :hint="capacityHint"
                         :error="edit.errors.capacity"
                     />
-                    <p v-else class="text-sm text-slate-600">
+                    <p v-else class="text-sm text-ink-muted">
                         Capacity {{ editing.capacity ?? 'not configured' }} — this Section belongs
                         to a closed year, so its capacity is history and cannot be changed.
                     </p>
                     <div class="flex gap-3 sm:col-span-3">
-                        <button
-                            type="submit"
-                            :disabled="edit.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="edit.processing" class="btn btn-primary">
                             Save
                         </button>
-                        <button
-                            type="button"
-                            class="rounded border border-slate-300 px-3 py-2"
-                            @click="editing = null"
-                        >
+                        <button type="button" class="btn btn-secondary" @click="editing = null">
                             Cancel
                         </button>
                     </div>
@@ -310,7 +300,7 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
 
             <p
                 v-if="props.canManage && props.selectedYearId && selectedYearClosed"
-                class="mt-8 text-sm text-slate-600"
+                class="mt-8 text-sm text-ink-muted"
             >
                 {{ yearName }} is closed: it keeps its Sections but takes no new ones.
             </p>
@@ -324,7 +314,7 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                 </h2>
                 <p
                     v-if="props.campuses.length === 0 || props.gradeLevels.length === 0"
-                    class="mt-2 text-sm text-slate-600"
+                    class="mt-2 text-sm text-ink-muted"
                 >
                     A Section needs an active Campus and an active Grade level.
                 </p>
@@ -373,11 +363,7 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                         :error="create.errors.capacity"
                     />
                     <div class="sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="create.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="create.processing" class="btn btn-primary">
                             Add Section
                         </button>
                     </div>

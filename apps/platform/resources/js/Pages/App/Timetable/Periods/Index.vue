@@ -51,31 +51,31 @@ function toggleStatus(period: PeriodRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Timetable periods</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Named time slots ("Period 1", 09:00-09:45) the weekly schedule is built against.
                 </p>
             </div>
             <a
                 v-if="canManage"
                 href="/app/timetable-periods/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Add Period
             </a>
         </div>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+            <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
             <select
                 id="filter-status"
                 v-model="statusFilter"
-                class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input mt-1 w-48"
                 @change="applyStatus"
             >
                 <option value="active">Active</option>
@@ -95,12 +95,7 @@ function toggleStatus(period: PeriodRow): void {
             "
         >
             <template v-if="canManage && status === 'active'" #action>
-                <a
-                    href="/app/timetable-periods/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Add Period
-                </a>
+                <a href="/app/timetable-periods/create" class="btn btn-primary"> Add Period </a>
             </template>
         </EmptyState>
 
@@ -109,7 +104,7 @@ function toggleStatus(period: PeriodRow): void {
             <div class="relative mt-6 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Code</th>
                             <th scope="col" class="py-2 font-medium">Name</th>
                             <th scope="col" class="py-2 font-medium">Start</th>
@@ -120,7 +115,7 @@ function toggleStatus(period: PeriodRow): void {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="period in periods.data" :key="period.id">
                             <td class="py-3 font-medium">{{ period.code }}</td>
                             <td class="py-3">{{ period.name }}</td>

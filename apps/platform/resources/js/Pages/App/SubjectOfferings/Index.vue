@@ -61,25 +61,25 @@ function applyFilters(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2">
             <h1 class="text-xl font-semibold">Subject Offerings</h1>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 View rosters and manage elective participation for a SubjectOffering.
             </p>
         </div>
 
         <form class="mt-6 flex items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-academic-year"
+                <label class="block text-sm text-ink-muted" for="filter-academic-year"
                     >Academic Year</label
                 >
                 <select
                     id="filter-academic-year"
                     v-model="academicYearId"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                     @change="applyFilters"
                 >
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
@@ -100,7 +100,7 @@ function applyFilters(): void {
             <div class="mt-6 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Subject</th>
                             <th scope="col" class="py-2 font-medium">Grade</th>
                             <th scope="col" class="py-2 font-medium">Campus</th>
@@ -112,7 +112,7 @@ function applyFilters(): void {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="o in offerings.data" :key="o.id">
                             <td class="py-3">
                                 <a
@@ -121,12 +121,12 @@ function applyFilters(): void {
                                     >{{ o.subject?.name ?? 'Unknown Subject' }}</a
                                 >
                             </td>
-                            <td class="py-3 text-slate-600">{{ o.gradeLevel?.name }}</td>
-                            <td class="py-3 text-slate-600">{{ o.campus?.name }}</td>
-                            <td class="py-3 text-slate-600">
+                            <td class="py-3 text-ink-muted">{{ o.gradeLevel?.name }}</td>
+                            <td class="py-3 text-ink-muted">{{ o.campus?.name }}</td>
+                            <td class="py-3 text-ink-muted">
                                 {{ o.isRequired ? 'Required' : 'Elective' }}
                             </td>
-                            <td class="py-3 text-slate-600">
+                            <td class="py-3 text-ink-muted">
                                 {{ o.electiveGroup?.name ?? 'Ungrouped' }}
                             </td>
                             <td class="py-3"><StatusBadge :status="o.status" /></td>

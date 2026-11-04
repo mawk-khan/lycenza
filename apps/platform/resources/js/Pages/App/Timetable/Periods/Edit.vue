@@ -41,90 +41,66 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/timetable-periods?status=all"
             >← Timetable periods</a
         >
         <h1 class="mt-2 text-xl font-semibold">Edit Period {{ period.code }}</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Times cannot change while active classes use this Period.
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="code">Code</label>
-                <input
-                    id="code"
-                    v-model="form.code"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.code" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="code">Code</label>
+                <input id="code" v-model="form.code" type="text" class="input mt-1" />
+                <p v-if="form.errors.code" class="mt-1 text-sm text-danger">
                     {{ form.errors.code }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="name">Name</label>
-                <input
-                    id="name"
-                    v-model="form.name"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">
+                <label class="block text-sm text-ink-muted" for="name">Name</label>
+                <input id="name" v-model="form.name" type="text" class="input mt-1" />
+                <p v-if="form.errors.name" class="mt-1 text-sm text-danger">
                     {{ form.errors.name }}
                 </p>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm text-slate-600" for="start_time">Start time</label>
+                    <label class="block text-sm text-ink-muted" for="start_time">Start time</label>
                     <input
                         id="start_time"
                         v-model="form.start_time"
                         type="time"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     />
-                    <p v-if="form.errors.start_time" class="mt-1 text-sm text-red-600">
+                    <p v-if="form.errors.start_time" class="mt-1 text-sm text-danger">
                         {{ form.errors.start_time }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="end_time">End time</label>
-                    <input
-                        id="end_time"
-                        v-model="form.end_time"
-                        type="time"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <p v-if="form.errors.end_time" class="mt-1 text-sm text-red-600">
+                    <label class="block text-sm text-ink-muted" for="end_time">End time</label>
+                    <input id="end_time" v-model="form.end_time" type="time" class="input mt-1" />
+                    <p v-if="form.errors.end_time" class="mt-1 text-sm text-danger">
                         {{ form.errors.end_time }}
                     </p>
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="sort_order"
+                <label class="block text-sm text-ink-muted" for="sort_order"
                     >Sort order (optional)</label
                 >
-                <input
-                    id="sort_order"
-                    v-model="form.sort_order"
-                    type="number"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p v-if="form.errors.sort_order" class="mt-1 text-sm text-red-600">
+                <input id="sort_order" v-model="form.sort_order" type="number" class="input mt-1" />
+                <p v-if="form.errors.sort_order" class="mt-1 text-sm text-danger">
                     {{ form.errors.sort_order }}
                 </p>
             </div>
 
             <div class="flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Save Period' }}
                 </button>
                 <a class="text-sm underline" href="/app/timetable-periods?status=all">Cancel</a>

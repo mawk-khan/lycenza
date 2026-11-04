@@ -100,13 +100,13 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
 
 <template>
     <Head title="Subjects" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Subjects</h1>
 
         <ErrorSummary :errors="statusForm.errors" :fields="['status']" />
 
-        <p v-if="props.subjects.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.subjects.length === 0" class="mt-4 text-sm text-ink-muted">
             No Subject exists yet.
         </p>
         <div v-else class="relative overflow-x-auto mt-4">
@@ -114,7 +114,7 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
                 <caption class="sr-only">
                     Subjects
                 </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
+                <thead class="border-b border-control-line text-ink-muted">
                     <tr>
                         <th scope="col" class="pr-3 py-2">Name</th>
                         <th scope="col" class="pr-3 py-2">Code</th>
@@ -126,11 +126,11 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-200">
+                <tbody class="divide-y divide-line">
                     <tr v-for="subject in props.subjects" :key="subject.id">
                         <td class="pr-3 py-2 font-medium">
                             {{ subject.name }}
-                            <span v-if="subject.shortName" class="text-slate-500"
+                            <span v-if="subject.shortName" class="text-ink-muted"
                                 >({{ subject.shortName }})</span
                             >
                         </td>
@@ -147,7 +147,7 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
                             <button
                                 v-if="subject.status === 'active'"
                                 type="button"
-                                class="text-red-700 underline"
+                                class="text-danger underline"
                                 @click="askDeactivate(subject)"
                             >
                                 Deactivate<span class="sr-only"> {{ subject.name }}</span>
@@ -169,7 +169,7 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
 
         <section
             v-if="editing"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             aria-labelledby="edit-subject-heading"
         >
             <h2 id="edit-subject-heading" class="font-semibold">Edit {{ editing.name }}</h2>
@@ -213,18 +213,10 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
                     :error="edit.errors.academic_department_id"
                 />
                 <div class="flex gap-3 sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="edit.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="edit.processing" class="btn btn-primary">
                         Save
                     </button>
-                    <button
-                        type="button"
-                        class="rounded border border-slate-300 px-3 py-2"
-                        @click="editing = null"
-                    >
+                    <button type="button" class="btn btn-secondary" @click="editing = null">
                         Cancel
                     </button>
                 </div>
@@ -274,11 +266,7 @@ function setStatus(subject: Subject, status: 'active' | 'inactive') {
                     :error="create.errors.academic_department_id"
                 />
                 <div class="sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="create.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
+                    <button type="submit" :disabled="create.processing" class="btn btn-primary">
                         Add Subject
                     </button>
                 </div>

@@ -90,11 +90,11 @@ function submitEdit() {
 
 <template>
     <Head title="Terms" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Terms</h1>
 
-        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-ink-muted">
             Terms belong to an Academic Year. Create an Academic Year first.
         </p>
         <template v-else>
@@ -107,16 +107,14 @@ function submitEdit() {
                         :options="yearOptions"
                     />
                 </div>
-                <button type="submit" class="rounded border border-slate-300 px-3 py-2">
-                    Show terms
-                </button>
+                <button type="submit" class="btn btn-secondary">Show terms</button>
             </form>
-            <p v-if="year" class="mt-2 text-sm text-slate-600">
+            <p v-if="year" class="mt-2 text-sm text-ink-muted">
                 {{ year.name }} runs {{ formatCalendarDate(year.startsOn) }} –
                 {{ formatCalendarDate(year.endsOn) }}.
             </p>
 
-            <p v-if="props.terms.length === 0" class="mt-4 text-sm text-slate-600">
+            <p v-if="props.terms.length === 0" class="mt-4 text-sm text-ink-muted">
                 This Academic Year has no Term yet.
             </p>
             <div v-else class="relative overflow-x-auto mt-4">
@@ -127,7 +125,7 @@ function submitEdit() {
                             year?.name
                         }}
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="pr-3 py-2">Order</th>
                             <th scope="col" class="pr-3 py-2">Name</th>
@@ -138,7 +136,7 @@ function submitEdit() {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="term in props.terms" :key="term.id">
                             <td class="pr-3 py-2">{{ term.sequence }}</td>
                             <td class="pr-3 py-2 font-medium">{{ term.name }}</td>
@@ -167,11 +165,11 @@ function submitEdit() {
 
             <section
                 v-if="editing"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 aria-labelledby="edit-term-heading"
             >
                 <h2 id="edit-term-heading" class="font-semibold">Rename {{ editing.name }}</h2>
-                <p class="mt-1 text-sm text-slate-600">
+                <p class="mt-1 text-sm text-ink-muted">
                     Renaming changes the name and code only. Dates can be corrected while the
                     Academic Year is a draft.
                 </p>
@@ -192,18 +190,10 @@ function submitEdit() {
                         :error="edit.errors.code"
                     />
                     <div class="flex gap-3 sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="edit.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="edit.processing" class="btn btn-primary">
                             Save
                         </button>
-                        <button
-                            type="button"
-                            class="rounded border border-slate-300 px-3 py-2"
-                            @click="editing = null"
-                        >
+                        <button type="button" class="btn btn-secondary" @click="editing = null">
                             Cancel
                         </button>
                     </div>
@@ -212,7 +202,7 @@ function submitEdit() {
 
             <p
                 v-if="props.canManage && props.selectedYearId && year?.status === 'closed'"
-                class="mt-8 text-sm text-slate-600"
+                class="mt-8 text-sm text-ink-muted"
             >
                 {{ year.name }} is closed: it keeps its Terms but takes no new ones.
             </p>
@@ -267,11 +257,7 @@ function submitEdit() {
                         :error="create.errors.ends_on"
                     />
                     <div class="sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="create.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="create.processing" class="btn btn-primary">
                             Add Term
                         </button>
                     </div>

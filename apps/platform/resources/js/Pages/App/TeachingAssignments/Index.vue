@@ -197,11 +197,11 @@ function submitEnd(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Teaching Assignments</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Who teaches which Section and Subject Offering, and for which dates. This record grants
             no access by itself.
         </p>
@@ -212,12 +212,8 @@ function submitEnd(): void {
         </p>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-year">Academic Year</label>
-            <select
-                id="filter-year"
-                v-model="academicYearId"
-                class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
-            >
+            <label class="block text-sm text-ink-muted" for="filter-year">Academic Year</label>
+            <select id="filter-year" v-model="academicYearId" class="input mt-1 w-72">
                 <option value="">Select a year</option>
                 <option v-for="year in academicYears" :key="year.id" :value="year.id">
                     {{ year.name }} ({{ year.code }})
@@ -227,11 +223,11 @@ function submitEnd(): void {
 
         <div v-if="filterOptions !== null" class="mt-4 flex flex-wrap items-end gap-3">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-teacher">Teacher</label>
+                <label class="block text-sm text-ink-muted" for="filter-teacher">Teacher</label>
                 <select
                     id="filter-teacher"
                     v-model="filterEmployeeId"
-                    class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-72"
                     @change="applyListFilters"
                 >
                     <option value="">All teachers</option>
@@ -245,11 +241,11 @@ function submitEnd(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-section">Section</label>
+                <label class="block text-sm text-ink-muted" for="filter-section">Section</label>
                 <select
                     id="filter-section"
                     v-model="filterSectionId"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-56"
                     @change="applyListFilters"
                 >
                     <option value="">All Sections</option>
@@ -298,7 +294,7 @@ function submitEnd(): void {
             <div v-else class="relative mt-6 overflow-x-auto">
                 <table class="w-full border-collapse text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                        <tr class="border-b border-line text-left text-ink-muted">
                             <th class="py-2">Employee</th>
                             <th class="py-2">Section</th>
                             <th class="py-2">Subject</th>
@@ -313,11 +309,11 @@ function submitEnd(): void {
                         <tr
                             v-for="row in assignments.data"
                             :key="row.id"
-                            class="border-b border-slate-100"
+                            class="border-b border-line"
                         >
                             <td class="py-2">
                                 {{ row.employee.fullName }}
-                                <span class="text-slate-500"
+                                <span class="text-ink-muted"
                                     >({{ row.employee.employeeNumber }})</span
                                 >
                             </td>
@@ -363,7 +359,7 @@ function submitEnd(): void {
                     >Previous</a
                 >
                 <span>Page {{ assignments.current_page }} of {{ assignments.last_page }}</span>
-                <span class="text-slate-500"
+                <span class="text-ink-muted"
                     >{{ assignments.total }}
                     {{ assignments.total === 1 ? 'assignment' : 'assignments' }}</span
                 >
@@ -377,67 +373,59 @@ function submitEnd(): void {
 
             <form
                 v-if="canManage && endingId !== null"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitEnd"
             >
                 <h2 class="text-sm font-semibold">End assignment</h2>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     The last day this Employee owns the class. It cannot be before the start date or
                     after an existing end date, and an ended assignment cannot be changed.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-3">
-                    <label class="text-sm text-slate-600" for="end-date">Last day</label>
+                    <label class="text-sm text-ink-muted" for="end-date">Last day</label>
                     <input
                         id="end-date"
                         v-model="endForm.ends_on"
                         type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-auto"
                     />
-                    <label class="text-sm text-slate-600" for="end-reason">Reason</label>
-                    <select
-                        id="end-reason"
-                        v-model="endForm.reason"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    >
+                    <label class="text-sm text-ink-muted" for="end-reason">Reason</label>
+                    <select id="end-reason" v-model="endForm.reason" class="input w-auto">
                         <option value="">Select a reason</option>
                         <option v-for="reason in endReasons" :key="reason" :value="reason">
                             {{ reasonLabels[reason] ?? reason }}
                         </option>
                     </select>
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="endForm.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="endForm.processing">
                         End assignment
                     </button>
                     <button type="button" class="text-sm underline" @click="endingId = null">
                         Cancel
                     </button>
                 </div>
-                <p v-if="endForm.errors.ends_on" class="mt-2 text-sm text-red-700">
+                <p v-if="endForm.errors.ends_on" class="mt-2 text-sm text-danger">
                     {{ endForm.errors.ends_on }}
                 </p>
-                <p v-if="endForm.errors.reason" class="mt-2 text-sm text-red-700">
+                <p v-if="endForm.errors.reason" class="mt-2 text-sm text-danger">
                     {{ endForm.errors.reason }}
                 </p>
             </form>
 
             <form
                 v-if="canManage && options !== null"
-                class="mt-8 rounded border border-slate-300 p-4"
+                class="mt-8 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitCreate"
             >
                 <h2 class="text-sm font-semibold">New assignment</h2>
                 <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600" for="new-employee"
+                        <label class="block text-sm text-ink-muted" for="new-employee"
                             >Employee</label
                         >
                         <select
                             id="new-employee"
                             v-model="createForm.employee_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option value="">Select an Employee</option>
                             <option
@@ -450,14 +438,10 @@ function submitEnd(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="new-section"
+                        <label class="block text-sm text-ink-muted" for="new-section"
                             >Section</label
                         >
-                        <select
-                            id="new-section"
-                            v-model="createForm.section_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        >
+                        <select id="new-section" v-model="createForm.section_id" class="input mt-1">
                             <option value="">Select a Section</option>
                             <option
                                 v-for="section in options.sections"
@@ -470,13 +454,13 @@ function submitEnd(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="new-offering">
+                        <label class="block text-sm text-ink-muted" for="new-offering">
                             Subject Offering (required subjects only)
                         </label>
                         <select
                             id="new-offering"
                             v-model="createForm.subject_offering_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                             :disabled="!createForm.section_id"
                         >
                             <option value="">Select a Subject Offering</option>
@@ -491,42 +475,38 @@ function submitEnd(): void {
                     </div>
                     <div class="flex gap-3">
                         <div>
-                            <label class="block text-sm text-slate-600" for="new-starts"
+                            <label class="block text-sm text-ink-muted" for="new-starts"
                                 >From</label
                             >
                             <input
                                 id="new-starts"
                                 v-model="createForm.starts_on"
                                 type="date"
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1 w-auto"
                             />
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-600" for="new-ends">
+                            <label class="block text-sm text-ink-muted" for="new-ends">
                                 To (optional)
                             </label>
                             <input
                                 id="new-ends"
                                 v-model="createForm.ends_on"
                                 type="date"
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1 w-auto"
                             />
                         </div>
                     </div>
                 </div>
                 <div class="mt-4">
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="createForm.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="createForm.processing">
                         Create assignment
                     </button>
                 </div>
                 <p
                     v-for="(message, field) in createForm.errors"
                     :key="field"
-                    class="mt-2 text-sm text-red-700"
+                    class="mt-2 text-sm text-danger"
                 >
                     {{ message }}
                 </p>

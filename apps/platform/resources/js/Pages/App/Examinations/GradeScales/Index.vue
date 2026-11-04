@@ -100,11 +100,11 @@ function transition(scale: GradeScaleRow, status: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Grade Scales</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             School-owned mappings from a percentage to a grade outcome. Independent of any
             Examination.
         </p>
@@ -119,18 +119,14 @@ function transition(scale: GradeScaleRow, status: string): void {
         <div
             v-for="scale in gradeScales"
             :key="scale.id"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
         >
             <div class="flex items-center justify-between">
                 <div>
                     <span class="font-medium">{{ scale.code }}</span>
                     <template v-if="editingNameFor === scale.id">
                         <form class="mt-1 flex gap-2" @submit.prevent="submitName(scale)">
-                            <input
-                                v-model="nameForm.name"
-                                type="text"
-                                class="rounded border border-slate-300 px-2 py-1 text-sm"
-                            />
+                            <input v-model="nameForm.name" type="text" class="input w-auto" />
                             <button
                                 type="submit"
                                 class="text-sm underline"
@@ -148,7 +144,7 @@ function transition(scale: GradeScaleRow, status: string): void {
                         </form>
                     </template>
                     <template v-else>
-                        <span class="ml-2 text-slate-600">{{ scale.name }}</span>
+                        <span class="ml-2 text-ink-muted">{{ scale.name }}</span>
                         <button
                             v-if="canManage"
                             type="button"
@@ -159,25 +155,21 @@ function transition(scale: GradeScaleRow, status: string): void {
                         </button>
                     </template>
                 </div>
-                <span class="rounded bg-slate-100 px-2 py-1 text-xs font-medium capitalize">{{
+                <span class="rounded-xs bg-graphite-200 px-2 py-1 text-xs font-medium capitalize">{{
                     scale.status
                 }}</span>
             </div>
 
             <table class="mt-3 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-1">Min %</th>
                         <th class="py-1">Label</th>
                         <th v-if="canManage && scale.status === 'draft'" class="py-1"></th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr
-                        v-for="band in scale.bands"
-                        :key="band.id"
-                        class="border-b border-slate-100"
-                    >
+                    <tr v-for="band in scale.bands" :key="band.id" class="border-b border-line">
                         <td class="py-1">{{ band.minPercentage }}</td>
                         <td class="py-1">{{ band.label }}</td>
                         <td v-if="canManage && scale.status === 'draft'" class="py-1 text-right">
@@ -193,7 +185,7 @@ function transition(scale: GradeScaleRow, status: string): void {
                 </tbody>
             </table>
 
-            <p v-if="!hasFloorBand(scale)" class="mt-2 text-xs text-amber-700">
+            <p v-if="!hasFloorBand(scale)" class="mt-2 text-xs text-ink">
                 Missing a 0.00 threshold band — this scale cannot be activated until one is added.
             </p>
 
@@ -208,7 +200,7 @@ function transition(scale: GradeScaleRow, status: string): void {
                     </button>
                     <button
                         type="button"
-                        class="rounded bg-slate-900 px-3 py-1 text-sm font-medium text-white hover:bg-slate-800"
+                        class="btn btn-primary"
                         :disabled="!hasFloorBand(scale)"
                         @click="transition(scale, 'active')"
                     >
@@ -218,7 +210,7 @@ function transition(scale: GradeScaleRow, status: string): void {
                 <button
                     v-else-if="scale.status === 'active'"
                     type="button"
-                    class="rounded bg-slate-900 px-3 py-1 text-sm font-medium text-white hover:bg-slate-800"
+                    class="btn btn-primary"
                     @click="transition(scale, 'inactive')"
                 >
                     Deactivate
@@ -226,7 +218,7 @@ function transition(scale: GradeScaleRow, status: string): void {
                 <button
                     v-else-if="scale.status === 'inactive'"
                     type="button"
-                    class="rounded bg-slate-900 px-3 py-1 text-sm font-medium text-white hover:bg-slate-800"
+                    class="btn btn-primary"
                     @click="transition(scale, 'active')"
                 >
                     Reactivate
@@ -235,7 +227,7 @@ function transition(scale: GradeScaleRow, status: string): void {
 
             <form
                 v-if="canManage && editingBandsFor === scale.id"
-                class="mt-3 flex flex-wrap items-center gap-2 rounded border border-slate-200 p-2"
+                class="mt-3 flex flex-wrap items-center gap-2 rounded-xs border border-line p-2"
                 @submit.prevent="submitAddBand(scale)"
             >
                 <input
@@ -245,18 +237,18 @@ function transition(scale: GradeScaleRow, status: string): void {
                     max="100"
                     step="0.01"
                     placeholder="Min %"
-                    class="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-24"
                 />
                 <input
                     v-model="bandForm.label"
                     type="text"
                     placeholder="Label"
-                    class="w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-32"
                 />
                 <button type="submit" class="text-sm underline" :disabled="bandForm.processing">
                     Add
                 </button>
-                <p v-if="bandForm.errors.min_percentage" class="w-full text-xs text-red-700">
+                <p v-if="bandForm.errors.min_percentage" class="w-full text-xs text-danger">
                     {{ bandForm.errors.min_percentage }}
                 </p>
             </form>
@@ -264,7 +256,7 @@ function transition(scale: GradeScaleRow, status: string): void {
 
         <form
             v-if="canManage"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             @submit.prevent="submitCreate"
         >
             <h3 class="text-sm font-semibold">Add a grade scale</h3>
@@ -273,23 +265,19 @@ function transition(scale: GradeScaleRow, status: string): void {
                     v-model="createForm.code"
                     type="text"
                     placeholder="Code"
-                    class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input w-32"
                 />
                 <input
                     v-model="createForm.name"
                     type="text"
                     placeholder="Name"
-                    class="w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input w-72"
                 />
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="createForm.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="createForm.processing">
                     Add grade scale
                 </button>
             </div>
-            <p v-if="createForm.errors.code" class="mt-2 text-sm text-red-700">
+            <p v-if="createForm.errors.code" class="mt-2 text-sm text-danger">
                 {{ createForm.errors.code }}
             </p>
         </form>

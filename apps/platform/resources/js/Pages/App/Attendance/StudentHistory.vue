@@ -77,42 +77,38 @@ function apply(): void {
 
 <template>
     <Head :title="`Attendance · ${student.name}`" />
-    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/attendance">← Attendance registers</a>
         <h1 class="mt-2 text-xl font-semibold">{{ student.name }} · attendance</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Every submitted register record for this Student in the range, newest first. Corrected
             records show the original status and the reason category.
         </p>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-xs text-slate-600" for="history-from">From</label>
+                <label class="block text-xs text-ink-muted" for="history-from">From</label>
                 <input
                     id="history-from"
                     v-model="from"
                     type="date"
                     :max="today"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                 />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="history-to">To</label>
+                <label class="block text-xs text-ink-muted" for="history-to">To</label>
                 <input
                     id="history-to"
                     v-model="to"
                     type="date"
                     :max="today"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                 />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="history-status">Status</label>
-                <select
-                    id="history-status"
-                    v-model="status"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                >
+                <label class="block text-xs text-ink-muted" for="history-status">Status</label>
+                <select id="history-status" v-model="status" class="input mt-1 w-auto">
                     <option value="">Any status</option>
                     <option v-for="(label, key) in statusLabels" :key="key" :value="key">
                         {{ label }}
@@ -120,23 +116,17 @@ function apply(): void {
                 </select>
             </div>
             <div v-if="subjects.length > 0">
-                <label class="block text-xs text-slate-600" for="history-subject">Subject</label>
-                <select
-                    id="history-subject"
-                    v-model="subjectId"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                >
+                <label class="block text-xs text-ink-muted" for="history-subject">Subject</label>
+                <select id="history-subject" v-model="subjectId" class="input mt-1 w-auto">
                     <option value="">Any subject</option>
                     <option v-for="s in subjects" :key="s.value" :value="s.value">
                         {{ s.label }}
                     </option>
                 </select>
             </div>
-            <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
-                Show
-            </button>
+            <button type="submit" class="btn btn-secondary">Show</button>
         </form>
-        <p v-if="pageErrors.from || pageErrors.to" class="mt-3 text-sm text-red-700" role="alert">
+        <p v-if="pageErrors.from || pageErrors.to" class="mt-3 text-sm text-danger" role="alert">
             {{ pageErrors.from ?? pageErrors.to }}
         </p>
 
@@ -153,7 +143,7 @@ function apply(): void {
                         Attendance records of one Student
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Date</th>
                             <th scope="col" class="py-2 font-medium">Class</th>
                             <th scope="col" class="py-2 font-medium">Period</th>
@@ -161,7 +151,7 @@ function apply(): void {
                             <th scope="col" class="py-2 font-medium">Status</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in rows.data" :key="row.id">
                             <td class="py-2">
                                 <a
@@ -172,12 +162,12 @@ function apply(): void {
                                 >
                                 <span v-else>{{ formatCalendarDate(row.date) }}</span>
                             </td>
-                            <td class="py-2 text-slate-600">{{ row.classLabel ?? '—' }}</td>
-                            <td class="py-2 text-slate-600">{{ row.periodName ?? '—' }}</td>
-                            <td class="py-2 text-slate-600">{{ row.subjectName ?? '—' }}</td>
+                            <td class="py-2 text-ink-muted">{{ row.classLabel ?? '—' }}</td>
+                            <td class="py-2 text-ink-muted">{{ row.periodName ?? '—' }}</td>
+                            <td class="py-2 text-ink-muted">{{ row.subjectName ?? '—' }}</td>
                             <td class="py-2">
                                 {{ statusLabels[row.status] }}
-                                <span v-if="row.corrected" class="block text-xs text-slate-500">
+                                <span v-if="row.corrected" class="block text-xs text-ink-muted">
                                     corrected from
                                     {{
                                         row.originalStatus ? statusLabels[row.originalStatus] : '—'

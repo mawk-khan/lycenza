@@ -64,15 +64,15 @@ function submit() {
 
 <template>
     <Head title="Elective groups" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/subject-offerings">← Subject offerings</a>
         <h1 class="mt-2 text-xl font-semibold">Elective groups</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             A group collects alternative elective Offerings of one Grade level on one Campus; a
             Student takes at most one of them.
         </p>
 
-        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.academicYears.length === 0" class="mt-4 text-sm text-ink-muted">
             Elective groups belong to an Academic Year. Create an Academic Year first.
         </p>
         <template v-else>
@@ -85,12 +85,10 @@ function submit() {
                         :options="yearOptions"
                     />
                 </div>
-                <button type="submit" class="rounded border border-slate-300 px-3 py-2">
-                    Show groups
-                </button>
+                <button type="submit" class="btn btn-secondary">Show groups</button>
             </form>
 
-            <p v-if="props.groups.length === 0" class="mt-4 text-sm text-slate-600">
+            <p v-if="props.groups.length === 0" class="mt-4 text-sm text-ink-muted">
                 {{ yearName }} has no Elective group yet.
             </p>
             <div v-else class="relative overflow-x-auto mt-4">
@@ -101,7 +99,7 @@ function submit() {
                             yearName
                         }}
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="pr-3 py-2">Name</th>
                             <th scope="col" class="pr-3 py-2">Code</th>
@@ -110,7 +108,7 @@ function submit() {
                             <th scope="col" class="pr-3 py-2">Offerings</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="group in props.groups" :key="group.id">
                             <td class="pr-3 py-2 font-medium">
                                 <a class="underline" :href="`/app/elective-groups/${group.id}`">{{
@@ -170,11 +168,7 @@ function submit() {
                         :error="form.errors.code"
                     />
                     <div class="sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="form.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="form.processing" class="btn btn-primary">
                             Add Elective group
                         </button>
                     </div>

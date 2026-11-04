@@ -100,11 +100,11 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
 
 <template>
     <Head title="Rooms" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Rooms</h1>
 
-        <p v-if="props.campuses.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="props.campuses.length === 0" class="mt-4 text-sm text-ink-muted">
             Rooms belong to a Campus. Add a Campus first.
         </p>
         <template v-else>
@@ -117,14 +117,12 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                         :options="campusOptions"
                     />
                 </div>
-                <button type="submit" class="rounded border border-slate-300 px-3 py-2">
-                    Show rooms
-                </button>
+                <button type="submit" class="btn btn-secondary">Show rooms</button>
             </form>
 
             <ErrorSummary :errors="statusForm.errors" :fields="['status']" />
 
-            <p v-if="props.rooms.length === 0" class="mt-4 text-sm text-slate-600">
+            <p v-if="props.rooms.length === 0" class="mt-4 text-sm text-ink-muted">
                 {{ campusName }} has no Room yet.
             </p>
             <div v-else class="relative overflow-x-auto mt-4">
@@ -135,7 +133,7 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                             campusName
                         }}
                     </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
+                    <thead class="border-b border-control-line text-ink-muted">
                         <tr>
                             <th scope="col" class="pr-3 py-2">Name</th>
                             <th scope="col" class="pr-3 py-2">Code</th>
@@ -147,7 +145,7 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="room in props.rooms" :key="room.id">
                             <td class="pr-3 py-2 font-medium">{{ room.name }}</td>
                             <td class="pr-3 py-2">{{ room.code }}</td>
@@ -163,7 +161,7 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                                 <button
                                     v-if="room.status === 'active'"
                                     type="button"
-                                    class="text-red-700 underline"
+                                    class="text-danger underline"
                                     @click="askDeactivate(room)"
                                 >
                                     Deactivate<span class="sr-only"> {{ room.name }}</span>
@@ -185,7 +183,7 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
 
             <section
                 v-if="editing"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 aria-labelledby="edit-room-heading"
             >
                 <h2 id="edit-room-heading" class="font-semibold">Edit {{ editing.name }}</h2>
@@ -221,18 +219,10 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                         :error="edit.errors.capacity"
                     />
                     <div class="flex gap-3 sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="edit.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="edit.processing" class="btn btn-primary">
                             Save
                         </button>
-                        <button
-                            type="button"
-                            class="rounded border border-slate-300 px-3 py-2"
-                            @click="editing = null"
-                        >
+                        <button type="button" class="btn btn-secondary" @click="editing = null">
                             Cancel
                         </button>
                     </div>
@@ -241,7 +231,7 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
 
             <p
                 v-if="props.canManage && props.selectedCampusId && !campusActive"
-                class="mt-8 text-sm text-slate-600"
+                class="mt-8 text-sm text-ink-muted"
             >
                 {{ campusName }} is inactive, so it takes no new Rooms.
             </p>
@@ -285,11 +275,7 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                         :error="create.errors.capacity"
                     />
                     <div class="sm:col-span-2">
-                        <button
-                            type="submit"
-                            :disabled="create.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                        >
+                        <button type="submit" :disabled="create.processing" class="btn btn-primary">
                             Add Room
                         </button>
                     </div>

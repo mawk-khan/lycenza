@@ -37,21 +37,21 @@ function submit(): void {
 
 <template>
     <Head title="Correct academic year dates" />
-    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/school-setup/academic-years">← Academic years</a>
         <h1 class="mt-2 text-xl font-semibold">Correct dates of {{ academicYear.name }}</h1>
         <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <dt class="text-slate-500">Code</dt>
+            <dt class="text-ink-muted">Code</dt>
             <dd>{{ academicYear.code }}</dd>
-            <dt class="text-slate-500">Status</dt>
+            <dt class="text-ink-muted">Status</dt>
             <dd>Draft</dd>
-            <dt class="text-slate-500">Current dates</dt>
+            <dt class="text-ink-muted">Current dates</dt>
             <dd>
                 {{ formatCalendarDate(academicYear.startsOn) }} –
                 {{ formatCalendarDate(academicYear.endsOn) }}
             </dd>
         </dl>
-        <p class="mt-3 text-sm text-slate-600">
+        <p class="mt-3 text-sm text-ink-muted">
             For a mistake made while preparing the year. The dates can be corrected only while the
             year is a draft; once it is activated they are fixed. Its Terms, placements and other
             records must stay inside the new dates, so correct those first if needed. The change is
@@ -81,11 +81,7 @@ function submit(): void {
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Save dates' }}
                 </button>
                 <a class="text-sm underline" href="/app/school-setup/academic-years">Cancel</a>

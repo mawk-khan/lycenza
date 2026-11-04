@@ -66,9 +66,10 @@ const statusLabels: Record<ExceptionRow['status'], string> = {
 };
 
 const statusClasses: Record<ExceptionRow['status'], string> = {
-    absent: 'bg-red-50 text-red-800 ring-red-200',
-    late: 'bg-amber-50 text-amber-800 ring-amber-200',
-    excused: 'bg-slate-100 text-slate-700 ring-slate-200',
+    // DS-4e: status families (OD-DS-1) -- an absence is a record, never the danger hue.
+    absent: 'tag-attention',
+    late: 'tag-info',
+    excused: 'tag-neutral',
 };
 
 function apply(resetSection = false): void {
@@ -102,33 +103,33 @@ function periodLabel(row: ExceptionRow): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/attendance">← Attendance registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">Absent, late and excused</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Every Student marked absent, late or excused on one day, across all submitted registers.
             Open a register to correct a status.
         </p>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply()">
             <div>
-                <label class="block text-sm text-slate-600" for="exceptions-date">Date</label>
+                <label class="block text-sm text-ink-muted" for="exceptions-date">Date</label>
                 <input
                     id="exceptions-date"
                     v-model="date"
                     type="date"
                     required
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                     @change="apply(true)"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="exceptions-section">Section</label>
+                <label class="block text-sm text-ink-muted" for="exceptions-section">Section</label>
                 <select
                     id="exceptions-section"
                     v-model="sectionId"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-56"
                     @change="apply()"
                 >
                     <option value="">All Sections with a register</option>
@@ -138,11 +139,11 @@ function periodLabel(row: ExceptionRow): string {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="exceptions-status">Status</label>
+                <label class="block text-sm text-ink-muted" for="exceptions-status">Status</label>
                 <select
                     id="exceptions-status"
                     v-model="status"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-40"
                     @change="apply()"
                 >
                     <option value="">Absent, late or excused</option>
@@ -187,7 +188,7 @@ function periodLabel(row: ExceptionRow): string {
                         }}
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Student</th>
                             <th scope="col" class="py-2 font-medium">Roll</th>
                             <th scope="col" class="py-2 font-medium">Section</th>
@@ -199,7 +200,7 @@ function periodLabel(row: ExceptionRow): string {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in records.data" :key="row.id">
                             <td class="py-3">
                                 <a
@@ -210,19 +211,17 @@ function periodLabel(row: ExceptionRow): string {
                                 >
                                 <span v-else class="font-medium">{{ row.fullName ?? '—' }}</span>
                             </td>
-                            <td class="py-3 text-slate-600">{{ row.rollNumber ?? '—' }}</td>
-                            <td class="py-3 text-slate-600">
+                            <td class="py-3 text-ink-muted">{{ row.rollNumber ?? '—' }}</td>
+                            <td class="py-3 text-ink-muted">
                                 {{ row.classLabel ?? row.sectionName ?? row.sectionCode ?? '—' }}
                             </td>
-                            <td class="py-3 text-slate-600">{{ periodLabel(row) }}</td>
-                            <td class="py-3 text-slate-600">{{ row.subjectName ?? '—' }}</td>
+                            <td class="py-3 text-ink-muted">{{ periodLabel(row) }}</td>
+                            <td class="py-3 text-ink-muted">{{ row.subjectName ?? '—' }}</td>
                             <td class="py-3">
-                                <span
-                                    class="inline-flex rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
-                                    :class="statusClasses[row.status]"
-                                    >{{ statusLabels[row.status] }}</span
-                                >
-                                <span v-if="row.correctedAt" class="ml-1 text-xs text-slate-500"
+                                <span class="tag" :class="statusClasses[row.status]">{{
+                                    statusLabels[row.status]
+                                }}</span>
+                                <span v-if="row.correctedAt" class="ml-1 text-xs text-ink-muted"
                                     >(corrected)</span
                                 >
                             </td>

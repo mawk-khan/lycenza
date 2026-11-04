@@ -120,11 +120,11 @@ function close(row: AssignmentRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">My Assignments</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Assignments for the classes you teach. You can change only the Assignments you created,
             while you still teach every Section they are for. The due date is for display.
         </p>
@@ -138,14 +138,10 @@ function close(row: AssignmentRow): void {
 
         <template v-else>
             <div class="mt-6">
-                <label class="block text-sm text-slate-600" for="filter-offering">
+                <label class="block text-sm text-ink-muted" for="filter-offering">
                     Subject Offering
                 </label>
-                <select
-                    id="filter-offering"
-                    v-model="subjectOfferingId"
-                    class="mt-1 w-96 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select id="filter-offering" v-model="subjectOfferingId" class="input mt-1 w-96">
                     <option value="">All my classes</option>
                     <option
                         v-for="context in contexts"
@@ -158,7 +154,7 @@ function close(row: AssignmentRow): void {
                 </select>
             </div>
 
-            <h2 class="mt-8 text-sm font-semibold text-slate-700">Assignments</h2>
+            <h2 class="mt-8 text-sm font-semibold text-ink">Assignments</h2>
 
             <EmptyState
                 v-if="assignments.length === 0"
@@ -169,7 +165,7 @@ function close(row: AssignmentRow): void {
 
             <table v-else class="mt-2 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Due</th>
                         <th class="py-2">Title</th>
                         <th class="py-2">For</th>
@@ -178,11 +174,11 @@ function close(row: AssignmentRow): void {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in assignments" :key="row.id" class="border-b border-slate-100">
+                    <tr v-for="row in assignments" :key="row.id" class="border-b border-line">
                         <td class="py-2">{{ row.dueOn ?? '—' }}</td>
                         <td class="py-2 font-medium">
                             {{ row.title }}
-                            <span v-if="!row.mine" class="ml-1 text-xs text-slate-500">
+                            <span v-if="!row.mine" class="ml-1 text-xs text-ink-muted">
                                 (read only)
                             </span>
                         </td>
@@ -217,7 +213,7 @@ function close(row: AssignmentRow): void {
 
             <form
                 v-if="editingId !== null"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitEdit"
             >
                 <h3 class="text-sm font-semibold">Edit assignment</h3>
@@ -226,18 +222,10 @@ function close(row: AssignmentRow): void {
                         v-model="editForm.title"
                         type="text"
                         placeholder="Title"
-                        class="w-80 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-80"
                     />
-                    <input
-                        v-model="editForm.due_on"
-                        type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="editForm.processing"
-                    >
+                    <input v-model="editForm.due_on" type="date" class="input w-auto" />
+                    <button type="submit" class="btn btn-primary" :disabled="editForm.processing">
                         Save
                     </button>
                     <button type="button" class="text-sm underline" @click="editingId = null">
@@ -248,24 +236,24 @@ function close(row: AssignmentRow): void {
                     v-model="editForm.instructions"
                     rows="3"
                     placeholder="Instructions"
-                    class="mt-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-3"
                 ></textarea>
-                <p v-if="editForm.errors.title" class="mt-2 text-sm text-red-700">
+                <p v-if="editForm.errors.title" class="mt-2 text-sm text-danger">
                     {{ editForm.errors.title }}
                 </p>
-                <p v-if="editForm.errors.due_on" class="mt-2 text-sm text-red-700">
+                <p v-if="editForm.errors.due_on" class="mt-2 text-sm text-danger">
                     {{ editForm.errors.due_on }}
                 </p>
             </form>
 
             <form
                 v-if="selectedContext"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="submitCreate"
             >
                 <h3 class="text-sm font-semibold">Add an assignment for my Sections</h3>
                 <fieldset class="mt-3">
-                    <legend class="text-sm text-slate-600">For Sections</legend>
+                    <legend class="text-sm text-ink-muted">For Sections</legend>
                     <label
                         v-for="section in selectedContext.sections"
                         :key="section.id"
@@ -284,18 +272,10 @@ function close(row: AssignmentRow): void {
                         v-model="createForm.title"
                         type="text"
                         placeholder="Title"
-                        class="w-80 rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input w-80"
                     />
-                    <input
-                        v-model="createForm.due_on"
-                        type="date"
-                        class="rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="createForm.processing"
-                    >
+                    <input v-model="createForm.due_on" type="date" class="input w-auto" />
+                    <button type="submit" class="btn btn-primary" :disabled="createForm.processing">
                         Add assignment
                     </button>
                 </div>
@@ -303,12 +283,12 @@ function close(row: AssignmentRow): void {
                     v-model="createForm.instructions"
                     rows="3"
                     placeholder="Instructions"
-                    class="mt-3 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-3"
                 ></textarea>
-                <p v-if="createForm.errors.title" class="mt-2 text-sm text-red-700">
+                <p v-if="createForm.errors.title" class="mt-2 text-sm text-danger">
                     {{ createForm.errors.title }}
                 </p>
-                <p v-if="createForm.errors.audience_section_ids" class="mt-2 text-sm text-red-700">
+                <p v-if="createForm.errors.audience_section_ids" class="mt-2 text-sm text-danger">
                     {{ createForm.errors.audience_section_ids }}
                 </p>
             </form>

@@ -61,9 +61,10 @@ const labels: Record<Status, string> = {
     not_submitted: 'Not submitted',
 };
 const badge: Record<Status, string> = {
-    submitted: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-    pending: 'bg-slate-50 text-slate-700 ring-slate-200',
-    not_submitted: 'bg-amber-50 text-amber-900 ring-amber-200',
+    // DS-4e: status families (OD-DS-1).
+    submitted: 'tag-positive',
+    pending: 'tag-info',
+    not_submitted: 'tag-attention',
 };
 
 const sectionsForGrade = computed(() =>
@@ -99,10 +100,10 @@ function period(row: Row): string {
 
 <template>
     <Head title="Registers by day" />
-    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/attendance">← Attendance registers</a>
         <h1 class="mt-2 text-xl font-semibold">Registers taken and not taken</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             The classes on the current timetable for the chosen day, and whether each register has
             been submitted. Lycenza does not record school holidays or cancelled periods, so on a
             day the school was closed every class shows as not submitted.
@@ -110,22 +111,22 @@ function period(row: Row): string {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-xs text-slate-600" for="registers-date">Date</label>
+                <label class="block text-xs text-ink-muted" for="registers-date">Date</label>
                 <input
                     id="registers-date"
                     v-model="date"
                     type="date"
                     :max="today"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="registers-grade">Grade</label>
+                <label class="block text-xs text-ink-muted" for="registers-grade">Grade</label>
                 <select
                     id="registers-grade"
                     v-model="gradeId"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">All grades</option>
@@ -135,11 +136,11 @@ function period(row: Row): string {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="registers-section">Section</label>
+                <label class="block text-xs text-ink-muted" for="registers-section">Section</label>
                 <select
                     id="registers-section"
                     v-model="sectionId"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">All sections</option>
@@ -149,11 +150,11 @@ function period(row: Row): string {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="registers-status">Status</label>
+                <label class="block text-xs text-ink-muted" for="registers-status">Status</label>
                 <select
                     id="registers-status"
                     v-model="status"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">Any status</option>
@@ -161,21 +162,21 @@ function period(row: Row): string {
                 </select>
             </div>
         </form>
-        <p v-if="pageErrors.date" class="mt-3 text-sm text-red-700" role="alert">
+        <p v-if="pageErrors.date" class="mt-3 text-sm text-danger" role="alert">
             {{ pageErrors.date }}
         </p>
 
         <dl v-if="applicable" class="mt-6 grid grid-cols-3 gap-4 sm:max-w-xl">
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Submitted registers</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Submitted registers</dt>
                 <dd class="text-lg font-semibold">{{ counts.submitted }}</dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Not submitted</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Not submitted</dt>
                 <dd class="text-lg font-semibold">{{ counts.not_submitted }}</dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Not yet due</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Not yet due</dt>
                 <dd class="text-lg font-semibold">{{ counts.pending }}</dd>
             </div>
         </dl>
@@ -199,7 +200,7 @@ function period(row: Row): string {
                         Timetabled classes and their register status
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Class</th>
                             <th scope="col" class="py-2 font-medium">Period</th>
                             <th scope="col" class="py-2 font-medium">Subject</th>
@@ -210,18 +211,16 @@ function period(row: Row): string {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in rows.data" :key="row.timetableEntryId">
                             <td class="py-2">{{ row.classLabel ?? '—' }}</td>
-                            <td class="py-2 text-slate-600">{{ period(row) }}</td>
-                            <td class="py-2 text-slate-600">{{ row.subjectName ?? '—' }}</td>
-                            <td class="py-2 text-slate-600">{{ row.teacherName ?? '—' }}</td>
+                            <td class="py-2 text-ink-muted">{{ period(row) }}</td>
+                            <td class="py-2 text-ink-muted">{{ row.subjectName ?? '—' }}</td>
+                            <td class="py-2 text-ink-muted">{{ row.teacherName ?? '—' }}</td>
                             <td class="py-2">
-                                <span
-                                    class="inline-flex rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
-                                    :class="badge[row.status]"
-                                    >{{ labels[row.status] }}</span
-                                >
+                                <span class="tag" :class="badge[row.status]">{{
+                                    labels[row.status]
+                                }}</span>
                             </td>
                             <!-- SIS 6.1: straight to the register, or to Take for this class and day. -->
                             <td class="py-2 text-right">

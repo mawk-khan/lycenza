@@ -69,13 +69,13 @@ watch(attendanceDate, () => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ heading }}</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Submitted class registers. A register is taken once, complete, and thereafter
                     only individual statuses are corrected.
                 </p>
@@ -90,23 +90,14 @@ watch(attendanceDate, () => {
                     >
                 </p>
             </div>
-            <a
-                v-if="canManage"
-                :href="`${baseUrl}/take`"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <a v-if="canManage" :href="`${baseUrl}/take`" class="btn btn-primary shrink-0">
                 Take a register
             </a>
         </div>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-date">Date</label>
-            <input
-                id="filter-date"
-                v-model="attendanceDate"
-                type="date"
-                class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
-            />
+            <label class="block text-sm text-ink-muted" for="filter-date">Date</label>
+            <input id="filter-date" v-model="attendanceDate" type="date" class="input mt-1 w-56" />
         </div>
 
         <EmptyState
@@ -116,19 +107,14 @@ watch(attendanceDate, () => {
             description="Take the first register to begin recording Student attendance."
         >
             <template v-if="canManage" #action>
-                <a
-                    :href="`${baseUrl}/take`"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Take a register
-                </a>
+                <a :href="`${baseUrl}/take`" class="btn btn-primary"> Take a register </a>
             </template>
         </EmptyState>
 
         <div v-else class="relative mt-6 overflow-x-auto">
             <table class="w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Date</th>
                         <th class="py-2">Class</th>
                         <th class="py-2">Subject</th>
@@ -139,17 +125,13 @@ watch(attendanceDate, () => {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr
-                        v-for="row in sessions.data"
-                        :key="row.id"
-                        class="border-b border-slate-100"
-                    >
+                    <tr v-for="row in sessions.data" :key="row.id" class="border-b border-line">
                         <td class="py-2">{{ formatCalendarDate(row.attendanceDate) }}</td>
                         <td class="py-2">{{ row.classLabel ?? row.sectionCode }}</td>
                         <td class="py-2">{{ row.subjectName }}</td>
                         <td class="py-2">
                             {{ row.periodName }}
-                            <span class="text-slate-500">
+                            <span class="text-ink-muted">
                                 ({{ formatTimeRange(row.periodStartTime, row.periodEndTime) }})
                             </span>
                         </td>

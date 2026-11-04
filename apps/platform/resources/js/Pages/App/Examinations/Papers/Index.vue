@@ -112,11 +112,11 @@ function submitEdit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/examinations">← Examinations</a>
 
         <h1 class="mt-2 text-xl font-semibold">{{ examination.name }} — Papers</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ examination.code }} · {{ examination.startsOn }} to {{ examination.endsOn }} ·
             <span class="capitalize">{{ examination.status }}</span>
         </p>
@@ -130,7 +130,7 @@ function submitEdit(): void {
 
         <table v-else class="mt-8 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th class="py-2">Subject Offering</th>
                     <th class="py-2">Date</th>
                     <th class="py-2">Start</th>
@@ -141,7 +141,7 @@ function submitEdit(): void {
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="paper in papers" :key="paper.id" class="border-b border-slate-100">
+                <tr v-for="paper in papers" :key="paper.id" class="border-b border-line">
                     <td class="py-2 font-medium">{{ offeringLabel(paper.subjectOfferingId) }}</td>
                     <td class="py-2">{{ paper.scheduledOn }}</td>
                     <td class="py-2">{{ formatDateTime(paper.startsAt) }}</td>
@@ -159,74 +159,50 @@ function submitEdit(): void {
 
         <form
             v-if="canManage && editingId !== null"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             @submit.prevent="submitEdit"
         >
             <h3 class="text-sm font-semibold">Edit paper</h3>
             <div class="mt-3 flex flex-wrap gap-3">
-                <input
-                    v-model="editForm.scheduled_on"
-                    type="date"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="editForm.starts_at"
-                    type="time"
-                    step="1"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="editForm.ends_at"
-                    type="time"
-                    step="1"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <input v-model="editForm.scheduled_on" type="date" class="input w-auto" />
+                <input v-model="editForm.starts_at" type="time" step="1" class="input w-auto" />
+                <input v-model="editForm.ends_at" type="time" step="1" class="input w-auto" />
                 <input
                     v-model="editForm.max_marks"
                     type="number"
                     min="0.01"
                     step="0.01"
                     placeholder="Max marks"
-                    class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input w-32"
                 />
-                <select
-                    v-model="editForm.status"
-                    class="w-32 rounded border border-slate-300 px-3 py-2 text-sm capitalize"
-                >
+                <select v-model="editForm.status" class="input w-32 capitalize">
                     <option v-for="status in statuses" :key="status" :value="status">
                         {{ status }}
                     </option>
                 </select>
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="editForm.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="editForm.processing">
                     Save
                 </button>
                 <button type="button" class="text-sm underline" @click="editingId = null">
                     Cancel
                 </button>
             </div>
-            <p v-if="editForm.errors.scheduled_on" class="mt-2 text-sm text-red-700">
+            <p v-if="editForm.errors.scheduled_on" class="mt-2 text-sm text-danger">
                 {{ editForm.errors.scheduled_on }}
             </p>
-            <p v-if="editForm.errors.status" class="mt-2 text-sm text-red-700">
+            <p v-if="editForm.errors.status" class="mt-2 text-sm text-danger">
                 {{ editForm.errors.status }}
             </p>
         </form>
 
         <form
             v-if="canManage"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             @submit.prevent="submitCreate"
         >
             <h3 class="text-sm font-semibold">Schedule a paper</h3>
             <div class="mt-3 flex flex-wrap gap-3">
-                <select
-                    v-model="createForm.subject_offering_id"
-                    class="w-64 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select v-model="createForm.subject_offering_id" class="input w-64">
                     <option value="">Select a Subject Offering</option>
                     <option
                         v-for="offering in subjectOfferings"
@@ -236,43 +212,25 @@ function submitEdit(): void {
                         {{ offering.label }} ({{ offering.isRequired ? 'Required' : 'Elective' }})
                     </option>
                 </select>
-                <input
-                    v-model="createForm.scheduled_on"
-                    type="date"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="createForm.starts_at"
-                    type="time"
-                    step="1"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                    v-model="createForm.ends_at"
-                    type="time"
-                    step="1"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <input v-model="createForm.scheduled_on" type="date" class="input w-auto" />
+                <input v-model="createForm.starts_at" type="time" step="1" class="input w-auto" />
+                <input v-model="createForm.ends_at" type="time" step="1" class="input w-auto" />
                 <input
                     v-model="createForm.max_marks"
                     type="number"
                     min="0.01"
                     step="0.01"
                     placeholder="Max marks"
-                    class="w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input w-32"
                 />
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="createForm.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="createForm.processing">
                     Schedule paper
                 </button>
             </div>
-            <p v-if="createForm.errors.subject_offering_id" class="mt-2 text-sm text-red-700">
+            <p v-if="createForm.errors.subject_offering_id" class="mt-2 text-sm text-danger">
                 {{ createForm.errors.subject_offering_id }}
             </p>
-            <p v-if="createForm.errors.scheduled_on" class="mt-2 text-sm text-red-700">
+            <p v-if="createForm.errors.scheduled_on" class="mt-2 text-sm text-danger">
                 {{ createForm.errors.scheduled_on }}
             </p>
         </form>

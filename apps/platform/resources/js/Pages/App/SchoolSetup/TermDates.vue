@@ -37,23 +37,23 @@ function submit(): void {
 
 <template>
     <Head title="Correct term dates" />
-    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-ink sm:p-8">
         <a class="text-sm underline" :href="back">← Terms</a>
         <h1 class="mt-2 text-xl font-semibold">Correct dates of {{ term.name }}</h1>
         <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <dt class="text-slate-500">Code</dt>
+            <dt class="text-ink-muted">Code</dt>
             <dd>{{ term.code }}</dd>
-            <dt class="text-slate-500">Order</dt>
+            <dt class="text-ink-muted">Order</dt>
             <dd>{{ term.sequence }}</dd>
-            <dt class="text-slate-500">Current dates</dt>
+            <dt class="text-ink-muted">Current dates</dt>
             <dd>{{ formatCalendarDate(term.startsOn) }} – {{ formatCalendarDate(term.endsOn) }}</dd>
-            <dt class="text-slate-500">Academic year</dt>
+            <dt class="text-ink-muted">Academic year</dt>
             <dd>
                 {{ academicYear.name }} (draft), {{ formatCalendarDate(academicYear.startsOn) }} –
                 {{ formatCalendarDate(academicYear.endsOn) }}
             </dd>
         </dl>
-        <p class="mt-3 text-sm text-slate-600">
+        <p class="mt-3 text-sm text-ink-muted">
             The dates can be corrected only while the academic year is a draft. The change is
             recorded in the audit log.
         </p>
@@ -81,11 +81,7 @@ function submit(): void {
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Save dates' }}
                 </button>
                 <a class="text-sm underline" :href="back">Cancel</a>

@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a to DS-4d implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4e implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -361,3 +361,17 @@ recommended first domain (Students) was taken.
    entitlements, requests, approvals, accruals; Payroll hub, periods,
    structures, components; staff attendance and monthly; Staff accounts; My
    attendance and payslips).
+9. **DS-4e: Academics (2026-11-04).** `Pages/App/Attendance`, `Timetable`,
+   `Examinations`, `CurriculumDelivery`, `Syllabus`, `LMS`,
+   `TeachingAssignments`, `SubjectOfferings`, `ElectiveGroups`,
+   `Components/SubjectOfferings` and the nine academic-structure pages of
+   `SchoolSetup` (years and their dates, terms and their dates, grade levels,
+   sections, subjects, departments, rooms) -- 39 files on the codemod.
+   - **Hand edits, presentation only:** the attendance exception and
+     register-status maps use the status families (Absent = attention, Late
+     = info, Excused = neutral; Submitted = positive, Pending = info, Not
+     submitted = attention). An absence is a record, never the danger hue.
+   - The remaining `SchoolSetup` pages (profile, campuses, readiness,
+     presentation, integrations, organization report, index) move with
+     DS-4h.
+   - Visual check on 19 captured pages.

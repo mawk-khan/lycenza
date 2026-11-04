@@ -207,7 +207,7 @@ function closeAllPanels(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/subject-offerings">← Subject Offerings</a>
 
         <div class="mt-2 flex items-start justify-between">
@@ -215,7 +215,7 @@ function closeAllPanels(): void {
                 <h1 class="text-xl font-semibold">
                     {{ offering.subject?.name ?? 'Unknown Subject' }}
                 </h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{ offering.academicYear?.name }} · {{ offering.campus?.name }} ·
                     {{ offering.gradeLevel?.name }}
                 </p>
@@ -227,19 +227,19 @@ function closeAllPanels(): void {
 
         <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <div>
-                <dt class="text-slate-500">Type</dt>
+                <dt class="text-ink-muted">Type</dt>
                 <dd class="font-medium">{{ offering.isRequired ? 'Required' : 'Elective' }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Elective Group</dt>
+                <dt class="text-ink-muted">Elective Group</dt>
                 <dd class="font-medium">{{ offering.electiveGroup?.name ?? 'Ungrouped' }}</dd>
             </div>
         </dl>
 
         <!-- Required Offering: read-only roster, no management surface at all. -->
         <section v-if="offering.isRequired" class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Current roster (read-only)</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <h2 class="text-sm font-medium text-ink-muted">Current roster (read-only)</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 Membership is derived automatically from Student placement (enrollment, Grade,
                 Campus). To change who is here, update the Student's enrollment instead.
             </p>
@@ -250,7 +250,7 @@ function closeAllPanels(): void {
                 title="No Students currently placed"
                 description="No active Student enrollment currently matches this Offering's Year, Grade, and Campus."
             />
-            <ul v-else class="mt-4 divide-y divide-slate-100 text-sm">
+            <ul v-else class="mt-4 divide-y divide-line text-sm">
                 <li v-for="s in roster" :key="s.id" class="flex items-center justify-between py-2">
                     <span>
                         <a
@@ -260,7 +260,7 @@ function closeAllPanels(): void {
                             >{{ studentName(s) }}</a
                         >
                         <span v-else>{{ studentName(s) }}</span>
-                        <span class="ml-2 text-slate-500">{{ s.studentNumber }}</span>
+                        <span class="ml-2 text-ink-muted">{{ s.studentNumber }}</span>
                     </span>
                 </li>
             </ul>
@@ -270,11 +270,11 @@ function closeAllPanels(): void {
         <template v-else>
             <section class="mt-8">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-sm font-medium text-slate-500">Current roster</h2>
+                    <h2 class="text-sm font-medium text-ink-muted">Current roster</h2>
                     <button
                         v-if="canManage && offering.status === 'active'"
                         type="button"
-                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+                        class="btn btn-primary"
                         @click="openEnrollPanel"
                     >
                         Enroll Student
@@ -291,7 +291,7 @@ function closeAllPanels(): void {
                             : 'This Offering is not currently active -- new enrollment is unavailable.'
                     "
                 />
-                <ul v-else class="mt-4 divide-y divide-slate-100 text-sm">
+                <ul v-else class="mt-4 divide-y divide-line text-sm">
                     <li v-for="s in roster" :key="s.id" class="py-3">
                         <div class="flex items-center justify-between">
                             <span>
@@ -302,7 +302,7 @@ function closeAllPanels(): void {
                                     >{{ studentName(s) }}</a
                                 >
                                 <span v-else>{{ studentName(s) }}</span>
-                                <span class="ml-2 text-slate-500">{{ s.studentNumber }}</span>
+                                <span class="ml-2 text-ink-muted">{{ s.studentNumber }}</span>
                             </span>
                             <div
                                 v-if="canManage && s.studentSubjectEnrollmentId"
@@ -337,12 +337,12 @@ function closeAllPanels(): void {
                             v-if="
                                 openLifecycleAction?.enrollmentId === s.studentSubjectEnrollmentId
                             "
-                            class="mt-2 flex items-end gap-3 rounded border border-slate-200 p-3"
+                            class="mt-2 flex items-end gap-3 rounded-xs border border-line p-3"
                             @submit.prevent="submitLifecycle"
                         >
                             <div>
                                 <label
-                                    class="block text-xs text-slate-600"
+                                    class="block text-xs text-ink-muted"
                                     :for="`ends-on-${s.studentSubjectEnrollmentId}`"
                                     >{{
                                         openLifecycleAction.type === 'withdraw'
@@ -360,10 +360,10 @@ function closeAllPanels(): void {
                                         ).ends_on
                                     "
                                     type="date"
-                                    class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                                    class="input mt-1 w-auto"
                                 />
                             </div>
-                            <p class="text-xs text-slate-500">
+                            <p class="text-xs text-ink-muted">
                                 {{
                                     openLifecycleAction.type === 'withdraw'
                                         ? 'The Student was actively taking this elective and has now left it.'
@@ -372,7 +372,7 @@ function closeAllPanels(): void {
                             </p>
                             <button
                                 type="submit"
-                                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                class="btn btn-primary"
                                 :disabled="
                                     (openLifecycleAction.type === 'withdraw'
                                         ? withdrawForm
@@ -392,7 +392,7 @@ function closeAllPanels(): void {
                                         : cancelForm
                                     ).errors.ends_on
                                 "
-                                class="text-sm text-red-600"
+                                class="text-sm text-danger"
                             >
                                 {{
                                     (openLifecycleAction.type === 'withdraw'
@@ -406,14 +406,14 @@ function closeAllPanels(): void {
                         <!-- Transfer panel -->
                         <div
                             v-if="transferState.enrollmentId === s.studentSubjectEnrollmentId"
-                            class="mt-2 rounded border border-slate-200 p-3"
+                            class="mt-2 rounded-xs border border-line p-3"
                         >
-                            <p v-if="transferState.loading" class="text-sm text-slate-500">
+                            <p v-if="transferState.loading" class="text-sm text-ink-muted">
                                 Loading compatible Offerings…
                             </p>
                             <p
                                 v-else-if="transferState.targets.length === 0"
-                                class="text-sm text-slate-500"
+                                class="text-sm text-ink-muted"
                             >
                                 No compatible target Offerings found for this Student's current
                                 placement.
@@ -421,14 +421,14 @@ function closeAllPanels(): void {
                             <form v-else class="space-y-3" @submit.prevent="submitTransfer">
                                 <div>
                                     <label
-                                        class="block text-xs text-slate-600"
+                                        class="block text-xs text-ink-muted"
                                         :for="`target-${s.studentSubjectEnrollmentId}`"
                                         >Transfer to</label
                                     >
                                     <select
                                         :id="`target-${s.studentSubjectEnrollmentId}`"
                                         v-model="transferForm.target_subject_offering_id"
-                                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                        class="input mt-1"
                                         required
                                     >
                                         <option value="" disabled>Select a target Offering</option>
@@ -450,7 +450,7 @@ function closeAllPanels(): void {
                                 </div>
                                 <div>
                                     <label
-                                        class="block text-xs text-slate-600"
+                                        class="block text-xs text-ink-muted"
                                         :for="`effective-${s.studentSubjectEnrollmentId}`"
                                         >Effective date</label
                                     >
@@ -458,13 +458,13 @@ function closeAllPanels(): void {
                                         :id="`effective-${s.studentSubjectEnrollmentId}`"
                                         v-model="transferForm.effective_date"
                                         type="date"
-                                        class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                                        class="input mt-1 w-auto"
                                     />
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <button
                                         type="submit"
-                                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                        class="btn btn-primary"
                                         :disabled="transferForm.processing"
                                     >
                                         Transfer
@@ -479,13 +479,13 @@ function closeAllPanels(): void {
                                 </div>
                                 <p
                                     v-if="transferForm.errors.target_subject_offering_id"
-                                    class="text-sm text-red-600"
+                                    class="text-sm text-danger"
                                 >
                                     {{ transferForm.errors.target_subject_offering_id }}
                                 </p>
                                 <p
                                     v-if="transferForm.errors.effective_date"
-                                    class="text-sm text-red-600"
+                                    class="text-sm text-danger"
                                 >
                                     {{ transferForm.errors.effective_date }}
                                 </p>
@@ -495,34 +495,31 @@ function closeAllPanels(): void {
                 </ul>
 
                 <!-- Enroll panel -->
-                <div v-if="showEnrollPanel" class="mt-4 rounded border border-slate-200 p-4">
+                <div v-if="showEnrollPanel" class="mt-4 rounded-xs border border-line p-4">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-medium">Enroll a Student</h3>
                         <button type="button" class="text-sm underline" @click="closeAllPanels">
                             Close
                         </button>
                     </div>
-                    <label class="mt-3 block text-xs text-slate-600" for="enroll-search"
+                    <label class="mt-3 block text-xs text-ink-muted" for="enroll-search"
                         >Search by name or Student number</label
                     >
                     <input
                         id="enroll-search"
                         v-model="enrollQuery"
                         type="text"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-1"
                         @input="searchCandidates"
                     />
-                    <p v-if="searching" class="mt-2 text-sm text-slate-500">Searching…</p>
+                    <p v-if="searching" class="mt-2 text-sm text-ink-muted">Searching…</p>
                     <EmptyState
                         v-else-if="candidates.length === 0"
                         class="mt-3"
                         title="No compatible Students found"
                         description="Only Students with a current active enrollment matching this Offering's Year, Grade, and Campus appear here."
                     />
-                    <ul
-                        v-else
-                        class="mt-3 max-h-72 divide-y divide-slate-100 overflow-y-auto text-sm"
-                    >
+                    <ul v-else class="mt-3 max-h-72 divide-y divide-line overflow-y-auto text-sm">
                         <li
                             v-for="c in candidates"
                             :key="c.studentEnrollmentId"
@@ -530,11 +527,11 @@ function closeAllPanels(): void {
                         >
                             <span>
                                 {{ studentName(c.student) }}
-                                <span class="text-slate-500">{{ c.student.studentNumber }}</span>
-                                <span v-if="c.section" class="ml-2 text-slate-500"
+                                <span class="text-ink-muted">{{ c.student.studentNumber }}</span>
+                                <span v-if="c.section" class="ml-2 text-ink-muted"
                                     >Section {{ c.section.name }}</span
                                 >
-                                <span v-if="c.hasCurrentGroupConflict" class="ml-2 text-amber-700"
+                                <span v-if="c.hasCurrentGroupConflict" class="ml-2 text-ink"
                                     >(already has an active choice in this elective group)</span
                                 >
                             </span>
@@ -548,25 +545,25 @@ function closeAllPanels(): void {
                         </li>
                     </ul>
                     <div class="mt-3">
-                        <label class="block text-xs text-slate-600" for="enroll-starts-on"
+                        <label class="block text-xs text-ink-muted" for="enroll-starts-on"
                             >Starts on</label
                         >
                         <input
                             id="enroll-starts-on"
                             v-model="enrollForm.starts_on"
                             type="date"
-                            class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input mt-1 w-auto"
                         />
                     </div>
-                    <p v-if="enrollForm.errors.student_id" class="mt-2 text-sm text-red-600">
+                    <p v-if="enrollForm.errors.student_id" class="mt-2 text-sm text-danger">
                         {{ enrollForm.errors.student_id }}
                     </p>
                 </div>
             </section>
 
             <section class="mt-8">
-                <h2 class="text-sm font-medium text-slate-500">Participation history</h2>
-                <p class="mt-1 text-sm text-slate-500">
+                <h2 class="text-sm font-medium text-ink-muted">Participation history</h2>
+                <p class="mt-1 text-sm text-ink-muted">
                     Every past and present participation, including withdrawn, cancelled, and
                     transferred rows -- kept for history, never deleted.
                 </p>
@@ -578,7 +575,7 @@ function closeAllPanels(): void {
                     description="Once a Student is enrolled, withdrawn, cancelled, or transferred, it will appear here."
                 />
                 <template v-else>
-                    <ul class="mt-4 divide-y divide-slate-100 text-sm">
+                    <ul class="mt-4 divide-y divide-line text-sm">
                         <li
                             v-for="h in history.data"
                             :key="h.id"
@@ -586,7 +583,7 @@ function closeAllPanels(): void {
                         >
                             <span>
                                 {{ studentName(h.student) }}
-                                <span class="ml-2 text-slate-500"
+                                <span class="ml-2 text-ink-muted"
                                     >{{ h.startsOn
                                     }}<span v-if="h.endsOn"> → {{ h.endsOn }}</span></span
                                 >

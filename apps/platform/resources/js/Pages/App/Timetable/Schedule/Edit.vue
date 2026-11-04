@@ -146,37 +146,37 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/timetable-schedule">← Timetable schedule</a>
         <h1 class="mt-2 text-xl font-semibold">Edit class</h1>
 
-        <dl class="mt-4 rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+        <dl class="mt-4 rounded-xs border border-line bg-graphite-100 px-4 py-3 text-sm">
             <div class="flex gap-2">
-                <dt class="text-slate-500">Subject</dt>
+                <dt class="text-ink-muted">Subject</dt>
                 <dd>{{ entry.subjectCode }} — {{ entry.subjectName }}</dd>
             </div>
             <div class="flex gap-2">
-                <dt class="text-slate-500">Class</dt>
+                <dt class="text-ink-muted">Class</dt>
                 <dd>{{ entry.classLabel ?? entry.sectionName }}</dd>
             </div>
             <div class="flex gap-2">
-                <dt class="text-slate-500">Academic year</dt>
+                <dt class="text-ink-muted">Academic year</dt>
                 <dd>{{ entry.academicYearName }}</dd>
             </div>
         </dl>
 
         <form class="mt-6 space-y-6" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="teacher">Teacher</label>
+                <label class="block text-sm text-ink-muted" for="teacher">Teacher</label>
                 <div
                     v-if="teacherPicker.selectedLabel.value"
-                    class="mt-1 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ teacherPicker.selectedLabel.value }}</span>
                     <button
                         id="teacher-change"
                         type="button"
-                        class="text-slate-500 underline hover:text-slate-700"
+                        class="text-ink-muted underline hover:text-ink"
                         @click="
                             form.teacher_id = '';
                             teacherPicker.selectedLabel.value = '';
@@ -191,7 +191,7 @@ function submit(): void {
                     id="teacher"
                     v-model="teacherPicker.query.value"
                     placeholder="Search by name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="teacherPicker.results.value"
                     :option-key="(o) => o.id"
                     :error="form.errors.teacher_id"
@@ -204,16 +204,16 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="room">Room (optional)</label>
+                <label class="block text-sm text-ink-muted" for="room">Room (optional)</label>
                 <div
                     v-if="roomPicker.selectedLabel.value"
-                    class="mt-1 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ roomPicker.selectedLabel.value }}</span>
                     <button
                         id="room-change"
                         type="button"
-                        class="text-slate-500 underline hover:text-slate-700"
+                        class="text-ink-muted underline hover:text-ink"
                         @click="
                             form.room_id = '';
                             roomPicker.selectedLabel.value = '';
@@ -228,7 +228,7 @@ function submit(): void {
                     id="room"
                     v-model="roomPicker.query.value"
                     placeholder="Search by Room code or name (leave empty for no room)"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="roomPicker.results.value"
                     :option-key="(o) => o.id"
                     :error="form.errors.room_id"
@@ -241,16 +241,16 @@ function submit(): void {
             </div>
 
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="period">Period</label>
+                <label class="block text-sm text-ink-muted" for="period">Period</label>
                 <div
                     v-if="periodPicker.selectedLabel.value"
-                    class="mt-1 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ periodPicker.selectedLabel.value }}</span>
                     <button
                         id="period-change"
                         type="button"
-                        class="text-slate-500 underline hover:text-slate-700"
+                        class="text-ink-muted underline hover:text-ink"
                         @click="
                             form.period_id = '';
                             periodPicker.selectedLabel.value = '';
@@ -265,7 +265,7 @@ function submit(): void {
                     id="period"
                     v-model="periodPicker.query.value"
                     placeholder="Search by Period code or name"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                     :options="periodPicker.results.value"
                     :option-key="(o) => o.id"
                     :error="form.errors.period_id"
@@ -278,17 +278,13 @@ function submit(): void {
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="day_of_week">Day</label>
-                <select
-                    id="day_of_week"
-                    v-model.number="form.day_of_week"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="day_of_week">Day</label>
+                <select id="day_of_week" v-model.number="form.day_of_week" class="input mt-1">
                     <option v-for="day in DAYS" :key="day.value" :value="day.value">
                         {{ day.label }}
                     </option>
                 </select>
-                <p v-if="form.errors.day_of_week" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.day_of_week" class="mt-1 text-sm text-danger">
                     {{ form.errors.day_of_week }}
                 </p>
             </div>
@@ -297,7 +293,7 @@ function submit(): void {
                 <button
                     type="submit"
                     :disabled="form.processing || !form.teacher_id || !form.period_id"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    class="btn btn-primary"
                 >
                     {{ form.processing ? 'Saving…' : 'Save class' }}
                 </button>

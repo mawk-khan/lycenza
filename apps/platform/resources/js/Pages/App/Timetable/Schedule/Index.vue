@@ -119,20 +119,20 @@ function toggle(entry: EntryRow): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Timetable schedule</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Which Subject each Section is taught, by whom, when, and where.
                 </p>
             </div>
             <a
                 v-if="canManage"
                 href="/app/timetable-schedule/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Schedule a class
             </a>
@@ -140,11 +140,11 @@ function toggle(entry: EntryRow): void {
 
         <div class="mt-6 flex flex-wrap items-end gap-4">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-year">Academic year</label>
+                <label class="block text-sm text-ink-muted" for="filter-year">Academic year</label>
                 <select
                     id="filter-year"
                     v-model="academicYearId"
-                    class="mt-1 w-56 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-56 max-w-full"
                     @change="changeYear"
                 >
                     <option v-for="y in filterOptions.academicYears" :key="y.id" :value="y.id">
@@ -153,11 +153,11 @@ function toggle(entry: EntryRow): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+                <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
                 <select
                     id="filter-status"
                     v-model="statusFilter"
-                    class="mt-1 w-36 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-36 max-w-full"
                     @change="applyFilters()"
                 >
                     <option value="active">Active</option>
@@ -166,11 +166,11 @@ function toggle(entry: EntryRow): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-section">Section</label>
+                <label class="block text-sm text-ink-muted" for="filter-section">Section</label>
                 <select
                     id="filter-section"
                     v-model="sectionId"
-                    class="mt-1 w-64 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-64 max-w-full"
                     @change="applyFilters(true)"
                 >
                     <option value="">All Sections</option>
@@ -180,11 +180,11 @@ function toggle(entry: EntryRow): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-teacher">Teacher</label>
+                <label class="block text-sm text-ink-muted" for="filter-teacher">Teacher</label>
                 <select
                     id="filter-teacher"
                     v-model="teacherId"
-                    class="mt-1 w-64 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-64 max-w-full"
                     @change="applyFilters()"
                 >
                     <option value="">All teachers</option>
@@ -214,10 +214,7 @@ function toggle(entry: EntryRow): void {
             "
         >
             <template v-if="canManage && !sectionId && !teacherId" #action>
-                <a
-                    href="/app/timetable-schedule/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a href="/app/timetable-schedule/create" class="btn btn-primary">
                     Schedule a class
                 </a>
             </template>
@@ -228,7 +225,7 @@ function toggle(entry: EntryRow): void {
             <div class="relative mt-6 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Day</th>
                             <th scope="col" class="py-2 font-medium">Period</th>
                             <th scope="col" class="py-2 font-medium">Subject</th>
@@ -241,12 +238,12 @@ function toggle(entry: EntryRow): void {
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="entry in entries.data" :key="entry.id">
                             <td class="py-3">{{ DAY_NAMES[entry.dayOfWeek] }}</td>
                             <td class="py-3">
                                 {{ entry.periodCode }}
-                                <span v-if="entry.periodStartTime" class="text-xs text-slate-400">
+                                <span v-if="entry.periodStartTime" class="text-xs text-ink-muted">
                                     ({{
                                         formatTimeRange(entry.periodStartTime, entry.periodEndTime)
                                     }})
