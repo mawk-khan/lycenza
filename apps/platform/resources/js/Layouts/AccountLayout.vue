@@ -243,9 +243,13 @@ const homeLinkClass = (active: boolean) => [
                     <NavigationGroupList :groups="platformGroups" />
                 </nav>
             </div>
-            <!-- DS-2: pages stay on white until DS-4 moves their secondary text to
-                 text-ink-muted (text-slate-500 is 4.25:1 on the ground). -->
-            <div id="main-content" tabindex="-1" class="min-w-0 flex-1 bg-white focus:outline-none">
+            <!-- DS-5 (ADR 0082 §11): every page is on the tokens, so the page area
+                 is the design's ground; secondary text (ink-muted) is 5.87:1 on it. -->
+            <div
+                id="main-content"
+                tabindex="-1"
+                class="min-w-0 flex-1 bg-ground focus:outline-none"
+            >
                 <FlashMessage />
                 <RefusalMessage />
                 <slot />

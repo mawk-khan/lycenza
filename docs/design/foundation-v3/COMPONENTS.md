@@ -71,4 +71,5 @@ from the start.
 - Every page and component is migrated; `DesignTokensTest` refuses a raw
   palette class anywhere under `resources/js` (exemption: the elevation
   banner).
-- The page area stays white until every domain is migrated (ADR 0082 §10.3).
+- Since DS-5 the page area and the document are the ground (ADR 0082 §11);
+  CLAUDE.md rule 136 is the contract.

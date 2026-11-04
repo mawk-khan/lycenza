@@ -86,6 +86,11 @@ class DesignTokensTest extends TestCase
         $this->assertStringContainsString("'bg-accent-strong font-medium text-on-accent'", $layout, 'the active item is the strong step');
         $this->assertSame(1, substr_count($layout, ':style='), 'only the brand label chip sets a style (its server-derived foreground)');
 
+        // DS-5 (ADR 0082 §11): the page area and the document are the ground.
+        $this->assertMatchesRegularExpression('/id="main-content"\s+tabindex="-1"\s+class="min-w-0 flex-1 bg-ground /', $layout);
+        $this->assertStringNotContainsString('bg-white focus:outline-none', $layout);
+        $this->assertMatchesRegularExpression('/html,\s*body \{\s*background-color: var\(--ds-ground\);\s*color: var\(--ds-ink\);/', $this->css());
+
         $css = $this->css();
         $this->assertStringNotContainsString('#29d', preg_replace('/\/\*.*?\*\//s', '', $css), 'the progress bar follows the accent');
     }

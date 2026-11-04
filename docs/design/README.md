@@ -54,6 +54,8 @@ the verbatim copy and is **not** how the application loads fonts (ADR 0082 §2.3
 | **DS-1** | Tokens in Tailwind `@theme`, self-hosted Barlow, runtime School accent. | Published (`27547ab2`) |
 | **DS-2** | Application shell (`AccountLayout`): top bar, navigation, focus. | Published (`7fc9f197`) |
 | **DS-3** | Primitives and the 13 patterns on the existing components. | Published (`9757f44b`; `foundation-v3/COMPONENTS.md`) |
-| **DS-4+** | Page migration, one domain per slice (codemod `foundation-v3/ds_migrate.py`). | DS-4a Students published (`8b462ae8`); DS-4b Guardians, Enrollments, Admissions, Rollovers published (`ec965384`); DS-4c Finance & Fees published (`ffc39e68`); DS-4d HR, Leave, Payroll & staff published (`d33c22f5`); DS-4e Academics published (`38777903`); DS-4f Operations published (`02f996e8`); DS-4g Communications published (`4c13a89a`); DS-4h Platform, Organization and all remaining pages implemented -- every page migrated (ADR 0082 §10.12) |
+| **DS-4+** | Page migration, one domain per slice (codemod `foundation-v3/ds_migrate.py`). | DS-4a Students published (`8b462ae8`); DS-4b Guardians, Enrollments, Admissions, Rollovers published (`ec965384`); DS-4c Finance & Fees published (`ffc39e68`); DS-4d HR, Leave, Payroll & staff published (`d33c22f5`); DS-4e Academics published (`38777903`); DS-4f Operations published (`02f996e8`); DS-4g Communications published (`4c13a89a`); DS-4h published (`36c0b75e`) -- every page migrated (ADR 0082 §10) |
 
-Every slice needs owner authorization; none starts automatically.
+| **DS-5** | Ground on the page area, CLAUDE.md rule 136, closure. | Implemented (ADR 0082 §11) -- **programme closed for development** |
+
+Open owner decisions: OD-DS-4 (elevation banner amber; Emergency red), D-04, D-21, D-23.

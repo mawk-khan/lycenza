@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a to DS-4h implemented (2026-11-04, §10): every page is on the design system.** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4h implemented (2026-11-04, §10): every page is on the design system. DS-5 closed the programme (2026-11-04, §11).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -430,3 +430,32 @@ recommended first domain (Students) was taken.
       security) and platform (registry, groups, roles, dashboard).
     - **Still to do (closing slice):** the page area onto the ground, and
       the CLAUDE.md rule.
+
+## 11. DS-5: closure (2026-11-04)
+
+Owner authorization: "please proceed" after DS-4h (2026-11-04).
+
+1. **The ground is on.** The page area (`#main-content`) and the document
+   (`html`, `body`) use `--ds-ground`/`--ds-ink`, so the signed-in shell and
+   the guest pages (sign-in, recovery, invitations) share one ground. Every
+   text token used by the pages clears AA on it (ink 14.79, ink-muted 5.87,
+   danger 5.88, accent-strong 5.78, accent-900 12.56); `graphite-400` text
+   appears only on disabled controls (exempt). The §7.4 deferral is closed.
+2. **Engineering rule.** CLAUDE.md rule 136 records the design-system
+   contract for every contributor.
+3. **Guard.** `DesignTokensTest` pins the ground on the page area and the
+   document, and refuses a raw palette class or a non-square corner in any
+   `.vue`/`.ts` file under `resources/js` (exemption: the elevation banner,
+   OD-DS-4).
+4. **Visual check.** Eight captured pages across domains (sign-in,
+   dashboard, Students directory and profile, outstanding fees,
+   Communication Hub, setup readiness, Sections) on the ground.
+5. **Programme closed for development.** DS-0 to DS-5 delivered the
+   Foundation v3 look on every staff, Guardian-portal, platform and guest
+   page, presentation only.
+6. **Still open (owner):** OD-DS-4 (the amber elevation banner; Emergency
+   in the danger hue), D-04, D-21, D-23. OD-DS-1 and OD-DS-3 run on their
+   recommended defaults; OD-DS-2 (icons) was not needed. Not adopted, by
+   design: the blueprint frame on every card (available as `frame`, used
+   where a page wants it), duotone imagery and School logos (no governed
+   media pipeline), and the Mobile tab (Flutter).
