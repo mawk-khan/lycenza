@@ -1,8 +1,9 @@
 # ADR 0082: UI Design Foundation v3 for the staff web application (DS)
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
-  implemented (2026-11-03, §7).** No route, capability, role, table or
-  migration change. Each further slice needs owner authorization.
+  implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8).** No
+  route, capability, role, table or migration change. Each further slice
+  needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
 - Owner decision: adopt the owner's "Lycenza Foundation v3" design for the
@@ -205,3 +206,45 @@ reversible: one reserved danger hue (`--ds-danger` `#b42318`), and fonts from
 7. **No engineering rule yet.** A CLAUDE.md rule ("colour comes only from
    the tokens") lands with the guard of §2.7, once pages are migrated; until
    then new pages may still use the existing palette classes.
+
+## 8. DS-2 implementation: the application shell (2026-11-04)
+
+Owner authorization: "please proceed" after DS-1 (2026-11-04).
+
+1. **Account bar** (`AccountLayout`): the deep accent step (`bg-accent-900`)
+   with ground-coloured text (>= 12:1); the product name in Barlow Condensed
+   capitals; School name and e-mail in `accent-200`; Menu and Log out as
+   outlined bar buttons (`accent-400` border, `accent-800` hover); account
+   links underlined. Square corners (`rounded-xs`, the design's 2 px).
+2. **Navigation** (`AccountLayout` Home link, `NavigationGroupList`): on the
+   ground with a hairline divider (`border-line`); group labels in Barlow
+   Condensed capitals and section labels in `text-ink-muted` (5.87:1, was
+   `text-slate-500`); links `text-ink`, hover `graphite-200`; the active item
+   is the strong step with `text-on-accent` (>= 4.5:1 by construction).
+3. **Focus:** a 2 px `accent-strong` ring on the ground and white, an
+   `accent-300` ring on the dark bar. The skip link gains the ring too. Amber
+   focus rings are gone from the shell.
+4. **Progress bar:** the Inertia bar, peg and spinner use `--ds-accent-strong`
+   instead of `#29d`.
+5. **Pages stay on white.** The main content area is `bg-white` beside the
+   grey navigation column, because migrated pages arrive only in DS-4 and
+   today's `text-slate-500` is 4.25:1 on the ground (§7.4).
+6. **Brand (ADR 0080 §11.6 amended).** The ORG.12F accent stripe is replaced:
+   a School or Network accent now colours the shell chrome -- bar, active
+   item, focus ring and progress bar -- through the DS-1 tokens. The label
+   chip stays. Page text and page backgrounds remain never brand-controlled.
+   With no accent supplied, the steel applies.
+7. **Not changed in DS-2:** the elevation banner keeps its amber warning
+   styling (a security signal, revisited with the DS-3 feedback patterns), as
+   do the flash and refusal messages (DS-3 "Feedback"). No prop, route or
+   behaviour changed; every `data-testid`, landmark and ARIA attribute is
+   kept.
+8. **Tests.** `DesignTokensTest::the_shell_is_styled_only_through_the_design_tokens`
+   (no raw palette utility in the shell files, the bar and active-item
+   tokens, one `:style` only, no `#29d`); the existing shell guards
+   (`NavigationAccessibilityBaselineTest`, `LogoutAccessTest`,
+   `PresentationArchitectureTest`) unchanged and passing.
+9. **Visual check.** The real built application booted in headless Chromium
+   with a hand-written Inertia page payload (Dashboard, sample navigation):
+   steel default, a `#F5D90A` accent with its label chip, a `#1D4E89`
+   accent, and a 390 px mobile width. The shared DDEV site was not used.

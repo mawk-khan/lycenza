@@ -31,8 +31,8 @@ const blocksByGroup = computed(() =>
 );
 
 const linkClass = (active: boolean) => [
-    'block rounded px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber-500',
-    active ? 'bg-slate-900 font-medium text-white' : 'text-slate-700 hover:bg-slate-200',
+    'block rounded-xs px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-strong',
+    active ? 'bg-accent-strong font-medium text-on-accent' : 'text-ink hover:bg-graphite-200',
 ];
 </script>
 
@@ -40,7 +40,7 @@ const linkClass = (active: boolean) => [
     <div v-for="{ group, blocks } in blocksByGroup" :key="group.key" class="mt-4 first:mt-0">
         <p
             :id="`nav-group-${group.key}`"
-            class="px-2 text-xs font-semibold tracking-wide text-slate-500 uppercase"
+            class="px-2 font-heading text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase"
         >
             {{ group.label }}
         </p>
@@ -49,7 +49,7 @@ const linkClass = (active: boolean) => [
                 <li v-if="block.section">
                     <span
                         :id="`nav-section-${group.key}-${index}`"
-                        class="mt-2 block px-2 text-xs font-medium text-slate-500"
+                        class="mt-2 block px-2 text-xs font-medium text-ink-muted"
                         >{{ block.section }}</span
                     >
                     <ul

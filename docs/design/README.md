@@ -50,8 +50,8 @@ the verbatim copy and is **not** how the application loads fonts (ADR 0082 §2.3
 | Slice | Scope | Status |
 |---|---|---|
 | **DS-0** | Reconciliation, ADR 0082, reference copy. Docs only. | Published (`e418a67e`) |
-| **DS-1** | Tokens in Tailwind `@theme`, self-hosted Barlow, runtime School accent. | Implemented (ADR 0082 §7) |
-| **DS-2** | Application shell (`AccountLayout`): top bar, navigation, focus. | Not started |
+| **DS-1** | Tokens in Tailwind `@theme`, self-hosted Barlow, runtime School accent. | Published (`27547ab2`) |
+| **DS-2** | Application shell (`AccountLayout`): top bar, navigation, focus. | Implemented (ADR 0082 §8) |
 | **DS-3** | Primitives and the 13 patterns on the existing components. | Not started |
 | **DS-4+** | Page migration, one domain per slice. | Not started |
 

@@ -70,7 +70,8 @@
     --ds-danger: #b42318;
     --ds-danger-tint: #fef3f2;
 
-    --ds-font-body: 'Barlow', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --ds-font-body:
+        'Barlow', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
     --ds-font-heading: 'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;
 }
@@ -149,7 +150,8 @@
  * Phase 0O.3 (ADR 0049 section 11): Inertia's progress bar, moved out of
  * its runtime-injected <style> element (progress.includeCSS is false in
  * resources/js/app.ts) so the enforced CSP needs no `unsafe-inline`.
- * Same rules and default colour (#29d) as @inertiajs/core.
+ * Same rules as @inertiajs/core; since DS-2 (ADR 0082 §8) the colour is the
+ * design system's accent-strong step instead of the default #29d.
  */
 #nprogress {
     pointer-events: none;
@@ -171,7 +173,7 @@
 }
 
 #nprogress .bar {
-    background: #29d;
+    background: var(--ds-accent-strong);
     position: fixed;
     z-index: 1031;
     top: 0;
@@ -187,8 +189,8 @@
     width: 100px;
     height: 100%;
     box-shadow:
-        0 0 10px #29d,
-        0 0 5px #29d;
+        0 0 10px var(--ds-accent-strong),
+        0 0 5px var(--ds-accent-strong);
     opacity: 1;
     transform: rotate(3deg) translate(0, -4px);
 }
@@ -206,8 +208,8 @@
     height: 18px;
     box-sizing: border-box;
     border: solid 2px transparent;
-    border-top-color: #29d;
-    border-left-color: #29d;
+    border-top-color: var(--ds-accent-strong);
+    border-left-color: var(--ds-accent-strong);
     border-radius: 50%;
     animation: nprogress-spinner 400ms linear infinite;
 }

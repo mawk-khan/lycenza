@@ -71,6 +71,26 @@ class DesignTokensTest extends TestCase
     }
 
     #[Test]
+    public function the_shell_is_styled_only_through_the_design_tokens(): void
+    {
+        // DS-2 (ADR 0082 §8): the migrated shell files carry no raw palette
+        // utility, so a rebrand or a School accent reaches all of it.
+        $palette = '/\b(?:bg|text|border|outline|ring|divide|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/';
+        foreach (['resources/js/Layouts/AccountLayout.vue', 'resources/js/Components/Navigation/NavigationGroupList.vue'] as $file) {
+            $code = preg_replace(['/<!--.*?-->/s', '/^\s*\/\/.*$/m'], '', (string) file_get_contents(base_path($file)));
+            $this->assertDoesNotMatchRegularExpression($palette, $code, "{$file} uses a raw palette class");
+        }
+
+        $layout = (string) file_get_contents(base_path('resources/js/Layouts/AccountLayout.vue'));
+        $this->assertStringContainsString('bg-accent-900', $layout, 'the bar is the deep accent step');
+        $this->assertStringContainsString("'bg-accent-strong font-medium text-on-accent'", $layout, 'the active item is the strong step');
+        $this->assertSame(1, substr_count($layout, ':style='), 'only the brand label chip sets a style (its server-derived foreground)');
+
+        $css = $this->css();
+        $this->assertStringNotContainsString('#29d', preg_replace('/\/\*.*?\*\//s', '', $css), 'the progress bar follows the accent');
+    }
+
+    #[Test]
     public function a_school_accent_drives_the_ramp_and_text_uses_the_strong_step(): void
     {
         $css = $this->css();

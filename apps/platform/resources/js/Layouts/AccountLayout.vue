@@ -45,10 +45,13 @@ const page = usePage<{
         source: string;
     } | null;
 }>();
-// ORG.12F (ADR 0080 §11.6): the School's effective brand -- an accent stripe
-// and an optional label chip, nothing else. Set through the DOM (allowed by the
-// CSP), never as markup; the foreground is derived on the server for contrast.
-// A School on the system default renders exactly as before.
+// ORG.12F (ADR 0080 §11.6, amended by ADR 0082 §8): the School's effective
+// brand -- an optional label chip here, and (DS-2) the accent tokens below,
+// which colour the shell chrome only: the bar, the active navigation item, the
+// focus ring and the progress bar. Never page text or page backgrounds. Set
+// through the DOM (allowed by the CSP), never as markup; the foreground and
+// the strong step are derived on the server for contrast. On the system
+// default the design-system steel applies.
 const brand = computed(() =>
     page.props.brand && page.props.brand.source !== 'system' ? page.props.brand : null,
 );
@@ -117,29 +120,37 @@ onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKeydown);
 });
 
-const accountLinkClass =
-    'underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500';
+// DS-2 (ADR 0082 §8): the shell in the design tokens. The bar is the deep
+// accent step, so it follows a School accent (DS-1); controls on it use the
+// light ramp and a light focus ring. Contrast is guaranteed by the tokens
+// (DesignTokensTest), not by these classes.
+const barFocus =
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-300';
+const barButtonClass = `rounded-xs border border-accent-400 px-3 py-1 font-medium text-ground hover:bg-accent-800 active:bg-accent-700 ${barFocus}`;
+const accountLinkClass = `underline underline-offset-2 hover:text-accent-200 ${barFocus}`;
+const homeLinkClass = (active: boolean) => [
+    'block rounded-xs px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-strong',
+    active ? 'bg-accent-strong font-medium text-on-accent' : 'text-ink hover:bg-graphite-200',
+];
 </script>
 
 <template>
     <template v-if="user">
         <a
             href="#main-content"
-            class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:text-slate-900 focus:shadow"
+            class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-xs focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:text-ink focus:shadow focus:outline-2 focus:outline-accent-strong"
             >Skip to content</a
         >
         <header
-            class="border-b border-slate-200 bg-slate-50 font-sans text-sm text-slate-700 print:hidden"
-            :class="brand ? 'border-t-4' : ''"
-            :style="brand ? { borderTopColor: brand.accent } : undefined"
+            class="bg-accent-900 font-sans text-sm text-ground print:hidden"
             data-testid="account-bar"
         >
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
+            <div class="flex min-h-11 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-1.5">
                 <button
                     v-if="navigation"
                     ref="menuButton"
                     type="button"
-                    class="rounded border border-slate-300 bg-white px-3 py-1 font-medium text-slate-900 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:hidden"
+                    :class="[barButtonClass, 'md:hidden']"
                     aria-controls="primary-navigation"
                     :aria-expanded="menuOpen ? 'true' : 'false'"
                     data-testid="menu-button"
@@ -149,27 +160,30 @@ const accountLinkClass =
                 </button>
                 <InertiaLink
                     :href="navigation?.home.href ?? '/app'"
-                    class="font-semibold text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+                    :class="[
+                        'font-heading text-base font-semibold tracking-[0.08em] whitespace-nowrap uppercase',
+                        barFocus,
+                    ]"
                     data-testid="product-home"
                     >{{ productName }}</InertiaLink
                 >
                 <span
                     v-if="navigation?.school"
-                    class="min-w-0 truncate text-slate-600"
+                    class="min-w-0 truncate text-accent-200"
                     data-testid="shell-school"
                     >{{ navigation.school.name }}</span
                 >
                 <span
                     v-if="brand?.label"
-                    class="rounded px-2 py-0.5 text-xs font-medium"
+                    class="rounded-xs px-2 py-0.5 text-xs font-medium"
                     :style="{ backgroundColor: brand.accent, color: brand.foreground }"
                     data-testid="shell-brand"
                     >{{ brand.label }}</span
                 >
                 <div class="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-2">
                     <span class="min-w-0 max-w-full truncate">
-                        <span class="font-medium text-slate-900">{{ user.name }}</span>
-                        <span class="ml-1 text-slate-500">{{ user.email }}</span>
+                        <span class="font-medium">{{ user.name }}</span>
+                        <span class="ml-1 text-accent-200">{{ user.email }}</span>
                     </span>
                     <nav
                         v-if="navigation && navigation.account.length"
@@ -190,7 +204,7 @@ const accountLinkClass =
                         href="/logout"
                         method="post"
                         as="button"
-                        class="rounded border border-slate-300 bg-white px-3 py-1 font-medium text-slate-900 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+                        :class="barButtonClass"
                         data-testid="logout"
                     >
                         Log out
@@ -199,14 +213,14 @@ const accountLinkClass =
             </div>
         </header>
         <ElevationBanner />
-        <div class="md:flex">
+        <div class="bg-ground md:flex md:min-h-[calc(100vh-2.75rem)]">
             <div
                 v-if="navigation"
                 id="primary-navigation"
                 :class="[
                     menuOpen ? 'block' : 'hidden',
                     // SIS 11.4: printed pages (the report print view) carry no navigation.
-                    'border-b border-slate-200 bg-slate-50 px-3 py-4 font-sans text-sm md:block md:w-60 md:shrink-0 md:border-r md:border-b-0 print:hidden',
+                    'border-b border-line bg-ground px-3 py-4 font-sans text-sm md:block md:w-60 md:shrink-0 md:border-r md:border-b-0 print:hidden',
                 ]"
                 data-testid="primary-navigation"
             >
@@ -214,12 +228,7 @@ const accountLinkClass =
                     <InertiaLink
                         :href="navigation.home.href"
                         :aria-current="navigation.home.active ? 'page' : undefined"
-                        :class="[
-                            'block rounded px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber-500',
-                            navigation.home.active
-                                ? 'bg-slate-900 font-medium text-white'
-                                : 'text-slate-700 hover:bg-slate-200',
-                        ]"
+                        :class="homeLinkClass(navigation.home.active)"
                         data-nav-key="home"
                         >Home</InertiaLink
                     >
@@ -234,7 +243,9 @@ const accountLinkClass =
                     <NavigationGroupList :groups="platformGroups" />
                 </nav>
             </div>
-            <div id="main-content" tabindex="-1" class="min-w-0 flex-1 focus:outline-none">
+            <!-- DS-2: pages stay on white until DS-4 moves their secondary text to
+                 text-ink-muted (text-slate-500 is 4.25:1 on the ground). -->
+            <div id="main-content" tabindex="-1" class="min-w-0 flex-1 bg-white focus:outline-none">
                 <FlashMessage />
                 <RefusalMessage />
                 <slot />

@@ -747,6 +747,12 @@ RLS).
   identity and references.
 - **Shell:** an accent stripe and a label chip, set through the DOM (which
   the CSP allows), and nothing at all on the system default.
+  - *Amended by ADR 0082 §8 (DS-2, 2026-11-04):* the stripe is replaced by
+    the accent driving the shell chrome only -- the account bar (its deep
+    step), the active navigation item and focus ring (its server-computed
+    strong step, `BrandColor::strong()`, >= 4.5:1) and the progress bar.
+    Body text and page backgrounds stay never brand-controlled. On the system
+    default the design system's steel applies.
 - **School brand** (`school_brand_profiles`, forced RLS, one per School):
   - its own label and accent;
   - an optional `brand_source_group_id`, a composite key to the School's
