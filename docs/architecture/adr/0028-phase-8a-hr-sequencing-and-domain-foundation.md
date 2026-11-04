@@ -372,4 +372,3 @@ HR-owned shadow of any owner's data; treating a failed read as zero.
 **Consequences.** No migration. R-HR12-1 closed. Residual R-HR15-1: Identity
 grants are not locked by HR, so a role granted in the same instant a case
 completes can be missed (the case stays readable and the grant visible).
-

@@ -1927,4 +1927,3 @@ once several modules copy it.
 138. **Operational staff pickers and separation obligations tell the truth (HR.15, ADR 0028 HR.15 amendment).**
      - **One picker answer:** every Timetable teacher, Transport driver and Visitor host search uses `DutyCandidateReader` (`EmploymentCoverage::constrainToCoveredOn()`, the read form of `hold()`), directory fields only, bounded. Never an `Employee::query()->where('record_status', 'active')` candidate list, and never drop the save-time `hold()`.
      - **Unknown is never clear:** an owner's failed answer is UNAVAILABLE and blocks completion; kept School access is RETAINED, never clear or revoked; NOT_INTEGRATED owners (Library, Inventory, Finance -- deferred 2026-11-04) are never clear.
-
