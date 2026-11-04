@@ -99,7 +99,7 @@ class DesignTokensTest extends TestCase
     public function the_shared_components_are_styled_only_through_the_design_tokens(): void
     {
         // DS-3 (ADR 0082 §9). ElevationBanner keeps its amber security
-        // styling until the owner decides OD-DS-4 -- deliberately not listed.
+        // styling by owner decision OD-DS-4 (ADR 0082 §12) -- deliberately not listed.
         $palette = '/\b(?:bg|text|border|outline|ring|divide|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/';
         foreach ([
             'ConfirmDialog', 'DuplicateStudentWarning', 'EmptyState', 'FlashMessage', 'MfaCodeField', 'Pagination',
@@ -127,11 +127,11 @@ class DesignTokensTest extends TestCase
     /**
      * DS-4h (ADR 0082 §10.12): every page, layout, component and class-map
      * helper is on the design tokens. The only file allowed a raw palette is
-     * the elevation banner, whose amber security styling waits on the owner
-     * decision OD-DS-4 (ADR 0082 §9.6).
+     * the elevation banner, whose amber security styling the owner kept
+     * (OD-DS-4, decided 2026-11-04, ADR 0082 §12).
      */
     private const EXEMPT = [
-        'resources/js/Components/ElevationBanner.vue' => 'OD-DS-4: amber security banner, owner decision pending',
+        'resources/js/Components/ElevationBanner.vue' => 'OD-DS-4: amber security banner, kept by owner decision (ADR 0082 §12)',
     ];
 
     #[Test]

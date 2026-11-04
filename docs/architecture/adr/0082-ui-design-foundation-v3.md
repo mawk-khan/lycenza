@@ -2,12 +2,12 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a to DS-4h implemented (2026-11-04, §10): every page is on the design system. DS-5 closed the programme (2026-11-04, §11).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4h implemented (2026-11-04, §10): every page is on the design system. DS-5 closed the programme (2026-11-04, §11). Owner decisions OD-DS-4, D-04, D-21 and D-23 recorded (2026-11-04, §12).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
 - Owner decision: adopt the owner's "Lycenza Foundation v3" design for the
-  School ERP (2026-11-03). Open owner decisions: §5.
+  School ERP (2026-11-03). Owner decisions: §5, answered in §12.
 - Evidence: `docs/design/foundation-v3/DS-0-RECONCILIATION.md`.
 - Builds on: ADR 0049 §11 (enforced CSP), ADR 0080 §11 (presentation and
   brand, rule 115), rules 2, 87, 98, 101.
@@ -454,8 +454,38 @@ Owner authorization: "please proceed" after DS-4h (2026-11-04).
    Foundation v3 look on every staff, Guardian-portal, platform and guest
    page, presentation only.
 6. **Still open (owner):** OD-DS-4 (the amber elevation banner; Emergency
-   in the danger hue), D-04, D-21, D-23. OD-DS-1 and OD-DS-3 run on their
+   in the danger hue), D-04, D-21, D-23 -- all answered in §12. OD-DS-1 and OD-DS-3 run on their
    recommended defaults; OD-DS-2 (icons) was not needed. Not adopted, by
    design: the blueprint frame on every card (available as `frame`, used
    where a page wants it), duotone imagery and School logos (no governed
    media pipeline), and the Mobile tab (Flutter).
+
+## 12. Owner decisions (2026-11-04)
+
+The owner answered the four open items after DS-5.
+
+1. **OD-DS-4 -- safety signals keep their colour.** The platform-elevation
+   banner keeps its amber styling and the Emergency communication label
+   keeps the danger hue. Both are safety signals and stay outside the mono
+   palette by design. `ElevationBanner.vue` remains the one
+   `DesignTokensTest` exemption, now permanent rather than pending.
+2. **D-04 -- "Mark remaining Present" (ATTENDANCE.md §5, ATT-08).** The
+   register (`Attendance/Take.vue`, office and teacher) gains one explicit
+   secondary button that sets every Student who is STILL UNMARKED to
+   Present. It never overwrites a mark already made, it is never a default
+   (the register still starts unmarked and resets when the roster
+   changes), and submission still needs every Student marked; the server's
+   exact-roster check is unchanged. A polite live region reports how many
+   were set. Not adopted: "Mark all Present" (overwriting) and any
+   pre-filled register. Test:
+   `AttendanceAdminUiTest::mark_remaining_present_fills_only_unmarked_students_and_never_defaults`.
+3. **D-21 -- any School accent.** The brand accent keeps accepting any
+   `#RRGGBB` (rule 115); no swatch restriction. Contrast stays guaranteed by
+   the derived strong step (§2.4, `BrandColor::strong()`).
+4. **D-23 -- Principal holds no finance.** `principal` keeps no `finance.*`
+   key (ADR 0071 least privilege); finance stays with `accountant`,
+   `cashier` and `school_admin`. No catalogue change.
+
+OD-DS-1 (one danger hue) and OD-DS-3 (`@fontsource`) stay on their
+recommended defaults. No route, capability, role, table or migration
+change.

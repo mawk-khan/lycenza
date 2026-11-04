@@ -34,7 +34,7 @@ Dispositions:
 | D-01 | Codebase not inspected. | This document is the inspection. | REPO — closed by DS-0 |
 | D-02 | No Registrar persona. | No `registrar` role in the 17-role School catalogue (`StaffRoleCatalogueSnapshotTest`). | CONSISTENT |
 | D-03 | Register starts unmarked; Save needs every Student marked. | `Attendance/Take.vue` disables Save while `unmarkedCount() > 0`. | CONSISTENT |
-| D-04 | "Mark all Present" not built. | Not built. | OWNER — open, nothing built |
+| D-04 | "Mark all Present" not built. | Not built. | OWNER — decided 2026-11-04: "Mark remaining Present" (unmarked only, never a default; ADR 0082 §12.2) |
 | D-05 | No attendance percentages. | Rules 104, 123, 124: no rate, tally or percentage outside Analytics (ADR 0040). | CONSISTENT |
 | D-06 | Year selector only on academic screens. | The shell has no year selector; screens take the year as a filter. | CONSISTENT |
 | D-07 | Campus filter only where supported; scoped users see "Your scope". | Rule 101: a selected Campus is a filter, never authority, intersected with `CampusScope`. | CONSISTENT |
@@ -51,9 +51,9 @@ Dispositions:
 | D-18 | Prototype asks for MFA on a same-year transfer. | **Single** transfer (`StudentEnrollmentController::transfer`) takes no fresh MFA and no reason; **bulk** moves need fresh MFA (rule 129). The DS programme must not add an MFA step. | REPO — remove the extra MFA |
 | D-19 | "Excused" status per School? | `AttendanceRecord::STATUSES` = `present`, `absent`, `late`, `excused` for every School. | REPO |
 | D-20 | Core: Organization, Students, Academics, Timetable, Attendance, Finance, HR, Communications. | **Wrong.** `ModuleCatalogue` core = Identity & Access, Organization, Academic Structure, Student Records, Staff Records, Compliance & Audit, Documents. Timetable, Attendance, Finance, Fees, Communications, Leave, Payroll and the operations modules are optional (rule 100). | REPO |
-| D-21 | Accent picker limited to swatches. | Rule 115: any `#RRGGBB` with a derived foreground (`BrandColor`). Restricting it is a product change. | OWNER — DS keeps rule 115 (ADR 0082 §2.4) |
+| D-21 | Accent picker limited to swatches. | Rule 115: any `#RRGGBB` with a derived foreground (`BrandColor`). Restricting it is a product change. | OWNER — decided 2026-11-04: keep any colour (ADR 0082 §12.3) |
 | D-22 | Role × module matrix from the catalogue. | The School Access Center (rule 114) already renders it from `CapabilityResolver` and the catalogue. | REPO |
-| D-23 | Principal finance visibility. | `principal` holds no `finance.*` key. | REPO; changing it is a catalogue release (rule 93) — OWNER |
+| D-23 | Principal finance visibility. | `principal` holds no `finance.*` key. | OWNER — decided 2026-11-04: no change, Principal keeps no finance (ADR 0082 §12.4) |
 | D-24 | Assignments in teacher navigation. | Exists: `lms.assignments.view/.manage/.teacher` (LMS module, TCH). Submissions do not. | REPO — Assignments is real |
 | D-25 | Student portal removed. | Rule 115: no Student audience exists. | CONSISTENT |
 | D-26 | Operations modules as placeholders. | **Stale.** Library, Transport, Hostel, Inventory, Canteen and Visitors are built, entitlement-gated modules. | REPO — migrate their real pages (DS-4+) |
@@ -65,7 +65,7 @@ Dispositions:
 | D-32 | School lifecycle states unknown. | `schools.status` ∈ `provisioning`, `active`, `suspended`, `archived`; transitions provisioning→active, active⇄suspended (`trg_schools_status_transition`). Close/Reopen = a suspension recorded with `closed_at` and a `SchoolClosureReason` (migration `2026_11_08_090000_add_school_closure_columns`). | REPO |
 | D-33 | Phase 9 closure unknown. | Phase 9 = non-statutory Payroll, closed and published 2026-09-03 (MASTER-ROADMAP). Payroll pages exist. | REPO |
 
-Open items left for the owner, none blocking DS-1: **D-04**, **D-21**, **D-23**.
+Open items left for the owner, none blocking DS-1: **D-04**, **D-21**, **D-23** -- all decided 2026-11-04 (ADR 0082 §12).
 D-15 stays with legal review. D-29 and D-31 stay deferred.
 
 ## 3. Personas

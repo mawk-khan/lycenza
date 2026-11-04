@@ -58,4 +58,6 @@ the verbatim copy and is **not** how the application loads fonts (ADR 0082 §2.3
 
 | **DS-5** | Ground on the page area, CLAUDE.md rule 136, closure. | Implemented (ADR 0082 §11) -- **programme closed for development** |
 
-Open owner decisions: OD-DS-4 (elevation banner amber; Emergency red), D-04, D-21, D-23.
+Owner decisions (2026-11-04, ADR 0082 §12): OD-DS-4 keep the amber elevation banner and red Emergency;
+D-04 add "Mark remaining Present" (fills unmarked Students only); D-21 keep any School accent; D-23
+Principal keeps no finance. OD-DS-1 and OD-DS-3 stay on their recommended defaults.

@@ -13,6 +13,10 @@ import EmptyState from '../../../Components/EmptyState.vue';
  * the server re-derives it under locks and rejects the whole register
  * if the submitted set is not exactly the authoritative roster. There
  * is deliberately no partial/draft save and no default-to-present.
+ *
+ * D-04 (owner, 2026-11-04): "Mark remaining Present" is an explicit
+ * action, never a default. It sets ONLY the Students still unmarked and
+ * never overwrites a mark already made; submission rules are unchanged.
  */
 interface ClassRow {
     timetableEntryId: string;
@@ -55,11 +59,14 @@ const selected = ref(props.selectedTimetableEntryId ?? '');
 // Every Student starts UNMARKED. A default would quietly turn an
 // incomplete register into a complete-looking one.
 const marks = ref<Record<string, string>>({});
+const PRESENT = 'present';
+const markedPresentNotice = ref('');
 
 watch(
     () => props.roster,
     () => {
         marks.value = {};
+        markedPresentNotice.value = '';
     },
 );
 
@@ -93,6 +100,18 @@ const recordErrors = computed(() =>
 
 function unmarkedCount(): number {
     return props.roster.filter((member) => !marks.value[member.studentEnrollmentId]).length;
+}
+
+// D-04: the marker clicks it, typically after marking the absentees.
+function markRemainingPresent(): void {
+    let count = 0;
+    for (const member of props.roster) {
+        if (!marks.value[member.studentEnrollmentId]) {
+            marks.value[member.studentEnrollmentId] = PRESENT;
+            count++;
+        }
+    }
+    markedPresentNotice.value = `${count} Student(s) marked Present. Check the register, then submit.`;
 }
 
 function submit(): void {
@@ -227,7 +246,17 @@ function submit(): void {
                 </tbody>
             </table>
 
-            <div v-if="roster.length > 0" class="mt-6 flex items-center gap-4">
+            <div v-if="roster.length > 0" class="mt-6 flex flex-wrap items-center gap-4">
+                <button
+                    v-if="statuses.includes(PRESENT)"
+                    type="button"
+                    class="btn btn-secondary"
+                    data-testid="mark-remaining-present"
+                    :disabled="unmarkedCount() === 0 || form.processing"
+                    @click="markRemainingPresent"
+                >
+                    Mark remaining Present
+                </button>
                 <button
                     type="button"
                     class="btn btn-primary"
@@ -240,6 +269,7 @@ function submit(): void {
                     {{ unmarkedCount() }} Student(s) still unmarked.
                 </span>
             </div>
+            <p class="mt-2 text-sm text-ink-muted" aria-live="polite">{{ markedPresentNotice }}</p>
 
             <p v-if="form.errors.timetable_entry_id" class="mt-3 text-sm text-danger" role="alert">
                 {{ form.errors.timetable_entry_id }}

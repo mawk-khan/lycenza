@@ -90,6 +90,13 @@ Student the marker forgot must never be silently recorded as present.
 The marking UI leaves every Student unmarked until a human marks them
 and disables submission while any remain unmarked.
 
+**"Mark remaining Present" (owner decision D-04, 2026-11-04, ADR 0082
+§12.2)** is an explicit human action, not a default: one button sets the
+Students who are still unmarked to Present, never overwrites a mark
+already made, and leaves the register's start state, the
+every-Student-marked submission rule and the server's exact-roster check
+unchanged. There is no overwriting "mark all" and no pre-filled register.
+
 ## 6. The historical roster predicate
 
 Owned by Students/SIS, in
@@ -861,7 +868,7 @@ withdrawal or completion after registers were taken.
 |---|---|---|
 | ATT-06 correction confirmation | PARTIAL: closed reason since ORG.8E; one click | **CLOSED**: a confirmation names the Student (roll), class, date, period, old → new status and reason. Cancel writes nothing. Not an approval: the service still compares `expected_status` under lock and refuses a stale one (`ATTENDANCE_RECORD_STATUS_CHANGED`, now in plain words) |
 | ATT-07 one Student over a range | COMPLETE (ORG.9C-1), poorly exposed | **Exposure closed**: linked from each register row (office) and the Student page (`canViewAttendance`). A current Student in the reader's scope with no record yet gets an empty list (via `StudentPurposeLookup::find()`, the declared consumer path), not a 404. Anyone else is still the same 404. The empty read is audited too |
-| ATT-08 "mark all present" | DECISION BLOCKED (§5, PV1-19) | **Still BLOCKED on an owner decision**. Nothing defaults to Present. Heading residual closed: registers read "Grade 6 · A · Subject" |
+| ATT-08 "mark all present" | DECISION BLOCKED (§5, PV1-19) | **Still BLOCKED on an owner decision**. Nothing defaults to Present. Heading residual closed: registers read "Grade 6 · A · Subject". **Decided 2026-11-04 (D-04):** "Mark remaining Present", unmarked only (§5) |
 | ATT-09 future dates | PARTIAL: server refused; pages offered them | **CLOSED**: Take (office and teacher) has `max` = the School's today. A later date shows a notice and lists no class. `AttendanceSubmissionService` still refuses one (`ATTENDANCE_DATE_IN_FUTURE`, now a plain sentence) by `SchoolTimezone`, east and west of UTC |
 | SB-01 registers not taken | COMPLETE (ORG.9C-1) | **Navigation added**: each row opens its register, or Take for that class and day (`attendance.manage` scope) |
 | SB-02 marks outside a placement | CLOSED by SIS 8.1 Data Health | Unchanged |

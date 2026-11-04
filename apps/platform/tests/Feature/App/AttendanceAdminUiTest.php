@@ -161,6 +161,41 @@ class AttendanceAdminUiTest extends TestCase
         $this->assertStringContainsString('role="alert"', $view);
     }
 
+    /**
+     * D-04 (owner, 2026-11-04, ADR 0082 §12): "Mark remaining Present" is an
+     * explicit control that fills only the still-unmarked Students. Nothing
+     * defaults to Present (ATTENDANCE.md §5): the register still starts empty
+     * and submission still needs every Student marked.
+     */
+    #[Test]
+    public function mark_remaining_present_fills_only_unmarked_students_and_never_defaults(): void
+    {
+        $view = (string) file_get_contents(resource_path('js/Pages/App/Attendance/Take.vue'));
+
+        // Still no default: the register starts (and resets) unmarked.
+        $this->assertStringContainsString('const marks = ref<Record<string, string>>({});', $view);
+        $this->assertStringContainsString('marks.value = {};', $view);
+        $this->assertStringContainsString(':disabled="unmarkedCount() > 0 || form.processing"', $view);
+
+        // An explicit button, wired to the one function.
+        $this->assertStringContainsString('data-testid="mark-remaining-present"', $view);
+        $this->assertStringContainsString('@click="markRemainingPresent"', $view);
+        $this->assertSame(1, substr_count($view, 'markRemainingPresent()'), 'only one definition, no other caller');
+
+        // It writes only where no mark exists, and only Present.
+        $this->assertSame(1, preg_match('/function markRemainingPresent\(\): void \{(.*?)\n\}/s', $view, $body));
+        $this->assertStringContainsString('if (!marks.value[member.studentEnrollmentId])', $body[1]);
+        $this->assertSame(1, substr_count($body[1], 'marks.value[member.studentEnrollmentId] ='));
+        $this->assertStringContainsString('marks.value[member.studentEnrollmentId] = PRESENT;', $body[1]);
+        $this->assertStringContainsString("const PRESENT = 'present';", $view);
+
+        // The status it uses is the server's own vocabulary.
+        $w = $this->attendanceWorld();
+        $this->actor($w)->get('/app/attendance/take?attendance_date='.self::MONDAY)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('statuses', fn ($statuses) => in_array('present', (array) collect($statuses)->all(), true)));
+    }
+
     #[Test]
     public function an_incomplete_register_is_refused_by_the_ui_endpoint(): void
     {
