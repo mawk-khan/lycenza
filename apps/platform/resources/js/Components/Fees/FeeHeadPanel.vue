@@ -36,12 +36,15 @@ function clear() {
 </script>
 
 <template>
-    <section class="mt-8 rounded border border-slate-300 p-4" :aria-labelledby="`${id}-heading`">
+    <section
+        class="mt-8 rounded-xs border border-control-line p-4"
+        :aria-labelledby="`${id}-heading`"
+    >
         <h2 :id="`${id}-heading`" class="font-semibold">{{ props.title }}</h2>
         <p class="mt-1 text-sm" :data-testid="`${id}-current`">
-            <span class="text-slate-600">Current:</span> {{ feeHeadText(props.panel.feeHead) }}
+            <span class="text-ink-muted">Current:</span> {{ feeHeadText(props.panel.feeHead) }}
         </p>
-        <p v-if="props.hint" class="mt-1 text-sm text-slate-600">{{ props.hint }}</p>
+        <p v-if="props.hint" class="mt-1 text-sm text-ink-muted">{{ props.hint }}</p>
         <form
             v-if="props.panel.canManage"
             class="mt-3 flex flex-wrap items-end gap-3"
@@ -58,18 +61,14 @@ function clear() {
                     :error="form.errors.fee_head_id"
                 />
             </div>
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary">
                 Save fee head
             </button>
             <button
                 v-if="props.panel.feeHead"
                 type="button"
                 :disabled="form.processing"
-                class="rounded border border-slate-300 px-3 py-2"
+                class="btn btn-secondary"
                 @click="dialog?.open()"
             >
                 Clear

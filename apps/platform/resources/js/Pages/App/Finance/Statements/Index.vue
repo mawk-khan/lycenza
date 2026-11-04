@@ -23,10 +23,10 @@ async function search(): Promise<void> {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <h1 class="mt-2 text-xl font-semibold">Student fee statements</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             A Student's charges, concessions, payments with their receipt numbers, and what is still
             outstanding -- computed from the ledger records each time it is opened.
         </p>
@@ -37,20 +37,18 @@ async function search(): Promise<void> {
                 type="search"
                 aria-label="Search Students by name or number"
                 placeholder="Search by name or Student number"
-                class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input"
             />
-            <button type="submit" class="rounded bg-slate-900 px-3 py-2 text-sm text-white">
-                Search
-            </button>
+            <button type="submit" class="btn btn-primary">Search</button>
         </form>
 
-        <p v-if="searched && results.length === 0" class="mt-4 text-sm text-slate-500">
+        <p v-if="searched && results.length === 0" class="mt-4 text-sm text-ink-muted">
             No Student matches that search.
         </p>
-        <ul v-else class="mt-4 divide-y divide-slate-100 text-sm">
+        <ul v-else class="mt-4 divide-y divide-line text-sm">
             <li v-for="r in results" :key="r.id" class="py-2">
                 <a class="underline" :href="`/app/finance/fee-statements/${r.id}`">{{ r.name }}</a>
-                <span v-if="r.studentNumber" class="text-slate-500"> ({{ r.studentNumber }})</span>
+                <span v-if="r.studentNumber" class="text-ink-muted"> ({{ r.studentNumber }})</span>
             </li>
         </ul>
     </main>

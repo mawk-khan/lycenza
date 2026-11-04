@@ -21,31 +21,31 @@ const props = defineProps<{
 
 <template>
     <section
-        class="mt-8 rounded border border-slate-300 p-4"
+        class="mt-8 rounded-xs border border-control-line p-4"
         aria-labelledby="admission-fee-heading"
     >
         <h2 id="admission-fee-heading" class="font-semibold">Admission fee</h2>
         <p class="mt-1 text-sm">
-            <span class="text-slate-600">School admission fee head:</span>
+            <span class="text-ink-muted">School admission fee head:</span>
             {{ feeHeadText(props.panel.configured) }} (<a
                 class="underline"
                 href="/app/admissions/fee-head"
                 >admission fee setting</a
             >)
         </p>
-        <p v-if="!props.converted" class="mt-2 text-sm text-slate-600">
+        <p v-if="!props.converted" class="mt-2 text-sm text-ink-muted">
             Fee intent is recorded when this application is converted.
         </p>
         <p
             v-else-if="!props.panel.intent"
-            class="mt-2 text-sm text-slate-600"
+            class="mt-2 text-sm text-ink-muted"
             data-testid="admission-fee-intent"
         >
             No admission fee intent was recorded at conversion (no fee head configured, or none
             applicable).
         </p>
         <p v-else class="mt-2 text-sm" data-testid="admission-fee-intent">
-            <span class="text-slate-600">Recorded at conversion:</span>
+            <span class="text-ink-muted">Recorded at conversion:</span>
             {{ feeHeadText(props.panel.intent.feeHead) }} —
             {{ outcomeLabel(props.panel.intent.selectionOutcome) }},
             {{ formatDate(props.panel.intent.recordedAt) }}. This is fee intent, not a charge;

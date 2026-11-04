@@ -44,9 +44,12 @@ function run() {
 </script>
 
 <template>
-    <section class="mt-6 rounded border border-slate-300 p-4" :aria-labelledby="`${id}-heading`">
+    <section
+        class="mt-6 rounded-xs border border-control-line p-4"
+        :aria-labelledby="`${id}-heading`"
+    >
         <h2 :id="`${id}-heading`" class="font-semibold">Carry fee intent forward</h2>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Records the mapped fee head for every active {{ sourceLabel }} in the chosen year.
             Running it again changes nothing that is already recorded.
         </p>
@@ -65,7 +68,7 @@ function run() {
             <button
                 type="submit"
                 :disabled="form.processing || !form.academic_year_id"
-                class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                class="btn btn-primary"
             >
                 Carry forward
             </button>
@@ -74,7 +77,7 @@ function run() {
             v-if="props.result"
             role="status"
             aria-live="polite"
-            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm"
+            class="mt-4 rounded-xs border border-line bg-graphite-100 p-3 text-sm"
             :data-testid="`${id}-result`"
         >
             <p class="font-medium">Carry-forward to {{ resultYear }} finished.</p>

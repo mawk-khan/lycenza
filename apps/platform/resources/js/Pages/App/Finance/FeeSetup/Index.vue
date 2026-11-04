@@ -141,9 +141,9 @@ function accountLabel(options: AccountOption[], id: string): string {
 }
 
 const statusClass: Record<StructureRow['status'], string> = {
-    draft: 'bg-amber-50 text-amber-700',
-    active: 'bg-emerald-50 text-emerald-700',
-    retired: 'bg-slate-100 text-slate-600',
+    draft: 'bg-accent-100 text-ink',
+    active: 'bg-graphite-100 text-ink',
+    retired: 'bg-graphite-200 text-ink-muted',
 };
 
 const noAccounts = computed(
@@ -152,10 +152,10 @@ const noAccounts = computed(
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <h1 class="mt-2 text-xl font-semibold">Fee setup</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Fee heads map fees to ledger accounts. A fee structure sets each fee head's yearly
             amount and instalment schedule for one academic year and grade (optionally one campus).
             Nothing here bills a Student yet.
@@ -166,14 +166,18 @@ const noAccounts = computed(
             structure's billing period to Students.
         </p>
 
-        <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p
+            v-if="actionError"
+            role="alert"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
+        >
             {{ actionError }}
         </p>
 
         <!-- Receipt numbering (FEE.4) -->
-        <section class="mt-8 rounded border border-slate-200 p-4">
+        <section class="mt-8 rounded-xs border border-line p-4">
             <h2 class="text-sm font-medium">Receipt numbering</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Payment receipts are numbered per financial year, for example
                 {{ receiptForm.receipt_prefix || receiptNumbering.prefix }}/2026-27/000001. The
                 prefix cannot change while this year's series has receipts, and the start month
@@ -189,31 +193,27 @@ const noAccounts = computed(
                 @submit.prevent="saveReceiptNumbering"
             >
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Prefix</span>
+                    <span class="block text-xs text-ink-muted">Prefix</span>
                     <input
                         v-model="receiptForm.receipt_prefix"
                         maxlength="16"
-                        class="mt-1 w-32 rounded border border-slate-300 px-2 py-1 font-mono uppercase"
+                        class="input mt-1 w-32 font-mono uppercase"
                         required
                     />
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Financial year starts in</span>
+                    <span class="block text-xs text-ink-muted">Financial year starts in</span>
                     <select
                         v-model.number="receiptForm.financial_year_start_month"
-                        class="mt-1 rounded border border-slate-300 px-2 py-1"
+                        class="input mt-1 w-auto"
                     >
                         <option v-for="(m, i) in months" :key="m" :value="i + 1">{{ m }}</option>
                     </select>
                 </label>
-                <button
-                    type="submit"
-                    class="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50"
-                    :disabled="receiptForm.processing"
-                >
+                <button type="submit" class="btn btn-secondary" :disabled="receiptForm.processing">
                     Save
                 </button>
-                <span v-if="receiptForm.errors.receipt_prefix" class="text-xs text-red-600">{{
+                <span v-if="receiptForm.errors.receipt_prefix" class="text-xs text-danger">{{
                     receiptForm.errors.receipt_prefix
                 }}</span>
             </form>
@@ -223,45 +223,40 @@ const noAccounts = computed(
         <section class="mt-8">
             <h2 class="text-lg font-semibold">Fee heads</h2>
 
-            <p v-if="canManage && noAccounts" class="mt-2 text-sm text-amber-700">
+            <p v-if="canManage && noAccounts" class="mt-2 text-sm text-ink">
                 You need an active asset account and an active income account first --
                 <a class="underline" href="/app/finance/ledger-accounts">create ledger accounts</a>.
             </p>
 
             <form
                 v-if="canManage"
-                class="mt-3 grid gap-3 rounded border border-slate-200 p-4 md:grid-cols-2"
+                class="mt-3 grid gap-3 rounded-xs border border-line p-4 md:grid-cols-2"
                 @submit.prevent="createHead"
             >
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Code</span>
+                    <span class="block text-xs text-ink-muted">Code</span>
                     <input
                         v-model="headForm.code"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1 font-mono"
+                        class="input mt-1 font-mono"
                         maxlength="32"
                         required
                     />
-                    <span v-if="headForm.errors.code" class="text-xs text-red-600">{{
+                    <span v-if="headForm.errors.code" class="text-xs text-danger">{{
                         headForm.errors.code
                     }}</span>
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Name</span>
-                    <input
-                        v-model="headForm.name"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        maxlength="120"
-                        required
-                    />
-                    <span v-if="headForm.errors.name" class="text-xs text-red-600">{{
+                    <span class="block text-xs text-ink-muted">Name</span>
+                    <input v-model="headForm.name" class="input mt-1" maxlength="120" required />
+                    <span v-if="headForm.errors.name" class="text-xs text-danger">{{
                         headForm.errors.name
                     }}</span>
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Receivable account (asset)</span>
+                    <span class="block text-xs text-ink-muted">Receivable account (asset)</span>
                     <select
                         v-model="headForm.receivable_ledger_account_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
+                        class="input mt-1"
                         required
                     >
                         <option value="" disabled>Choose…</option>
@@ -271,15 +266,15 @@ const noAccounts = computed(
                     </select>
                     <span
                         v-if="headForm.errors.receivable_ledger_account_id"
-                        class="text-xs text-red-600"
+                        class="text-xs text-danger"
                         >{{ headForm.errors.receivable_ledger_account_id }}</span
                     >
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Revenue account (income)</span>
+                    <span class="block text-xs text-ink-muted">Revenue account (income)</span>
                     <select
                         v-model="headForm.revenue_ledger_account_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
+                        class="input mt-1"
                         required
                     >
                         <option value="" disabled>Choose…</option>
@@ -289,22 +284,18 @@ const noAccounts = computed(
                     </select>
                     <span
                         v-if="headForm.errors.revenue_ledger_account_id"
-                        class="text-xs text-red-600"
+                        class="text-xs text-danger"
                         >{{ headForm.errors.revenue_ledger_account_id }}</span
                     >
                 </label>
                 <label class="text-sm md:col-span-2">
-                    <span class="block text-xs text-slate-500">Description (optional)</span>
-                    <input
-                        v-model="headForm.description"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        maxlength="500"
-                    />
+                    <span class="block text-xs text-ink-muted">Description (optional)</span>
+                    <input v-model="headForm.description" class="input mt-1" maxlength="500" />
                 </label>
                 <div class="md:col-span-2">
                     <button
                         type="submit"
-                        class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                        class="btn btn-primary"
                         :disabled="headForm.processing || noAccounts"
                     >
                         Create fee head
@@ -321,7 +312,7 @@ const noAccounts = computed(
 
             <table v-else class="mt-4 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Code</th>
                         <th scope="col" class="py-2 font-medium">Name</th>
                         <th scope="col" class="hidden py-2 font-medium md:table-cell">Accounts</th>
@@ -331,19 +322,15 @@ const noAccounts = computed(
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="head in feeHeads" :key="head.id" class="align-top">
                         <td class="py-3 font-mono text-xs">{{ head.code }}</td>
                         <td class="py-3">
                             <template v-if="editingHeadId === head.id">
-                                <input
-                                    v-model="editForm.name"
-                                    class="w-full rounded border border-slate-300 px-2 py-1"
-                                    maxlength="120"
-                                />
+                                <input v-model="editForm.name" class="input" maxlength="120" />
                                 <select
                                     v-model="editForm.receivable_ledger_account_id"
-                                    class="mt-2 w-full rounded border border-slate-300 px-2 py-1"
+                                    class="input mt-2"
                                 >
                                     <option
                                         v-for="a in receivableAccounts"
@@ -355,7 +342,7 @@ const noAccounts = computed(
                                 </select>
                                 <select
                                     v-model="editForm.revenue_ledger_account_id"
-                                    class="mt-2 w-full rounded border border-slate-300 px-2 py-1"
+                                    class="input mt-2"
                                 >
                                     <option v-for="a in revenueAccounts" :key="a.id" :value="a.id">
                                         {{ a.code }} · {{ a.name }}
@@ -364,14 +351,14 @@ const noAccounts = computed(
                                 <p
                                     v-for="(message, field) in editForm.errors"
                                     :key="field"
-                                    class="text-xs text-red-600"
+                                    class="text-xs text-danger"
                                 >
                                     {{ message }}
                                 </p>
                             </template>
                             <template v-else>{{ head.name }}</template>
                         </td>
-                        <td class="hidden py-3 text-xs text-slate-600 md:table-cell">
+                        <td class="hidden py-3 text-xs text-ink-muted md:table-cell">
                             <template v-if="canManage">
                                 {{
                                     accountLabel(receivableAccounts, head.receivableLedgerAccountId)
@@ -383,11 +370,11 @@ const noAccounts = computed(
                         </td>
                         <td class="py-3">
                             <span
-                                class="rounded-full px-2 py-0.5 text-xs font-medium"
+                                class="rounded-xs px-2 py-0.5 text-xs font-medium"
                                 :class="
                                     head.status === 'active'
-                                        ? 'bg-emerald-50 text-emerald-700'
-                                        : 'bg-slate-100 text-slate-600'
+                                        ? 'bg-graphite-100 text-ink'
+                                        : 'bg-graphite-200 text-ink-muted'
                                 "
                                 >{{ head.status === 'active' ? 'Active' : 'Inactive' }}</span
                             >
@@ -434,16 +421,12 @@ const noAccounts = computed(
 
             <form
                 v-if="canManage"
-                class="mt-3 grid gap-3 rounded border border-slate-200 p-4 md:grid-cols-3"
+                class="mt-3 grid gap-3 rounded-xs border border-line p-4 md:grid-cols-3"
                 @submit.prevent="createStructure"
             >
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Academic year</span>
-                    <select
-                        v-model="structureForm.academic_year_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        required
-                    >
+                    <span class="block text-xs text-ink-muted">Academic year</span>
+                    <select v-model="structureForm.academic_year_id" class="input mt-1" required>
                         <option value="" disabled>Choose…</option>
                         <option v-for="y in academicYears" :key="y.id" :value="y.id">
                             {{ y.name }} ({{ y.status }})
@@ -451,69 +434,62 @@ const noAccounts = computed(
                     </select>
                     <span
                         v-if="structureForm.errors.academic_year_id"
-                        class="text-xs text-red-600"
+                        class="text-xs text-danger"
                         >{{ structureForm.errors.academic_year_id }}</span
                     >
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Grade</span>
-                    <select
-                        v-model="structureForm.grade_level_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        required
-                    >
+                    <span class="block text-xs text-ink-muted">Grade</span>
+                    <select v-model="structureForm.grade_level_id" class="input mt-1" required>
                         <option value="" disabled>Choose…</option>
                         <option v-for="g in gradeLevels" :key="g.id" :value="g.id">
                             {{ g.name }}
                         </option>
                     </select>
-                    <span v-if="structureForm.errors.grade_level_id" class="text-xs text-red-600">{{
+                    <span v-if="structureForm.errors.grade_level_id" class="text-xs text-danger">{{
                         structureForm.errors.grade_level_id
                     }}</span>
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Campus</span>
-                    <select
-                        v-model="structureForm.campus_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                    >
+                    <span class="block text-xs text-ink-muted">Campus</span>
+                    <select v-model="structureForm.campus_id" class="input mt-1">
                         <option value="">All campuses (School default)</option>
                         <option v-for="c in campuses" :key="c.id" :value="c.id">
                             {{ c.name }}
                         </option>
                     </select>
-                    <span v-if="structureForm.errors.campus_id" class="text-xs text-red-600">{{
+                    <span v-if="structureForm.errors.campus_id" class="text-xs text-danger">{{
                         structureForm.errors.campus_id
                     }}</span>
                 </label>
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Code</span>
+                    <span class="block text-xs text-ink-muted">Code</span>
                     <input
                         v-model="structureForm.code"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1 font-mono"
+                        class="input mt-1 font-mono"
                         maxlength="32"
                         required
                     />
-                    <span v-if="structureForm.errors.code" class="text-xs text-red-600">{{
+                    <span v-if="structureForm.errors.code" class="text-xs text-danger">{{
                         structureForm.errors.code
                     }}</span>
                 </label>
                 <label class="text-sm md:col-span-2">
-                    <span class="block text-xs text-slate-500">Name</span>
+                    <span class="block text-xs text-ink-muted">Name</span>
                     <input
                         v-model="structureForm.name"
-                        class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
+                        class="input mt-1"
                         maxlength="120"
                         required
                     />
-                    <span v-if="structureForm.errors.name" class="text-xs text-red-600">{{
+                    <span v-if="structureForm.errors.name" class="text-xs text-danger">{{
                         structureForm.errors.name
                     }}</span>
                 </label>
                 <div class="md:col-span-3">
                     <button
                         type="submit"
-                        class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                        class="btn btn-primary"
                         :disabled="structureForm.processing"
                     >
                         Create draft structure
@@ -530,7 +506,7 @@ const noAccounts = computed(
 
             <table v-else class="mt-4 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Structure</th>
                         <th scope="col" class="py-2 font-medium">Year</th>
                         <th scope="col" class="py-2 font-medium">Grade</th>
@@ -538,7 +514,7 @@ const noAccounts = computed(
                         <th scope="col" class="py-2 font-medium">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="s in structures" :key="s.id">
                         <td class="py-3">
                             <a
@@ -546,19 +522,19 @@ const noAccounts = computed(
                                 :href="`/app/finance/fee-setup/structures/${s.id}`"
                                 >{{ s.name }}</a
                             >
-                            <span class="ml-1 font-mono text-xs text-slate-500">{{ s.code }}</span>
+                            <span class="ml-1 font-mono text-xs text-ink-muted">{{ s.code }}</span>
                             <span
                                 v-if="s.supersedesFeeStructureId"
-                                class="ml-1 text-xs text-slate-500"
+                                class="ml-1 text-xs text-ink-muted"
                                 >(amendment)</span
                             >
                         </td>
-                        <td class="py-3 text-slate-600">{{ s.academicYearName }}</td>
-                        <td class="py-3 text-slate-600">{{ s.gradeLevelName }}</td>
-                        <td class="py-3 text-slate-600">{{ s.campusName ?? 'All campuses' }}</td>
+                        <td class="py-3 text-ink-muted">{{ s.academicYearName }}</td>
+                        <td class="py-3 text-ink-muted">{{ s.gradeLevelName }}</td>
+                        <td class="py-3 text-ink-muted">{{ s.campusName ?? 'All campuses' }}</td>
                         <td class="py-3">
                             <span
-                                class="rounded-full px-2 py-0.5 text-xs font-medium capitalize"
+                                class="rounded-xs px-2 py-0.5 text-xs font-medium capitalize"
                                 :class="statusClass[s.status]"
                                 >{{ s.status }}</span
                             >

@@ -140,10 +140,10 @@ function record(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/payments">← Payments</a>
         <h1 class="mt-2 text-xl font-semibold">Record an offline payment</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Record money this School has already received in cash, by bank transfer or by cheque.
             Lycenza does not collect or move money -- this only records a payment that has already
             happened.
@@ -151,14 +151,14 @@ function record(): void {
 
         <p
             v-if="form.errors.idempotency_key"
-            class="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             {{ form.errors.idempotency_key }}
         </p>
 
         <p
             v-if="settlementAccounts.length === 0"
-            class="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             This School has no active asset ledger account (such as Cash or Bank) to record a
             payment into. Someone with ledger access needs to set one up first.
@@ -166,19 +166,19 @@ function record(): void {
 
         <!-- Step 1: Student -->
         <section class="mt-6">
-            <h2 class="text-sm font-medium text-slate-900">Student</h2>
+            <h2 class="text-sm font-medium text-ink">Student</h2>
             <div
                 v-if="student"
-                class="mt-2 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                class="mt-2 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
             >
                 <span
                     >{{ student.name }}
-                    <span class="text-slate-500">({{ student.studentNumber }})</span></span
+                    <span class="text-ink-muted">({{ student.studentNumber }})</span></span
                 >
                 <button
                     v-if="!reviewing"
                     type="button"
-                    class="text-slate-500 underline hover:text-slate-800"
+                    class="text-ink-muted underline hover:text-ink"
                     @click="changeStudent"
                 >
                     Change
@@ -191,20 +191,20 @@ function record(): void {
                     v-model="studentQuery"
                     type="text"
                     placeholder="Search by name or student number…"
-                    class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input"
                 />
                 <ul
                     v-if="studentResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white shadow-sm"
+                    class="absolute z-10 mt-1 w-full rounded-xs border border-line bg-white shadow-sm"
                 >
                     <li v-for="candidate in studentResults" :key="candidate.id">
                         <button
                             type="button"
-                            class="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            class="block w-full px-3 py-2 text-left text-sm hover:bg-graphite-100"
                             @click="selectStudent(candidate)"
                         >
                             {{ candidate.name }}
-                            <span class="text-xs text-slate-400"
+                            <span class="text-xs text-ink-muted"
                                 >({{ candidate.studentNumber }})</span
                             >
                         </button>
@@ -216,36 +216,36 @@ function record(): void {
         <template v-if="student && !reviewing">
             <!-- Step 2: Charges -->
             <section class="mt-8">
-                <h2 class="text-sm font-medium text-slate-900">Apply to charges</h2>
-                <p class="mt-1 text-sm text-slate-500">
+                <h2 class="text-sm font-medium text-ink">Apply to charges</h2>
+                <p class="mt-1 text-sm text-ink-muted">
                     Enter how much of this payment goes to each charge. One payment can cover
                     several charges.
                 </p>
-                <p v-if="campusScoped" class="mt-1 text-sm text-amber-800">
+                <p v-if="campusScoped" class="mt-1 text-sm text-ink">
                     You collect for your campus: one payment can only pay charges of one campus.
                     Record a separate payment for each campus.
                 </p>
-                <p v-if="charges.length === 0" class="mt-3 text-sm text-slate-500">
+                <p v-if="charges.length === 0" class="mt-3 text-sm text-ink-muted">
                     This Student has no open charges.
                 </p>
                 <table v-else class="mt-3 w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Charge</th>
                             <th scope="col" class="py-2 text-right font-medium">Outstanding</th>
                             <th scope="col" class="py-2 pl-4 font-medium">Apply (INR)</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="charge in charges" :key="charge.id">
                             <td class="py-3">
                                 {{ charge.description }}
-                                <span v-if="charge.dueDate" class="block text-xs text-slate-500"
+                                <span v-if="charge.dueDate" class="block text-xs text-ink-muted"
                                     >Due {{ charge.dueDate }}</span
                                 >
                                 <span
                                     v-if="campusScoped && charge.campusId && campusNames"
-                                    class="block text-xs text-slate-500"
+                                    class="block text-xs text-ink-muted"
                                     >{{ campusNames[charge.campusId] }}</span
                                 >
                             </td>
@@ -253,7 +253,7 @@ function record(): void {
                                 {{ formatMoney(charge.outstanding, charge.currency) }}
                                 <span
                                     v-if="charge.adjusted !== '0.00'"
-                                    class="block text-xs text-slate-500"
+                                    class="block text-xs text-ink-muted"
                                     >after
                                     {{ formatMoney(charge.adjusted, charge.currency) }}
                                     concession</span
@@ -262,7 +262,7 @@ function record(): void {
                             <td class="py-3 pl-4">
                                 <span
                                     v-if="charge.outstanding === '0.00'"
-                                    class="text-xs text-slate-500"
+                                    class="text-xs text-ink-muted"
                                     >Settled</span
                                 >
                                 <div v-else class="flex items-center gap-2">
@@ -271,11 +271,11 @@ function record(): void {
                                         :aria-label="`Amount to apply to ${charge.description}`"
                                         inputmode="decimal"
                                         placeholder="0.00"
-                                        class="w-28 rounded border border-slate-300 px-2 py-1 text-right font-mono text-sm"
+                                        class="input w-28 text-right font-mono"
                                     />
                                     <button
                                         type="button"
-                                        class="text-xs text-slate-500 underline hover:text-slate-800"
+                                        class="text-xs text-ink-muted underline hover:text-ink"
                                         @click="applyFullOutstanding(charge)"
                                     >
                                         Full
@@ -285,18 +285,18 @@ function record(): void {
                         </tr>
                     </tbody>
                 </table>
-                <p v-if="form.errors.allocations" class="mt-2 text-sm text-red-600">
+                <p v-if="form.errors.allocations" class="mt-2 text-sm text-danger">
                     {{ form.errors.allocations }}
                 </p>
             </section>
 
             <!-- Step 3: Payment details -->
             <section class="mt-8 space-y-4">
-                <h2 class="text-sm font-medium text-slate-900">Payment details</h2>
+                <h2 class="text-sm font-medium text-ink">Payment details</h2>
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600" for="amount"
+                        <label class="block text-sm text-ink-muted" for="amount"
                             >Amount received (INR)</label
                         >
                         <input
@@ -305,21 +305,21 @@ function record(): void {
                             required
                             inputmode="decimal"
                             placeholder="0.00"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+                            class="input mt-1 font-mono"
                             :aria-invalid="!!form.errors.amount"
                         />
-                        <p class="mt-1 text-xs text-slate-500">
+                        <p class="mt-1 text-xs text-ink-muted">
                             Applied to charges: {{ formatMoney(appliedTotal, 'INR') }}
                             <span v-if="leftToApply !== null && leftToApply !== '0.00'">
                                 · left to apply: {{ formatMoney(leftToApply, 'INR') }}</span
                             >
                         </p>
-                        <p v-if="form.errors.amount" class="mt-1 text-sm text-red-600">
+                        <p v-if="form.errors.amount" class="mt-1 text-sm text-danger">
                             {{ form.errors.amount }}
                         </p>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="occurred_on"
+                        <label class="block text-sm text-ink-muted" for="occurred_on"
                             >Received on</label
                         >
                         <input
@@ -328,17 +328,17 @@ function record(): void {
                             type="date"
                             required
                             :max="today"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                             :aria-invalid="!!form.errors.occurred_on"
                         />
-                        <p v-if="form.errors.occurred_on" class="mt-1 text-sm text-red-600">
+                        <p v-if="form.errors.occurred_on" class="mt-1 text-sm text-danger">
                             {{ form.errors.occurred_on }}
                         </p>
                     </div>
                 </div>
 
                 <fieldset>
-                    <legend class="block text-sm text-slate-600">Method</legend>
+                    <legend class="block text-sm text-ink-muted">Method</legend>
                     <div class="mt-1 flex flex-wrap gap-4">
                         <label
                             v-for="method in methods"
@@ -349,13 +349,13 @@ function record(): void {
                             {{ method.label }}
                         </label>
                     </div>
-                    <p v-if="form.errors.method" class="mt-1 text-sm text-red-600">
+                    <p v-if="form.errors.method" class="mt-1 text-sm text-danger">
                         {{ form.errors.method }}
                     </p>
                 </fieldset>
 
                 <div>
-                    <label class="block text-sm text-slate-600" for="reference"
+                    <label class="block text-sm text-ink-muted" for="reference"
                         >Reference (optional)</label
                     >
                     <input
@@ -363,25 +363,25 @@ function record(): void {
                         v-model="form.reference"
                         maxlength="64"
                         placeholder="Cheque number or bank transfer reference (UTR)"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!form.errors.reference"
                     />
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-ink-muted">
                         Never enter card numbers, bank account numbers or passwords.
                     </p>
-                    <p v-if="form.errors.reference" class="mt-1 text-sm text-red-600">
+                    <p v-if="form.errors.reference" class="mt-1 text-sm text-danger">
                         {{ form.errors.reference }}
                     </p>
                 </div>
 
                 <div>
-                    <label class="block text-sm text-slate-600" for="settlement_ledger_account_id"
+                    <label class="block text-sm text-ink-muted" for="settlement_ledger_account_id"
                         >Received into</label
                     >
                     <select
                         id="settlement_ledger_account_id"
                         v-model="form.settlement_ledger_account_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!form.errors.settlement_ledger_account_id"
                     >
                         <option value="" disabled>Select the account the money went into</option>
@@ -391,7 +391,7 @@ function record(): void {
                     </select>
                     <p
                         v-if="form.errors.settlement_ledger_account_id"
-                        class="mt-1 text-sm text-red-600"
+                        class="mt-1 text-sm text-danger"
                     >
                         {{ form.errors.settlement_ledger_account_id }}
                     </p>
@@ -401,7 +401,7 @@ function record(): void {
             <button
                 type="button"
                 :disabled="!canReview"
-                class="mt-8 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary mt-8"
                 @click="review"
             >
                 Review payment
@@ -411,41 +411,41 @@ function record(): void {
         <!-- Step 4: Confirm -->
         <section
             v-if="student && reviewing"
-            class="mt-8 rounded border border-slate-300 p-5"
+            class="mt-8 rounded-xs border border-control-line p-5"
             aria-labelledby="review-heading"
         >
-            <h2 id="review-heading" class="text-sm font-medium text-slate-900">
+            <h2 id="review-heading" class="text-sm font-medium text-ink">
                 Check the payment before recording it
             </h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Once recorded, this payment cannot be edited or deleted.
             </p>
 
             <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <div>
-                    <dt class="text-slate-500">Amount received</dt>
+                    <dt class="text-ink-muted">Amount received</dt>
                     <dd class="font-mono">{{ formatMoney(form.amount, 'INR') }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Method</dt>
+                    <dt class="text-ink-muted">Method</dt>
                     <dd>{{ methodLabel }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Received on</dt>
+                    <dt class="text-ink-muted">Received on</dt>
                     <dd>{{ form.occurred_on }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Reference</dt>
+                    <dt class="text-ink-muted">Reference</dt>
                     <dd>{{ form.reference || '—' }}</dd>
                 </div>
                 <div class="col-span-2">
-                    <dt class="text-slate-500">Received into</dt>
+                    <dt class="text-ink-muted">Received into</dt>
                     <dd>{{ account ? `${account.code} — ${account.name}` : '' }}</dd>
                 </div>
             </dl>
 
-            <h3 class="mt-5 text-xs font-medium text-slate-500">Applied to</h3>
-            <ul class="mt-2 divide-y divide-slate-100 text-sm">
+            <h3 class="mt-5 text-xs font-medium text-ink-muted">Applied to</h3>
+            <ul class="mt-2 divide-y divide-line text-sm">
                 <li
                     v-for="allocation in allocations"
                     :key="allocation.charge.id"
@@ -470,7 +470,7 @@ function record(): void {
                 <button
                     type="button"
                     :disabled="form.processing || !hasMfaFactor"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary"
                     @click="record"
                 >
                     Record payment
@@ -478,7 +478,7 @@ function record(): void {
                 <button
                     type="button"
                     :disabled="form.processing"
-                    class="rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                    class="btn btn-secondary"
                     @click="reviewing = false"
                 >
                     Back to edit

@@ -75,18 +75,18 @@ const hasFilters =
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Journal entries</h1>
-                <p class="mt-1 text-sm text-slate-500">Posted Ledger history for this School.</p>
+                <p class="mt-1 text-sm text-ink-muted">Posted Ledger history for this School.</p>
             </div>
             <a
                 v-if="canPost"
                 href="/app/finance/journal-entries/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary shrink-0"
             >
                 Post journal entry
             </a>
@@ -94,33 +94,33 @@ const hasFilters =
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-posted-from"
+                <label class="block text-sm text-ink-muted" for="filter-posted-from"
                     >Posted from</label
                 >
                 <input
                     id="filter-posted-from"
                     v-model="postedFrom"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-posted-to">Posted to</label>
+                <label class="block text-sm text-ink-muted" for="filter-posted-to">Posted to</label>
                 <input
                     id="filter-posted-to"
                     v-model="postedTo"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-account">Account</label>
+                <label class="block text-sm text-ink-muted" for="filter-account">Account</label>
                 <select
                     id="filter-account"
                     v-model="ledgerAccountId"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                     @change="applyFilters"
                 >
                     <option value="">All accounts</option>
@@ -130,15 +130,10 @@ const hasFilters =
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-search">Description</label>
-                <input
-                    id="filter-search"
-                    v-model="search"
-                    type="text"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <label class="block text-sm text-ink-muted" for="filter-search">Description</label>
+                <input id="filter-search" v-model="search" type="text" class="input mt-1 w-48" />
             </div>
-            <label class="mb-2 flex items-center gap-2 text-sm text-slate-600">
+            <label class="mb-2 flex items-center gap-2 text-sm text-ink-muted">
                 <input v-model="reversedOnly" type="checkbox" @change="applyFilters" />
                 Reversals only
             </label>
@@ -157,10 +152,7 @@ const hasFilters =
             "
         >
             <template v-if="canPost && !hasFilters" #action>
-                <a
-                    href="/app/finance/journal-entries/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a href="/app/finance/journal-entries/create" class="btn btn-primary">
                     Post journal entry
                 </a>
             </template>
@@ -169,7 +161,7 @@ const hasFilters =
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Posted</th>
                         <th scope="col" class="py-2 font-medium">Description</th>
                         <th scope="col" class="py-2 font-medium">Lines</th>
@@ -179,9 +171,9 @@ const hasFilters =
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="entry in journalEntries.data" :key="entry.id">
-                        <td class="py-3 text-slate-600">{{ formatDateTime(entry.postedAt) }}</td>
+                        <td class="py-3 text-ink-muted">{{ formatDateTime(entry.postedAt) }}</td>
                         <td class="py-3">
                             <a
                                 class="font-medium underline"
@@ -190,21 +182,21 @@ const hasFilters =
                             >
                             <span
                                 v-if="entry.reversalOfJournalEntryId"
-                                class="ml-1 text-xs text-slate-400"
+                                class="ml-1 text-xs text-ink-muted"
                                 >(reversal)</span
                             >
                         </td>
-                        <td class="py-3 text-slate-600">{{ entry.lineCount }}</td>
+                        <td class="py-3 text-ink-muted">{{ entry.lineCount }}</td>
                         <td class="py-3">
                             <span
                                 v-if="entry.reversedByJournalEntryId"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                                class="inline-flex items-center gap-1.5 rounded-xs bg-accent-100 px-2 py-0.5 text-xs font-medium text-ink"
                             >
                                 Reversed
                             </span>
                             <span
                                 v-else
-                                class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
+                                class="inline-flex items-center gap-1.5 rounded-xs bg-graphite-100 px-2 py-0.5 text-xs font-medium text-ink"
                             >
                                 Posted
                             </span>
@@ -224,14 +216,14 @@ const hasFilters =
                 <li
                     v-for="entry in journalEntries.data"
                     :key="entry.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a
                         class="font-medium underline"
                         :href="`/app/finance/journal-entries/${entry.id}`"
                         >{{ entry.description }}</a
                     >
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">
                         {{ formatDateTime(entry.postedAt) }} · {{ entry.lineCount }} lines
                     </p>
                 </li>

@@ -147,7 +147,7 @@ onBeforeUnmount(() => clearInterval(timer));
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/fee-runs">← Assessment runs</a>
         <h1 class="mt-2 text-xl font-semibold">
             {{ run.structureLabel }} · <span class="font-mono">{{ run.billingPeriodKey }}</span>
@@ -155,28 +155,32 @@ onBeforeUnmount(() => clearInterval(timer));
         <p class="mt-1 text-sm">
             Status:
             <span class="font-medium capitalize">{{ run.status.replaceAll('_', ' ') }}</span>
-            <span v-if="run.status === 'draft' && run.previewedAt" class="ml-2 text-amber-700">
+            <span v-if="run.status === 'draft' && run.previewedAt" class="ml-2 text-ink">
                 -- changed since the last preview; preview again before executing.
             </span>
         </p>
 
-        <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p
+            v-if="actionError"
+            role="alert"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
+        >
             {{ actionError }}
         </p>
 
         <section class="mt-4 grid gap-3 text-sm md:grid-cols-2">
-            <div class="rounded border border-slate-200 p-3">
+            <div class="rounded-xs border border-line p-3">
                 <h2 class="font-medium">Preview (no charges created)</h2>
                 <p class="mt-1">
                     {{ run.preview.readyCount }} ready ·
                     {{ formatMoney(run.preview.readyAmount, run.currency) }}
                 </p>
-                <p class="text-slate-600">
+                <p class="text-ink-muted">
                     {{ run.preview.excludedCount }} excluded ·
                     {{ run.preview.blockedCount }} blocked ·
                     {{ run.preview.alreadyAssessedCount }} already assessed
                 </p>
-                <p v-if="decisionsRequired > 0" class="mt-1 font-medium text-amber-800">
+                <p v-if="decisionsRequired > 0" class="mt-1 font-medium text-ink">
                     {{ decisionsRequired }}
                     {{ decisionsRequired === 1 ? 'Student needs' : 'Students need' }} a decision:
                     they already have a charge that may cover this period.
@@ -187,20 +191,20 @@ onBeforeUnmount(() => clearInterval(timer));
             </div>
             <div
                 v-if="!isOpen && run.status !== 'cancelled'"
-                class="rounded border border-slate-200 p-3"
+                class="rounded-xs border border-line p-3"
             >
                 <h2 class="font-medium">Execution</h2>
                 <p class="mt-1">
                     {{ run.execution.succeededCount }} charged ·
                     {{ formatMoney(run.execution.assessedAmount, run.currency) }}
                 </p>
-                <p class="text-slate-600">
+                <p class="text-ink-muted">
                     {{ run.execution.skippedCount }} already assessed ·
-                    <span :class="run.execution.failedCount ? 'text-red-700' : ''"
+                    <span :class="run.execution.failedCount ? 'text-danger' : ''"
                         >{{ run.execution.failedCount }} failed</span
                     >
                 </p>
-                <p v-if="run.status === 'executing'" class="mt-1 text-amber-700">
+                <p v-if="run.status === 'executing'" class="mt-1 text-ink">
                     Running… this page refreshes itself.
                 </p>
             </div>
@@ -210,7 +214,7 @@ onBeforeUnmount(() => clearInterval(timer));
             <button
                 v-if="isOpen"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5"
+                class="btn btn-secondary"
                 @click="post(`${base}/preview`)"
             >
                 {{ run.previewedAt ? 'Preview again' : 'Preview' }}
@@ -218,7 +222,7 @@ onBeforeUnmount(() => clearInterval(timer));
             <button
                 v-if="run.status === 'previewed' && run.previewIsCurrent && decisionsRequired === 0"
                 type="button"
-                class="rounded bg-emerald-700 px-3 py-1.5 text-white"
+                class="rounded-xs bg-accent-strong px-3 py-1.5 text-white"
                 @click="
                     post(
                         `${base}/execute`,
@@ -230,14 +234,14 @@ onBeforeUnmount(() => clearInterval(timer));
             </button>
             <p
                 v-if="run.status === 'previewed' && run.previewIsCurrent && decisionsRequired > 0"
-                class="self-center text-amber-800"
+                class="self-center text-ink"
             >
                 Decide for every Student who needs a decision, preview again, then execute.
             </p>
             <button
                 v-if="run.status === 'executing'"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5"
+                class="btn btn-secondary"
                 @click="post(`${base}/resume`)"
             >
                 Resume
@@ -245,7 +249,7 @@ onBeforeUnmount(() => clearInterval(timer));
             <button
                 v-if="isOpen"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5"
+                class="btn btn-secondary"
                 @click="post(`${base}/cancel`, 'Cancel this run? Nothing has been charged.')"
             >
                 Cancel run
@@ -257,7 +261,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <h2 class="text-lg font-semibold">Items</h2>
                 <select
                     :value="filters.preview_result"
-                    class="rounded border border-slate-300 px-2 py-1"
+                    class="input w-auto"
                     @change="filter(($event.target as HTMLSelectElement).value)"
                 >
                     <option value="">All</option>
@@ -269,19 +273,19 @@ onBeforeUnmount(() => clearInterval(timer));
                 </select>
             </div>
 
-            <p v-if="items.data.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="items.data.length === 0" class="mt-3 text-sm text-ink-muted">
                 {{ run.previewedAt ? 'No items.' : 'Preview the run to see its items.' }}
             </p>
 
             <section
                 v-if="voidingId"
-                class="mt-6 rounded border border-red-200 bg-red-50/40 p-4"
+                class="mt-6 rounded-xs border border-danger/40 bg-danger-tint/40 p-4"
                 aria-label="Void"
             >
-                <h2 class="text-sm font-medium text-slate-900">
+                <h2 class="text-sm font-medium text-ink">
                     Void this assessment and cancel its charge
                 </h2>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Void only what should not stand. To excuse a valid charge, request a concession
                     instead.
                 </p>
@@ -302,7 +306,7 @@ onBeforeUnmount(() => clearInterval(timer));
             </section>
             <table v-else class="mt-3 w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Student</th>
                         <th scope="col" class="py-2 font-medium">Fee</th>
                         <th scope="col" class="py-2 text-right font-medium">Amount</th>
@@ -311,12 +315,12 @@ onBeforeUnmount(() => clearInterval(timer));
                         <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="i in items.data" :key="i.id">
                         <td class="py-2">
                             {{ i.studentName }}
-                            <span class="text-xs text-slate-500">{{ i.studentNumber }}</span>
-                            <span v-if="i.enrollmentStartsOn" class="block text-xs text-slate-500"
+                            <span class="text-xs text-ink-muted">{{ i.studentNumber }}</span>
+                            <span v-if="i.enrollmentStartsOn" class="block text-xs text-ink-muted"
                                 >enrolled from {{ i.enrollmentStartsOn }}</span
                             >
                         </td>
@@ -327,7 +331,7 @@ onBeforeUnmount(() => clearInterval(timer));
                                 v-if="i.concessionPreview"
                                 class="block text-xs"
                                 :class="
-                                    i.concessionPreview.exceeds ? 'text-red-700' : 'text-slate-500'
+                                    i.concessionPreview.exceeds ? 'text-danger' : 'text-ink-muted'
                                 "
                                 >−{{ formatMoney(i.concessionPreview.concession, i.currency) }}
                                 concession ·
@@ -340,22 +344,20 @@ onBeforeUnmount(() => clearInterval(timer));
                         </td>
                         <td class="py-2">
                             <span
-                                :class="
-                                    i.previewResult === 'review' ? 'font-medium text-amber-800' : ''
-                                "
+                                :class="i.previewResult === 'review' ? 'font-medium text-ink' : ''"
                                 >{{ previewText[i.previewResult] ?? i.previewResult }}</span
                             >
-                            <span v-if="i.reason" class="block text-xs text-slate-500">{{
+                            <span v-if="i.reason" class="block text-xs text-ink-muted">{{
                                 reasonText[i.reason] ?? i.reason
                             }}</span>
                             <span
                                 v-if="i.overlapDecision === 'include'"
-                                class="block text-xs text-slate-500"
+                                class="block text-xs text-ink-muted"
                                 >Included anyway (decided)</span
                             >
                             <div
                                 v-if="i.overlapCharges.length > 0"
-                                class="mt-1 rounded bg-amber-50 p-2 text-xs text-slate-700"
+                                class="mt-1 rounded-xs bg-accent-100 p-2 text-xs text-ink"
                             >
                                 <p class="font-medium">Existing charge(s):</p>
                                 <ul class="mt-0.5 list-disc pl-4">
@@ -385,7 +387,7 @@ onBeforeUnmount(() => clearInterval(timer));
                             <span v-if="i.executionStatus" class="capitalize">{{
                                 i.executionStatus.replaceAll('_', ' ')
                             }}</span>
-                            <span v-if="i.failureReason" class="block text-xs text-red-700">{{
+                            <span v-if="i.failureReason" class="block text-xs text-danger">{{
                                 failureText[i.failureReason] ?? i.failureReason.replaceAll('_', ' ')
                             }}</span>
                         </td>
@@ -396,14 +398,14 @@ onBeforeUnmount(() => clearInterval(timer));
                             >
                                 <button
                                     type="button"
-                                    class="rounded border border-slate-300 px-2 py-1"
+                                    class="btn btn-secondary"
                                     @click="decide(i, 'include')"
                                 >
                                     Include anyway
                                 </button>
                                 <button
                                     type="button"
-                                    class="rounded border border-slate-300 px-2 py-1"
+                                    class="btn btn-secondary"
                                     @click="decide(i, 'exclude')"
                                 >
                                     Exclude from this run

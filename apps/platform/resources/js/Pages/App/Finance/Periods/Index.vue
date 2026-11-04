@@ -70,10 +70,10 @@ function submitClose(period: Period): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <h1 class="mt-2 text-xl font-semibold">Financial periods</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             One financial year per row (today: {{ localToday }}). Closing a year is permanent: it
             records carried-forward balances computed from the ledger, and nothing can be posted
             into it afterwards. Corrections are posted in the current year, linked to the original.
@@ -81,40 +81,40 @@ function submitClose(period: Period): void {
 
         <p
             v-if="unmappedEntries > 0"
-            class="mt-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             {{ unmappedEntries }} older journal
             {{ unmappedEntries === 1 ? 'entry is' : 'entries are' }} not yet assigned to a financial
             year.
         </p>
 
-        <p v-if="periods.length === 0" class="mt-6 text-sm text-slate-500">
+        <p v-if="periods.length === 0" class="mt-6 text-sm text-ink-muted">
             No financial year exists yet. The first posting creates one.
         </p>
 
-        <ul class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
+        <ul class="mt-6 divide-y divide-line rounded-xs border border-line">
             <li v-for="period in periods" :key="period.id" class="px-4 py-4">
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h2 class="font-medium">{{ period.key }}</h2>
-                        <p class="text-sm text-slate-500">
+                        <p class="text-sm text-ink-muted">
                             {{ period.startsOn }} to {{ period.endsOn }}
                             <template v-if="period.entryCount !== null">
                                 · {{ period.entryCount }}
                                 {{ period.entryCount === 1 ? 'journal entry' : 'journal entries' }}
                             </template>
                         </p>
-                        <p v-if="period.status === 'closed'" class="text-sm text-slate-500">
+                        <p v-if="period.status === 'closed'" class="text-sm text-ink-muted">
                             Closed {{ formatDateTime(period.closedAt)
                             }}{{ period.closedBy ? ` by ${period.closedBy}` : '' }}
                         </p>
                     </div>
                     <span
-                        class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+                        class="shrink-0 rounded-xs px-2 py-0.5 text-xs font-medium"
                         :class="
                             period.status === 'closed'
-                                ? 'bg-slate-100 text-slate-700'
-                                : 'bg-emerald-50 text-emerald-700'
+                                ? 'bg-graphite-200 text-ink'
+                                : 'bg-graphite-100 text-ink'
                         "
                     >
                         {{ period.status === 'closed' ? 'Closed' : 'Open' }}
@@ -122,10 +122,10 @@ function submitClose(period: Period): void {
                 </div>
 
                 <template v-if="period.status === 'open'">
-                    <ul v-if="period.blockers.length" class="mt-2 space-y-1 text-sm text-slate-600">
+                    <ul v-if="period.blockers.length" class="mt-2 space-y-1 text-sm text-ink-muted">
                         <li v-for="code in period.blockers" :key="code">• {{ describe(code) }}</li>
                     </ul>
-                    <ul v-if="period.notices.length" class="mt-2 space-y-1 text-sm text-amber-700">
+                    <ul v-if="period.notices.length" class="mt-2 space-y-1 text-sm text-ink">
                         <li v-for="code in period.notices" :key="code">• {{ describe(code) }}</li>
                     </ul>
 
@@ -133,25 +133,23 @@ function submitClose(period: Period): void {
                         <button
                             v-if="closingId !== period.id"
                             type="button"
-                            class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                            class="btn btn-secondary"
                             @click="startClose(period)"
                         >
                             Close {{ period.key }}…
                         </button>
                         <form
                             v-else
-                            class="mt-2 space-y-3 rounded border border-red-200 bg-red-50 p-4"
+                            class="mt-2 space-y-3 rounded-xs border border-danger/40 bg-danger-tint p-4"
                             @submit.prevent="submitClose(period)"
                         >
-                            <p class="text-sm text-red-800">
+                            <p class="text-sm text-danger">
                                 Closing {{ period.key }} cannot be undone. Type
                                 <span class="font-mono font-semibold">{{ period.key }}</span> to
                                 confirm.
                             </p>
                             <div>
-                                <label
-                                    class="block text-sm text-slate-700"
-                                    :for="`confirm-${period.id}`"
+                                <label class="block text-sm text-ink" :for="`confirm-${period.id}`"
                                     >Period</label
                                 >
                                 <input
@@ -160,13 +158,11 @@ function submitClose(period: Period): void {
                                     type="text"
                                     maxlength="16"
                                     autocomplete="off"
-                                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+                                    class="input mt-1 w-40 font-mono"
                                 />
                             </div>
                             <div v-if="hasMfaFactor">
-                                <label
-                                    class="block text-sm text-slate-700"
-                                    :for="`mfa-${period.id}`"
+                                <label class="block text-sm text-ink" :for="`mfa-${period.id}`"
                                     >Authentication code</label
                                 >
                                 <input
@@ -176,17 +172,17 @@ function submitClose(period: Period): void {
                                     inputmode="numeric"
                                     autocomplete="one-time-code"
                                     maxlength="32"
-                                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+                                    class="input mt-1 w-40 font-mono"
                                 />
                             </div>
-                            <p v-else class="text-sm text-red-800">
+                            <p v-else class="text-sm text-danger">
                                 Closing a period needs multi-factor authentication. Enroll a factor
                                 under Account security first.
                             </p>
                             <p
                                 v-for="(message, field) in errors"
                                 :key="field"
-                                class="text-sm text-red-700"
+                                class="text-sm text-danger"
                             >
                                 {{ message }}
                             </p>
@@ -198,13 +194,13 @@ function submitClose(period: Period): void {
                                         form.confirmation !== period.key ||
                                         !hasMfaFactor
                                     "
-                                    class="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                    class="btn btn-danger"
                                 >
                                     Close permanently
                                 </button>
                                 <button
                                     type="button"
-                                    class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                                    class="btn btn-secondary"
                                     @click="closingId = null"
                                 >
                                     Cancel

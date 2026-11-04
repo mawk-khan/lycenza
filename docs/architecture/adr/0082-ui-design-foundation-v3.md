@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a and DS-4b implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a, DS-4b and DS-4c implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -336,3 +336,20 @@ recommended first domain (Students) was taken.
    (Guardian directory and profile, Enrollments, Rollover list and plan,
    Admissions, Applicant list and profile, Application). The admission-fee
    panel (`Components/Fees/AdmissionFeePanel.vue`) moves with Finance.
+7. **DS-4c: Finance and Fees (2026-11-04).** `Pages/App/Finance/**`,
+   `Components/Fees/**` and `Components/ChargeEndForm.vue` -- 34 files.
+   - **Codemod extended:** a rounded status pill (`rounded-full` + `py-0.5` +
+     `text-xs`) becomes a square one. Re-running it over DS-4a/b changed
+     nothing there (idempotent).
+   - **Hand edits, all presentation:** the payment status map uses the
+     status families (`tag-positive` Received, `tag-info` Partly refunded /
+     Refunded, `tag-attention` Reversed -- the same family `StatusBadge`
+     gives "reversed"), so a status is no longer in the danger hue; a
+     cancelled Charge line on the fee statement is an attention tag; the
+     filter chips are square.
+   - The danger hue stays on money that needs action (the overdue total)
+     and on refusals.
+   - Visual check on 13 captured pages with seeded charges and ledger
+     accounts (hub, charges, charge entry, outstanding, payments, ledger
+     accounts, journals and journal entry, periods, fee setup, concessions,
+     statements, correction requests).

@@ -247,27 +247,27 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-2xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/finance/payments">← Payments</a>
 
         <p
             v-if="recordedOutcome === 'recorded'"
             role="status"
-            class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+            class="mt-4 rounded-xs border border-graphite-300 bg-graphite-100 p-3 text-sm text-ink"
         >
             Payment recorded. It is now part of this School's permanent Finance record.
         </p>
         <p
             v-else-if="recordedOutcome === 'duplicate_replay'"
             role="status"
-            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-line bg-graphite-100 p-3 text-sm text-ink"
         >
             This payment was already recorded -- nothing new was created.
         </p>
         <p
             v-if="correctedOutcome === 'requested'"
             role="status"
-            class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+            class="mt-4 rounded-xs border border-graphite-300 bg-graphite-100 p-3 text-sm text-ink"
         >
             Correction requested. Nothing has changed yet: someone else must approve it, and it is
             recorded only then.
@@ -275,7 +275,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
         <p
             v-else-if="correctedOutcome === 'approved'"
             role="status"
-            class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+            class="mt-4 rounded-xs border border-graphite-300 bg-graphite-100 p-3 text-sm text-ink"
         >
             Correction approved and recorded. The original payment is unchanged; the correction is
             listed below with its own journal entry.
@@ -283,14 +283,14 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
         <p
             v-else-if="correctedOutcome === 'rejected' || correctedOutcome === 'withdrawn'"
             role="status"
-            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-line bg-graphite-100 p-3 text-sm text-ink"
         >
             Correction request {{ correctedOutcome }}. Nothing was changed.
         </p>
         <p
             v-else-if="correctedOutcome === 'duplicate_replay'"
             role="status"
-            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+            class="mt-4 rounded-xs border border-line bg-graphite-100 p-3 text-sm text-ink"
         >
             This correction was already requested -- nothing new was created.
         </p>
@@ -298,7 +298,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
         <div
             v-if="corrections.reversed"
             role="note"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             <p class="font-medium">Reversed on {{ corrections.reversed.on }}.</p>
             <p class="mt-1">
@@ -321,7 +321,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
         <h1 class="mt-2 text-xl font-semibold">
             {{ payment.source === 'manual' ? 'Offline payment' : 'Payment' }}
         </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             <template v-if="payment.source === 'manual'">
                 {{ payment.methodLabel }} · received {{ payment.occurredOn }}.
             </template>
@@ -331,11 +331,11 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
 
         <dl class="mt-6 grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
             <div>
-                <dt class="text-slate-500">Amount</dt>
+                <dt class="text-ink-muted">Amount</dt>
                 <dd class="font-mono">{{ formatMoney(payment.amount, payment.currency) }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Source</dt>
+                <dt class="text-ink-muted">Source</dt>
                 <dd>
                     {{
                         payment.source === 'manual'
@@ -346,33 +346,33 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
             </div>
             <template v-if="payment.source === 'manual'">
                 <div>
-                    <dt class="text-slate-500">Method</dt>
+                    <dt class="text-ink-muted">Method</dt>
                     <dd>{{ payment.methodLabel }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Reference</dt>
+                    <dt class="text-ink-muted">Reference</dt>
                     <dd>{{ payment.manualReference ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Received on</dt>
+                    <dt class="text-ink-muted">Received on</dt>
                     <dd>{{ payment.occurredOn }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Recorded</dt>
+                    <dt class="text-ink-muted">Recorded</dt>
                     <dd>
                         {{ formatDateTime(payment.recordedAt) }}
-                        <span v-if="payment.recordedByName" class="block text-slate-500"
+                        <span v-if="payment.recordedByName" class="block text-ink-muted"
                             >by {{ payment.recordedByName }}</span
                         >
                     </dd>
                 </div>
             </template>
             <div v-else>
-                <dt class="text-slate-500">Provider reference</dt>
+                <dt class="text-ink-muted">Provider reference</dt>
                 <dd class="break-all">{{ payment.providerPaymentReference }}</dd>
             </div>
             <div v-if="payment.journalEntryId">
-                <dt class="text-slate-500">Settlement journal entry</dt>
+                <dt class="text-ink-muted">Settlement journal entry</dt>
                 <dd>
                     <a
                         class="underline"
@@ -382,30 +382,27 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                 </dd>
             </div>
             <div>
-                <dt class="text-slate-500">Receipt</dt>
+                <dt class="text-ink-muted">Receipt</dt>
                 <dd v-if="payment.receiptNumber">
                     <a
                         class="font-mono underline"
                         :href="`/app/finance/payments/${payment.id}/receipt`"
                         >{{ payment.receiptNumber }}</a
                     >
-                    <span v-if="corrections.reversed" class="ml-1 text-amber-800">(reversed)</span>
+                    <span v-if="corrections.reversed" class="ml-1 text-ink">(reversed)</span>
                 </dd>
-                <dd v-else class="text-slate-500">
+                <dd v-else class="text-ink-muted">
                     Not issued yet (recorded before receipts existed)
                 </dd>
             </div>
         </dl>
 
-        <section v-if="corrections.history.length > 0" class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-medium text-slate-900">Where this payment stands now</h2>
-            <p class="mt-1 text-sm text-slate-500">
+        <section v-if="corrections.history.length > 0" class="mt-8 border-t border-line pt-6">
+            <h2 class="text-sm font-medium text-ink">Where this payment stands now</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 The original allocations below, after the corrections recorded on this payment.
             </p>
-            <ul
-                v-if="corrections.standing.length > 0"
-                class="mt-3 divide-y divide-slate-100 text-sm"
-            >
+            <ul v-if="corrections.standing.length > 0" class="mt-3 divide-y divide-line text-sm">
                 <li
                     v-for="s in corrections.standing"
                     :key="s.chargeId"
@@ -417,16 +414,16 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                     <span class="font-mono">{{ formatMoney(s.amount, payment.currency) }}</span>
                 </li>
             </ul>
-            <p v-else class="mt-3 text-sm text-slate-500">
+            <p v-else class="mt-3 text-sm text-ink-muted">
                 Nothing of this payment is on any charge.
             </p>
         </section>
 
-        <section class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-medium text-slate-900">
+        <section class="mt-8 border-t border-line pt-6">
+            <h2 class="text-sm font-medium text-ink">
                 {{ corrections.history.length > 0 ? 'Original allocations' : 'Allocations' }}
             </h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 How this Payment's amount was applied across Charges when it was recorded.
                 Allocations are permanent facts; corrections are recorded beside them.
             </p>
@@ -434,14 +431,14 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
             <div v-if="payment.allocations.length > 0" class="overflow-x-auto">
                 <table class="mt-4 w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Charge</th>
                             <th scope="col" class="py-2 text-right font-medium">
                                 Allocated amount
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="allocation in payment.allocations" :key="allocation.chargeId">
                             <td class="py-3">
                                 <a
@@ -457,16 +454,16 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                     </tbody>
                 </table>
             </div>
-            <p v-else class="mt-4 text-sm text-slate-500">No allocations recorded.</p>
+            <p v-else class="mt-4 text-sm text-ink-muted">No allocations recorded.</p>
         </section>
 
-        <section v-if="corrections.history.length > 0" class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-medium text-slate-900">Corrections</h2>
+        <section v-if="corrections.history.length > 0" class="mt-8 border-t border-line pt-6">
+            <h2 class="text-sm font-medium text-ink">Corrections</h2>
             <ol class="mt-3 space-y-4 text-sm">
                 <li
                     v-for="entry in corrections.history"
                     :key="entry.id"
-                    class="rounded border border-slate-200 p-3"
+                    class="rounded-xs border border-line p-3"
                 >
                     <p class="flex flex-wrap justify-between gap-2">
                         <span class="font-medium">{{ kindLabel[entry.kind] }}</span>
@@ -474,7 +471,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                             formatMoney(entry.amount, payment.currency)
                         }}</span>
                     </p>
-                    <p class="mt-1 text-slate-500">
+                    <p class="mt-1 text-ink-muted">
                         {{ entry.recordedOn
                         }}<template v-if="entry.byName"> · by {{ entry.byName }}</template>
                         <template v-if="entry.journalEntryId">
@@ -486,7 +483,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                             >
                         </template>
                     </p>
-                    <p v-if="entry.kind === 'refund'" class="mt-1 text-slate-600">
+                    <p v-if="entry.kind === 'refund'" class="mt-1 text-ink-muted">
                         Paid back by {{ entry.refundMethodLabel }} on {{ entry.refundedOn
                         }}<template v-if="entry.refundReference">
                             · ref {{ entry.refundReference }}</template
@@ -507,14 +504,14 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                             }}</span>
                         </li>
                     </ul>
-                    <p class="mt-2 text-slate-700">Reason: {{ entry.reason }}</p>
+                    <p class="mt-2 text-ink">Reason: {{ entry.reason }}</p>
                 </li>
             </ol>
         </section>
 
-        <section v-if="choices.length > 0" class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-medium text-slate-900">Request a correction</h2>
-            <p class="mt-1 text-sm text-slate-500">
+        <section v-if="choices.length > 0" class="mt-8 border-t border-line pt-6">
+            <h2 class="text-sm font-medium text-ink">Request a correction</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 A correction never changes or deletes this payment. You request it with your reason;
                 someone else approves or rejects it, and only an approval records it as a new entry
                 with its own journal entry. Fee concessions are not used for corrections.
@@ -522,7 +519,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
             <button
                 v-if="!opened"
                 type="button"
-                class="mt-3 rounded border border-slate-300 px-4 py-2 text-sm"
+                class="btn btn-secondary mt-3"
                 @click="opened = true"
             >
                 Request correction…
@@ -530,35 +527,31 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
 
             <form v-else class="mt-4 space-y-4" @submit.prevent="submit">
                 <fieldset>
-                    <legend class="text-sm text-slate-700">What went wrong?</legend>
+                    <legend class="text-sm text-ink">What went wrong?</legend>
                     <div class="mt-2 space-y-2">
                         <label
                             v-for="c in choices"
                             :key="c.kind"
-                            class="flex gap-2 rounded border border-slate-200 p-3 text-sm"
+                            class="flex gap-2 rounded-xs border border-line p-3 text-sm"
                         >
                             <input v-model="form.kind" type="radio" name="kind" :value="c.kind" />
                             <span>
                                 <span class="font-medium">{{ c.label }}</span>
-                                <span class="block text-slate-500">{{ c.help }}</span>
+                                <span class="block text-ink-muted">{{ c.help }}</span>
                             </span>
                         </label>
                     </div>
-                    <p v-if="form.errors.kind" class="mt-1 text-sm text-red-700">
+                    <p v-if="form.errors.kind" class="mt-1 text-sm text-danger">
                         {{ form.errors.kind }}
                     </p>
                 </fieldset>
 
                 <template v-if="form.kind === 'reallocation' || form.kind === 'refund'">
                     <div>
-                        <label class="block text-sm text-slate-700" for="correction-charge">{{
+                        <label class="block text-sm text-ink" for="correction-charge">{{
                             form.kind === 'refund' ? 'Refund from charge' : 'Move from charge'
                         }}</label>
-                        <select
-                            id="correction-charge"
-                            v-model="form.charge_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        >
+                        <select id="correction-charge" v-model="form.charge_id" class="input mt-1">
                             <option value="" disabled>Choose a charge</option>
                             <option
                                 v-for="s in corrections.standing"
@@ -569,21 +562,21 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                 {{ formatMoney(s.amount, payment.currency) }} of this payment
                             </option>
                         </select>
-                        <p v-if="form.errors.charge_id" class="mt-1 text-sm text-red-700">
+                        <p v-if="form.errors.charge_id" class="mt-1 text-sm text-danger">
                             {{ form.errors.charge_id }}
                         </p>
                     </div>
                 </template>
 
                 <div v-if="form.kind === 'reallocation'">
-                    <label class="block text-sm text-slate-700" for="correction-to-charge"
+                    <label class="block text-sm text-ink" for="correction-to-charge"
                         >Move to charge (same Student)</label
                     >
                     <select
                         id="correction-to-charge"
                         v-model="form.to_charge_id"
                         :disabled="form.charge_id === ''"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="" disabled>
                             Choose a charge with an amount outstanding
@@ -598,17 +591,17 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                     </select>
                     <p
                         v-if="form.charge_id !== '' && destinations.length === 0"
-                        class="mt-1 text-sm text-slate-500"
+                        class="mt-1 text-sm text-ink-muted"
                     >
                         This Student has no other charge with an amount outstanding.
                     </p>
-                    <p v-if="form.errors.to_charge_id" class="mt-1 text-sm text-red-700">
+                    <p v-if="form.errors.to_charge_id" class="mt-1 text-sm text-danger">
                         {{ form.errors.to_charge_id }}
                     </p>
                 </div>
 
                 <div v-if="form.kind === 'reallocation' || form.kind === 'refund'">
-                    <label class="block text-sm text-slate-700" for="correction-amount"
+                    <label class="block text-sm text-ink" for="correction-amount"
                         >Amount (INR)</label
                     >
                     <input
@@ -616,9 +609,9 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                         v-model="form.amount"
                         type="text"
                         inputmode="decimal"
-                        class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+                        class="input mt-1 w-48 font-mono"
                     />
-                    <p v-if="form.errors.amount" class="mt-1 text-sm text-red-700">
+                    <p v-if="form.errors.amount" class="mt-1 text-sm text-danger">
                         {{ form.errors.amount }}
                     </p>
                 </div>
@@ -626,13 +619,13 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                 <template v-if="form.kind === 'refund'">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <label class="block text-sm text-slate-700" for="correction-account"
+                            <label class="block text-sm text-ink" for="correction-account"
                                 >Paid out of</label
                             >
                             <select
                                 id="correction-account"
                                 v-model="form.account_id"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1"
                             >
                                 <option value="" disabled>Choose an account</option>
                                 <option
@@ -643,19 +636,15 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                     {{ a.code }} · {{ a.name }}
                                 </option>
                             </select>
-                            <p v-if="form.errors.account_id" class="mt-1 text-sm text-red-700">
+                            <p v-if="form.errors.account_id" class="mt-1 text-sm text-danger">
                                 {{ form.errors.account_id }}
                             </p>
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-700" for="correction-method"
+                            <label class="block text-sm text-ink" for="correction-method"
                                 >Paid back by</label
                             >
-                            <select
-                                id="correction-method"
-                                v-model="form.method"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                            >
+                            <select id="correction-method" v-model="form.method" class="input mt-1">
                                 <option value="" disabled>Choose a method</option>
                                 <option
                                     v-for="m in corrections.methods"
@@ -665,12 +654,12 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                     {{ m.label }}
                                 </option>
                             </select>
-                            <p v-if="form.errors.method" class="mt-1 text-sm text-red-700">
+                            <p v-if="form.errors.method" class="mt-1 text-sm text-danger">
                                 {{ form.errors.method }}
                             </p>
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-700" for="correction-date"
+                            <label class="block text-sm text-ink" for="correction-date"
                                 >Paid back on</label
                             >
                             <input
@@ -679,14 +668,14 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                 type="date"
                                 :min="corrections.refundEarliest"
                                 :max="corrections.today"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1"
                             />
-                            <p v-if="form.errors.refunded_on" class="mt-1 text-sm text-red-700">
+                            <p v-if="form.errors.refunded_on" class="mt-1 text-sm text-danger">
                                 {{ form.errors.refunded_on }}
                             </p>
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-700" for="correction-reference"
+                            <label class="block text-sm text-ink" for="correction-reference"
                                 >Reference (optional)</label
                             >
                             <input
@@ -694,14 +683,14 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                 v-model="form.reference"
                                 type="text"
                                 maxlength="64"
-                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1"
                             />
-                            <p v-if="form.errors.reference" class="mt-1 text-sm text-red-700">
+                            <p v-if="form.errors.reference" class="mt-1 text-sm text-danger">
                                 {{ form.errors.reference }}
                             </p>
                         </div>
                     </div>
-                    <p class="text-sm text-slate-500">
+                    <p class="text-sm text-ink-muted">
                         After the refund the charge is owed again for that amount. If nothing should
                         be owed, cancel the charge or review a concession through the normal paths.
                     </p>
@@ -709,7 +698,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
 
                 <div
                     v-if="form.kind === 'reversal'"
-                    class="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                    class="rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
                 >
                     <p>
                         Everything this payment still has on its charges ({{
@@ -723,32 +712,30 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                         <input v-model="form.confirm" type="checkbox" />
                         <span>I confirm this payment should be reversed.</span>
                     </label>
-                    <p v-if="form.errors.confirm" class="mt-1 text-red-700">
+                    <p v-if="form.errors.confirm" class="mt-1 text-danger">
                         {{ form.errors.confirm }}
                     </p>
                 </div>
 
                 <div v-if="form.kind !== ''">
-                    <label class="block text-sm text-slate-700" for="correction-reason"
-                        >Reason</label
-                    >
+                    <label class="block text-sm text-ink" for="correction-reason">Reason</label>
                     <textarea
                         id="correction-reason"
                         v-model="form.reason"
                         rows="3"
                         maxlength="500"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     ></textarea>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-ink-muted">
                         Required. The approver sees it, and it is kept with the correction for
                         anyone reviewing it later.
                     </p>
-                    <p v-if="form.errors.reason" class="mt-1 text-sm text-red-700">
+                    <p v-if="form.errors.reason" class="mt-1 text-sm text-danger">
                         {{ form.errors.reason }}
                     </p>
                 </div>
 
-                <p v-if="form.errors.idempotency_key" class="text-sm text-red-700">
+                <p v-if="form.errors.idempotency_key" class="text-sm text-danger">
                     {{ form.errors.idempotency_key }}
                 </p>
 
@@ -756,14 +743,14 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                     <button
                         type="submit"
                         :disabled="form.processing || form.kind === ''"
-                        class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Submit request
                     </button>
                     <button
                         type="button"
                         :disabled="form.processing"
-                        class="rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                        class="btn btn-secondary"
                         @click="opened = false"
                     >
                         Cancel
@@ -774,41 +761,41 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
 
         <section
             v-if="corrections.requests && corrections.requests.length > 0"
-            class="mt-8 border-t border-slate-200 pt-6"
+            class="mt-8 border-t border-line pt-6"
         >
-            <h2 class="text-sm font-medium text-slate-900">Correction requests</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <h2 class="text-sm font-medium text-ink">Correction requests</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 A request changes nothing until someone other than its requester approves it.
                 Approving records the correction at once.
             </p>
-            <p v-if="decisionError" class="mt-2 text-sm text-red-700">
+            <p v-if="decisionError" class="mt-2 text-sm text-danger">
                 {{ decisionError }}
             </p>
             <ol class="mt-3 space-y-3">
                 <li
                     v-for="r in corrections.requests"
                     :key="r.id"
-                    class="rounded border border-slate-200 p-3 text-sm"
+                    class="rounded-xs border border-line p-3 text-sm"
                 >
                     <p class="font-medium">
                         {{ requestKindLabel[r.kind] }}
                         <template v-if="r.amount">
                             · {{ formatMoney(r.amount, payment.currency) }}</template
                         >
-                        <span class="ml-1 text-slate-500">({{ r.status }})</span>
+                        <span class="ml-1 text-ink-muted">({{ r.status }})</span>
                     </p>
-                    <p v-if="r.chargeDescription" class="text-slate-600">
+                    <p v-if="r.chargeDescription" class="text-ink-muted">
                         From {{ r.chargeDescription
                         }}<template v-if="r.toChargeDescription">
                             to {{ r.toChargeDescription }}</template
                         >
                     </p>
-                    <p v-if="r.refundMethodLabel" class="text-slate-600">
+                    <p v-if="r.refundMethodLabel" class="text-ink-muted">
                         Paid back by {{ r.refundMethodLabel }} on {{ r.refundedOn
                         }}<template v-if="r.refundReference"> · {{ r.refundReference }}</template>
                     </p>
-                    <p class="mt-1 text-slate-700">{{ r.reason }}</p>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-ink">{{ r.reason }}</p>
+                    <p class="mt-1 text-xs text-ink-muted">
                         Requested by {{ r.requestedByName ?? 'unknown' }} on {{ r.requestedOn
                         }}<template v-if="r.decidedOn">
                             · {{ r.status }}
@@ -830,7 +817,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                 <button
                                     type="button"
                                     :disabled="decision.processing || !hasMfaFactor"
-                                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    class="btn btn-primary"
                                     @click="decide(r, 'approve')"
                                 >
                                     Approve and record
@@ -838,7 +825,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                                 <button
                                     type="button"
                                     :disabled="decision.processing"
-                                    class="rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                                    class="btn btn-secondary"
                                     @click="approvingId = null"
                                 >
                                     Cancel
@@ -848,7 +835,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                         <div v-else class="flex flex-wrap gap-3">
                             <button
                                 type="button"
-                                class="rounded border border-slate-300 px-4 py-2 text-sm"
+                                class="btn btn-secondary"
                                 @click="approvingId = r.id"
                             >
                                 Approve…
@@ -856,7 +843,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                             <button
                                 type="button"
                                 :disabled="decision.processing"
-                                class="rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                                class="btn btn-secondary"
                                 @click="decide(r, 'reject')"
                             >
                                 Reject
@@ -867,7 +854,7 @@ function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'with
                         v-if="r.canWithdraw"
                         type="button"
                         :disabled="decision.processing"
-                        class="mt-3 rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                        class="btn btn-secondary mt-3"
                         @click="decide(r, 'withdraw')"
                     >
                         Withdraw request

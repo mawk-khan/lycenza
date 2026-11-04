@@ -135,15 +135,15 @@ function apply(): void {
 
 <template>
     <Head title="Outstanding fees" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <h1 class="mt-2 text-xl font-semibold">Outstanding fees</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Students who still owe money, most overdue first. Overdue means the charge's due date is
             before {{ asAt ? `the as-at date (${asAt})` : `today (${today})` }}. Open a Student's
             statement to see each charge.
         </p>
-        <p v-if="asAt" class="mt-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p v-if="asAt" class="mt-2 rounded-xs bg-accent-100 px-3 py-2 text-sm text-ink">
             As at the end of {{ asAt }} (school time): charges, concessions and payments as recorded
             by then. A payment recorded later counts from the day it was recorded. Class and
             "Students" (current or leavers) describe each Student today, not on that date.
@@ -151,11 +151,11 @@ function apply(): void {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-xs text-slate-600" for="filter-status">Show</label>
+                <label class="block text-xs text-ink-muted" for="filter-status">Show</label>
                 <select
                     id="filter-status"
                     v-model="status"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="outstanding">Everyone who owes money</option>
@@ -164,13 +164,8 @@ function apply(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-year">Academic year</label>
-                <select
-                    id="filter-year"
-                    v-model="yearId"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                    @change="apply"
-                >
+                <label class="block text-xs text-ink-muted" for="filter-year">Academic year</label>
+                <select id="filter-year" v-model="yearId" class="input mt-1 w-auto" @change="apply">
                     <option value="">All years</option>
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
                         {{ y.name }}
@@ -178,11 +173,11 @@ function apply(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-standing">Students</label>
+                <label class="block text-xs text-ink-muted" for="filter-standing">Students</label>
                 <select
                     id="filter-standing"
                     v-model="standing"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">All Students</option>
@@ -191,13 +186,13 @@ function apply(): void {
                 </select>
             </div>
             <div v-if="campuses.length > 0">
-                <label class="block text-xs text-slate-600" for="filter-campus"
+                <label class="block text-xs text-ink-muted" for="filter-campus"
                     >Charge campus</label
                 >
                 <select
                     id="filter-campus"
                     v-model="campusId"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 >
                     <option value="">All campuses</option>
@@ -207,11 +202,11 @@ function apply(): void {
             </div>
             <template v-if="canSeeClass">
                 <div>
-                    <label class="block text-xs text-slate-600" for="filter-grade">Grade</label>
+                    <label class="block text-xs text-ink-muted" for="filter-grade">Grade</label>
                     <select
                         id="filter-grade"
                         v-model="gradeId"
-                        class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                        class="input mt-1 w-auto"
                         @change="apply"
                     >
                         <option value="">All grades</option>
@@ -221,11 +216,11 @@ function apply(): void {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-600" for="filter-section">Section</label>
+                    <label class="block text-xs text-ink-muted" for="filter-section">Section</label>
                     <select
                         id="filter-section"
                         v-model="sectionId"
-                        class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                        class="input mt-1 w-auto"
                         @change="apply"
                     >
                         <option value="">All sections</option>
@@ -236,63 +231,61 @@ function apply(): void {
                 </div>
             </template>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-as-at">As at</label>
+                <label class="block text-xs text-ink-muted" for="filter-as-at">As at</label>
                 <input
                     id="filter-as-at"
                     v-model="asAt"
                     type="date"
                     :max="today"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="filter-q">Student</label>
+                <label class="block text-xs text-ink-muted" for="filter-q">Student</label>
                 <input
                     id="filter-q"
                     v-model="q"
                     type="search"
                     placeholder="Name or student number"
-                    class="mt-1 w-56 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-56"
                 />
             </div>
-            <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
-                Search
-            </button>
+            <button type="submit" class="btn btn-secondary">Search</button>
         </form>
 
-        <p v-if="pageErrors.as_at" class="mt-3 text-sm text-red-700" role="alert">
+        <p v-if="pageErrors.as_at" class="mt-3 text-sm text-danger" role="alert">
             {{ pageErrors.as_at }}
         </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Billed (all matching rows)</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Billed (all matching rows)</dt>
                 <dd class="text-lg font-semibold">
                     {{ formatMoney(totals.billed, totals.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Concessions</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Concessions</dt>
                 <dd class="text-lg font-semibold">
                     {{ formatMoney(totals.concession, totals.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Paid</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Paid</dt>
                 <dd class="text-lg font-semibold">
                     {{ formatMoney(totals.paid, totals.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Balance (all matching rows)</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Balance (all matching rows)</dt>
                 <dd class="text-lg font-semibold">
                     {{ formatMoney(totals.outstanding, totals.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Of which overdue</dt>
-                <dd class="text-lg font-semibold text-red-700">
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Of which overdue</dt>
+                <dd class="text-lg font-semibold text-danger">
                     {{ formatMoney(totals.overdue, totals.currency) }}
                 </dd>
             </div>
@@ -300,19 +293,17 @@ function apply(): void {
 
         <section
             v-if="canSendFeeReminder && !asAt"
-            class="mt-4 flex flex-wrap items-center gap-3 rounded border border-slate-200 p-3 text-sm"
+            class="mt-4 flex flex-wrap items-center gap-3 rounded-xs border border-line p-3 text-sm"
         >
-            <a class="rounded bg-slate-900 px-3 py-1.5 text-white" :href="reminderHref"
-                >Send fee reminder</a
-            >
-            <span class="text-xs text-slate-600"
+            <a class="btn btn-primary" :href="reminderHref">Send fee reminder</a>
+            <span class="text-xs text-ink-muted"
                 >Emails the current guardians of every Student in this selection who owes money,
                 after approval. Uses the status, year, campus and class filters above (not the
                 search or Students filters); amounts are read again when it is sent.</span
             >
         </section>
 
-        <p v-if="filters.campus_id" class="mt-3 text-xs text-slate-500">
+        <p v-if="filters.campus_id" class="mt-3 text-xs text-ink-muted">
             Each charge keeps the campus it was recorded against when it was charged (a fee run's
             placement, a canteen outlet, a library loan, or a manual charge's placement on that
             day). It never follows the Student's current campus. Charges with no campus are under
@@ -339,7 +330,7 @@ function apply(): void {
                         Students with billed, concession, paid and balance amounts
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Student</th>
                             <th v-if="canSeeClass" scope="col" class="py-2 font-medium">Class</th>
                             <th scope="col" class="py-2 text-right font-medium">Billed</th>
@@ -350,7 +341,7 @@ function apply(): void {
                             <th scope="col" class="py-2 pl-4 font-medium">Due</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="row in rows.data" :key="row.studentId">
                             <td class="py-2">
                                 <a
@@ -358,25 +349,25 @@ function apply(): void {
                                     :href="`/app/finance/fee-statements/${row.studentId}`"
                                     >{{ row.name }}</a
                                 >
-                                <span class="block text-xs text-slate-500"
+                                <span class="block text-xs text-ink-muted"
                                     >{{ row.studentNumber
                                     }}<span
                                         v-if="row.leaver"
-                                        class="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-slate-700"
+                                        class="ml-2 rounded-xs bg-graphite-200 px-1.5 py-0.5 text-ink"
                                         >Left (inactive)</span
                                     ></span
                                 >
                             </td>
-                            <td v-if="canSeeClass" class="py-2 text-slate-600">
+                            <td v-if="canSeeClass" class="py-2 text-ink-muted">
                                 {{ row.class ?? '—' }}
                             </td>
                             <td class="py-2 text-right font-mono">
                                 {{ formatMoney(row.billed, totals.currency) }}
                             </td>
-                            <td class="py-2 text-right font-mono text-slate-600">
+                            <td class="py-2 text-right font-mono text-ink-muted">
                                 {{ formatMoney(row.concession, totals.currency) }}
                             </td>
-                            <td class="py-2 text-right font-mono text-slate-600">
+                            <td class="py-2 text-right font-mono text-ink-muted">
                                 {{ formatMoney(row.paid, totals.currency) }}
                             </td>
                             <td class="py-2 text-right font-mono">
@@ -384,18 +375,18 @@ function apply(): void {
                             </td>
                             <td
                                 class="py-2 text-right font-mono"
-                                :class="row.overdue !== '0.00' ? 'text-red-700' : 'text-slate-400'"
+                                :class="row.overdue !== '0.00' ? 'text-danger' : 'text-ink-muted'"
                             >
                                 {{ formatMoney(row.overdue, totals.currency) }}
                             </td>
-                            <td class="py-2 pl-4 text-xs text-slate-600">
-                                <span v-if="row.earliestOverdueDueDate" class="block text-red-700"
+                            <td class="py-2 pl-4 text-xs text-ink-muted">
+                                <span v-if="row.earliestOverdueDueDate" class="block text-danger"
                                     >Overdue since {{ row.earliestOverdueDueDate }}</span
                                 >
                                 <span v-if="row.nextDueDate" class="block"
                                     >Next due {{ row.nextDueDate }}</span
                                 >
-                                <span class="block text-slate-400"
+                                <span class="block text-ink-muted"
                                     >{{ row.openCharges }} open charge{{
                                         row.openCharges === 1 ? '' : 's'
                                     }}</span

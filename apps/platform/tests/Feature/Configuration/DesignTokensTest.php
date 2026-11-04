@@ -134,6 +134,9 @@ class DesignTokensTest extends TestCase
         'resources/js/Pages/App/EnrollmentRollovers', // DS-4b
         'resources/js/Components/GuardianIdentityFields.vue', // DS-4b
         'resources/js/Components/RelationshipFlags.vue', // DS-4b
+        'resources/js/Pages/App/Finance',           // DS-4c
+        'resources/js/Components/Fees',             // DS-4c
+        'resources/js/Components/ChargeEndForm.vue', // DS-4c
     ];
 
     #[Test]
@@ -146,7 +149,7 @@ class DesignTokensTest extends TestCase
             $files = [...$files, ...(is_dir($full) ? iterator_to_array(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($full, \FilesystemIterator::SKIP_DOTS))) : [new \SplFileInfo($full)])];
         }
         $vue = array_filter($files, fn (\SplFileInfo $f) => $f->getExtension() === 'vue');
-        $this->assertGreaterThan(50, count($vue), 'the migrated scope resolves to real files');
+        $this->assertGreaterThan(85, count($vue), 'the migrated scope resolves to real files');
         foreach ($vue as $file) {
             $code = preg_replace(['/<!--.*?-->/s', '/^\s*\/\/.*$/m'], '', (string) file_get_contents($file->getPathname()));
             $this->assertDoesNotMatchRegularExpression($palette, $code, $file->getPathname().' uses a raw palette class');

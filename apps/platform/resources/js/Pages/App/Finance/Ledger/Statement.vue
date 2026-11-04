@@ -78,13 +78,13 @@ function apply(): void {
 
 <template>
     <Head :title="`Ledger · ${account.code}`" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/ledger-accounts">← Ledger accounts</a>
         <h1 class="mt-2 text-xl font-semibold">
-            <span class="font-mono text-base text-slate-500">{{ account.code }}</span>
+            <span class="font-mono text-base text-ink-muted">{{ account.code }}</span>
             {{ account.name }}
         </h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ account.type }} account · normally carries a {{ account.normalSide }} balance. Lines
             are in posting order, dated by the school's own calendar. Every entry here is posted;
             corrections appear as their own reversing entries.
@@ -92,52 +92,50 @@ function apply(): void {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-xs text-slate-600" for="ledger-from">From</label>
+                <label class="block text-xs text-ink-muted" for="ledger-from">From</label>
                 <input
                     id="ledger-from"
                     v-model="from"
                     type="date"
                     :max="today"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                 />
             </div>
             <div>
-                <label class="block text-xs text-slate-600" for="ledger-to">To</label>
+                <label class="block text-xs text-ink-muted" for="ledger-to">To</label>
                 <input
                     id="ledger-to"
                     v-model="to"
                     type="date"
                     :max="today"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                 />
             </div>
-            <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
-                Show
-            </button>
+            <button type="submit" class="btn btn-secondary">Show</button>
         </form>
-        <p v-if="pageErrors.from || pageErrors.to" class="mt-3 text-sm text-red-700" role="alert">
+        <p v-if="pageErrors.from || pageErrors.to" class="mt-3 text-sm text-danger" role="alert">
             {{ pageErrors.from ?? pageErrors.to }}
         </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Opening balance ({{ filters.from }})</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Opening balance ({{ filters.from }})</dt>
                 <dd class="text-lg font-semibold">{{ side(opening) }}</dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Debits in range</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Debits in range</dt>
                 <dd class="text-lg font-semibold">
                     {{ formatMoney(totalDebit, account.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Credits in range</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Credits in range</dt>
                 <dd class="text-lg font-semibold">
                     {{ formatMoney(totalCredit, account.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-xs text-slate-500">Closing balance ({{ filters.to }})</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-xs text-ink-muted">Closing balance ({{ filters.to }})</dt>
                 <dd class="text-lg font-semibold">{{ side(closing) }}</dd>
             </div>
         </dl>
@@ -156,7 +154,7 @@ function apply(): void {
                         Posted lines with the running balance after each
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
+                        <tr class="border-b border-line text-xs text-ink-muted">
                             <th scope="col" class="py-2 font-medium">Posted</th>
                             <th scope="col" class="py-2 font-medium">Entry</th>
                             <th scope="col" class="py-2 text-right font-medium">Debit</th>
@@ -164,9 +162,9 @@ function apply(): void {
                             <th scope="col" class="py-2 text-right font-medium">Balance</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="(line, index) in lines.data" :key="index">
-                            <td class="py-2 text-slate-600">{{ line.postedAt }}</td>
+                            <td class="py-2 text-ink-muted">{{ line.postedAt }}</td>
                             <td class="py-2">
                                 <a
                                     class="underline"
@@ -175,7 +173,7 @@ function apply(): void {
                                 >
                                 <span
                                     v-if="line.isReversal"
-                                    class="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700"
+                                    class="ml-2 rounded-xs bg-graphite-200 px-1.5 py-0.5 text-xs text-ink"
                                     >reversal</span
                                 >
                             </td>

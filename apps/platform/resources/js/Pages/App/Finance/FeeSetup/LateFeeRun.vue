@@ -83,12 +83,12 @@ function filter(result: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/late-fee-runs">← Late-fee runs</a>
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ run.rule?.name ?? 'Late-fee run' }}</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Evaluated on {{ run.evaluationDate }} ·
                     <span class="capitalize">{{ run.status.replaceAll('_', ' ') }}</span>
                     <template v-if="run.rule">
@@ -110,7 +110,7 @@ function filter(result: string): void {
                 <button
                     v-if="['draft', 'previewed'].includes(run.status)"
                     type="button"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                    class="btn btn-secondary"
                     @click="act('preview')"
                 >
                     {{ run.status === 'draft' ? 'Preview' : 'Preview again' }}
@@ -118,7 +118,7 @@ function filter(result: string): void {
                 <button
                     v-if="run.status === 'previewed'"
                     type="button"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+                    class="btn btn-primary"
                     @click="
                         act(
                             'execute',
@@ -131,7 +131,7 @@ function filter(result: string): void {
                 <button
                     v-if="run.status === 'executing'"
                     type="button"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                    class="btn btn-secondary"
                     @click="act('resume')"
                 >
                     Resume
@@ -139,7 +139,7 @@ function filter(result: string): void {
                 <button
                     v-if="['draft', 'previewed'].includes(run.status)"
                     type="button"
-                    class="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700"
+                    class="rounded-xs border border-danger/40 px-3 py-1.5 text-sm text-danger"
                     @click="act('cancel', 'Cancel this run?')"
                 >
                     Cancel run
@@ -147,31 +147,35 @@ function filter(result: string): void {
             </div>
         </div>
 
-        <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p
+            v-if="actionError"
+            role="alert"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
+        >
             {{ actionError }}
         </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-slate-500">Ready</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-ink-muted">Ready</dt>
                 <dd>
                     {{ run.preview.readyCount }} ·
                     {{ formatMoney(run.preview.readyAmount, run.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-slate-500">Not eligible / already charged</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-ink-muted">Not eligible / already charged</dt>
                 <dd>{{ run.preview.notEligibleCount }} / {{ run.preview.alreadyAssessedCount }}</dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-slate-500">Charged</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-ink-muted">Charged</dt>
                 <dd>
                     {{ run.execution.succeededCount }} ·
                     {{ formatMoney(run.execution.assessedAmount, run.currency) }}
                 </dd>
             </div>
-            <div class="rounded border border-slate-200 p-3">
-                <dt class="text-slate-500">Skipped / failed</dt>
+            <div class="rounded-xs border border-line p-3">
+                <dt class="text-ink-muted">Skipped / failed</dt>
                 <dd>{{ run.execution.skippedCount }} / {{ run.execution.failedCount }}</dd>
             </div>
         </dl>
@@ -181,11 +185,11 @@ function filter(result: string): void {
                 v-for="f in ['', 'ready', 'not_eligible', 'already_assessed']"
                 :key="f"
                 type="button"
-                class="rounded-full border px-3 py-1"
+                class="rounded-xs border px-3 py-1"
                 :class="
                     filters.preview_result === f
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300'
+                        ? 'border-accent-strong bg-accent-strong text-white'
+                        : 'border-control-line'
                 "
                 @click="filter(f)"
             >
@@ -195,13 +199,11 @@ function filter(result: string): void {
 
         <section
             v-if="voidingId"
-            class="mt-6 rounded border border-red-200 bg-red-50/40 p-4"
+            class="mt-6 rounded-xs border border-danger/40 bg-danger-tint/40 p-4"
             aria-label="Void"
         >
-            <h2 class="text-sm font-medium text-slate-900">
-                Void this late fee and reverse its charge
-            </h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <h2 class="text-sm font-medium text-ink">Void this late fee and reverse its charge</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 Void only what should not stand. To excuse a valid charge, request a concession
                 instead.
             </p>
@@ -222,7 +224,7 @@ function filter(result: string): void {
         </section>
         <table class="mt-4 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Student</th>
                     <th scope="col" class="py-2 font-medium">Source charge</th>
                     <th scope="col" class="py-2 text-right font-medium">Outstanding</th>
@@ -230,11 +232,11 @@ function filter(result: string): void {
                     <th scope="col" class="py-2 pl-4 font-medium">Result</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="i in items.data" :key="i.id">
                     <td class="py-2">
                         {{ i.studentName ?? 'Student' }}
-                        <span v-if="i.studentNumber" class="block text-xs text-slate-500">{{
+                        <span v-if="i.studentNumber" class="block text-xs text-ink-muted">{{
                             i.studentNumber
                         }}</span>
                     </td>
@@ -242,7 +244,7 @@ function filter(result: string): void {
                         <a class="underline" :href="`/app/finance/charges/${i.sourceChargeId}`"
                             >{{ i.feeHeadCode }} · {{ i.billingPeriodKey }}</a
                         >
-                        <span class="block text-xs text-slate-500"
+                        <span class="block text-xs text-ink-muted"
                             >due {{ i.dueDate }}, grace to {{ i.finalGraceDate }}</span
                         >
                     </td>
@@ -256,7 +258,7 @@ function filter(result: string): void {
                     </td>
                     <td class="py-2 text-right font-mono">
                         {{ formatMoney(i.executedAmount ?? i.finalAmount, i.currency) }}
-                        <span v-if="i.capApplied" class="block text-xs text-slate-500"
+                        <span v-if="i.capApplied" class="block text-xs text-ink-muted"
                             >capped from {{ formatMoney(i.calculatedAmount, i.currency) }}</span
                         >
                     </td>
@@ -264,7 +266,7 @@ function filter(result: string): void {
                         <span class="capitalize">{{
                             (i.executionStatus ?? i.previewResult).replaceAll('_', ' ')
                         }}</span>
-                        <span v-if="i.failureReason ?? i.reason" class="block text-slate-500">{{
+                        <span v-if="i.failureReason ?? i.reason" class="block text-ink-muted">{{
                             (i.failureReason ?? i.reason ?? '').replaceAll('_', ' ')
                         }}</span>
                         <a
@@ -273,11 +275,11 @@ function filter(result: string): void {
                             :href="`/app/finance/charges/${i.lateFeeChargeId}`"
                             >late-fee charge</a
                         >
-                        <span v-if="i.lateFeeVoided" class="block text-slate-500">voided</span>
+                        <span v-if="i.lateFeeVoided" class="block text-ink-muted">voided</span>
                         <button
                             v-else-if="canVoid && i.lateFeeAssessmentId"
                             type="button"
-                            class="block text-red-700 underline"
+                            class="block text-danger underline"
                             @click="voidingId = i.lateFeeAssessmentId"
                         >
                             Void

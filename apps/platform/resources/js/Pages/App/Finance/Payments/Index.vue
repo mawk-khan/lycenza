@@ -94,29 +94,26 @@ const narrowed = computed(
 );
 
 const STATUS: Record<Status, { label: string; className: string }> = {
-    received: { label: 'Received', className: 'bg-emerald-50 text-emerald-700' },
-    partly_refunded: { label: 'Partly refunded', className: 'bg-amber-50 text-amber-700' },
-    refunded: { label: 'Refunded', className: 'bg-amber-50 text-amber-800' },
-    reversed: { label: 'Reversed', className: 'bg-red-50 text-red-700' },
+    received: { label: 'Received', className: 'tag-positive' },
+    partly_refunded: { label: 'Partly refunded', className: 'tag-info' },
+    refunded: { label: 'Refunded', className: 'tag-info' },
+    reversed: { label: 'Reversed', className: 'tag-attention' },
 };
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h1 class="text-xl font-semibold">Payments received</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Receipts recorded {{ isToday ? 'today' : 'on' }} {{ period }} (School time).
                     Recorded payments are never edited; a correction shows as the status.
                 </p>
             </div>
-            <a
-                v-if="canRecord"
-                href="/app/finance/payments/record"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+            <a v-if="canRecord" href="/app/finance/payments/record" class="btn btn-primary shrink-0"
                 >Record offline payment</a
             >
         </div>
@@ -128,28 +125,28 @@ const STATUS: Record<Status, { label: string; className: string }> = {
             @submit.prevent="apply"
         >
             <div>
-                <label class="block text-sm text-slate-600" for="filter-from">Recorded on</label>
+                <label class="block text-sm text-ink-muted" for="filter-from">Recorded on</label>
                 <input
                     id="filter-from"
                     v-model="from"
                     type="date"
                     :max="today"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                    class="input mt-1"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-to">To (optional)</label>
+                <label class="block text-sm text-ink-muted" for="filter-to">To (optional)</label>
                 <input
                     id="filter-to"
                     v-model="to"
                     type="date"
                     :min="from"
                     :max="today"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                    class="input mt-1"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-receipt"
+                <label class="block text-sm text-ink-muted" for="filter-receipt"
                     >Receipt number</label
                 >
                 <input
@@ -157,26 +154,22 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                     v-model="receipt"
                     type="search"
                     placeholder="e.g. 000123"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                    class="input mt-1"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-student">Student</label>
+                <label class="block text-sm text-ink-muted" for="filter-student">Student</label>
                 <input
                     id="filter-student"
                     v-model="student"
                     type="search"
                     placeholder="Name or number"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
+                    class="input mt-1"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-method">Method</label>
-                <select
-                    id="filter-method"
-                    v-model="method"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="filter-method">Method</label>
+                <select id="filter-method" v-model="method" class="input mt-1">
                     <option value="">All methods</option>
                     <option v-for="m in methods" :key="m.value" :value="m.value">
                         {{ m.label }}
@@ -184,16 +177,11 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                 </select>
             </div>
             <div class="flex gap-2">
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-                >
-                    Show
-                </button>
+                <button type="submit" class="btn btn-primary">Show</button>
                 <button
                     v-if="!isToday || narrowed"
                     type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="btn btn-secondary"
                     @click="showToday"
                 >
                     Today
@@ -206,29 +194,29 @@ const STATUS: Record<Status, { label: string; className: string }> = {
             <dl
                 v-for="t in totals"
                 :key="t.currency"
-                class="grid grid-cols-1 gap-3 rounded border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-3"
+                class="grid grid-cols-1 gap-3 rounded-xs border border-line bg-graphite-100 p-4 text-sm sm:grid-cols-3"
             >
                 <div>
-                    <dt class="text-slate-500">Receipts</dt>
+                    <dt class="text-ink-muted">Receipts</dt>
                     <dd class="text-lg font-semibold">{{ t.receipts }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Gross received</dt>
+                    <dt class="text-ink-muted">Gross received</dt>
                     <dd class="font-mono text-lg font-semibold">
                         {{ formatMoney(t.gross, t.currency) }}
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Still retained</dt>
+                    <dt class="text-ink-muted">Still retained</dt>
                     <dd class="font-mono text-lg font-semibold">
                         {{ formatMoney(t.retained, t.currency) }}
                     </dd>
-                    <dd class="text-xs text-slate-500">
+                    <dd class="text-xs text-ink-muted">
                         Gross less any of these receipts reversed or refunded since.
                     </dd>
                 </div>
             </dl>
-            <p class="mt-2 text-xs text-slate-500">
+            <p class="mt-2 text-xs text-ink-muted">
                 Totals cover every matching receipt{{ narrowed ? ' for these filters' : '' }}, not
                 only this page.
             </p>
@@ -248,7 +236,7 @@ const STATUS: Record<Status, { label: string; className: string }> = {
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 pr-3 font-medium">Receipt</th>
                         <th scope="col" class="py-2 pr-3 font-medium">Student</th>
                         <th scope="col" class="py-2 pr-3 font-medium">Recorded</th>
@@ -257,7 +245,7 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                         <th scope="col" class="py-2 font-medium">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="payment in payments.data" :key="payment.id">
                         <td class="py-3 pr-3">
                             <a
@@ -271,7 +259,7 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                                 name
                             }}</span>
                         </td>
-                        <td class="py-3 pr-3 text-slate-600">
+                        <td class="py-3 pr-3 text-ink-muted">
                             {{ formatDateTime(payment.recordedAt) }}
                             <span
                                 v-if="payment.receivedOn !== payment.recordedAt.slice(0, 10)"
@@ -287,20 +275,18 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                             {{ formatMoney(payment.amount, payment.currency) }}
                         </td>
                         <td class="py-3">
-                            <span
-                                class="rounded-full px-2 py-0.5 text-xs font-medium"
-                                :class="STATUS[payment.status].className"
-                                >{{ STATUS[payment.status].label }}</span
-                            >
+                            <span class="tag" :class="STATUS[payment.status].className">{{
+                                STATUS[payment.status].label
+                            }}</span>
                             <span
                                 v-if="payment.status === 'partly_refunded'"
-                                class="block text-xs text-slate-500"
+                                class="block text-xs text-ink-muted"
                                 >{{
                                     formatMoney(payment.refunded, payment.currency)
                                 }}
                                 refunded</span
                             >
-                            <span v-if="payment.reallocated" class="block text-xs text-slate-500"
+                            <span v-if="payment.reallocated" class="block text-xs text-ink-muted"
                                 >Reallocated</span
                             >
                         </td>
@@ -312,7 +298,7 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                 <li
                     v-for="payment in payments.data"
                     :key="payment.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <div class="flex items-start justify-between gap-3">
                         <a
@@ -320,16 +306,14 @@ const STATUS: Record<Status, { label: string; className: string }> = {
                             :href="`/app/finance/payments/${payment.id}`"
                             >{{ payment.receiptNumber ?? 'View payment' }}</a
                         >
-                        <span
-                            class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
-                            :class="STATUS[payment.status].className"
-                            >{{ STATUS[payment.status].label }}</span
-                        >
+                        <span class="tag shrink-0" :class="STATUS[payment.status].className">{{
+                            STATUS[payment.status].label
+                        }}</span>
                     </div>
                     <p v-for="name in payment.students" :key="name" class="mt-1 text-sm">
                         {{ name }}
                     </p>
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">
                         {{ formatDateTime(payment.recordedAt) }} · {{ payment.methodLabel }}
                     </p>
                     <p class="mt-1 font-mono text-sm">

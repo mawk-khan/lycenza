@@ -16,7 +16,7 @@ defineProps<{ rows: FeeIntentRow[]; caption: string; showScope?: boolean }>();
 </script>
 
 <template>
-    <p v-if="rows.length === 0" class="text-sm text-slate-600">No fee intent recorded.</p>
+    <p v-if="rows.length === 0" class="text-sm text-ink-muted">No fee intent recorded.</p>
     <div v-else class="relative overflow-x-auto">
         <table class="w-full text-left text-sm">
             <caption class="sr-only">
@@ -24,7 +24,7 @@ defineProps<{ rows: FeeIntentRow[]; caption: string; showScope?: boolean }>();
                     caption
                 }}
             </caption>
-            <thead class="text-xs text-slate-600">
+            <thead class="text-xs text-ink-muted">
                 <tr>
                     <th scope="col" class="pr-3 py-1">Academic year</th>
                     <th scope="col" class="pr-3 py-1">Fee head</th>

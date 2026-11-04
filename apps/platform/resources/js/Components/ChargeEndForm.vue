@@ -76,11 +76,11 @@ function submit(): void {
             :action="action"
             :error="form.errors.mfa_code"
         />
-        <p v-if="refusal" class="text-sm text-red-700">{{ refusal }}</p>
+        <p v-if="refusal" class="text-sm text-danger">{{ refusal }}</p>
         <button
             type="submit"
             :disabled="form.processing || form.reason_code === '' || form.mfa_code === ''"
-            class="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            class="rounded-xs border border-danger/40 px-3 py-2 text-sm font-medium text-danger hover:bg-danger-tint disabled:opacity-50"
         >
             {{ submitLabel }}
         </button>

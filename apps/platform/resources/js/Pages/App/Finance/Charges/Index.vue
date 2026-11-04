@@ -109,34 +109,30 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Charges</h1>
-                <p class="mt-1 text-sm text-slate-500">Student fee charges for this School.</p>
+                <p class="mt-1 text-sm text-ink-muted">Student fee charges for this School.</p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/finance/charges/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <a v-if="canManage" href="/app/finance/charges/create" class="btn btn-primary shrink-0">
                 Assess charge
             </a>
         </div>
 
         <div class="mt-6 flex flex-wrap items-end gap-3">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="filter-student">Student</label>
+                <label class="block text-sm text-ink-muted" for="filter-student">Student</label>
                 <div
                     v-if="studentLabel"
-                    class="mt-1 flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center gap-2 rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ studentLabel }}</span>
                     <button
                         type="button"
-                        class="text-slate-400 hover:text-slate-700"
+                        class="text-ink-muted hover:text-ink"
                         @click="clearStudent"
                     >
                         ×
@@ -148,20 +144,20 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                     v-model="studentQuery"
                     type="text"
                     placeholder="Search by name…"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-56"
                 />
                 <ul
                     v-if="studentResults.length > 0"
-                    class="absolute z-10 mt-1 w-56 rounded border border-slate-200 bg-white shadow-sm"
+                    class="absolute z-10 mt-1 w-56 rounded-xs border border-line bg-white shadow-sm"
                 >
                     <li v-for="candidate in studentResults" :key="candidate.id">
                         <button
                             type="button"
-                            class="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            class="block w-full px-3 py-2 text-left text-sm hover:bg-graphite-100"
                             @click="selectStudent(candidate)"
                         >
                             {{ candidateName(candidate) }}
-                            <span class="text-xs text-slate-400"
+                            <span class="text-xs text-ink-muted"
                                 >({{ candidate.studentNumber }})</span
                             >
                         </button>
@@ -169,11 +165,11 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                 </ul>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-year">Academic Year</label>
+                <label class="block text-sm text-ink-muted" for="filter-year">Academic Year</label>
                 <select
                     id="filter-year"
                     v-model="academicYearId"
-                    class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-48"
                     @change="applyFilters"
                 >
                     <option value="">All years</option>
@@ -182,7 +178,7 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                     </option>
                 </select>
             </div>
-            <label class="mb-2 flex items-center gap-2 text-sm text-slate-600">
+            <label class="mb-2 flex items-center gap-2 text-sm text-ink-muted">
                 <input v-model="includeCancelled" type="checkbox" @change="applyFilters" />
                 Include cancelled
             </label>
@@ -201,19 +197,14 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
             "
         >
             <template v-if="canManage && !hasFilters" #action>
-                <a
-                    href="/app/finance/charges/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Assess charge
-                </a>
+                <a href="/app/finance/charges/create" class="btn btn-primary"> Assess charge </a>
             </template>
         </EmptyState>
 
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Student</th>
                         <th scope="col" class="py-2 font-medium">Description</th>
                         <th scope="col" class="py-2 text-right font-medium">Amount</th>
@@ -221,7 +212,7 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                         <th scope="col" class="py-2 font-medium">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="charge in charges.data" :key="charge.id">
                         <td class="py-3">
                             <a
@@ -230,20 +221,20 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                                 >{{ charge.studentName ?? 'Student unavailable' }}</a
                             >
                         </td>
-                        <td class="py-3 text-slate-600">{{ charge.description }}</td>
+                        <td class="py-3 text-ink-muted">{{ charge.description }}</td>
                         <td class="py-3 text-right font-mono">
                             {{ formatMoney(charge.amount, charge.currency) }}
                         </td>
-                        <td class="py-3 text-slate-600">{{ charge.dueDate ?? '—' }}</td>
+                        <td class="py-3 text-ink-muted">{{ charge.dueDate ?? '—' }}</td>
                         <td class="py-3">
                             <span
                                 v-if="charge.cancelledAt"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700"
+                                class="inline-flex items-center gap-1.5 rounded-xs bg-danger-tint px-2 py-0.5 text-xs font-medium text-danger"
                                 >Cancelled</span
                             >
                             <span
                                 v-else
-                                class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
+                                class="inline-flex items-center gap-1.5 rounded-xs bg-graphite-100 px-2 py-0.5 text-xs font-medium text-ink"
                                 >Assessed</span
                             >
                         </td>
@@ -255,12 +246,12 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                 <li
                     v-for="charge in charges.data"
                     :key="charge.id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a class="font-medium underline" :href="`/app/finance/charges/${charge.id}`">{{
                         charge.studentName ?? charge.studentId
                     }}</a>
-                    <p class="mt-1 text-sm text-slate-500">{{ charge.description }}</p>
+                    <p class="mt-1 text-sm text-ink-muted">{{ charge.description }}</p>
                     <p class="mt-1 font-mono text-sm">
                         {{ formatMoney(charge.amount, charge.currency) }}
                     </p>

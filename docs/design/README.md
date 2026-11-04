@@ -54,6 +54,6 @@ the verbatim copy and is **not** how the application loads fonts (ADR 0082 §2.3
 | **DS-1** | Tokens in Tailwind `@theme`, self-hosted Barlow, runtime School accent. | Published (`27547ab2`) |
 | **DS-2** | Application shell (`AccountLayout`): top bar, navigation, focus. | Published (`7fc9f197`) |
 | **DS-3** | Primitives and the 13 patterns on the existing components. | Published (`9757f44b`; `foundation-v3/COMPONENTS.md`) |
-| **DS-4+** | Page migration, one domain per slice (codemod `foundation-v3/ds_migrate.py`). | DS-4a Students published (`8b462ae8`); DS-4b Guardians, Enrollments, Admissions, Rollovers implemented (ADR 0082 §10.6) |
+| **DS-4+** | Page migration, one domain per slice (codemod `foundation-v3/ds_migrate.py`). | DS-4a Students published (`8b462ae8`); DS-4b Guardians, Enrollments, Admissions, Rollovers published (`ec965384`); DS-4c Finance & Fees implemented (ADR 0082 §10.7) |
 
 Every slice needs owner authorization; none starts automatically.

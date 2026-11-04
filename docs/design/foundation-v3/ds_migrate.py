@@ -109,6 +109,10 @@ OPACITY = re.compile(r"^disabled:opacity-\d+$")
 def restructure(tag: str, classes: str) -> str:
     toks = classes.split()
     t = tag.lower()
+    # Status pills are square tags in the design (DS-4c).
+    if "rounded-full" in toks and "text-xs" in toks and "py-0.5" in toks:
+        toks = ["rounded-xs" if x == "rounded-full" else x for x in toks]
+        classes = " ".join(toks)
     buttonish = t in ("button", "a", "link", "inertialink")
     if t in ("input", "select", "textarea") and "border-slate-300" in toks:
         drop = {"rounded", "border", "border-slate-300", "text-sm", "bg-white", "w-full"}

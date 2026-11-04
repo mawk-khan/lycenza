@@ -50,10 +50,10 @@ function filter(status: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-4 font-sans text-slate-900 sm:p-8">
+    <main class="mx-auto max-w-5xl p-4 font-sans text-ink sm:p-8">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <h1 class="mt-2 text-xl font-semibold">Payment corrections</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Reallocations, reversals and refunds of recorded payments. A correction is requested on
             the payment's page and recorded only when someone other than its requester approves it
             there.
@@ -64,11 +64,11 @@ function filter(status: string): void {
                 v-for="s in statuses"
                 :key="s"
                 type="button"
-                class="rounded-full border px-3 py-1 capitalize"
+                class="rounded-xs border px-3 py-1 capitalize"
                 :class="
                     filters.status === s
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300'
+                        ? 'border-accent-strong bg-accent-strong text-white'
+                        : 'border-control-line'
                 "
                 @click="filter(s)"
             >
@@ -86,7 +86,7 @@ function filter(status: string): void {
         <div v-else class="mt-4 overflow-x-auto">
             <table class="w-full text-left text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Payment</th>
                         <th scope="col" class="py-2 font-medium">Correction</th>
                         <th scope="col" class="py-2 text-right font-medium">Amount</th>
@@ -94,7 +94,7 @@ function filter(status: string): void {
                         <th scope="col" class="py-2 pl-4 font-medium">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="r in requests.data" :key="r.id">
                         <td class="py-3">
                             <a class="underline" :href="`/app/finance/payments/${r.paymentId}`">{{

@@ -92,30 +92,34 @@ function cancelAdjustment(a: Adjustment): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/concessions">← Concessions</a>
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold capitalize">{{ concession.category }}</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{ concession.studentName ?? 'Student' }}
                     <span v-if="concession.studentNumber">({{ concession.studentNumber }})</span>
                     · {{ concession.academicYearName }}
                 </p>
             </div>
             <span
-                class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize"
+                class="shrink-0 rounded-xs bg-graphite-200 px-2 py-0.5 text-xs font-medium capitalize"
                 >{{ concession.status }}</span
             >
         </div>
 
-        <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p
+            v-if="actionError"
+            role="alert"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
+        >
             {{ actionError }}
         </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
-                <dt class="text-slate-500">Value</dt>
+                <dt class="text-ink-muted">Value</dt>
                 <dd class="font-mono">
                     {{
                         concession.kind === 'fixed'
@@ -125,7 +129,7 @@ function cancelAdjustment(a: Adjustment): void {
                 </dd>
             </div>
             <div>
-                <dt class="text-slate-500">Applies to</dt>
+                <dt class="text-ink-muted">Applies to</dt>
                 <dd v-if="concession.scope === 'targeted'">
                     <a class="underline" :href="`/app/finance/charges/${concession.chargeId}`">{{
                         concession.chargeDescription ?? 'Charge'
@@ -137,26 +141,26 @@ function cancelAdjustment(a: Adjustment): void {
                 </dd>
             </div>
             <div>
-                <dt class="text-slate-500">Requested by</dt>
+                <dt class="text-ink-muted">Requested by</dt>
                 <dd>
                     {{ concession.requestedByName ?? '—' }} ·
                     {{ formatDateTime(concession.createdAt) }}
                 </dd>
             </div>
             <div v-if="concession.decidedAt">
-                <dt class="text-slate-500">Decided by</dt>
+                <dt class="text-ink-muted">Decided by</dt>
                 <dd>
                     {{ concession.decidedByName ?? '—' }} ·
                     {{ formatDateTime(concession.decidedAt) }}
                 </dd>
             </div>
             <div v-if="concession.revokedAt">
-                <dt class="text-slate-500">Revoked</dt>
+                <dt class="text-ink-muted">Revoked</dt>
                 <dd>{{ formatDateTime(concession.revokedAt) }}</dd>
             </div>
         </dl>
 
-        <section v-if="needsCode" class="mt-8 border-t border-slate-200 pt-6">
+        <section v-if="needsCode" class="mt-8 border-t border-line pt-6">
             <MfaCodeField
                 id="concession-mfa"
                 v-model="mfaCode"
@@ -168,12 +172,12 @@ function cancelAdjustment(a: Adjustment): void {
 
         <section
             v-if="concession.status === 'pending'"
-            class="mt-8 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-6"
+            class="mt-8 flex flex-wrap items-center gap-2 border-t border-line pt-6"
         >
             <template v-if="can.decide">
                 <button
                     type="button"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+                    class="btn btn-primary"
                     @click="
                         act(
                             'approve',
@@ -185,43 +189,43 @@ function cancelAdjustment(a: Adjustment): void {
                 </button>
                 <button
                     type="button"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                    class="btn btn-secondary"
                     @click="act('reject', 'Reject this concession?')"
                 >
                     Reject
                 </button>
             </template>
-            <p v-else-if="can.isRequester" class="text-sm text-slate-500">
+            <p v-else-if="can.isRequester" class="text-sm text-ink-muted">
                 You requested this concession, so another person must approve or reject it.
             </p>
             <button
                 v-if="can.withdraw"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                class="btn btn-secondary"
                 @click="act('withdraw', 'Withdraw your request?')"
             >
                 Withdraw
             </button>
         </section>
 
-        <section v-if="can.revoke" class="mt-8 border-t border-slate-200 pt-6">
-            <p class="text-sm text-slate-500">
+        <section v-if="can.revoke" class="mt-8 border-t border-line pt-6">
+            <p class="text-sm text-ink-muted">
                 Revoking stops this concession applying to future charges. Adjustments already
                 posted stay until each is cancelled.
             </p>
             <button
                 type="button"
-                class="mt-2 rounded border border-red-300 px-3 py-1.5 text-sm text-red-700"
+                class="mt-2 rounded-xs border border-danger/40 px-3 py-1.5 text-sm text-danger"
                 @click="act('revoke', 'Revoke this standing concession?')"
             >
                 Revoke
             </button>
         </section>
 
-        <section class="mt-8 border-t border-slate-200 pt-6">
+        <section class="mt-8 border-t border-line pt-6">
             <h2 class="text-sm font-medium">Posted adjustments</h2>
-            <p v-if="adjustments.length === 0" class="mt-1 text-sm text-slate-500">None yet.</p>
-            <ul v-else class="mt-2 divide-y divide-slate-100 text-sm">
+            <p v-if="adjustments.length === 0" class="mt-1 text-sm text-ink-muted">None yet.</p>
+            <ul v-else class="mt-2 divide-y divide-line text-sm">
                 <li
                     v-for="a in adjustments"
                     :key="a.id"
@@ -232,18 +236,18 @@ function cancelAdjustment(a: Adjustment): void {
                     }}</a>
                     <span
                         class="ml-auto font-mono"
-                        :class="{ 'text-slate-400 line-through': a.cancelledAt }"
+                        :class="{ 'text-ink-muted line-through': a.cancelledAt }"
                         >{{ formatMoney(a.amount, a.currency) }}</span
                     >
                     <button
                         v-if="can.cancelAdjustments && !a.cancelledAt"
                         type="button"
-                        class="text-xs text-red-700 underline"
+                        class="text-xs text-danger underline"
                         @click="cancelAdjustment(a)"
                     >
                         Cancel
                     </button>
-                    <span v-else-if="a.cancelledAt" class="text-xs text-slate-500">Cancelled</span>
+                    <span v-else-if="a.cancelledAt" class="text-xs text-ink-muted">Cancelled</span>
                 </li>
             </ul>
         </section>

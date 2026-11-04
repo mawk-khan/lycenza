@@ -32,56 +32,47 @@ function create(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <h1 class="mt-2 text-xl font-semibold">Late-fee runs</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             A run applies one active rule at an evaluation date. A charge is eligible only after its
             due date plus the grace days. Preview first -- a preview never creates a charge;
             execution recalculates from what is outstanding at that moment.
         </p>
 
-        <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p
+            v-if="actionError"
+            role="alert"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
+        >
             {{ actionError }}
         </p>
 
         <form
             v-if="canRun"
-            class="mt-6 grid gap-3 rounded border border-slate-200 p-4 md:grid-cols-3"
+            class="mt-6 grid gap-3 rounded-xs border border-line p-4 md:grid-cols-3"
             @submit.prevent="create"
         >
             <label class="text-sm md:col-span-2">
-                <span class="block text-xs text-slate-500">Active late-fee rule</span>
-                <select
-                    v-model="form.late_fee_rule_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                    required
-                >
+                <span class="block text-xs text-ink-muted">Active late-fee rule</span>
+                <select v-model="form.late_fee_rule_id" class="input mt-1" required>
                     <option value="" disabled>Choose…</option>
                     <option v-for="r in activeRules" :key="r.id" :value="r.id">{{ r.name }}</option>
                 </select>
-                <span v-if="form.errors.late_fee_rule_id" class="text-xs text-red-600">{{
+                <span v-if="form.errors.late_fee_rule_id" class="text-xs text-danger">{{
                     form.errors.late_fee_rule_id
                 }}</span>
             </label>
             <label class="text-sm">
-                <span class="block text-xs text-slate-500">Evaluation date</span>
-                <input
-                    v-model="form.evaluation_date"
-                    type="date"
-                    :max="today"
-                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                />
-                <span v-if="form.errors.evaluation_date" class="text-xs text-red-600">{{
+                <span class="block text-xs text-ink-muted">Evaluation date</span>
+                <input v-model="form.evaluation_date" type="date" :max="today" class="input mt-1" />
+                <span v-if="form.errors.evaluation_date" class="text-xs text-danger">{{
                     form.errors.evaluation_date
                 }}</span>
             </label>
             <div class="md:col-span-3">
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-                    :disabled="form.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="form.processing">
                     Create run
                 </button>
             </div>
@@ -96,14 +87,14 @@ function create(): void {
 
         <table v-else class="mt-6 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Rule</th>
                     <th scope="col" class="py-2 font-medium">Evaluation date</th>
                     <th scope="col" class="py-2 font-medium">Status</th>
                     <th scope="col" class="py-2 text-right font-medium">Ready / assessed</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="r in runs" :key="r.id">
                     <td class="py-3">
                         <a class="underline" :href="`/app/finance/late-fee-runs/${r.id}`">{{

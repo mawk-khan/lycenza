@@ -60,27 +60,27 @@ function saveAccount(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance">← Finance</a>
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Concessions</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     Concessions, scholarships and waivers. Every request needs a second person's
                     approval before it reduces what a Student owes; the charge itself never changes.
                 </p>
             </div>
             <a
                 v-if="canRequest"
-                class="shrink-0 rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+                class="btn btn-primary shrink-0"
                 href="/app/finance/concessions/create"
                 >Request concession</a
             >
         </div>
 
-        <section v-if="settings" class="mt-6 rounded border border-slate-200 p-4">
+        <section v-if="settings" class="mt-6 rounded-xs border border-line p-4">
             <h2 class="text-sm font-medium">Concession account</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Approved concessions post to this expense account. Changing it never moves
                 concessions already posted.
             </p>
@@ -92,7 +92,7 @@ function saveAccount(): void {
                     <span class="sr-only">Concession expense account</span>
                     <select
                         v-model="settingsForm.concession_ledger_account_id"
-                        class="rounded border border-slate-300 px-2 py-1"
+                        class="input w-auto"
                         required
                     >
                         <option value="" disabled>Choose an active expense account…</option>
@@ -101,16 +101,12 @@ function saveAccount(): void {
                         </option>
                     </select>
                 </label>
-                <button
-                    type="submit"
-                    class="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50"
-                    :disabled="settingsForm.processing"
-                >
+                <button type="submit" class="btn btn-secondary" :disabled="settingsForm.processing">
                     Save
                 </button>
                 <span
                     v-if="settingsForm.errors.concession_ledger_account_id"
-                    class="text-xs text-red-600"
+                    class="text-xs text-danger"
                     >{{ settingsForm.errors.concession_ledger_account_id }}</span
                 >
             </form>
@@ -119,7 +115,7 @@ function saveAccount(): void {
         <p
             v-if="errors.action"
             role="alert"
-            class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
         >
             {{ errors.action }}
         </p>
@@ -129,18 +125,18 @@ function saveAccount(): void {
                 v-for="s in statuses"
                 :key="s"
                 type="button"
-                class="rounded-full border px-3 py-1 capitalize"
+                class="rounded-xs border px-3 py-1 capitalize"
                 :class="
                     filters.status === s
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300'
+                        ? 'border-accent-strong bg-accent-strong text-white'
+                        : 'border-control-line'
                 "
                 @click="filter(s, filters.scope)"
             >
                 {{ s === 'pending' ? 'Awaiting approval' : s }}
             </button>
             <select
-                class="ml-auto rounded border border-slate-300 px-2 py-1"
+                class="input ml-auto w-auto"
                 :value="filters.scope"
                 aria-label="Scope"
                 @change="filter(filters.status, ($event.target as HTMLSelectElement).value)"
@@ -160,7 +156,7 @@ function saveAccount(): void {
 
         <table v-else class="mt-4 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Student</th>
                     <th scope="col" class="py-2 font-medium">Category</th>
                     <th scope="col" class="py-2 font-medium">Applies to</th>
@@ -168,7 +164,7 @@ function saveAccount(): void {
                     <th scope="col" class="py-2 pl-4 font-medium">Status</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="c in concessions.data" :key="c.id">
                     <td class="py-3">
                         <a class="underline" :href="`/app/finance/concessions/${c.id}`">{{

@@ -97,24 +97,24 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/charges">← Charges</a>
         <h1 class="mt-2 text-xl font-semibold">Assess charge</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Records a Student fee charge and posts its recognition entry to the Ledger in one step.
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
-                <label class="block text-sm text-slate-600" for="student">Student</label>
+                <label class="block text-sm text-ink-muted" for="student">Student</label>
                 <div
                     v-if="selectedStudentLabel"
-                    class="mt-1 flex items-center justify-between rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="mt-1 flex items-center justify-between rounded-xs border border-control-line px-3 py-2 text-sm"
                 >
                     <span>{{ selectedStudentLabel }}</span>
                     <button
                         type="button"
-                        class="text-slate-400 hover:text-slate-700"
+                        class="text-ink-muted hover:text-ink"
                         @click="clearStudent"
                     >
                         Change
@@ -126,40 +126,40 @@ function submit(): void {
                     v-model="studentQuery"
                     type="text"
                     placeholder="Search by name or student number…"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     :aria-invalid="!!form.errors.student_id"
                 />
                 <ul
                     v-if="studentResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white shadow-sm"
+                    class="absolute z-10 mt-1 w-full rounded-xs border border-line bg-white shadow-sm"
                 >
                     <li v-for="candidate in studentResults" :key="candidate.id">
                         <button
                             type="button"
-                            class="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            class="block w-full px-3 py-2 text-left text-sm hover:bg-graphite-100"
                             @click="selectStudent(candidate)"
                         >
                             {{ candidateName(candidate) }}
-                            <span class="text-xs text-slate-400"
+                            <span class="text-xs text-ink-muted"
                                 >({{ candidate.studentNumber }})</span
                             >
                         </button>
                     </li>
                 </ul>
-                <p v-if="form.errors.student_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.student_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.student_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="academic_year_id"
+                <label class="block text-sm text-ink-muted" for="academic_year_id"
                     >Academic Year</label
                 >
                 <select
                     id="academic_year_id"
                     v-model="form.academic_year_id"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     :aria-invalid="!!form.errors.academic_year_id"
                 >
                     <option value="" disabled>Select an Academic Year</option>
@@ -167,30 +167,30 @@ function submit(): void {
                         {{ year.label }}
                     </option>
                 </select>
-                <p v-if="form.errors.academic_year_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.academic_year_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.academic_year_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="description">Description</label>
+                <label class="block text-sm text-ink-muted" for="description">Description</label>
                 <input
                     id="description"
                     v-model="form.description"
                     required
                     maxlength="255"
                     placeholder="e.g. Term 1 Tuition Fee"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     :aria-invalid="!!form.errors.description"
                 />
-                <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.description" class="mt-1 text-sm text-danger">
                     {{ form.errors.description }}
                 </p>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-sm text-slate-600" for="amount">Amount (INR)</label>
+                    <label class="block text-sm text-ink-muted" for="amount">Amount (INR)</label>
                     <input
                         id="amount"
                         v-model="form.amount"
@@ -198,35 +198,30 @@ function submit(): void {
                         inputmode="decimal"
                         placeholder="0.00"
                         pattern="\d{1,12}(\.\d{1,2})?"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                         :aria-invalid="!!form.errors.amount"
                     />
-                    <p v-if="form.errors.amount" class="mt-1 text-sm text-red-600">
+                    <p v-if="form.errors.amount" class="mt-1 text-sm text-danger">
                         {{ form.errors.amount }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="due_date"
+                    <label class="block text-sm text-ink-muted" for="due_date"
                         >Due date (optional)</label
                     >
-                    <input
-                        id="due_date"
-                        v-model="form.due_date"
-                        type="date"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
+                    <input id="due_date" v-model="form.due_date" type="date" class="input mt-1" />
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="receivable_ledger_account_id"
+                <label class="block text-sm text-ink-muted" for="receivable_ledger_account_id"
                     >Receivable account</label
                 >
                 <select
                     id="receivable_ledger_account_id"
                     v-model="form.receivable_ledger_account_id"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                     :aria-invalid="!!form.errors.receivable_ledger_account_id"
                 >
                     <option value="" disabled>Select an account</option>
@@ -238,23 +233,20 @@ function submit(): void {
                         {{ account.code }} — {{ account.name }}
                     </option>
                 </select>
-                <p
-                    v-if="form.errors.receivable_ledger_account_id"
-                    class="mt-1 text-sm text-red-600"
-                >
+                <p v-if="form.errors.receivable_ledger_account_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.receivable_ledger_account_id }}
                 </p>
             </div>
 
             <div>
-                <label class="block text-sm text-slate-600" for="revenue_ledger_account_id"
+                <label class="block text-sm text-ink-muted" for="revenue_ledger_account_id"
                     >Revenue account</label
                 >
                 <select
                     id="revenue_ledger_account_id"
                     v-model="form.revenue_ledger_account_id"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select an account</option>
                     <option
@@ -270,7 +262,7 @@ function submit(): void {
             <div
                 v-if="form.errors.confirm_similar && similarCharges.length > 0"
                 role="alert"
-                class="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                class="rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
             >
                 <p class="font-medium">{{ form.errors.confirm_similar }}</p>
                 <ul class="mt-2 space-y-1">
@@ -298,7 +290,7 @@ function submit(): void {
             <button
                 type="submit"
                 :disabled="form.processing || !form.student_id"
-                class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary"
             >
                 Assess charge
             </button>

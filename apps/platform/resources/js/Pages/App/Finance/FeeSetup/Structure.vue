@@ -217,18 +217,18 @@ function createSuccessor(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/finance/fee-setup">← Fee setup</a>
         <h1 class="mt-2 text-xl font-semibold">
             {{ structure.name }}
-            <span class="ml-1 font-mono text-sm text-slate-500">{{ structure.code }}</span>
+            <span class="ml-1 font-mono text-sm text-ink-muted">{{ structure.code }}</span>
         </h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ structure.academicYearName }} · {{ structure.gradeLevelName }} ·
             {{ structure.campusName ?? 'All campuses (School default)' }} ·
             <span class="font-medium capitalize">{{ structure.status }}</span>
         </p>
-        <p v-if="structure.supersedesFeeStructureId" class="mt-1 text-sm text-slate-500">
+        <p v-if="structure.supersedesFeeStructureId" class="mt-1 text-sm text-ink-muted">
             Amends
             <a
                 class="underline"
@@ -236,7 +236,7 @@ function createSuccessor(): void {
                 >the previous structure</a
             >; activating this one retires it.
         </p>
-        <p v-if="structure.successorId" class="mt-1 text-sm text-slate-500">
+        <p v-if="structure.successorId" class="mt-1 text-sm text-ink-muted">
             An amendment exists ({{ structure.successorStatus }}):
             <a
                 class="underline"
@@ -245,7 +245,11 @@ function createSuccessor(): void {
             >.
         </p>
 
-        <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p
+            v-if="actionError"
+            role="alert"
+            class="mt-4 rounded-xs bg-danger-tint p-3 text-sm text-danger"
+        >
             {{ actionError }}
         </p>
 
@@ -254,7 +258,7 @@ function createSuccessor(): void {
             <button
                 v-if="isDraft"
                 type="button"
-                class="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white"
+                class="rounded-xs bg-accent-strong px-3 py-1.5 text-sm text-white"
                 @click="
                     post(
                         `${base}/activate`,
@@ -268,7 +272,7 @@ function createSuccessor(): void {
             <button
                 v-if="structure.status === 'active'"
                 type="button"
-                class="rounded border border-slate-300 px-3 py-1.5 text-sm"
+                class="btn btn-secondary"
                 @click="
                     post(
                         `${base}/retire`,
@@ -285,18 +289,16 @@ function createSuccessor(): void {
                 @submit.prevent="createSuccessor"
             >
                 <label class="text-sm">
-                    <span class="block text-xs text-slate-500">Amendment code</span>
+                    <span class="block text-xs text-ink-muted">Amendment code</span>
                     <input
                         v-model="successorForm.code"
-                        class="w-32 rounded border border-slate-300 px-2 py-1 font-mono"
+                        class="input w-32 font-mono"
                         maxlength="32"
                         required
                     />
                 </label>
-                <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
-                    Amend (copy to a new draft)
-                </button>
-                <span v-if="successorForm.errors.code" class="text-xs text-red-600">{{
+                <button type="submit" class="btn btn-secondary">Amend (copy to a new draft)</button>
+                <span v-if="successorForm.errors.code" class="text-xs text-danger">{{
                     successorForm.errors.code
                 }}</span>
             </form>
@@ -306,29 +308,27 @@ function createSuccessor(): void {
         <section class="mt-8">
             <h2 class="text-lg font-semibold">Fee lines</h2>
 
-            <p v-if="structure.lines.length === 0" class="mt-2 text-sm text-slate-500">
+            <p v-if="structure.lines.length === 0" class="mt-2 text-sm text-ink-muted">
                 No fee lines yet.
             </p>
 
             <article
                 v-for="line in structure.lines"
                 :key="line.id"
-                class="mt-4 rounded border border-slate-200 p-4"
+                class="mt-4 rounded-xs border border-line p-4"
             >
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 class="font-medium">
                         {{ headLabel(line.feeHeadId) }}
                         <span
                             v-if="line.isOptional"
-                            class="ml-1 rounded bg-sky-50 px-1.5 py-0.5 text-xs text-sky-700"
+                            class="ml-1 rounded-xs bg-accent-100 px-1.5 py-0.5 text-xs text-accent-strong"
                             >optional</span
                         >
                     </h3>
                     <p class="text-sm">
                         {{ formatMoney(line.amount, line.currency) }} a year ·
-                        <span
-                            :class="scheduleMatches(line) ? 'text-emerald-700' : 'text-amber-700'"
-                        >
+                        <span :class="scheduleMatches(line) ? 'text-ink' : 'text-ink'">
                             schedule {{ formatMoney(scheduleTotal(line), line.currency) }}
                         </span>
                     </p>
@@ -336,10 +336,10 @@ function createSuccessor(): void {
 
                 <div v-if="editable" class="mt-3 flex flex-wrap items-end gap-3 text-sm">
                     <label>
-                        <span class="block text-xs text-slate-500">Yearly amount</span>
+                        <span class="block text-xs text-ink-muted">Yearly amount</span>
                         <input
                             v-model="lineAmounts[line.id]"
-                            class="w-32 rounded border border-slate-300 px-2 py-1"
+                            class="input w-32"
                             inputmode="decimal"
                         />
                     </label>
@@ -357,7 +357,7 @@ function createSuccessor(): void {
                     >
                         {{ line.isOptional ? 'Make required' : 'Make optional' }}
                     </button>
-                    <span class="text-xs text-slate-500">Generate schedule:</span>
+                    <span class="text-xs text-ink-muted">Generate schedule:</span>
                     <button
                         v-for="f in frequencies"
                         :key="f"
@@ -378,7 +378,7 @@ function createSuccessor(): void {
                     </button>
                     <button
                         type="button"
-                        class="text-red-700 underline"
+                        class="text-danger underline"
                         @click="
                             post(`${base}/lines/${line.id}/remove`, {}, 'Remove this draft line?')
                         "
@@ -391,7 +391,7 @@ function createSuccessor(): void {
                 <div v-if="editingLineId === line.id" class="mt-4 overflow-x-auto">
                     <table class="w-full text-left text-xs">
                         <thead>
-                            <tr class="text-slate-500">
+                            <tr class="text-ink-muted">
                                 <th class="py-1">Label</th>
                                 <th class="py-1">Period key</th>
                                 <th class="py-1">Starts</th>
@@ -407,40 +407,40 @@ function createSuccessor(): void {
                                 <td>
                                     <input
                                         v-model="row.label"
-                                        class="w-28 rounded border px-1 py-0.5"
+                                        class="w-28 rounded-xs border px-1 py-0.5"
                                     />
                                 </td>
                                 <td>
                                     <input
                                         v-model="row.billing_period_key"
-                                        class="w-24 rounded border px-1 py-0.5 font-mono"
+                                        class="w-24 rounded-xs border px-1 py-0.5 font-mono"
                                     />
                                 </td>
                                 <td>
                                     <input
                                         v-model="row.period_starts_on"
                                         type="date"
-                                        class="rounded border px-1 py-0.5"
+                                        class="rounded-xs border px-1 py-0.5"
                                     />
                                 </td>
                                 <td>
                                     <input
                                         v-model="row.period_ends_on"
                                         type="date"
-                                        class="rounded border px-1 py-0.5"
+                                        class="rounded-xs border px-1 py-0.5"
                                     />
                                 </td>
                                 <td>
                                     <input
                                         v-model="row.due_date"
                                         type="date"
-                                        class="rounded border px-1 py-0.5"
+                                        class="rounded-xs border px-1 py-0.5"
                                     />
                                 </td>
                                 <td>
                                     <select
                                         v-model="row.academic_term_id"
-                                        class="rounded border px-1 py-0.5"
+                                        class="rounded-xs border px-1 py-0.5"
                                     >
                                         <option :value="null">—</option>
                                         <option
@@ -455,7 +455,7 @@ function createSuccessor(): void {
                                 <td>
                                     <input
                                         v-model="row.amount"
-                                        class="w-24 rounded border px-1 py-0.5"
+                                        class="w-24 rounded-xs border px-1 py-0.5"
                                         inputmode="decimal"
                                     />
                                 </td>
@@ -478,7 +478,7 @@ function createSuccessor(): void {
                     <p
                         v-for="(message, field) in scheduleErrors"
                         :key="field"
-                        class="text-xs text-red-600"
+                        class="text-xs text-danger"
                     >
                         {{ message }}
                     </p>
@@ -495,7 +495,7 @@ function createSuccessor(): void {
 
                 <table v-else-if="line.installments.length" class="mt-3 w-full text-left text-xs">
                     <thead>
-                        <tr class="text-slate-500">
+                        <tr class="text-ink-muted">
                             <th class="py-1">#</th>
                             <th class="py-1">Label</th>
                             <th class="py-1">Period</th>
@@ -503,12 +503,12 @@ function createSuccessor(): void {
                             <th class="py-1 text-right">Amount</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-line">
                         <tr v-for="i in line.installments" :key="i.id">
                             <td class="py-1">{{ i.sequence }}</td>
                             <td class="py-1">
                                 {{ i.label }}
-                                <span class="font-mono text-slate-500">{{
+                                <span class="font-mono text-ink-muted">{{
                                     i.billingPeriodKey
                                 }}</span>
                             </td>
@@ -518,10 +518,10 @@ function createSuccessor(): void {
                         </tr>
                     </tbody>
                 </table>
-                <p v-else class="mt-3 text-xs text-amber-700">No schedule yet.</p>
+                <p v-else class="mt-3 text-xs text-ink">No schedule yet.</p>
 
                 <!-- optional selections -->
-                <div v-if="line.isOptional" class="mt-4 border-t border-slate-100 pt-3">
+                <div v-if="line.isOptional" class="mt-4 border-t border-line pt-3">
                     <h4 class="text-sm font-medium">Students who chose this optional fee</h4>
                     <ul class="mt-2 space-y-1 text-sm">
                         <li
@@ -545,7 +545,7 @@ function createSuccessor(): void {
                                 Withdraw
                             </button>
                         </li>
-                        <li v-if="selectionsFor(line.id).length === 0" class="text-slate-500">
+                        <li v-if="selectionsFor(line.id).length === 0" class="text-ink-muted">
                             None yet.
                         </li>
                     </ul>
@@ -561,7 +561,7 @@ function createSuccessor(): void {
                         <div v-else>
                             <input
                                 v-model="studentQuery"
-                                class="w-64 rounded border border-slate-300 px-2 py-1 text-sm"
+                                class="input w-64"
                                 placeholder="Search by name or number"
                             />
                             <ul class="mt-1 text-sm">
@@ -582,16 +582,12 @@ function createSuccessor(): void {
 
             <form
                 v-if="editable"
-                class="mt-6 flex flex-wrap items-end gap-3 rounded border border-slate-200 p-4 text-sm"
+                class="mt-6 flex flex-wrap items-end gap-3 rounded-xs border border-line p-4 text-sm"
                 @submit.prevent="addLine"
             >
                 <label>
-                    <span class="block text-xs text-slate-500">Fee head</span>
-                    <select
-                        v-model="lineForm.fee_head_id"
-                        class="rounded border border-slate-300 px-2 py-1"
-                        required
-                    >
+                    <span class="block text-xs text-ink-muted">Fee head</span>
+                    <select v-model="lineForm.fee_head_id" class="input w-auto" required>
                         <option value="" disabled>Choose…</option>
                         <option
                             v-for="h in feeHeads.filter((h) => h.status === 'active')"
@@ -603,10 +599,10 @@ function createSuccessor(): void {
                     </select>
                 </label>
                 <label>
-                    <span class="block text-xs text-slate-500">Yearly amount (INR)</span>
+                    <span class="block text-xs text-ink-muted">Yearly amount (INR)</span>
                     <input
                         v-model="lineForm.amount"
-                        class="w-32 rounded border border-slate-300 px-2 py-1"
+                        class="input w-32"
                         inputmode="decimal"
                         required
                     />
@@ -615,13 +611,11 @@ function createSuccessor(): void {
                     <input v-model="lineForm.is_optional" type="checkbox" />
                     Optional
                 </label>
-                <button type="submit" class="rounded bg-slate-900 px-3 py-1.5 text-white">
-                    Add line
-                </button>
+                <button type="submit" class="btn btn-primary">Add line</button>
                 <p
                     v-for="(message, field) in lineForm.errors"
                     :key="field"
-                    class="w-full text-xs text-red-600"
+                    class="w-full text-xs text-danger"
                 >
                     {{ message }}
                 </p>
