@@ -143,7 +143,7 @@ async function reveal(identifierType: string): Promise<void> {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll/statutory">← Statutory Payroll</a>
 
         <h1 class="mt-2 text-xl font-semibold">
@@ -151,7 +151,7 @@ async function reveal(identifierType: string): Promise<void> {
         </h1>
 
         <!-- PF status -->
-        <section class="mt-6 rounded border border-slate-200 p-4">
+        <section class="mt-6 rounded-xs border border-line p-4">
             <h2 class="font-medium">PF status</h2>
             <form v-if="can.manage" class="mt-3 space-y-2 text-sm" @submit.prevent="submitPf">
                 <label class="flex items-center gap-2"
@@ -169,19 +169,19 @@ async function reveal(identifierType: string): Promise<void> {
                     Approved higher-wage contribution</label
                 >
                 <div>
-                    <label class="block text-slate-600">Higher-wage approval reference</label>
+                    <label class="block text-ink-muted">Higher-wage approval reference</label>
                     <input
                         v-model="pfForm.higher_wage_approval_reference"
                         type="text"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
                 </div>
                 <div>
-                    <label class="block text-slate-600">Higher-wage approval effective from</label>
+                    <label class="block text-ink-muted">Higher-wage approval effective from</label>
                     <input
                         v-model="pfForm.higher_wage_approval_effective_from"
                         type="date"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        class="input mt-1"
                     />
                 </div>
                 <label class="flex items-center gap-2"
@@ -191,26 +191,22 @@ async function reveal(identifierType: string): Promise<void> {
                     ><input v-model="pfForm.has_higher_pension_status" type="checkbox" /> Higher
                     pension status</label
                 >
-                <button
-                    type="submit"
-                    :disabled="pfForm.processing"
-                    class="rounded bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="pfForm.processing" class="btn btn-primary">
                     Save PF status
                 </button>
             </form>
-            <p v-else class="mt-2 text-sm text-slate-500">
+            <p v-else class="mt-2 text-sm text-ink-muted">
                 {{ pfStatus ? 'Configured.' : 'Not configured yet.' }} You don't hold
                 payroll.statutory.manage.
             </p>
         </section>
 
         <!-- ESI coverage -->
-        <section class="mt-6 rounded border border-slate-200 p-4">
+        <section class="mt-6 rounded-xs border border-line p-4">
             <h2 class="font-medium">ESI coverage</h2>
             <table v-if="esiCoverage.length > 0" class="mt-2 w-full text-left text-sm">
                 <thead>
-                    <tr class="text-slate-500">
+                    <tr class="text-ink-muted">
                         <th>Period</th>
                         <th>Entry wage</th>
                         <th>Covered</th>
@@ -235,19 +231,19 @@ async function reveal(identifierType: string): Promise<void> {
                     v-model="esiForm.period_start"
                     type="date"
                     placeholder="Period start"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <input
                     v-model="esiForm.period_end"
                     type="date"
                     placeholder="Period end"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <input
                     v-model="esiForm.entry_wage"
                     type="text"
                     placeholder="Entry wage"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <label class="flex items-center gap-2"
                     ><input v-model="esiForm.is_covered" type="checkbox" /> Covered</label
@@ -255,18 +251,18 @@ async function reveal(identifierType: string): Promise<void> {
                 <button
                     type="submit"
                     :disabled="esiForm.processing"
-                    class="col-span-2 w-fit rounded bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary col-span-2 w-fit"
                 >
                     Correct/add period
                 </button>
-                <p v-if="esiForm.errors.period_start" class="col-span-2 text-red-600">
+                <p v-if="esiForm.errors.period_start" class="col-span-2 text-danger">
                     {{ esiForm.errors.period_start }}
                 </p>
             </form>
         </section>
 
         <!-- Tax profile -->
-        <section class="mt-6 rounded border border-slate-200 p-4">
+        <section class="mt-6 rounded-xs border border-line p-4">
             <h2 class="font-medium">Tax profile</h2>
             <ul v-if="taxProfiles.length > 0" class="mt-2 space-y-1 text-sm">
                 <li v-for="p in taxProfiles" :key="p.fiscalYearStart">
@@ -281,12 +277,8 @@ async function reveal(identifierType: string): Promise<void> {
                 class="mt-3 grid grid-cols-2 gap-2 text-sm"
                 @submit.prevent="submitTax"
             >
-                <input
-                    v-model="taxForm.fiscal_year_start"
-                    type="date"
-                    class="rounded border border-slate-300 px-3 py-2"
-                />
-                <select v-model="taxForm.regime" class="rounded border border-slate-300 px-3 py-2">
+                <input v-model="taxForm.fiscal_year_start" type="date" class="input w-auto" />
+                <select v-model="taxForm.regime" class="input w-auto">
                     <option value="new">New regime</option>
                     <option value="old">Old regime</option>
                 </select>
@@ -294,36 +286,36 @@ async function reveal(identifierType: string): Promise<void> {
                     v-model="taxForm.regime_switch_policy_reference"
                     type="text"
                     placeholder="School policy reference (optional)"
-                    class="col-span-2 rounded border border-slate-300 px-3 py-2"
+                    class="input col-span-2 w-auto"
                 />
                 <input
                     v-model="taxForm.previous_employer_income"
                     type="text"
                     placeholder="Previous employer income"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <input
                     v-model="taxForm.previous_employer_tds"
                     type="text"
                     placeholder="Previous employer TDS"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <input
                     v-model="taxForm.declared_other_income"
                     type="text"
                     placeholder="Declared other income"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <input
                     v-model="taxForm.declared_deductions"
                     type="text"
                     placeholder="Declared deductions"
-                    class="rounded border border-slate-300 px-3 py-2"
+                    class="input w-auto"
                 />
                 <button
                     type="submit"
                     :disabled="taxForm.processing"
-                    class="col-span-2 w-fit rounded bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary col-span-2 w-fit"
                 >
                     Save tax profile
                 </button>
@@ -331,15 +323,15 @@ async function reveal(identifierType: string): Promise<void> {
         </section>
 
         <!-- Identifiers -->
-        <section class="mt-6 rounded border border-slate-200 p-4">
+        <section class="mt-6 rounded-xs border border-line p-4">
             <h2 class="font-medium">Statutory identifiers</h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 Masked by default. Revealing the real value requires
                 payroll.statutory.identifiers.view and is audited.
             </p>
             <table class="mt-2 w-full text-left text-sm">
                 <thead>
-                    <tr class="text-slate-500">
+                    <tr class="text-ink-muted">
                         <th>Type</th>
                         <th>Value</th>
                         <th></th>
@@ -370,10 +362,7 @@ async function reveal(identifierType: string): Promise<void> {
                 class="mt-3 flex gap-2 text-sm"
                 @submit.prevent="submitIdentifier"
             >
-                <select
-                    v-model="identifierForm.identifier_type"
-                    class="rounded border border-slate-300 px-3 py-2"
-                >
+                <select v-model="identifierForm.identifier_type" class="input w-auto">
                     <option value="pan">PAN</option>
                     <option value="uan">UAN</option>
                     <option value="pf_member_id">PF Member ID</option>
@@ -383,27 +372,23 @@ async function reveal(identifierType: string): Promise<void> {
                     v-model="identifierForm.value"
                     type="text"
                     placeholder="Value"
-                    class="flex-1 rounded border border-slate-300 px-3 py-2"
+                    class="input flex-1 w-auto"
                 />
-                <button
-                    type="submit"
-                    :disabled="identifierForm.processing"
-                    class="rounded bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="identifierForm.processing" class="btn btn-primary">
                     Save
                 </button>
             </form>
         </section>
 
         <!-- Statutory result breakdown -->
-        <section class="mt-6 rounded border border-slate-200 p-4">
+        <section class="mt-6 rounded-xs border border-line p-4">
             <h2 class="font-medium">Statutory result breakdown (most recent runs)</h2>
-            <p v-if="statutoryResults.length === 0" class="mt-2 text-sm text-slate-500">
+            <p v-if="statutoryResults.length === 0" class="mt-2 text-sm text-ink-muted">
                 No finalized statutory calculation yet.
             </p>
             <table v-else class="mt-2 w-full text-left text-sm">
                 <thead>
-                    <tr class="text-slate-500">
+                    <tr class="text-ink-muted">
                         <th>Period</th>
                         <th>PF (emp/employer)</th>
                         <th>ESI (emp/employer)</th>
@@ -433,7 +418,7 @@ async function reveal(identifierType: string): Promise<void> {
                         <td>{{ r.lwfCharged ? `${r.employeeLwf} / ${r.employerLwf}` : '—' }}</td>
                         <td>
                             {{ r.tdsMonthlyDeduction }}
-                            <span v-if="r.tdsResidualComplianceException" class="text-amber-700">
+                            <span v-if="r.tdsResidualComplianceException" class="text-ink">
                                 (residual: {{ r.tdsResidualComplianceException }})
                             </span>
                         </td>

@@ -32,7 +32,7 @@ function month(periodMonth: string): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">My payslips</h1>
 
@@ -48,7 +48,7 @@ function month(periodMonth: string): string {
             title="No payslips yet"
             description="Payslips appear here once your School posts a payroll run."
         />
-        <ul v-else class="mt-6 divide-y divide-slate-100 text-sm">
+        <ul v-else class="mt-6 divide-y divide-line text-sm">
             <li
                 v-for="p in payslips"
                 :key="`${p.payrollRunId}-${p.employmentRecordId}`"
@@ -56,11 +56,11 @@ function month(periodMonth: string): string {
             >
                 <span>
                     {{ month(p.periodMonth) }}
-                    <span v-if="p.runKind === 'correction'" class="ml-2 text-indigo-700"
+                    <span v-if="p.runKind === 'correction'" class="ml-2 text-accent-strong"
                         >Correction</span
                     >
-                    <span v-if="p.isReversed" class="ml-2 text-red-700">Reversed</span>
-                    <span v-if="p.paymentDate" class="ml-2 text-slate-500"
+                    <span v-if="p.isReversed" class="ml-2 text-danger">Reversed</span>
+                    <span v-if="p.paymentDate" class="ml-2 text-ink-muted"
                         >paid {{ p.paymentDate }}</span
                     >
                 </span>

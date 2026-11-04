@@ -7,11 +7,11 @@ defineProps<Props>();
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll/statutory">← Statutory Payroll</a>
 
         <h1 class="mt-2 text-xl font-semibold">Statutory exports</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Data preparation only -- no government portal submission. Verify every value before any
             real filing.
         </p>

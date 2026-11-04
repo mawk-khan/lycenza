@@ -15,10 +15,10 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/hr">← HR</a>
         <h1 class="mt-2 text-xl font-semibold">Import employees</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Paste a JSON array of employee rows. Each row may include core identity fields
             (required:
             <code>full_name</code>), optional personal/contact fields, and an optional current
@@ -27,23 +27,19 @@ function submit(): void {
         </p>
 
         <form class="mt-6" @submit.prevent="submit">
-            <label class="block text-sm text-slate-600" for="rows-json">Rows (JSON array)</label>
+            <label class="block text-sm text-ink-muted" for="rows-json">Rows (JSON array)</label>
             <textarea
                 id="rows-json"
                 v-model="form.rows_json"
                 rows="14"
                 :placeholder="EXAMPLE"
                 required
-                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+                class="input mt-1 font-mono"
             ></textarea>
-            <p class="mt-1 text-sm text-red-600">{{ form.errors.rows_json }}</p>
+            <p class="mt-1 text-sm text-danger">{{ form.errors.rows_json }}</p>
 
             <div class="mt-4 flex items-center gap-3">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Importing…' : 'Import' }}
                 </button>
                 <a class="text-sm underline" href="/app/hr">Cancel</a>

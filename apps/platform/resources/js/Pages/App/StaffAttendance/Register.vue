@@ -138,10 +138,10 @@ const attendanceError = useAttendanceError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Staff attendance</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             The daily register. Each half is present, absent or not recorded. Leave, holidays and
             weekly offs come from Leave and the staff calendar.
         </p>
@@ -151,28 +151,28 @@ const attendanceError = useAttendanceError();
         <p
             v-if="attendanceError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ attendanceError }}
         </p>
 
         <div class="mt-4 flex flex-wrap items-center gap-3">
-            <label class="text-sm text-slate-600" for="register-date">Date</label>
+            <label class="text-sm text-ink-muted" for="register-date">Date</label>
             <input
                 id="register-date"
                 v-model="date"
                 type="date"
                 :max="today"
-                class="rounded border border-slate-300 px-3 py-2 text-sm"
+                class="input w-auto"
             />
-            <span v-if="register.calendar" class="text-sm text-slate-500">
+            <span v-if="register.calendar" class="text-sm text-ink-muted">
                 Calendar: first half {{ register.calendar.firstHalf }}, second half
                 {{ register.calendar.secondHalf }}
             </span>
         </div>
         <p
             v-if="!register.calendarConfigured"
-            class="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            class="mt-3 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
         >
             The staff working week is not configured yet (Leave → Configuration). Attendance cannot
             be recorded until it is.
@@ -186,7 +186,7 @@ const attendanceError = useAttendanceError();
         />
         <table v-else class="mt-6 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th class="py-2">Employee</th>
                     <th class="py-2">First half</th>
                     <th class="py-2">Second half</th>
@@ -198,7 +198,7 @@ const attendanceError = useAttendanceError();
                 <tr
                     v-for="row in register.rows"
                     :key="row.employment.employmentRecordId"
-                    class="border-b border-slate-100 align-top"
+                    class="border-b border-line align-top"
                 >
                     <td class="py-2">
                         <a
@@ -215,7 +215,7 @@ const attendanceError = useAttendanceError();
                         <select
                             v-if="recordable(row) && halfOpen(half)"
                             v-model="marks[row.employment.employmentRecordId]![index]"
-                            class="rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input w-auto"
                             :aria-label="`${employmentName(row.employment)} ${index === 0 ? 'first' : 'second'} half`"
                         >
                             <option :value="null">Not recorded</option>
@@ -251,13 +251,13 @@ const attendanceError = useAttendanceError();
         <div v-if="canManage && register.rows.length > 0" class="mt-4 flex items-center gap-3">
             <button
                 type="button"
-                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                class="btn btn-primary"
                 :disabled="saving || marked.length === 0"
                 @click="saveAll"
             >
                 Save register ({{ marked.length }})
             </button>
-            <span class="text-sm text-slate-500"
+            <span class="text-sm text-ink-muted"
                 >All marked rows are saved together, or none are. Saved rows change only by
                 correction.</span
             >
@@ -265,60 +265,44 @@ const attendanceError = useAttendanceError();
 
         <form
             v-if="correcting"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             @submit.prevent="submitCorrection"
         >
             <h2 class="text-sm font-semibold">
                 Correct {{ employmentName(correcting.employment) }} on {{ register.date }}
             </h2>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 The previous values are kept as correction history. A half on approved leave cannot
                 be set to present or absent; cancel the leave first.
             </p>
             <div class="mt-3 flex flex-wrap items-center gap-3">
-                <label class="text-sm text-slate-600" for="correct-first">First half</label>
-                <select
-                    id="correct-first"
-                    v-model="correction.first_half"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <label class="text-sm text-ink-muted" for="correct-first">First half</label>
+                <select id="correct-first" v-model="correction.first_half" class="input w-auto">
                     <option :value="null">Not recorded</option>
                     <option value="present">Present</option>
                     <option value="absent">Absent</option>
                 </select>
-                <label class="text-sm text-slate-600" for="correct-second">Second half</label>
-                <select
-                    id="correct-second"
-                    v-model="correction.second_half"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <label class="text-sm text-ink-muted" for="correct-second">Second half</label>
+                <select id="correct-second" v-model="correction.second_half" class="input w-auto">
                     <option :value="null">Not recorded</option>
                     <option value="present">Present</option>
                     <option value="absent">Absent</option>
                 </select>
-                <label class="text-sm text-slate-600" for="correct-reason">Reason</label>
-                <select
-                    id="correct-reason"
-                    v-model="correction.reason_code"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <label class="text-sm text-ink-muted" for="correct-reason">Reason</label>
+                <select id="correct-reason" v-model="correction.reason_code" class="input w-auto">
                     <option value="">Select a reason</option>
                     <option v-for="r in reasons" :key="r" :value="r">
                         {{ reasonLabels[r] ?? r }}
                     </option>
                 </select>
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="correction.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="correction.processing">
                     Save correction
                 </button>
                 <button type="button" class="text-sm underline" @click="correcting = null">
                     Back
                 </button>
             </div>
-            <p v-if="correction.errors.reason_code" class="mt-2 text-sm text-red-700">
+            <p v-if="correction.errors.reason_code" class="mt-2 text-sm text-danger">
                 {{ correction.errors.reason_code }}
             </p>
         </form>

@@ -237,10 +237,10 @@ function isSelf(member: StaffMember): boolean {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Staff accounts</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Who has staff access to this School and with which roles. Staff join by invitation.
             Removing someone suspends their access to this School only; it never deletes their
             account or changes HR records.
@@ -248,7 +248,7 @@ function isSelf(member: StaffMember): boolean {
 
         <section
             v-if="canInvite || canManageMembers || canManageRoles"
-            class="mt-4 rounded border border-slate-200 p-4"
+            class="mt-4 rounded-xs border border-line p-4"
         >
             <p v-if="!hasMfaFactor" class="text-sm" data-testid="staff-mfa-required">
                 Changing staff access needs multi-factor authentication.
@@ -257,7 +257,7 @@ function isSelf(member: StaffMember): boolean {
                 >.
             </p>
             <template v-else>
-                <label class="block text-sm text-slate-600" for="mfa_code"
+                <label class="block text-sm text-ink-muted" for="mfa_code"
                     >Authentication code (needed for every change)</label
                 >
                 <input
@@ -265,18 +265,13 @@ function isSelf(member: StaffMember): boolean {
                     v-model="code"
                     inputmode="numeric"
                     autocomplete="one-time-code"
-                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2"
+                    class="input mt-1 w-40"
                 />
             </template>
-            <p
-                v-if="error"
-                role="alert"
-                class="mt-2 text-sm text-red-700"
-                data-testid="staff-error"
-            >
+            <p v-if="error" role="alert" class="mt-2 text-sm text-danger" data-testid="staff-error">
                 {{ error }}
             </p>
-            <p v-if="notice" class="mt-2 text-sm text-green-800" data-testid="staff-notice">
+            <p v-if="notice" class="mt-2 text-sm text-ink" data-testid="staff-notice">
                 {{ notice }}
             </p>
         </section>
@@ -291,11 +286,11 @@ function isSelf(member: StaffMember): boolean {
                     v-model="inviteEmail"
                     type="email"
                     placeholder="name@example.org"
-                    class="w-full max-w-md rounded border border-slate-300 px-3 py-2"
+                    class="input max-w-md"
                     aria-label="Email address"
                 />
                 <fieldset>
-                    <legend class="text-sm text-slate-600">Roles</legend>
+                    <legend class="text-sm text-ink-muted">Roles</legend>
                     <label
                         v-for="role in grantable"
                         :key="role.key"
@@ -304,14 +299,10 @@ function isSelf(member: StaffMember): boolean {
                     >
                         <input v-model="inviteRoles" type="checkbox" :value="role.key" />
                         {{ role.name
-                        }}<span v-if="role.addOn" class="text-slate-600"> (add-on)</span>
+                        }}<span v-if="role.addOn" class="text-ink-muted"> (add-on)</span>
                     </label>
                 </fieldset>
-                <button
-                    type="submit"
-                    :disabled="busy || !canMutate"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="busy || !canMutate" class="btn btn-primary">
                     Send invitation
                 </button>
             </form>
@@ -323,13 +314,13 @@ function isSelf(member: StaffMember): boolean {
             data-testid="role-catalogue"
         >
             <h2 class="font-medium">School roles</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 The fixed staff roles of this School. A person with more than one job receives more
                 than one role. Roles cannot be created or edited here.
             </p>
             <table class="mt-2 w-full text-left text-sm">
                 <thead>
-                    <tr class="text-slate-600">
+                    <tr class="text-ink-muted">
                         <th class="py-1">Role</th>
                         <th>Area</th>
                         <th>Purpose</th>
@@ -340,7 +331,7 @@ function isSelf(member: StaffMember): boolean {
                     <tr v-for="role in roleCatalog" :key="role.key" class="border-t align-top">
                         <td class="py-1">
                             {{ role.name }}
-                            <span v-if="role.addOn" class="text-slate-600">(add-on)</span>
+                            <span v-if="role.addOn" class="text-ink-muted">(add-on)</span>
                         </td>
                         <td>{{ role.groupLabel }}</td>
                         <td>{{ role.purpose }}</td>
@@ -352,10 +343,10 @@ function isSelf(member: StaffMember): boolean {
 
         <section class="mt-8">
             <h2 class="font-medium">Pending invitations</h2>
-            <p v-if="pending.length === 0" class="mt-1 text-sm text-slate-600">None.</p>
+            <p v-if="pending.length === 0" class="mt-1 text-sm text-ink-muted">None.</p>
             <table v-else class="mt-2 w-full text-left text-sm">
                 <thead>
-                    <tr class="text-slate-600">
+                    <tr class="text-ink-muted">
                         <th class="py-1">Email</th>
                         <th v-if="canViewRoles">Roles</th>
                         <th>Status</th>
@@ -394,7 +385,7 @@ function isSelf(member: StaffMember): boolean {
 
         <section class="mt-8">
             <h2 class="font-medium">Active staff</h2>
-            <p v-if="active.length === 0" class="mt-1 text-sm text-slate-600">None.</p>
+            <p v-if="active.length === 0" class="mt-1 text-sm text-ink-muted">None.</p>
             <ul v-else class="mt-2 divide-y">
                 <li
                     v-for="member in active"
@@ -405,8 +396,8 @@ function isSelf(member: StaffMember): boolean {
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <span
                             ><strong>{{ member.name }}</strong>
-                            <span class="ml-2 text-sm text-slate-600">{{ member.email }}</span>
-                            <span v-if="isSelf(member)" class="text-sm text-slate-600">
+                            <span class="ml-2 text-sm text-ink-muted">{{ member.email }}</span>
+                            <span v-if="isSelf(member)" class="text-sm text-ink-muted">
                                 (you)</span
                             ></span
                         >
@@ -420,11 +411,11 @@ function isSelf(member: StaffMember): boolean {
                         </button>
                     </div>
                     <div v-if="canViewRoles" class="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                        <span v-if="member.roles.length === 0" class="text-slate-600">No role</span>
+                        <span v-if="member.roles.length === 0" class="text-ink-muted">No role</span>
                         <span
                             v-for="role in member.roles"
                             :key="`${role.key}:${role.campusId ?? 'school'}`"
-                            class="rounded bg-slate-100 px-2 py-0.5"
+                            class="rounded-xs bg-graphite-200 px-2 py-0.5"
                             data-testid="staff-grant"
                         >
                             {{ role.name }} — {{ scopeLabel(role) }}
@@ -441,7 +432,7 @@ function isSelf(member: StaffMember): boolean {
                         <template v-if="canManageRoles && !isSelf(member)">
                             <select
                                 :value="grantChoice[member.membershipId] ?? ''"
-                                class="rounded border border-slate-300 px-2 py-1"
+                                class="input w-auto"
                                 aria-label="Role to grant"
                                 @change="
                                     grantChoice[member.membershipId] = (
@@ -467,7 +458,7 @@ function isSelf(member: StaffMember): boolean {
                             <select
                                 v-if="chosenRole(member)?.campusScopable && campuses.length"
                                 :value="grantScope[member.membershipId] ?? ''"
-                                class="rounded border border-slate-300 px-2 py-1"
+                                class="input w-auto"
                                 aria-label="Scope"
                                 @change="
                                     grantScope[member.membershipId] = (
@@ -492,7 +483,7 @@ function isSelf(member: StaffMember): boolean {
                                     chosenRole(member)?.campusScopable &&
                                     grantScope[member.membershipId]
                                 "
-                                class="basis-full text-xs text-slate-600"
+                                class="basis-full text-xs text-ink-muted"
                                 data-testid="campus-scope-note"
                             >
                                 Campus scope currently applies only to product areas that support
@@ -509,7 +500,7 @@ function isSelf(member: StaffMember): boolean {
 
         <section class="mt-8">
             <h2 class="font-medium">Suspended staff</h2>
-            <p v-if="suspended.length === 0" class="mt-1 text-sm text-slate-600">None.</p>
+            <p v-if="suspended.length === 0" class="mt-1 text-sm text-ink-muted">None.</p>
             <ul v-else class="mt-2 divide-y">
                 <li
                     v-for="member in suspended"
@@ -518,9 +509,9 @@ function isSelf(member: StaffMember): boolean {
                     data-testid="staff-suspended"
                 >
                     <strong>{{ member.name }}</strong>
-                    <span class="ml-2 text-sm text-slate-600">{{ member.email }}</span>
+                    <span class="ml-2 text-sm text-ink-muted">{{ member.email }}</span>
                     <div v-if="canInvite && !isSelf(member)" class="mt-1 text-sm">
-                        <span class="text-slate-600">Reactivate with roles: </span>
+                        <span class="text-ink-muted">Reactivate with roles: </span>
                         <label v-for="role in grantable" :key="role.key" class="mr-3">
                             <input
                                 type="checkbox"

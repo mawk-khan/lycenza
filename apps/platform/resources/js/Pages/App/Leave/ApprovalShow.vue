@@ -73,33 +73,33 @@ function reject(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/approvals">← Leave approvals</a>
         <h1 class="mt-2 text-xl font-semibold">
             {{ employee?.fullName ?? 'Leave request' }}
-            <span v-if="employee?.employeeNumber" class="text-slate-500"
+            <span v-if="employee?.employeeNumber" class="text-ink-muted"
                 >({{ employee.employeeNumber }})</span
             >
         </h1>
         <p
             v-if="leaveError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError }}
         </p>
 
         <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <dt class="text-slate-500">Leave type</dt>
+            <dt class="text-ink-muted">Leave type</dt>
             <dd>{{ typeName(types, request.leaveTypeId) }}</dd>
-            <dt class="text-slate-500">Period</dt>
+            <dt class="text-ink-muted">Period</dt>
             <dd>
                 {{ request.startsOn }} ({{ portionLabels[request.startPortion] }}) →
                 {{ request.endsOn }} ({{ portionLabels[request.endPortion] }})
             </dd>
-            <dt class="text-slate-500">Units</dt>
+            <dt class="text-ink-muted">Units</dt>
             <dd>{{ units(request.submittedUnits) }}</dd>
-            <dt class="text-slate-500">Reason</dt>
+            <dt class="text-ink-muted">Reason</dt>
             <dd>
                 {{
                     request.reasonCode
@@ -107,16 +107,16 @@ function reject(): void {
                         : '—'
                 }}
             </dd>
-            <dt class="text-slate-500">Status</dt>
+            <dt class="text-ink-muted">Status</dt>
             <dd>{{ requestStatusLabels[request.status] ?? request.status }}</dd>
-            <dt class="text-slate-500">Submitted</dt>
+            <dt class="text-ink-muted">Submitted</dt>
             <dd>{{ request.submittedAt?.slice(0, 10) ?? '—' }}</dd>
         </dl>
 
         <div v-if="request.status === 'submitted'" class="mt-6 flex flex-wrap items-end gap-3">
             <button
                 type="button"
-                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary"
                 :disabled="form.processing"
                 @click="approve"
             >
@@ -128,10 +128,7 @@ function reject(): void {
             <form v-else class="flex items-end gap-2" @submit.prevent="reject">
                 <label class="text-sm"
                     >Reason
-                    <select
-                        v-model="form.reason_code"
-                        class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                    >
+                    <select v-model="form.reason_code" class="input ml-1 w-auto">
                         <option value="">Select a reason</option>
                         <option v-for="r in rejectionReasons" :key="r" :value="r">
                             {{ reasonLabels[r] ?? r }}
@@ -141,14 +138,14 @@ function reject(): void {
                 <button type="submit" class="underline" :disabled="form.processing">Reject</button>
                 <button type="button" class="underline" @click="rejecting = false">Back</button>
             </form>
-            <p v-if="form.errors.reason_code" role="alert" class="w-full text-sm text-red-700">
+            <p v-if="form.errors.reason_code" role="alert" class="w-full text-sm text-danger">
                 {{ form.errors.reason_code }}
             </p>
         </div>
 
         <section class="mt-8" aria-labelledby="history-heading">
             <h2 id="history-heading" class="text-sm font-semibold">Decision history</h2>
-            <p v-if="request.decisions.length === 0" class="mt-1 text-sm text-slate-600">
+            <p v-if="request.decisions.length === 0" class="mt-1 text-sm text-ink-muted">
                 No decision yet.
             </p>
             <ol class="mt-2 space-y-1 text-sm">

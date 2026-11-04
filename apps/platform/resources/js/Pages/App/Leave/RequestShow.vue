@@ -68,46 +68,46 @@ function yearLabel(id: string): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/requests">← Leave requests</a>
         <h1 class="mt-2 text-xl font-semibold">Leave request</h1>
         <dl class="mt-4 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
             <div>
-                <dt class="text-slate-500">Employee</dt>
+                <dt class="text-ink-muted">Employee</dt>
                 <dd>{{ employee ? `${employee.fullName} (${employee.employeeNumber})` : '—' }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Leave type</dt>
+                <dt class="text-ink-muted">Leave type</dt>
                 <dd>{{ typeName(types, request.leaveTypeId) }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Period</dt>
+                <dt class="text-ink-muted">Period</dt>
                 <dd>
                     {{ request.startsOn }} ({{ portionLabels[request.startPortion] }}) →
                     {{ request.endsOn }} ({{ portionLabels[request.endPortion] }})
                 </dd>
             </div>
             <div>
-                <dt class="text-slate-500">Status</dt>
+                <dt class="text-ink-muted">Status</dt>
                 <dd>{{ requestStatusLabels[request.status] }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Reason</dt>
+                <dt class="text-ink-muted">Reason</dt>
                 <dd>{{ request.reasonCode ? reasonLabels[request.reasonCode] : '—' }}</dd>
             </div>
             <div>
-                <dt class="text-slate-500">Units at submission</dt>
+                <dt class="text-ink-muted">Units at submission</dt>
                 <dd>{{ units(request.submittedUnits) }}</dd>
             </div>
         </dl>
 
         <h2 class="mt-8 text-sm font-semibold">Chargeable days (fixed at approval)</h2>
-        <p v-if="request.days.length === 0" class="mt-2 text-sm text-slate-500">
+        <p v-if="request.days.length === 0" class="mt-2 text-sm text-ink-muted">
             Not approved: nothing has been charged.
         </p>
         <table v-else class="mt-2 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th class="py-2">Date</th>
                     <th class="py-2">Portion</th>
                     <th class="py-2">Units</th>
@@ -115,7 +115,7 @@ function yearLabel(id: string): string {
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="day in request.days" :key="day.date" class="border-b border-slate-100">
+                <tr v-for="day in request.days" :key="day.date" class="border-b border-line">
                     <td class="py-2">{{ day.date }}</td>
                     <td class="py-2">{{ portionLabels[day.portion] }}</td>
                     <td class="py-2">{{ day.units }}</td>
@@ -135,7 +135,7 @@ function yearLabel(id: string): string {
                 <template v-if="d.reasonCode">· {{ reasonLabels[d.reasonCode] }}</template>
                 · {{ formatDateTime(d.decidedAt) }}
             </li>
-            <li v-if="request.decisions.length === 0" class="text-slate-500">Not decided yet.</li>
+            <li v-if="request.decisions.length === 0" class="text-ink-muted">Not decided yet.</li>
         </ul>
 
         <h2 class="mt-8 text-sm font-semibold">Ledger effects</h2>
@@ -144,7 +144,7 @@ function yearLabel(id: string): string {
                 {{ ledgerKindLabels[e.kind] }} · {{ units(e.units) }} ·
                 {{ yearLabel(e.leaveYearId) }}
             </li>
-            <li v-if="request.ledgerEntries.length === 0" class="text-slate-500">None.</li>
+            <li v-if="request.ledgerEntries.length === 0" class="text-ink-muted">None.</li>
         </ul>
     </main>
 </template>

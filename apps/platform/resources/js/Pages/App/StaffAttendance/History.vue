@@ -58,7 +58,7 @@ const attendanceError = useAttendanceError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/staff-attendance">← Daily register</a>
         <h1 class="mt-2 text-xl font-semibold">
             Attendance history · {{ employmentName(history.employment) }}
@@ -66,39 +66,23 @@ const attendanceError = useAttendanceError();
         <p
             v-if="attendanceError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ attendanceError }}
         </p>
 
         <form class="mt-4 flex flex-wrap items-center gap-3" @submit.prevent="reload">
-            <label class="text-sm text-slate-600" for="history-from">From</label>
-            <input
-                id="history-from"
-                v-model="from"
-                type="date"
-                class="rounded border border-slate-300 px-3 py-2 text-sm"
-            />
-            <label class="text-sm text-slate-600" for="history-to">To</label>
-            <input
-                id="history-to"
-                v-model="to"
-                type="date"
-                :max="today"
-                class="rounded border border-slate-300 px-3 py-2 text-sm"
-            />
-            <button
-                type="submit"
-                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-                Show
-            </button>
-            <span class="text-sm text-slate-500">At most 93 days.</span>
+            <label class="text-sm text-ink-muted" for="history-from">From</label>
+            <input id="history-from" v-model="from" type="date" class="input w-auto" />
+            <label class="text-sm text-ink-muted" for="history-to">To</label>
+            <input id="history-to" v-model="to" type="date" :max="today" class="input w-auto" />
+            <button type="submit" class="btn btn-primary">Show</button>
+            <span class="text-sm text-ink-muted">At most 93 days.</span>
         </form>
 
         <table class="mt-6 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th class="py-2">Date</th>
                     <th class="py-2">First half</th>
                     <th class="py-2">Second half</th>
@@ -110,13 +94,13 @@ const attendanceError = useAttendanceError();
                 <tr
                     v-for="day in history.days"
                     :key="day.date"
-                    class="border-b border-slate-100 align-top"
+                    class="border-b border-line align-top"
                 >
                     <td class="py-2">
                         <a class="underline" :href="`/app/staff-attendance?date=${day.date}`">{{
                             day.date
                         }}</a>
-                        <span class="ml-1 text-slate-500">{{ weekday(day.date) }}</span>
+                        <span class="ml-1 text-ink-muted">{{ weekday(day.date) }}</span>
                     </td>
                     <td class="py-2">{{ halfLabel(day.firstHalf) }}</td>
                     <td class="py-2">{{ halfLabel(day.secondHalf) }}</td>
@@ -126,7 +110,7 @@ const attendanceError = useAttendanceError();
                             <li
                                 v-for="c in corrections[day.record.id]"
                                 :key="c.id"
-                                class="text-xs text-slate-600"
+                                class="text-xs text-ink-muted"
                             >
                                 v{{ c.fromVersion }}→v{{ c.toVersion }}:
                                 {{ halfStatusLabel(c.before.firstHalf) }} /
@@ -137,7 +121,7 @@ const attendanceError = useAttendanceError();
                                 {{ formatDate(c.correctedAt) }}
                             </li>
                         </ul>
-                        <span v-else class="text-slate-400">—</span>
+                        <span v-else class="text-ink-muted">—</span>
                     </td>
                 </tr>
             </tbody>

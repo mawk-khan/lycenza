@@ -54,10 +54,10 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/hr/employees">← Staff directory</a>
         <h1 class="mt-2 text-xl font-semibold">Onboard an employee</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Creates the employee, their employment and their first assignment together. Personal
             details, documents and the sign-in account are added later by whole-School HR.
         </p>
@@ -65,121 +65,92 @@ function submit(): void {
         <p
             v-if="employeeError"
             role="alert"
-            class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-4 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ employeeError }}
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="full-name">Full name</label>
+                <label class="block text-sm text-ink-muted" for="full-name">Full name</label>
                 <input
                     id="full-name"
                     v-model="form.full_name"
                     type="text"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.full_name }}</p>
+                <p class="mt-1 text-sm text-danger">{{ form.errors.full_name }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="work-email">Work email</label>
-                <input
-                    id="work-email"
-                    v-model="form.work_email"
-                    type="email"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.work_email }}</p>
+                <label class="block text-sm text-ink-muted" for="work-email">Work email</label>
+                <input id="work-email" v-model="form.work_email" type="email" class="input mt-1" />
+                <p class="mt-1 text-sm text-danger">{{ form.errors.work_email }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="work-phone">Work phone</label>
-                <input
-                    id="work-phone"
-                    v-model="form.work_phone"
-                    type="text"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.work_phone }}</p>
+                <label class="block text-sm text-ink-muted" for="work-phone">Work phone</label>
+                <input id="work-phone" v-model="form.work_phone" type="text" class="input mt-1" />
+                <p class="mt-1 text-sm text-danger">{{ form.errors.work_phone }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="employment-type"
+                <label class="block text-sm text-ink-muted" for="employment-type"
                     >Employment type</label
                 >
                 <select
                     id="employment-type"
                     v-model="form.employment_type"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 >
                     <option v-for="t in employmentTypes" :key="t.value" :value="t.value">
                         {{ t.label }}
                     </option>
                 </select>
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.employment_type }}</p>
+                <p class="mt-1 text-sm text-danger">{{ form.errors.employment_type }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="staff-type">Staff type</label>
-                <select
-                    id="staff-type"
-                    v-model="form.staff_type"
-                    required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="staff-type">Staff type</label>
+                <select id="staff-type" v-model="form.staff_type" required class="input mt-1">
                     <option value="" disabled>Select a staff type</option>
                     <option v-for="t in staffTypes" :key="t.value" :value="t.value">
                         {{ t.label }}
                     </option>
                 </select>
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.staff_type }}</p>
+                <p class="mt-1 text-sm text-danger">{{ form.errors.staff_type }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="starts-on">Start date</label>
+                <label class="block text-sm text-ink-muted" for="starts-on">Start date</label>
                 <input
                     id="starts-on"
                     v-model="form.starts_on"
                     type="date"
                     required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 />
-                <p class="mt-1 text-sm text-slate-500">Today or earlier.</p>
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.starts_on }}</p>
+                <p class="mt-1 text-sm text-ink-muted">Today or earlier.</p>
+                <p class="mt-1 text-sm text-danger">{{ form.errors.starts_on }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="campus">Campus</label>
-                <select
-                    id="campus"
-                    v-model="form.campus_id"
-                    required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="campus">Campus</label>
+                <select id="campus" v-model="form.campus_id" required class="input mt-1">
                     <option value="" disabled>Choose a campus</option>
                     <option v-for="c in campuses" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.campus_id }}</p>
+                <p class="mt-1 text-sm text-danger">{{ form.errors.campus_id }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="position">Position</label>
-                <select
-                    id="position"
-                    v-model="form.position_id"
-                    required
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="position">Position</label>
+                <select id="position" v-model="form.position_id" required class="input mt-1">
                     <option value="" disabled>Choose a position</option>
                     <option v-for="p in positions" :key="p.id" :value="p.id">{{ p.name }}</option>
                 </select>
-                <p class="mt-1 text-sm text-red-600">{{ form.errors.position_id }}</p>
+                <p class="mt-1 text-sm text-danger">{{ form.errors.position_id }}</p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="department"
+                <label class="block text-sm text-ink-muted" for="department"
                     >Department (optional)</label
                 >
-                <select
-                    id="department"
-                    v-model="form.department_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select id="department" v-model="form.department_id" class="input mt-1">
                     <option value="">None</option>
                     <option v-for="d in departmentChoices" :key="d.id" :value="d.id">
                         {{ d.name }}
@@ -188,11 +159,7 @@ function submit(): void {
             </div>
 
             <div class="flex items-center gap-3 pt-2">
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
+                <button type="submit" :disabled="form.processing" class="btn btn-primary">
                     {{ form.processing ? 'Saving…' : 'Onboard employee' }}
                 </button>
                 <a class="text-sm underline" href="/app/hr/employees">Cancel</a>

@@ -106,17 +106,17 @@ function factsText(r: {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/configuration">← Leave configuration</a>
         <h1 class="mt-2 text-xl font-semibold">Leave eligibility</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Which current policy version each employment resolves to, from its staff type, Employee
             Category and primary Department on the date. Units are half-days.
         </p>
         <p
             v-if="leaveError || error"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError ?? error }}
         </p>
@@ -124,27 +124,17 @@ function factsText(r: {
         <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <label class="text-sm"
                 >Leave type
-                <select
-                    v-model="filters.leave_type_id"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <select v-model="filters.leave_type_id" class="input ml-1 w-auto">
                     <option v-for="t in types" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>
             </label>
             <label class="text-sm"
                 >On
-                <input
-                    v-model="filters.date"
-                    type="date"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                />
+                <input v-model="filters.date" type="date" class="input ml-1 w-auto" />
             </label>
             <label class="text-sm"
                 >Show
-                <select
-                    v-model="filters.outcome"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <select v-model="filters.outcome" class="input ml-1 w-auto">
                     <option value="">Every outcome</option>
                     <option v-for="o in outcomes" :key="o.value" :value="o.value">
                         {{ o.label }}
@@ -154,14 +144,14 @@ function factsText(r: {
             <button type="submit" class="underline">Show</button>
         </form>
 
-        <p v-if="types.length === 0" class="mt-6 text-sm text-slate-600">
+        <p v-if="types.length === 0" class="mt-6 text-sm text-ink-muted">
             No leave type yet. Create one in Leave configuration.
         </p>
 
         <template v-if="result">
             <section class="mt-6" aria-labelledby="versions-heading">
                 <h2 id="versions-heading" class="text-sm font-semibold">Current versions</h2>
-                <p v-if="result.versions.length === 0" class="mt-1 text-sm text-slate-600">
+                <p v-if="result.versions.length === 0" class="mt-1 text-sm text-ink-muted">
                     This leave type has no current policy version.
                 </p>
                 <ul class="mt-1 space-y-1 text-sm">
@@ -189,7 +179,7 @@ function factsText(r: {
                         {{ o.label }}: {{ result.counts[o.value] ?? 0 }}
                     </li>
                 </ul>
-                <p v-if="driftCount > 0" class="mt-1 text-sm text-amber-900">
+                <p v-if="driftCount > 0" class="mt-1 text-sm text-ink">
                     On this page, {{ driftCount }} assigned employment(s) no longer match the
                     current rules. An assignment is never moved automatically: end it and assign
                     again if needed.
@@ -209,7 +199,7 @@ function factsText(r: {
                         v-else
                         role="alertdialog"
                         aria-labelledby="run-confirm"
-                        class="rounded border border-slate-300 p-3 text-sm"
+                        class="rounded-xs border border-control-line p-3 text-sm"
                     >
                         <p id="run-confirm">
                             Assign each eligible employment the version it resolves to, effective
@@ -236,12 +226,12 @@ function factsText(r: {
 
             <section class="mt-6" aria-labelledby="rows-heading">
                 <h2 id="rows-heading" class="text-sm font-semibold">Employments</h2>
-                <p v-if="rows.length === 0" class="mt-1 text-sm text-slate-600">
+                <p v-if="rows.length === 0" class="mt-1 text-sm text-ink-muted">
                     No employment matches this view.
                 </p>
                 <table v-else class="mt-2 w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-300">
+                        <tr class="border-b border-control-line">
                             <th scope="col" class="py-1 pr-2">Employee</th>
                             <th scope="col" class="py-1 pr-2">Facts on the date</th>
                             <th scope="col" class="py-1 pr-2">Outcome</th>
@@ -252,18 +242,18 @@ function factsText(r: {
                         <tr
                             v-for="r in rows"
                             :key="r.employmentRecordId"
-                            class="border-b border-slate-100 align-top"
+                            class="border-b border-line align-top"
                         >
                             <td class="py-1 pr-2">
                                 {{ r.fullName ?? 'Unnamed' }} ({{ r.employeeNumber ?? '—' }})
-                                <div class="text-xs text-slate-600">{{ r.employmentStatus }}</div>
+                                <div class="text-xs text-ink-muted">{{ r.employmentStatus }}</div>
                             </td>
                             <td class="py-1 pr-2">{{ factsText(r) }}</td>
                             <td class="py-1 pr-2">
                                 {{ outcomeLabels[r.outcome] ?? r.outcome }}
                                 <div
                                     v-if="r.assignedMatchesRules === false"
-                                    class="text-xs text-amber-900"
+                                    class="text-xs text-ink"
                                 >
                                     differs from the current rules
                                 </div>
@@ -276,7 +266,7 @@ function factsText(r: {
                                     {{ versionNames[r.policyId] ?? '—' }}
                                     <div
                                         v-if="r.outcome === 'eligible'"
-                                        class="text-xs text-slate-600"
+                                        class="text-xs text-ink-muted"
                                     >
                                         until {{ r.assignmentEndsOn ?? 'the employment ends' }}
                                     </div>

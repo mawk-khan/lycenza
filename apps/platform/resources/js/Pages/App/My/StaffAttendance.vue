@@ -50,7 +50,7 @@ const attendanceError = useAttendanceError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">My attendance</h1>
 
@@ -61,39 +61,24 @@ const attendanceError = useAttendanceError();
             description="Your account is not linked to a current employment here. Ask your School administrator."
         />
         <template v-else-if="attendance">
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Read only. Each half shows what your School recorded, or your approved leave, a
                 holiday or a weekly off.
             </p>
             <p
                 v-if="attendanceError"
                 role="alert"
-                class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+                class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
             >
                 {{ attendanceError }}
             </p>
             <form class="mt-4 flex flex-wrap items-center gap-3" @submit.prevent="reload">
-                <label class="text-sm text-slate-600" for="my-from">From</label>
-                <input
-                    id="my-from"
-                    v-model="from"
-                    type="date"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <label class="text-sm text-slate-600" for="my-to">To</label>
-                <input
-                    id="my-to"
-                    v-model="to"
-                    type="date"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Show
-                </button>
-                <span class="text-sm text-slate-500">At most 93 days.</span>
+                <label class="text-sm text-ink-muted" for="my-from">From</label>
+                <input id="my-from" v-model="from" type="date" class="input w-auto" />
+                <label class="text-sm text-ink-muted" for="my-to">To</label>
+                <input id="my-to" v-model="to" type="date" class="input w-auto" />
+                <button type="submit" class="btn btn-primary">Show</button>
+                <span class="text-sm text-ink-muted">At most 93 days.</span>
             </form>
 
             <EmptyState
@@ -104,7 +89,7 @@ const attendanceError = useAttendanceError();
             />
             <table v-else class="mt-6 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Date</th>
                         <th class="py-2">First half</th>
                         <th class="py-2">Second half</th>
@@ -112,14 +97,10 @@ const attendanceError = useAttendanceError();
                     </tr>
                 </thead>
                 <tbody>
-                    <tr
-                        v-for="day in attendance.days"
-                        :key="day.date"
-                        class="border-b border-slate-100"
-                    >
+                    <tr v-for="day in attendance.days" :key="day.date" class="border-b border-line">
                         <td class="py-2">
                             {{ day.date }}
-                            <span class="text-slate-500">{{ weekday(day.date) }}</span>
+                            <span class="text-ink-muted">{{ weekday(day.date) }}</span>
                         </td>
                         <td class="py-2">{{ halfLabel(day.firstHalf) }}</td>
                         <td class="py-2">{{ halfLabel(day.secondHalf) }}</td>

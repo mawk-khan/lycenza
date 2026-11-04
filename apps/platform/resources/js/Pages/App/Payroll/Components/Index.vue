@@ -56,7 +56,7 @@ function deactivate(id: string): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll">← Payroll</a>
 
         <div class="mt-2 flex items-center justify-between">
@@ -64,7 +64,7 @@ function deactivate(id: string): void {
             <button
                 v-if="canManage"
                 type="button"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+                class="btn btn-primary"
                 @click="showForm = !showForm"
             >
                 {{ showForm ? 'Cancel' : 'Add component' }}
@@ -73,61 +73,53 @@ function deactivate(id: string): void {
 
         <form
             v-if="showForm"
-            class="mt-4 space-y-3 rounded border border-slate-200 p-4"
+            class="mt-4 space-y-3 rounded-xs border border-line p-4"
             @submit.prevent="submit"
         >
             <div>
-                <label class="block text-sm text-slate-600" for="code">Code</label>
+                <label class="block text-sm text-ink-muted" for="code">Code</label>
                 <input
                     id="code"
                     v-model="form.code"
                     type="text"
                     maxlength="64"
-                    class="mt-1 w-full max-w-xs rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 max-w-xs"
                 />
-                <p v-if="form.errors.code" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.code" class="mt-1 text-sm text-danger">
                     {{ form.errors.code }}
                 </p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="name">Name</label>
+                <label class="block text-sm text-ink-muted" for="name">Name</label>
                 <input
                     id="name"
                     v-model="form.name"
                     type="text"
                     maxlength="255"
-                    class="mt-1 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 max-w-md"
                 />
-                <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.name" class="mt-1 text-sm text-danger">
                     {{ form.errors.name }}
                 </p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="type">Type</label>
-                <select
-                    id="type"
-                    v-model="form.type"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="type">Type</label>
+                <select id="type" v-model="form.type" class="input mt-1 w-auto">
                     <option value="earning">Earning</option>
                     <option value="deduction">Deduction</option>
                 </select>
-                <p v-if="form.errors.type" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.type" class="mt-1 text-sm text-danger">
                     {{ form.errors.type }}
                 </p>
             </div>
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary">
                 {{ form.processing ? 'Creating…' : 'Create component' }}
             </button>
         </form>
 
         <table class="mt-6 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Code</th>
                     <th scope="col" class="py-2 font-medium">Name</th>
                     <th scope="col" class="py-2 font-medium">Type</th>
@@ -135,7 +127,7 @@ function deactivate(id: string): void {
                     <th v-if="canManage" scope="col" class="py-2"></th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="c in components" :key="c.id">
                     <td class="py-3 font-mono text-xs">{{ c.code }}</td>
                     <td class="py-3">{{ c.name }}</td>
@@ -146,7 +138,7 @@ function deactivate(id: string): void {
                             v-if="c.status === 'active'"
                             type="button"
                             :disabled="deactivating === c.id"
-                            class="text-xs text-red-600 underline disabled:opacity-50"
+                            class="text-xs text-danger underline disabled:opacity-50"
                             @click="deactivate(c.id)"
                         >
                             Deactivate
@@ -156,7 +148,7 @@ function deactivate(id: string): void {
             </tbody>
         </table>
 
-        <p v-if="components.length === 0" class="mt-4 text-sm text-slate-500">
+        <p v-if="components.length === 0" class="mt-4 text-sm text-ink-muted">
             No Salary Components yet.
         </p>
     </main>

@@ -167,13 +167,13 @@ function placementLabel(a: Assignment): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/hr/employees">← Staff directory</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ overview.employee.displayName }}</h1>
-                <p class="mt-1 text-sm text-slate-500">
+                <p class="mt-1 text-sm text-ink-muted">
                     {{ overview.employee.employeeNumber }}
                     <span v-if="overview.employee.isArchived"> · Archived</span>
                 </p>
@@ -187,28 +187,28 @@ function placementLabel(a: Assignment): string {
         <p
             v-if="generalError"
             role="alert"
-            class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-4 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ generalError }}
         </p>
 
         <section class="mt-6">
-            <h2 class="text-sm font-semibold text-slate-700">Current placement</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <h2 class="text-sm font-semibold text-ink">Current placement</h2>
+            <p class="mt-1 text-sm text-ink-muted">
                 {{
                     overview.placement
                         ? placementLabel(overview.placement)
                         : 'No current placement you can see.'
                 }}
             </p>
-            <p v-if="overview.placement?.managerName" class="mt-1 text-sm text-slate-500">
+            <p v-if="overview.placement?.managerName" class="mt-1 text-sm text-ink-muted">
                 Reports to {{ overview.placement.managerName }}
             </p>
         </section>
 
         <section v-if="overview.currentAssignments !== null" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-slate-700">Current assignments</h2>
+                <h2 class="text-sm font-semibold text-ink">Current assignments</h2>
                 <button
                     v-if="can.addAssignment"
                     type="button"
@@ -221,51 +221,51 @@ function placementLabel(a: Assignment): string {
 
             <form
                 v-if="adding && can.addAssignment"
-                class="mt-3 grid gap-3 rounded border border-slate-200 p-4 sm:grid-cols-2"
+                class="mt-3 grid gap-3 rounded-xs border border-line p-4 sm:grid-cols-2"
                 @submit.prevent="submitAssignment"
             >
                 <div>
-                    <label class="block text-sm text-slate-600" for="assignment-campus"
+                    <label class="block text-sm text-ink-muted" for="assignment-campus"
                         >Campus</label
                     >
                     <select
                         id="assignment-campus"
                         v-model="assignmentForm.campus_id"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose a campus</option>
                         <option v-for="c in campuses" :key="c.id" :value="c.id">
                             {{ c.name }}
                         </option>
                     </select>
-                    <p class="mt-1 text-sm text-red-600">{{ assignmentForm.errors.campus_id }}</p>
+                    <p class="mt-1 text-sm text-danger">{{ assignmentForm.errors.campus_id }}</p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="assignment-position"
+                    <label class="block text-sm text-ink-muted" for="assignment-position"
                         >Position</label
                     >
                     <select
                         id="assignment-position"
                         v-model="assignmentForm.position_id"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Choose a position</option>
                         <option v-for="p in positions" :key="p.id" :value="p.id">
                             {{ p.name }}
                         </option>
                     </select>
-                    <p class="mt-1 text-sm text-red-600">{{ assignmentForm.errors.position_id }}</p>
+                    <p class="mt-1 text-sm text-danger">{{ assignmentForm.errors.position_id }}</p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="assignment-department"
+                    <label class="block text-sm text-ink-muted" for="assignment-department"
                         >Department (optional)</label
                     >
                     <select
                         id="assignment-department"
                         v-model="assignmentForm.department_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="">None</option>
                         <option v-for="d in departmentChoices" :key="d.id" :value="d.id">
@@ -274,7 +274,7 @@ function placementLabel(a: Assignment): string {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="assignment-starts"
+                    <label class="block text-sm text-ink-muted" for="assignment-starts"
                         >Starts on</label
                     >
                     <input
@@ -282,35 +282,35 @@ function placementLabel(a: Assignment): string {
                         v-model="assignmentForm.starts_on"
                         type="date"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     />
-                    <p class="mt-1 text-sm text-red-600">{{ assignmentForm.errors.starts_on }}</p>
+                    <p class="mt-1 text-sm text-danger">{{ assignmentForm.errors.starts_on }}</p>
                 </div>
                 <div class="sm:col-span-2">
                     <button
                         type="submit"
                         :disabled="assignmentForm.processing"
-                        class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        class="btn btn-primary"
                     >
                         Add assignment
                     </button>
                 </div>
             </form>
 
-            <p v-if="overview.currentAssignments.length === 0" class="mt-2 text-sm text-slate-500">
+            <p v-if="overview.currentAssignments.length === 0" class="mt-2 text-sm text-ink-muted">
                 No current assignments you can see.
             </p>
-            <ul v-else class="mt-3 divide-y divide-slate-100 rounded border border-slate-200">
+            <ul v-else class="mt-3 divide-y divide-line rounded-xs border border-line">
                 <li v-for="a in overview.currentAssignments" :key="a.id" class="p-4 text-sm">
                     <div class="flex flex-wrap items-start justify-between gap-2">
                         <div>
                             <p class="font-medium">
                                 {{ placementLabel(a) }}
-                                <span v-if="a.isPrimary" class="ml-1 text-xs text-slate-500"
+                                <span v-if="a.isPrimary" class="ml-1 text-xs text-ink-muted"
                                     >Primary</span
                                 >
                             </p>
-                            <p class="mt-1 text-slate-500">
+                            <p class="mt-1 text-ink-muted">
                                 From {{ a.startsOn
                                 }}<span v-if="a.endsOn"> until {{ a.endsOn }}</span>
                                 <span v-if="a.managerName"> · Reports to {{ a.managerName }}</span>
@@ -344,7 +344,7 @@ function placementLabel(a: Assignment): string {
                         @submit.prevent="submitEnd(a)"
                     >
                         <div>
-                            <label class="block text-sm text-slate-600" :for="`end-${a.id}`"
+                            <label class="block text-sm text-ink-muted" :for="`end-${a.id}`"
                                 >Last day</label
                             >
                             <input
@@ -352,20 +352,20 @@ function placementLabel(a: Assignment): string {
                                 v-model="endForm.ends_on"
                                 type="date"
                                 required
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1 w-auto"
                             />
                         </div>
                         <button
                             type="submit"
                             :disabled="endForm.processing"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             End assignment
                         </button>
                     </form>
 
                     <div v-if="managingId === a.id" class="mt-3">
-                        <label class="block text-sm text-slate-600" :for="`manager-${a.id}`"
+                        <label class="block text-sm text-ink-muted" :for="`manager-${a.id}`"
                             >Reports to</label
                         >
                         <input
@@ -373,16 +373,16 @@ function placementLabel(a: Assignment): string {
                             v-model="managerQuery"
                             type="text"
                             placeholder="Search by name…"
-                            class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1 w-64"
                         />
                         <ul
                             v-if="managerOptions.length > 0"
-                            class="mt-1 w-96 rounded border border-slate-200 bg-white"
+                            class="mt-1 w-96 rounded-xs border border-line bg-white"
                         >
                             <li v-for="c in managerOptions" :key="c.assignmentId">
                                 <button
                                     type="button"
-                                    class="w-full px-3 py-2 text-left hover:bg-slate-50"
+                                    class="w-full px-3 py-2 text-left hover:bg-graphite-100"
                                     @click="pickManager(c)"
                                 >
                                     {{ c.label }}
@@ -392,7 +392,7 @@ function placementLabel(a: Assignment): string {
                         <div class="mt-2 flex flex-wrap gap-3">
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`manager-effective-${a.id}`"
                                     >Effective from</label
                                 >
@@ -402,12 +402,12 @@ function placementLabel(a: Assignment): string {
                                     type="date"
                                     :min="today"
                                     required
-                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1 w-auto"
                                 />
                             </div>
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`manager-reason-${a.id}`"
                                     >Reason</label
                                 >
@@ -415,7 +415,7 @@ function placementLabel(a: Assignment): string {
                                     :id="`manager-reason-${a.id}`"
                                     v-model="managerForm.reason_code"
                                     required
-                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1 w-auto"
                                 >
                                     <option value="" disabled>Select a reason</option>
                                     <option
@@ -428,7 +428,7 @@ function placementLabel(a: Assignment): string {
                                 </select>
                             </div>
                         </div>
-                        <p class="mt-1 text-sm text-red-600">
+                        <p class="mt-1 text-sm text-danger">
                             {{
                                 managerForm.errors.manager_assignment_id ??
                                 managerForm.errors.reason_code ??
@@ -443,7 +443,7 @@ function placementLabel(a: Assignment): string {
                                     managerForm.manager_assignment_id === '' ||
                                     managerForm.reason_code === ''
                                 "
-                                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                class="btn btn-primary"
                                 @click="submitManager(a)"
                             >
                                 Save manager

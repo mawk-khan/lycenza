@@ -110,7 +110,7 @@ const leaveError = useLeaveError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">My leave</h1>
 
@@ -124,27 +124,27 @@ const leaveError = useLeaveError();
             <p
                 v-if="leaveError"
                 role="alert"
-                class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+                class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
             >
                 {{ leaveError }}
             </p>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 Balances come from your School's leave configuration. Units are half-days (2 = one
                 full day).
             </p>
 
             <h2 class="mt-6 text-sm font-semibold">
                 Balances
-                <span v-if="overview.leaveYear" class="font-normal text-slate-500"
+                <span v-if="overview.leaveYear" class="font-normal text-ink-muted"
                     >· leave year {{ overview.leaveYear.label }}</span
                 >
             </h2>
-            <p v-if="overview.balances.length === 0" class="mt-2 text-sm text-slate-500">
+            <p v-if="overview.balances.length === 0" class="mt-2 text-sm text-ink-muted">
                 No leave balance has been recorded for you this year.
             </p>
             <table v-else class="mt-2 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Leave type</th>
                         <th class="py-2">Available</th>
                     </tr>
@@ -153,7 +153,7 @@ const leaveError = useLeaveError();
                     <tr
                         v-for="b in overview.balances"
                         :key="b.leaveTypeId"
-                        class="border-b border-slate-100"
+                        class="border-b border-line"
                     >
                         <td class="py-2">{{ b.leaveTypeName ?? '—' }}</td>
                         <td class="py-2">{{ units(b.availableUnits) }}</td>
@@ -161,15 +161,12 @@ const leaveError = useLeaveError();
                 </tbody>
             </table>
 
-            <form class="mt-8 rounded border border-slate-300 p-4" @submit.prevent="submit">
+            <form class="mt-8 rounded-xs border border-control-line p-4" @submit.prevent="submit">
                 <h2 class="text-sm font-semibold">Request leave</h2>
                 <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <label class="text-sm">
-                        <span class="block text-slate-600">Leave type</span>
-                        <select
-                            v-model="form.leave_type_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        >
+                        <span class="block text-ink-muted">Leave type</span>
+                        <select v-model="form.leave_type_id" class="input mt-1">
                             <option value="">Select</option>
                             <option v-for="t in overview.types" :key="t.id" :value="t.id">
                                 {{ t.name }} ({{ t.code }})
@@ -177,43 +174,26 @@ const leaveError = useLeaveError();
                         </select>
                     </label>
                     <label class="text-sm">
-                        <span class="block text-slate-600">From</span>
-                        <input
-                            v-model="form.starts_on"
-                            type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        />
-                        <select
-                            v-model="form.start_portion"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        >
+                        <span class="block text-ink-muted">From</span>
+                        <input v-model="form.starts_on" type="date" class="input mt-1" />
+                        <select v-model="form.start_portion" class="input mt-1">
                             <option v-for="p in portions" :key="p" :value="p">
                                 {{ portionLabels[p] }}
                             </option>
                         </select>
                     </label>
                     <label class="text-sm">
-                        <span class="block text-slate-600">To (leave empty for one day)</span>
-                        <input
-                            v-model="form.ends_on"
-                            type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        />
-                        <select
-                            v-model="form.end_portion"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        >
+                        <span class="block text-ink-muted">To (leave empty for one day)</span>
+                        <input v-model="form.ends_on" type="date" class="input mt-1" />
+                        <select v-model="form.end_portion" class="input mt-1">
                             <option v-for="p in portions" :key="p" :value="p">
                                 {{ portionLabels[p] }}
                             </option>
                         </select>
                     </label>
                     <label class="text-sm">
-                        <span class="block text-slate-600">Reason (optional)</span>
-                        <select
-                            v-model="form.reason_code"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1"
-                        >
+                        <span class="block text-ink-muted">Reason (optional)</span>
+                        <select v-model="form.reason_code" class="input mt-1">
                             <option value="">None</option>
                             <option v-for="r in requestReasons" :key="r" :value="r">
                                 {{ reasonLabels[r] ?? r }}
@@ -221,11 +201,7 @@ const leaveError = useLeaveError();
                         </select>
                     </label>
                 </div>
-                <button
-                    type="submit"
-                    class="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="form.processing"
-                >
+                <button type="submit" class="btn btn-primary mt-3" :disabled="form.processing">
                     Submit request
                 </button>
             </form>
@@ -239,7 +215,7 @@ const leaveError = useLeaveError();
             />
             <table v-else class="mt-2 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Leave type</th>
                         <th class="py-2">Period</th>
                         <th class="py-2">Units</th>
@@ -248,7 +224,7 @@ const leaveError = useLeaveError();
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in requests" :key="row.id" class="border-b border-slate-100">
+                    <tr v-for="row in requests" :key="row.id" class="border-b border-line">
                         <td class="py-2">{{ typeName(overview.types, row.leaveTypeId) }}</td>
                         <td class="py-2">
                             <a class="underline" :href="`/app/my-leave/requests/${row.id}`">{{
@@ -281,36 +257,28 @@ const leaveError = useLeaveError();
 
             <form
                 v-if="acting"
-                class="mt-6 rounded border border-slate-300 p-4"
+                class="mt-6 rounded-xs border border-control-line p-4"
                 @submit.prevent="confirmDecision"
             >
                 <h2 class="text-sm font-semibold">
                     {{ acting.action === 'withdraw' ? 'Withdraw request' : 'Cancel leave' }}
                 </h2>
                 <div class="mt-3 flex flex-wrap items-center gap-3">
-                    <label class="text-sm text-slate-600" for="my-reason">Reason</label>
-                    <select
-                        id="my-reason"
-                        v-model="decision.reason_code"
-                        class="rounded border border-slate-300 px-2 py-1 text-sm"
-                    >
+                    <label class="text-sm text-ink-muted" for="my-reason">Reason</label>
+                    <select id="my-reason" v-model="decision.reason_code" class="input w-auto">
                         <option value="">Select a reason</option>
                         <option v-for="r in closingReasons" :key="r" :value="r">
                             {{ reasonLabels[r] ?? r }}
                         </option>
                     </select>
-                    <button
-                        type="submit"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                        :disabled="decision.processing"
-                    >
+                    <button type="submit" class="btn btn-primary" :disabled="decision.processing">
                         Confirm
                     </button>
                     <button type="button" class="text-sm underline" @click="acting = null">
                         Back
                     </button>
                 </div>
-                <p v-if="decision.errors.reason_code" class="mt-2 text-sm text-red-700">
+                <p v-if="decision.errors.reason_code" class="mt-2 text-sm text-danger">
                     {{ decision.errors.reason_code }}
                 </p>
             </form>

@@ -56,31 +56,31 @@ function apply(): void {
 
 <template>
     <Head title="Staff attendance by month" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/staff-attendance">← Staff attendance</a>
         <h1 class="mt-2 text-xl font-semibold">Staff attendance by month</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Days from {{ summary.from }} to {{ summary.to }}, per employee. Half days count as 0.5.
             Approved leave comes first, then what was recorded, then the staff calendar.
         </p>
 
         <form class="mt-6 flex items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-xs text-slate-600" for="staff-month">Month</label>
+                <label class="block text-xs text-ink-muted" for="staff-month">Month</label>
                 <input
                     id="staff-month"
                     v-model="month"
                     type="month"
                     :max="currentMonth"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 />
             </div>
         </form>
-        <p v-if="pageErrors.month" class="mt-3 text-sm text-red-700" role="alert">
+        <p v-if="pageErrors.month" class="mt-3 text-sm text-danger" role="alert">
             {{ pageErrors.month }}
         </p>
-        <p v-if="!summary.calendarConfigured" class="mt-3 text-sm text-amber-800">
+        <p v-if="!summary.calendarConfigured" class="mt-3 text-sm text-ink">
             The staff calendar is not configured, so no day is shown as a holiday or off day.
         </p>
 
@@ -96,7 +96,7 @@ function apply(): void {
                     Staff attendance days by state
                 </caption>
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Employee</th>
                         <th
                             v-for="s in states"
@@ -108,11 +108,11 @@ function apply(): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="row in summary.rows" :key="row.employment.employmentRecordId">
                         <td class="py-2">
                             {{ row.employment.fullName ?? '—' }}
-                            <span class="text-xs text-slate-500">{{
+                            <span class="text-xs text-ink-muted">{{
                                 row.employment.employeeNumber
                             }}</span>
                         </td>
@@ -122,7 +122,7 @@ function apply(): void {
                     </tr>
                 </tbody>
                 <tfoot>
-                    <tr class="border-t border-slate-200 font-medium">
+                    <tr class="border-t border-line font-medium">
                         <td class="py-2">All employees</td>
                         <td v-for="s in states" :key="s.key" class="py-2 text-right font-mono">
                             {{ days(summary.totals[s.key]) }}

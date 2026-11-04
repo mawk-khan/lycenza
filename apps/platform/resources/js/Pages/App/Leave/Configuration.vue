@@ -276,13 +276,13 @@ const leaveError = useLeaveError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/requests">← Leave requests</a>
         <h1 class="mt-2 text-xl font-semibold">Leave configuration</h1>
         <p
             v-if="leaveError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError }}
         </p>
@@ -306,7 +306,7 @@ const leaveError = useLeaveError();
                 <select
                     v-model.number="settingsForm.leave_year_start_month"
                     aria-label="Start month"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-auto"
                 >
                     <option v-for="(m, i) in months" :key="m" :value="i + 1">{{ m }}</option>
                 </select>
@@ -317,11 +317,11 @@ const leaveError = useLeaveError();
                 class="mt-2 flex flex-wrap gap-2"
                 @submit.prevent="post(changeForm, '/app/leave/year-start-changes')"
             >
-                <span class="text-sm text-slate-600">Change for future years:</span>
+                <span class="text-sm text-ink-muted">Change for future years:</span>
                 <select
                     v-model.number="changeForm.start_month"
                     aria-label="New start month"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-auto"
                 >
                     <option v-for="(m, i) in months" :key="m" :value="i + 1">{{ m }}</option>
                 </select>
@@ -329,7 +329,7 @@ const leaveError = useLeaveError();
                     v-model="changeForm.effective_from"
                     type="date"
                     aria-label="Effective from"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-auto"
                 />
                 <button type="submit" class="underline">Schedule</button>
             </form>
@@ -348,7 +348,7 @@ const leaveError = useLeaveError();
                     v-model="yearForm.on"
                     type="date"
                     aria-label="A date in the year to open"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-auto"
                 />
                 <button type="submit" class="underline">
                     Open the leave year containing this date
@@ -382,13 +382,13 @@ const leaveError = useLeaveError();
                     v-model="typeForm.code"
                     aria-label="Code"
                     placeholder="Code"
-                    class="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-24"
                 />
                 <input
                     v-model="typeForm.name"
                     aria-label="Name"
                     placeholder="Name"
-                    class="w-48 rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-48"
                 />
                 <label class="text-sm"
                     ><input v-model="typeForm.is_paid" type="checkbox" /> Paid</label
@@ -402,19 +402,19 @@ const leaveError = useLeaveError();
                 >
                 <button type="submit" class="underline">Add type</button>
             </form>
-            <p v-if="typeForm.errors.code" class="mt-1 text-sm text-red-700">
+            <p v-if="typeForm.errors.code" class="mt-1 text-sm text-danger">
                 {{ typeForm.errors.code }}
             </p>
         </section>
 
         <section class="mt-8" aria-labelledby="policies-heading">
             <h2 id="policies-heading" class="text-sm font-semibold">Policies</h2>
-            <p class="mt-1 text-sm text-slate-600">
+            <p class="mt-1 text-sm text-ink-muted">
                 A policy version is read-only once saved. To change it, replace it with a new
                 version: existing assignments keep the version they were made under.
                 <a class="underline" href="/app/leave/eligibility">Eligibility and assignment →</a>
             </p>
-            <p v-if="policiesByType.length === 0" class="mt-2 text-sm text-slate-600">
+            <p v-if="policiesByType.length === 0" class="mt-2 text-sm text-ink-muted">
                 No leave policy yet.
             </p>
             <div v-for="group in policiesByType" :key="group.type.id" class="mt-3">
@@ -423,10 +423,10 @@ const leaveError = useLeaveError();
                     <li
                         v-for="p in group.active"
                         :key="p.id"
-                        class="rounded border border-slate-200 p-2"
+                        class="rounded-xs border border-line p-2"
                     >
                         <span class="font-medium">{{ p.name }}</span>
-                        <span class="ml-2 rounded bg-green-100 px-1 text-xs text-green-900"
+                        <span class="ml-2 rounded-xs bg-graphite-100 px-1 text-xs text-ink"
                             >Current</span
                         >
                         <div>
@@ -471,7 +471,7 @@ const leaveError = useLeaveError();
                 <details v-if="group.history.length > 0" class="mt-1 text-sm">
                     <summary>Earlier versions ({{ group.history.length }})</summary>
                     <ul class="mt-1 space-y-1">
-                        <li v-for="p in group.history" :key="p.id" class="text-slate-700">
+                        <li v-for="p in group.history" :key="p.id" class="text-ink">
                             {{ p.name }} · {{ units(p.annualAllocationUnits) }} a year ·
                             {{ timingText(p) }} · retired {{ p.retiredAt?.slice(0, 10) }}
                         </li>
@@ -481,7 +481,7 @@ const leaveError = useLeaveError();
 
             <form
                 v-if="canConfigure"
-                class="mt-4 space-y-3 rounded border border-slate-300 p-3"
+                class="mt-4 space-y-3 rounded-xs border border-control-line p-3"
                 aria-labelledby="policy-editor-heading"
                 @submit.prevent="submitPolicy"
             >
@@ -496,10 +496,7 @@ const leaveError = useLeaveError();
                     <legend class="text-sm font-medium">Policy identity</legend>
                     <label class="text-sm"
                         >Leave type
-                        <select
-                            v-model="policyForm.leave_type_id"
-                            class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                        >
+                        <select v-model="policyForm.leave_type_id" class="input ml-1 w-auto">
                             <option value="">Choose…</option>
                             <option
                                 v-for="t in types.filter((x) => x.status === 'active')"
@@ -512,17 +509,11 @@ const leaveError = useLeaveError();
                     </label>
                     <label class="text-sm"
                         >Name
-                        <input
-                            v-model="policyForm.name"
-                            class="ml-1 w-48 rounded border border-slate-300 px-2 py-1 text-sm"
-                        />
+                        <input v-model="policyForm.name" class="input ml-1 w-48" />
                     </label>
                     <label class="text-sm"
                         >Replaces
-                        <select
-                            v-model="policyForm.supersedes_policy_id"
-                            class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                        >
+                        <select v-model="policyForm.supersedes_policy_id" class="input ml-1 w-auto">
                             <option value="">Nothing (a new policy)</option>
                             <option
                                 v-for="p in policies.filter(
@@ -543,10 +534,7 @@ const leaveError = useLeaveError();
                     <legend class="text-sm font-medium">Entitlement and carry-forward</legend>
                     <label class="text-sm"
                         >Funded by
-                        <select
-                            v-model="policyForm.entitlement_method"
-                            class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                        >
+                        <select v-model="policyForm.entitlement_method" class="input ml-1 w-auto">
                             <option v-for="m in entitlementMethods" :key="m.value" :value="m.value">
                                 {{ m.label }}
                             </option>
@@ -560,15 +548,12 @@ const leaveError = useLeaveError();
                                 type="number"
                                 min="1"
                                 max="62"
-                                class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                                class="input ml-1 w-20"
                             />
                         </label>
                         <label class="text-sm"
                             >Credited
-                            <select
-                                v-model="policyForm.accrual_timing"
-                                class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                            >
+                            <select v-model="policyForm.accrual_timing" class="input ml-1 w-auto">
                                 <option value="">Choose…</option>
                                 <option v-for="t in accrualTimings" :key="t.value" :value="t.value">
                                     {{ t.label }}
@@ -582,7 +567,7 @@ const leaveError = useLeaveError();
                             v-model.number="policyForm.annual_allocation_units"
                             type="number"
                             min="0"
-                            class="ml-1 w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input ml-1 w-24"
                         />
                     </label>
                     <label class="text-sm"
@@ -596,7 +581,7 @@ const leaveError = useLeaveError();
                             type="number"
                             min="1"
                             :disabled="!policyForm.carry_forward_allowed"
-                            class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input ml-1 w-20"
                         />
                     </label>
                     <label class="text-sm"
@@ -606,7 +591,7 @@ const leaveError = useLeaveError();
                             type="number"
                             min="1"
                             :disabled="!policyForm.carry_forward_allowed"
-                            class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input ml-1 w-20"
                         />
                     </label>
                 </fieldset>
@@ -621,7 +606,7 @@ const leaveError = useLeaveError();
                             type="number"
                             min="1"
                             max="366"
-                            class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input ml-1 w-20"
                         />
                     </label>
                     <label class="text-sm"
@@ -631,7 +616,7 @@ const leaveError = useLeaveError();
                             type="number"
                             min="0"
                             max="366"
-                            class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input ml-1 w-20"
                         />
                     </label>
                     <label class="text-sm"
@@ -641,13 +626,13 @@ const leaveError = useLeaveError();
                             type="number"
                             min="1"
                             max="734"
-                            class="ml-1 w-20 rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input ml-1 w-20"
                         />
                     </label>
                 </fieldset>
                 <fieldset>
                     <legend class="text-sm font-medium">Eligibility rules</legend>
-                    <p class="text-sm text-slate-600">
+                    <p class="text-sm text-ink-muted">
                         An employment matches a rule when every chosen value matches its staff type,
                         Employee Category and primary Department on the date. "Any" also matches an
                         employment with no value. No rule: the version is assigned by hand only.
@@ -659,10 +644,7 @@ const leaveError = useLeaveError();
                     >
                         <label class="text-sm"
                             >Staff type
-                            <select
-                                v-model="rule.staff_type"
-                                class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                            >
+                            <select v-model="rule.staff_type" class="input ml-1 w-auto">
                                 <option value="">Any</option>
                                 <option v-for="o in staffTypes" :key="o.value" :value="o.value">
                                     {{ o.label }}
@@ -671,10 +653,7 @@ const leaveError = useLeaveError();
                         </label>
                         <label class="text-sm"
                             >Employee Category
-                            <select
-                                v-model="rule.employee_category_id"
-                                class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                            >
+                            <select v-model="rule.employee_category_id" class="input ml-1 w-auto">
                                 <option value="">Any</option>
                                 <option v-for="c in employeeCategories" :key="c.id" :value="c.id">
                                     {{ c.name }}
@@ -683,10 +662,7 @@ const leaveError = useLeaveError();
                         </label>
                         <label class="text-sm"
                             >Department
-                            <select
-                                v-model="rule.department_id"
-                                class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                            >
+                            <select v-model="rule.department_id" class="input ml-1 w-auto">
                                 <option value="">Any</option>
                                 <option v-for="d in departments" :key="d.id" :value="d.id">
                                     {{ d.name }}
@@ -701,14 +677,10 @@ const leaveError = useLeaveError();
                         Add an eligibility rule
                     </button>
                 </fieldset>
-                <div class="flex flex-wrap items-end gap-3 border-t border-slate-200 pt-2">
+                <div class="flex flex-wrap items-end gap-3 border-t border-line pt-2">
                     <label class="text-sm"
                         >Preview on
-                        <input
-                            v-model="previewDate"
-                            type="date"
-                            class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                        />
+                        <input v-model="previewDate" type="date" class="input ml-1 w-auto" />
                     </label>
                     <button
                         type="button"
@@ -722,14 +694,14 @@ const leaveError = useLeaveError();
                         Save version
                     </button>
                 </div>
-                <p v-if="previewError" role="alert" class="text-sm text-red-700">
+                <p v-if="previewError" role="alert" class="text-sm text-danger">
                     {{ previewError }}
                 </p>
                 <div v-if="preview" class="text-sm" aria-live="polite">
                     <p
                         v-if="preview.overlappingPolicyId"
                         role="alert"
-                        class="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900"
+                        class="rounded-xs border border-accent-300 bg-accent-100 p-2 text-ink"
                     >
                         These rules overlap another current version of this leave type; saving will
                         be refused. Replace that version, or narrow the rules.
@@ -769,7 +741,7 @@ const leaveError = useLeaveError();
                     <select
                         v-model="weekForm.weekdays[i + 1]"
                         :disabled="!canConfigure"
-                        class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input ml-1 w-auto"
                     >
                         <option value="full">Full day</option>
                         <option value="first_half">Morning only</option>
@@ -802,12 +774,12 @@ const leaveError = useLeaveError();
                     v-model="holidayForm.date"
                     type="date"
                     aria-label="Holiday date"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-auto"
                 />
                 <select
                     v-model="holidayForm.portion"
                     aria-label="Holiday portion"
-                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-auto"
                 >
                     <option v-for="p in portions" :key="p" :value="p">
                         {{ portionLabels[p] }}
@@ -817,7 +789,7 @@ const leaveError = useLeaveError();
                     v-model="holidayForm.name"
                     aria-label="Holiday name"
                     placeholder="Name"
-                    class="w-48 rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input w-48"
                 />
                 <button type="submit" class="underline">Add holiday</button>
             </form>

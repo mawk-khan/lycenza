@@ -101,22 +101,22 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll/compensation">← Employee Compensation</a>
 
         <h1 class="mt-2 text-xl font-semibold">
             {{ employmentRecord.employeeFullName ?? employmentRecord.id }}
         </h1>
-        <p v-if="employmentRecord.employeeNumber" class="mt-1 text-sm text-slate-500">
+        <p v-if="employmentRecord.employeeNumber" class="mt-1 text-sm text-ink-muted">
             {{ employmentRecord.employeeNumber }}
         </p>
 
         <div class="mt-6 flex items-center justify-between">
-            <h2 class="text-sm font-medium text-slate-900">Compensation assignments</h2>
+            <h2 class="text-sm font-medium text-ink">Compensation assignments</h2>
             <button
                 v-if="canManageSensitive"
                 type="button"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+                class="btn btn-primary"
                 @click="showForm = !showForm"
             >
                 {{ showForm ? 'Cancel' : 'Assign new compensation' }}
@@ -125,17 +125,17 @@ function submit(): void {
 
         <form
             v-if="showForm"
-            class="mt-4 space-y-3 rounded border border-slate-200 p-4"
+            class="mt-4 space-y-3 rounded-xs border border-line p-4"
             @submit.prevent="submit"
         >
             <div>
-                <label class="block text-sm text-slate-600" for="salary_structure_id"
+                <label class="block text-sm text-ink-muted" for="salary_structure_id"
                     >Salary structure</label
                 >
                 <select
                     id="salary_structure_id"
                     :value="form.salary_structure_id"
-                    class="mt-1 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 max-w-md"
                     @change="selectStructure(($event.target as HTMLSelectElement).value)"
                 >
                     <option value="" disabled>Select…</option>
@@ -143,39 +143,34 @@ function submit(): void {
                         {{ s.code }} v{{ s.version }} — {{ s.name }}
                     </option>
                 </select>
-                <p v-if="form.errors.salary_structure_id" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.salary_structure_id" class="mt-1 text-sm text-danger">
                     {{ form.errors.salary_structure_id }}
                 </p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="effective_from"
+                <label class="block text-sm text-ink-muted" for="effective_from"
                     >Effective from</label
                 >
                 <input
                     id="effective_from"
                     v-model="form.effective_from"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                 />
-                <p v-if="form.errors.effective_from" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors.effective_from" class="mt-1 text-sm text-danger">
                     {{ form.errors.effective_from }}
                 </p>
             </div>
 
             <div v-if="form.fixed_values.length > 0" class="space-y-2">
-                <p class="text-sm text-slate-600">Fixed component amounts</p>
+                <p class="text-sm text-ink-muted">Fixed component amounts</p>
                 <div
                     v-for="(v, i) in form.fixed_values"
                     :key="v.salary_structure_component_id"
                     class="flex items-center gap-2"
                 >
-                    <span class="w-48 text-xs text-slate-500">Component {{ i + 1 }}</span>
-                    <input
-                        v-model="v.amount"
-                        type="text"
-                        placeholder="0.00"
-                        class="w-32 rounded border border-slate-300 px-2 py-1.5 text-sm"
-                    />
+                    <span class="w-48 text-xs text-ink-muted">Component {{ i + 1 }}</span>
+                    <input v-model="v.amount" type="text" placeholder="0.00" class="input w-32" />
                 </div>
             </div>
 
@@ -190,26 +185,26 @@ function submit(): void {
             <button
                 type="submit"
                 :disabled="form.processing || !hasMfaFactor"
-                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary"
             >
                 {{ form.processing ? 'Assigning…' : 'Assign compensation' }}
             </button>
         </form>
 
-        <p v-if="sensitiveNeedsMfa" class="mt-4 text-sm text-amber-700">
+        <p v-if="sensitiveNeedsMfa" class="mt-4 text-sm text-ink">
             Compensation amounts need a recent multi-factor sign-in. Sign out and sign in again with
             your authentication code to see them.
         </p>
 
         <table class="mt-4 w-full text-left text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <tr class="border-b border-line text-xs text-ink-muted">
                     <th scope="col" class="py-2 font-medium">Effective from</th>
                     <th scope="col" class="py-2 font-medium">Effective to</th>
                     <th v-if="canViewSensitive" scope="col" class="py-2 font-medium">Amounts</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-line">
                 <tr v-for="a in assignments" :key="a.id">
                     <td class="py-3">{{ a.effectiveFrom }}</td>
                     <td class="py-3">{{ a.effectiveTo ?? 'Current' }}</td>
@@ -232,7 +227,7 @@ function submit(): void {
                 </tr>
             </tbody>
         </table>
-        <p v-if="assignments.length === 0" class="mt-4 text-sm text-slate-500">
+        <p v-if="assignments.length === 0" class="mt-4 text-sm text-ink-muted">
             No compensation assigned yet.
         </p>
     </main>

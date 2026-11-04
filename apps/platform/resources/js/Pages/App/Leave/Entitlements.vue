@@ -195,25 +195,21 @@ const leaveError = useLeaveError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/requests">← Leave requests</a>
         <h1 class="mt-2 text-xl font-semibold">Leave entitlements</h1>
         <p
             v-if="leaveError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError }}
         </p>
 
         <div class="mt-6 flex flex-wrap gap-6">
             <div>
-                <label class="block text-sm text-slate-600" for="ent-employee">Employee</label>
-                <select
-                    id="ent-employee"
-                    v-model="employmentRecordId"
-                    class="mt-1 w-80 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="ent-employee">Employee</label>
+                <select id="ent-employee" v-model="employmentRecordId" class="input mt-1 w-80">
                     <option value="">Select an employee</option>
                     <option
                         v-for="e in employments"
@@ -225,12 +221,8 @@ const leaveError = useLeaveError();
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="ent-year">Leave year</label>
-                <select
-                    id="ent-year"
-                    v-model="leaveYearId"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="ent-year">Leave year</label>
+                <select id="ent-year" v-model="leaveYearId" class="input mt-1 w-56">
                     <option value="">Select a year</option>
                     <option v-for="y in years" :key="y.id" :value="y.id">{{ y.label }}</option>
                 </select>
@@ -243,13 +235,13 @@ const leaveError = useLeaveError();
                 <li v-for="b in balances" :key="b.leaveTypeId">
                     {{ typeName(types, b.leaveTypeId) }}: {{ units(b.availableUnits) }} available
                 </li>
-                <li v-if="balances.length === 0" class="text-slate-500">
+                <li v-if="balances.length === 0" class="text-ink-muted">
                     No ledger entries in this year.
                 </li>
             </ul>
 
             <h2 class="mt-6 text-sm font-semibold">Statements</h2>
-            <p v-if="statements.length === 0" class="mt-2 text-sm text-slate-500">
+            <p v-if="statements.length === 0" class="mt-2 text-sm text-ink-muted">
                 No ledger entries in this year.
             </p>
             <section
@@ -262,13 +254,13 @@ const leaveError = useLeaveError();
                 <p class="text-sm">
                     Opening {{ units(st.opening) }} + credits {{ units(st.credits) }} − debits
                     {{ units(st.debits) }} = closing {{ units(st.closing) }}
-                    <span v-if="!st.identityHolds" role="alert" class="text-red-700">
+                    <span v-if="!st.identityHolds" role="alert" class="text-danger">
                         (does not reconcile — report this)
                     </span>
                 </p>
                 <table class="mt-1 w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-300">
+                        <tr class="border-b border-control-line">
                             <th scope="col" class="py-1 pr-2">Entry</th>
                             <th scope="col" class="py-1 pr-2">Units</th>
                             <th scope="col" class="py-1 pr-2">Balance</th>
@@ -277,11 +269,7 @@ const leaveError = useLeaveError();
                         </tr>
                     </thead>
                     <tbody>
-                        <tr
-                            v-for="line in st.lines"
-                            :key="line.id"
-                            class="border-b border-slate-100"
-                        >
+                        <tr v-for="line in st.lines" :key="line.id" class="border-b border-line">
                             <td class="py-1 pr-2">
                                 {{ ledgerKindLabels[line.kind] ?? line.kind
                                 }}{{ line.direction ? ` (${line.direction})` : '' }}
@@ -337,21 +325,21 @@ const leaveError = useLeaveError();
                             v-model="endForm.effective_to"
                             type="date"
                             aria-label="Last effective day"
-                            class="rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input w-auto"
                         />
                         <button type="submit" class="underline">Confirm</button>
                     </form>
                 </li>
-                <li v-if="assignments.length === 0" class="text-slate-500">No policy assigned.</li>
+                <li v-if="assignments.length === 0" class="text-ink-muted">No policy assigned.</li>
             </ul>
 
             <div v-if="canManage" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                <form class="rounded border border-slate-300 p-4" @submit.prevent="assign">
+                <form class="rounded-xs border border-control-line p-4" @submit.prevent="assign">
                     <h3 class="text-sm font-semibold">Assign a policy</h3>
                     <select
                         v-model="assignForm.leave_policy_id"
                         aria-label="Policy"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     >
                         <option value="">Select a policy</option>
                         <option
@@ -366,13 +354,13 @@ const leaveError = useLeaveError();
                         v-model="assignForm.effective_from"
                         type="date"
                         aria-label="From"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     />
                     <input
                         v-model="assignForm.effective_to"
                         type="date"
                         aria-label="To (optional)"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     />
                     <button type="submit" class="mt-2 underline" :disabled="assignForm.processing">
                         Assign
@@ -380,14 +368,14 @@ const leaveError = useLeaveError();
                 </form>
                 <form
                     v-if="leaveYearId"
-                    class="rounded border border-slate-300 p-4"
+                    class="rounded-xs border border-control-line p-4"
                     @submit.prevent="allocate"
                 >
                     <h3 class="text-sm font-semibold">Explicit allocation (exact units)</h3>
                     <select
                         v-model="allocateForm.leave_type_id"
                         aria-label="Leave type"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     >
                         <option value="">Select a leave type</option>
                         <option
@@ -403,7 +391,7 @@ const leaveError = useLeaveError();
                         type="number"
                         min="1"
                         aria-label="Units"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     />
                     <button
                         type="submit"
@@ -415,14 +403,14 @@ const leaveError = useLeaveError();
                 </form>
                 <form
                     v-if="leaveYearId"
-                    class="rounded border border-slate-300 p-4"
+                    class="rounded-xs border border-control-line p-4"
                     @submit.prevent="adjust"
                 >
                     <h3 class="text-sm font-semibold">Adjustment</h3>
                     <select
                         v-model="adjustForm.leave_type_id"
                         aria-label="Leave type"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     >
                         <option value="">Select a leave type</option>
                         <option
@@ -436,7 +424,7 @@ const leaveError = useLeaveError();
                     <select
                         v-model="adjustForm.direction"
                         aria-label="Direction"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     >
                         <option value="credit">Credit</option>
                         <option value="debit">Debit</option>
@@ -446,13 +434,9 @@ const leaveError = useLeaveError();
                         type="number"
                         min="1"
                         aria-label="Units"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        class="input mt-2"
                     />
-                    <select
-                        v-model="adjustForm.reason"
-                        aria-label="Reason"
-                        class="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                    >
+                    <select v-model="adjustForm.reason" aria-label="Reason" class="input mt-2">
                         <option value="">Select a reason</option>
                         <option v-for="r in adjustmentReasons" :key="r" :value="r">
                             {{ reasonLabels[r] ?? r }}
@@ -460,10 +444,7 @@ const leaveError = useLeaveError();
                     </select>
                     <label class="mt-2 block text-sm"
                         >Corrects (optional)
-                        <select
-                            v-model="adjustForm.corrects_entry_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                        >
+                        <select v-model="adjustForm.corrects_entry_id" class="input mt-1">
                             <option value="">No earlier entry</option>
                             <template
                                 v-for="st in statements.filter(
@@ -485,10 +466,10 @@ const leaveError = useLeaveError();
                             v-model="adjustForm.mfa_code"
                             autocomplete="one-time-code"
                             inputmode="numeric"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input mt-1"
                         />
                     </label>
-                    <p v-if="adjustForm.errors.mfa_code" role="alert" class="text-sm text-red-700">
+                    <p v-if="adjustForm.errors.mfa_code" role="alert" class="text-sm text-danger">
                         {{ adjustForm.errors.mfa_code }}
                     </p>
                     <button type="submit" class="mt-2 underline" :disabled="adjustForm.processing">
@@ -497,20 +478,17 @@ const leaveError = useLeaveError();
                 </form>
                 <form
                     v-if="leaveYearId"
-                    class="rounded border border-slate-300 p-4"
+                    class="rounded-xs border border-control-line p-4"
                     @submit.prevent="recordOpening"
                 >
                     <h3 class="text-sm font-semibold">Opening balance (go-live)</h3>
-                    <p class="mt-1 text-xs text-slate-600">
+                    <p class="mt-1 text-xs text-ink-muted">
                         Exact units carried over from the School's previous records. Only as the
                         account's first entry, once.
                     </p>
                     <label class="mt-2 block text-sm"
                         >Leave type
-                        <select
-                            v-model="openingForm.leave_type_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-                        >
+                        <select v-model="openingForm.leave_type_id" class="input mt-1">
                             <option value="">Select a leave type</option>
                             <option
                                 v-for="t in types.filter((x) => x.tracksBalance)"
@@ -527,7 +505,7 @@ const leaveError = useLeaveError();
                             v-model.number="openingForm.units"
                             type="number"
                             min="1"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input mt-1"
                         />
                     </label>
                     <label class="mt-2 block text-sm"
@@ -536,10 +514,10 @@ const leaveError = useLeaveError();
                             v-model="openingForm.mfa_code"
                             autocomplete="one-time-code"
                             inputmode="numeric"
-                            class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                            class="input mt-1"
                         />
                     </label>
-                    <p v-if="openingForm.errors.mfa_code" role="alert" class="text-sm text-red-700">
+                    <p v-if="openingForm.errors.mfa_code" role="alert" class="text-sm text-danger">
                         {{ openingForm.errors.mfa_code }}
                     </p>
                     <button type="submit" class="mt-2 underline" :disabled="openingForm.processing">
@@ -547,7 +525,7 @@ const leaveError = useLeaveError();
                     </button>
                 </form>
             </div>
-            <p v-if="canManage && !mfaEnrolled" class="mt-2 text-sm text-amber-900">
+            <p v-if="canManage && !mfaEnrolled" class="mt-2 text-sm text-ink">
                 Adjustments and opening balances need a current authentication code: enroll a factor
                 under Account security first.
             </p>
@@ -556,14 +534,13 @@ const leaveError = useLeaveError();
             </p>
         </template>
 
-        <section v-if="canManage && leaveYearId" class="mt-8 rounded border border-slate-300 p-4">
+        <section
+            v-if="canManage && leaveYearId"
+            class="mt-8 rounded-xs border border-control-line p-4"
+        >
             <h2 class="text-sm font-semibold">Annual allocation run</h2>
             <div class="mt-2 flex flex-wrap items-center gap-3">
-                <select
-                    v-model="runTypeId"
-                    aria-label="Run leave type"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <select v-model="runTypeId" aria-label="Run leave type" class="input w-auto">
                     <option value="">Select a leave type</option>
                     <option
                         v-for="t in types.filter((x) => x.tracksBalance)"
@@ -586,7 +563,7 @@ const leaveError = useLeaveError();
                 <button
                     v-if="runPreview && !runPreview.error && runPreview.leaveTypeId === runTypeId"
                     type="button"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                    class="btn btn-primary"
                     :disabled="runForm.processing"
                     @click="executeRun"
                 >

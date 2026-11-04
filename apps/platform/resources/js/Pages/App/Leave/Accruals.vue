@@ -169,17 +169,17 @@ function cell(value: number | null): string {
 </script>
 
 <template>
-    <main class="mx-auto max-w-7xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-7xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/entitlements">← Leave entitlements</a>
         <h1 class="mt-2 text-xl font-semibold">Monthly accrual</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             Units are half-days (2 = one day). Only policy versions set to monthly accrual are
             credited here; annual policies keep the annual allocation run.
         </p>
         <p
             v-if="leaveError || error"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError ?? error }}
         </p>
@@ -187,25 +187,19 @@ function cell(value: number | null): string {
         <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="show">
             <label class="text-sm"
                 >Leave type
-                <select
-                    v-model="filters.leave_type_id"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <select v-model="filters.leave_type_id" class="input ml-1 w-auto">
                     <option v-for="t in types" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>
             </label>
             <label class="text-sm"
                 >Leave year
-                <select
-                    v-model="filters.leave_year_id"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <select v-model="filters.leave_year_id" class="input ml-1 w-auto">
                     <option v-for="y in years" :key="y.id" :value="y.id">{{ y.label }}</option>
                 </select>
             </label>
             <button type="submit" class="underline">Show</button>
         </form>
-        <p v-if="types.length === 0 || years.length === 0" class="mt-4 text-sm text-slate-600">
+        <p v-if="types.length === 0 || years.length === 0" class="mt-4 text-sm text-ink-muted">
             Create a balance-tracked leave type and open a leave year first.
         </p>
 
@@ -214,10 +208,7 @@ function cell(value: number | null): string {
             <div class="mt-2 flex flex-wrap items-end gap-3">
                 <label class="text-sm"
                     >Month
-                    <select
-                        v-model="month"
-                        class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                    >
+                    <select v-model="month" class="input ml-1 w-auto">
                         <option value="">Choose…</option>
                         <option v-for="m in months" :key="m" :value="m" :disabled="m > today">
                             {{ monthLabel(m) }}{{ m > today ? ' (not started)' : '' }}
@@ -239,7 +230,7 @@ function cell(value: number | null): string {
                 </p>
                 <table v-if="preview.rows.length > 0" class="mt-2 w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-slate-300">
+                        <tr class="border-b border-control-line">
                             <th scope="col" class="py-1 pr-2">Employee</th>
                             <th scope="col" class="py-1 pr-2">Outcome</th>
                             <th scope="col" class="py-1">Units</th>
@@ -249,7 +240,7 @@ function cell(value: number | null): string {
                         <tr
                             v-for="r in preview.rows"
                             :key="r.employmentRecordId"
-                            class="border-b border-slate-100"
+                            class="border-b border-line"
                         >
                             <td class="py-1 pr-2">
                                 {{ r.fullName ?? 'Unnamed' }} ({{ r.employeeNumber ?? '—' }})
@@ -259,7 +250,7 @@ function cell(value: number | null): string {
                                 <template v-if="r.outcome === 'not_due'">
                                     (from {{ r.postableOn }})</template
                                 >
-                                <span v-if="r.eligibilityDrift" class="text-amber-900">
+                                <span v-if="r.eligibilityDrift" class="text-ink">
                                     · no longer matches the eligibility rules</span
                                 >
                             </td>
@@ -279,7 +270,7 @@ function cell(value: number | null): string {
                     <button
                         v-if="!confirming"
                         type="button"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                        class="btn btn-primary"
                         :disabled="(preview.counts.credited ?? 0) === 0"
                         @click="askToRun"
                     >
@@ -289,7 +280,7 @@ function cell(value: number | null): string {
                         v-else
                         role="alertdialog"
                         aria-labelledby="run-confirm-heading"
-                        class="rounded border border-slate-300 p-3"
+                        class="rounded-xs border border-control-line p-3"
                     >
                         <h3
                             id="run-confirm-heading"
@@ -332,7 +323,7 @@ function cell(value: number | null): string {
                 </span>
                 <template v-if="run.failureCode"> Stopped: {{ run.failureCode }}.</template>
             </p>
-            <p v-if="run.status !== 'completed'" class="text-sm text-amber-900">
+            <p v-if="run.status !== 'completed'" class="text-sm text-ink">
                 Not finished: preview the month again and credit it to continue from where it
                 stopped.
             </p>
@@ -340,7 +331,7 @@ function cell(value: number | null): string {
                 >Show
                 <select
                     :value="outcome"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="input ml-1 w-auto"
                     @change="openRun(run.id, ($event.target as HTMLSelectElement).value)"
                 >
                     <option value="">Every outcome</option>
@@ -354,11 +345,11 @@ function cell(value: number | null): string {
                     {{ i.fullName ?? 'Unnamed' }} ({{ i.employeeNumber ?? '—' }}) ·
                     {{ accrualOutcomeLabels[i.outcome] ?? i.outcome }}
                     <template v-if="i.units !== null"> · {{ units(i.units) }}</template>
-                    <span v-if="i.eligibilityDrift" class="text-amber-900">
+                    <span v-if="i.eligibilityDrift" class="text-ink">
                         · no longer matches the eligibility rules</span
                     >
                 </li>
-                <li v-if="run.items.length === 0" class="text-slate-500">None.</li>
+                <li v-if="run.items.length === 0" class="text-ink-muted">None.</li>
             </ul>
             <button
                 v-if="run.nextAfter"
@@ -372,7 +363,7 @@ function cell(value: number | null): string {
 
         <section v-if="runs" class="mt-6" aria-labelledby="runs-heading">
             <h2 id="runs-heading" class="text-sm font-semibold">Runs</h2>
-            <p v-if="runs.length === 0" class="mt-1 text-sm text-slate-600">No run yet.</p>
+            <p v-if="runs.length === 0" class="mt-1 text-sm text-ink-muted">No run yet.</p>
             <ul class="mt-1 text-sm">
                 <li v-for="r in runs" :key="r.id">
                     <button type="button" class="underline" @click="openRun(r.id)">
@@ -393,7 +384,7 @@ function cell(value: number | null): string {
                         for that month.
                     </caption>
                     <thead>
-                        <tr class="border-b border-slate-300">
+                        <tr class="border-b border-control-line">
                             <th scope="col" class="py-1 pr-2">Employee</th>
                             <th v-for="m in grid.months" :key="m" scope="col" class="py-1 pr-2">
                                 {{ monthLabel(m).slice(0, 3) }}
@@ -406,7 +397,7 @@ function cell(value: number | null): string {
                         <tr
                             v-for="r in grid.rows"
                             :key="r.employmentRecordId"
-                            class="border-b border-slate-100"
+                            class="border-b border-line"
                         >
                             <th scope="row" class="py-1 pr-2 font-normal">
                                 <a
@@ -425,7 +416,7 @@ function cell(value: number | null): string {
                     </tbody>
                 </table>
             </div>
-            <p v-if="grid.rows.length === 0" class="mt-1 text-sm text-slate-600">
+            <p v-if="grid.rows.length === 0" class="mt-1 text-sm text-ink-muted">
                 No employment in this leave year.
             </p>
             <button

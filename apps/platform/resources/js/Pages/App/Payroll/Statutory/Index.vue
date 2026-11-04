@@ -65,28 +65,28 @@ function goToRunExports(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll">← Payroll</a>
 
         <h1 class="mt-2 text-xl font-semibold">Statutory Payroll</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             PF, ESI, Professional Tax, Labour Welfare Fund and TDS.
         </p>
 
-        <p v-if="!can.view" class="mt-6 text-sm text-slate-500">
+        <p v-if="!can.view" class="mt-6 text-sm text-ink-muted">
             You don't hold any Statutory Payroll capability yet.
         </p>
 
         <template v-else>
-            <section v-if="ruleStatus" class="mt-6 rounded border border-slate-200 p-4 text-sm">
+            <section v-if="ruleStatus" class="mt-6 rounded-xs border border-line p-4 text-sm">
                 <h2 class="font-medium">Active rule versions</h2>
                 <dl class="mt-2 grid grid-cols-2 gap-1">
-                    <dt class="text-slate-500">PF effective from</dt>
+                    <dt class="text-ink-muted">PF effective from</dt>
                     <dd>{{ ruleStatus.pf?.effectiveFrom ?? '—' }}</dd>
-                    <dt class="text-slate-500">ESI effective from</dt>
+                    <dt class="text-ink-muted">ESI effective from</dt>
                     <dd>{{ ruleStatus.esi?.effectiveFrom ?? '—' }}</dd>
                 </dl>
-                <p class="mt-2 text-xs text-amber-700">
+                <p class="mt-2 text-xs text-ink">
                     ESI disability threshold: {{ ruleStatus.esi?.disabilityThresholdStatus }}
                 </p>
             </section>
@@ -97,11 +97,11 @@ function goToRunExports(): void {
                     v-model="query"
                     type="search"
                     placeholder="Search by name or employee number…"
-                    class="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-2"
                     @input="search"
                 />
-                <p v-if="searching" class="mt-1 text-xs text-slate-400">Searching…</p>
-                <ul v-else-if="results.length > 0" class="mt-2 divide-y divide-slate-100 text-sm">
+                <p v-if="searching" class="mt-1 text-xs text-ink-muted">Searching…</p>
+                <ul v-else-if="results.length > 0" class="mt-2 divide-y divide-line text-sm">
                     <li v-for="r in results" :key="r.employmentRecordId" class="py-2">
                         <a
                             class="underline"
@@ -122,17 +122,8 @@ function goToRunExports(): void {
             <section v-if="can.generateExports" class="mt-6">
                 <h2 class="font-medium text-sm">Statutory exports for a Payroll Run</h2>
                 <div class="mt-2 flex gap-2">
-                    <input
-                        v-model="runId"
-                        type="text"
-                        placeholder="Payroll Run id"
-                        class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <button
-                        type="button"
-                        class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-                        @click="goToRunExports"
-                    >
+                    <input v-model="runId" type="text" placeholder="Payroll Run id" class="input" />
+                    <button type="button" class="btn btn-primary" @click="goToRunExports">
                         Go
                     </button>
                 </div>

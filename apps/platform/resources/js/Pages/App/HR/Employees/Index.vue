@@ -148,27 +148,19 @@ function resetFilters(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl p-8 font-sans text-ink">
         <a v-if="canOpenHub" class="text-sm underline" href="/app/hr">← HR</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Employees</h1>
-                <p class="mt-1 text-sm text-slate-500">Your School's Employee directory.</p>
+                <p class="mt-1 text-sm text-ink-muted">Your School's Employee directory.</p>
             </div>
             <div class="flex shrink-0 gap-2">
-                <a
-                    v-if="canOnboard"
-                    href="/app/hr/employees/onboard"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
+                <a v-if="canOnboard" href="/app/hr/employees/onboard" class="btn btn-secondary">
                     Onboard employee
                 </a>
-                <a
-                    v-if="canManage"
-                    href="/app/hr/employees/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
+                <a v-if="canManage" href="/app/hr/employees/create" class="btn btn-primary">
                     Add employee
                 </a>
             </div>
@@ -176,21 +168,21 @@ function resetFilters(): void {
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-search">Search</label>
+                <label class="block text-sm text-ink-muted" for="filter-search">Search</label>
                 <input
                     id="filter-search"
                     v-model="search"
                     type="text"
                     placeholder="Name or employee number…"
-                    class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-64"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-campus">Campus</label>
+                <label class="block text-sm text-ink-muted" for="filter-campus">Campus</label>
                 <select
                     id="filter-campus"
                     v-model="campusId"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 >
                     <option value="">All campuses</option>
@@ -200,13 +192,13 @@ function resetFilters(): void {
                 </select>
             </div>
             <div v-if="departmentOptions !== null">
-                <label class="block text-sm text-slate-600" for="filter-department"
+                <label class="block text-sm text-ink-muted" for="filter-department"
                     >Department</label
                 >
                 <select
                     id="filter-department"
                     v-model="departmentId"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 >
                     <option value="">All departments</option>
@@ -220,11 +212,11 @@ function resetFilters(): void {
                 </select>
             </div>
             <div v-if="positionOptions !== null">
-                <label class="block text-sm text-slate-600" for="filter-position">Position</label>
+                <label class="block text-sm text-ink-muted" for="filter-position">Position</label>
                 <select
                     id="filter-position"
                     v-model="positionId"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 >
                     <option value="">All positions</option>
@@ -238,11 +230,11 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-sort">Sort by</label>
+                <label class="block text-sm text-ink-muted" for="filter-sort">Sort by</label>
                 <select
                     id="filter-sort"
                     v-model="sortKey"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 >
                     <option value="full_name:asc">Name (A–Z)</option>
@@ -252,13 +244,13 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="employee-employment"
+                <label class="block text-sm text-ink-muted" for="employee-employment"
                     >Employment</label
                 >
                 <select
                     id="employee-employment"
                     v-model="employment"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 >
                     <option value="">Any</option>
@@ -269,34 +261,34 @@ function resetFilters(): void {
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="employee-joined-from"
+                <label class="block text-sm text-ink-muted" for="employee-joined-from"
                     >Joined from</label
                 >
                 <input
                     id="employee-joined-from"
                     v-model="joinedFrom"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="employee-joined-to"
+                <label class="block text-sm text-ink-muted" for="employee-joined-to"
                     >Joined to</label
                 >
                 <input
                     id="employee-joined-to"
                     v-model="joinedTo"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                     @change="applyFilters"
                 />
             </div>
-            <label class="flex items-center gap-2 pb-2 text-sm text-slate-600">
+            <label class="flex items-center gap-2 pb-2 text-sm text-ink-muted">
                 <input v-model="severalCampuses" type="checkbox" @change="applyFilters" />
                 On more than one campus
             </label>
-            <label class="flex items-center gap-2 pb-2 text-sm text-slate-600">
+            <label class="flex items-center gap-2 pb-2 text-sm text-ink-muted">
                 <input v-model="includeArchived" type="checkbox" @change="applyFilters" />
                 Include archived
             </label>
@@ -310,7 +302,7 @@ function resetFilters(): void {
             </button>
         </form>
 
-        <p v-if="filters.manager_id" class="mt-4 text-sm text-slate-600">
+        <p v-if="filters.manager_id" class="mt-4 text-sm text-ink-muted">
             Showing the people who currently report to the selected manager.
             <button
                 type="button"
@@ -335,19 +327,14 @@ function resetFilters(): void {
             "
         >
             <template v-if="canManage && !hasFilters" #action>
-                <a
-                    href="/app/hr/employees/create"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                    Add employee
-                </a>
+                <a href="/app/hr/employees/create" class="btn btn-primary"> Add employee </a>
             </template>
         </EmptyState>
 
         <template v-else>
             <table class="mt-6 hidden w-full text-left text-sm md:table">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Employee</th>
                         <th scope="col" class="py-2 font-medium">Employee number</th>
                         <th scope="col" class="py-2 font-medium">Position</th>
@@ -359,7 +346,7 @@ function resetFilters(): void {
                         </th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="employee in employees.data" :key="employee.employee_id">
                         <td class="py-3">
                             <a
@@ -368,11 +355,11 @@ function resetFilters(): void {
                                 >{{ employee.display_name }}</a
                             >
                         </td>
-                        <td class="py-3 text-slate-600">{{ employee.employee_number }}</td>
-                        <td class="py-3 text-slate-600">{{ employee.position_name ?? '—' }}</td>
-                        <td class="py-3 text-slate-600">{{ employee.department_name ?? '—' }}</td>
-                        <td class="py-3 text-slate-600">{{ employee.campus_name ?? '—' }}</td>
-                        <td class="py-3 text-slate-600">
+                        <td class="py-3 text-ink-muted">{{ employee.employee_number }}</td>
+                        <td class="py-3 text-ink-muted">{{ employee.position_name ?? '—' }}</td>
+                        <td class="py-3 text-ink-muted">{{ employee.department_name ?? '—' }}</td>
+                        <td class="py-3 text-ink-muted">{{ employee.campus_name ?? '—' }}</td>
+                        <td class="py-3 text-ink-muted">
                             <button
                                 v-if="employee.manager_employee_id"
                                 type="button"
@@ -397,13 +384,13 @@ function resetFilters(): void {
                 <li
                     v-for="employee in employees.data"
                     :key="employee.employee_id"
-                    class="rounded border border-slate-200 p-4"
+                    class="rounded-xs border border-line p-4"
                 >
                     <a class="font-medium underline" :href="employeeHref(employee.employee_id)">{{
                         employee.display_name
                     }}</a>
-                    <p class="mt-1 text-sm text-slate-500">{{ employee.employee_number }}</p>
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-ink-muted">{{ employee.employee_number }}</p>
+                    <p class="mt-1 text-sm text-ink-muted">
                         {{ employee.position_name ?? '—' }} · {{ employee.department_name ?? '—' }}
                     </p>
                 </li>

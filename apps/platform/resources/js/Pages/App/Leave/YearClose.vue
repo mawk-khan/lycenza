@@ -95,28 +95,24 @@ const leaveError = useLeaveError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/requests">← Leave requests</a>
         <h1 class="mt-2 text-xl font-semibold">Leave year close</h1>
         <p
             v-if="leaveError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError }}
         </p>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Carried leave expiry dates are recorded for information; lapsing carried leave inside
             the next year is not applied automatically yet.
         </p>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="close-year">Leave year</label>
-            <select
-                id="close-year"
-                v-model="leaveYearId"
-                class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
-            >
+            <label class="block text-sm text-ink-muted" for="close-year">Leave year</label>
+            <select id="close-year" v-model="leaveYearId" class="input mt-1 w-72">
                 <option value="">Select a leave year</option>
                 <option v-for="y in years" :key="y.id" :value="y.id">
                     {{ y.label }}{{ y.isTransition ? ' (transition)' : ''
@@ -127,15 +123,15 @@ const leaveError = useLeaveError();
 
         <section
             v-if="canManage && preview !== null"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
         >
             <h2 class="text-sm font-semibold">Preview</h2>
-            <ul v-if="preview.blockers.length > 0" class="mt-2 text-sm text-red-700">
+            <ul v-if="preview.blockers.length > 0" class="mt-2 text-sm text-danger">
                 <li v-for="b in preview.blockers" :key="b">{{ blockerLabels[b] ?? b }}</li>
             </ul>
             <table v-if="preview.items.length > 0" class="mt-3 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Employee</th>
                         <th class="py-2">Leave type</th>
                         <th class="py-2">Closing</th>
@@ -147,7 +143,7 @@ const leaveError = useLeaveError();
                     <tr
                         v-for="item in preview.items"
                         :key="item.employmentRecordId + item.leaveTypeId"
-                        class="border-b border-slate-100"
+                        class="border-b border-line"
                     >
                         <td class="py-2">{{ employeeName(employees, item.employmentRecordId) }}</td>
                         <td class="py-2">{{ typeName(types, item.leaveTypeId) }}</td>
@@ -160,7 +156,7 @@ const leaveError = useLeaveError();
             <button
                 v-if="preview.blockers.length === 0"
                 type="button"
-                class="mt-4 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                class="btn btn-primary mt-4"
                 :disabled="form.processing"
                 @click="execute"
             >
@@ -177,7 +173,7 @@ const leaveError = useLeaveError();
                 → {{ yearLabel(c.nextLeaveYearId) }} · {{ c.itemCount }} balances ·
                 {{ formatDateTime(c.executedAt) }}
             </li>
-            <li v-if="closes.length === 0" class="text-slate-500">
+            <li v-if="closes.length === 0" class="text-ink-muted">
                 No leave year has been closed.
             </li>
         </ul>
@@ -186,7 +182,7 @@ const leaveError = useLeaveError();
             <h3 class="text-sm font-semibold">Close details</h3>
             <table class="mt-2 w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <tr class="border-b border-line text-left text-ink-muted">
                         <th class="py-2">Employee</th>
                         <th class="py-2">Leave type</th>
                         <th class="py-2">Closing</th>
@@ -199,7 +195,7 @@ const leaveError = useLeaveError();
                     <tr
                         v-for="item in close.items"
                         :key="item.employmentRecordId + item.leaveTypeId"
-                        class="border-b border-slate-100"
+                        class="border-b border-line"
                     >
                         <td class="py-2">{{ employeeName(employees, item.employmentRecordId) }}</td>
                         <td class="py-2">{{ typeName(types, item.leaveTypeId) }}</td>
@@ -218,7 +214,7 @@ const leaveError = useLeaveError();
                     >: {{ units(r.units) }} returned — {{ r.carriedDelta }} carried,
                     {{ r.lapsedDelta }} lapsed
                 </li>
-                <li v-if="close.reconciliations.length === 0" class="text-slate-500">None.</li>
+                <li v-if="close.reconciliations.length === 0" class="text-ink-muted">None.</li>
             </ul>
         </section>
     </main>

@@ -2,7 +2,7 @@
 
 - Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
   implemented (2026-11-03, §7). DS-2 implemented (2026-11-04, §8). DS-3
-  implemented (2026-11-04, §9). DS-4a, DS-4b and DS-4c implemented (2026-11-04, §10).** No route, capability, role, table or
+  implemented (2026-11-04, §9). DS-4a to DS-4d implemented (2026-11-04, §10).** No route, capability, role, table or
   migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
@@ -353,3 +353,11 @@ recommended first domain (Students) was taken.
      accounts (hub, charges, charge entry, outstanding, payments, ledger
      accounts, journals and journal entry, periods, fee setup, concessions,
      statements, correction requests).
+8. **DS-4d: HR, Leave, Payroll and staff self-service (2026-11-04).**
+   `Pages/App/HR`, `Leave`, `Payroll`, `StaffAttendance`, `StaffAccounts`,
+   `My` and `Components/HR` -- 46 files, codemod only, no hand edits (no
+   script status maps, no pills). Visual check on 18 captured pages
+   (HR hub, directory, employee profile and overview; Leave configuration,
+   entitlements, requests, approvals, accruals; Payroll hub, periods,
+   structures, components; staff attendance and monthly; Staff accounts; My
+   attendance and payslips).

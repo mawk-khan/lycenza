@@ -74,38 +74,38 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll/statutory">← Statutory Payroll</a>
 
         <h1 class="mt-2 text-xl font-semibold">Statutory accounting configuration</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Every liability/expense account the statutory journal entry posts to. No account-name
             lookup -- these must be real Finance ledger accounts for this School.
         </p>
 
         <form class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2" @submit.prevent="submit">
             <div v-for="[, formKey] in fields" :key="formKey">
-                <label class="block text-sm text-slate-600" :for="formKey">{{
+                <label class="block text-sm text-ink-muted" :for="formKey">{{
                     labels[formKey]
                 }}</label>
                 <select
                     :id="formKey"
                     v-model="(form as Record<string, string>)[formKey]"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select…</option>
                     <option v-for="a in accounts" :key="a.id" :value="a.id">
                         {{ a.code }} — {{ a.name }} ({{ a.type }})
                     </option>
                 </select>
-                <p v-if="form.errors[formKey]" class="mt-1 text-sm text-red-600">
+                <p v-if="form.errors[formKey]" class="mt-1 text-sm text-danger">
                     {{ form.errors[formKey] }}
                 </p>
             </div>
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="col-span-full mt-2 w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                class="btn btn-primary col-span-full mt-2 w-fit"
             >
                 {{ form.processing ? 'Saving…' : 'Save configuration' }}
             </button>

@@ -36,27 +36,27 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll">← Payroll</a>
 
         <h1 class="mt-2 text-xl font-semibold">Payroll Accounting Configuration</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Names the two fixed Finance accounts a normal payroll run posts to. Per-deduction
             liability accounts are set on each Salary Component instead.
         </p>
 
-        <div v-if="configuration" class="mt-4 rounded border border-slate-200 p-4 text-sm">
+        <div v-if="configuration" class="mt-4 rounded-xs border border-line p-4 text-sm">
             <p>Salary expense account: {{ configuration.salaryExpenseLedgerAccountLabel }}</p>
             <p>Salary payable account: {{ configuration.salaryPayableLedgerAccountLabel }}</p>
             <p>Currency: {{ configuration.currency }}</p>
         </div>
-        <p v-else class="mt-4 text-sm text-amber-700">
+        <p v-else class="mt-4 text-sm text-ink">
             Not configured yet -- posting will fail until this is set.
         </p>
 
         <div
             v-if="missingDeductionMappings.length > 0"
-            class="mt-4 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+            class="mt-4 rounded-xs border border-accent-300 bg-accent-100 p-4 text-sm text-ink"
         >
             <p class="font-medium">Missing deduction ledger mappings:</p>
             <ul class="mt-1 list-disc pl-5">
@@ -68,13 +68,13 @@ function submit(): void {
 
         <form class="mt-6 space-y-3" @submit.prevent="submit">
             <div>
-                <label class="block text-sm text-slate-600" for="salary_expense_ledger_account_id"
+                <label class="block text-sm text-ink-muted" for="salary_expense_ledger_account_id"
                     >Salary expense account</label
                 >
                 <select
                     id="salary_expense_ledger_account_id"
                     v-model="form.salary_expense_ledger_account_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select…</option>
                     <option v-for="a in accounts" :key="a.id" :value="a.id">
@@ -83,19 +83,19 @@ function submit(): void {
                 </select>
                 <p
                     v-if="form.errors.salary_expense_ledger_account_id"
-                    class="mt-1 text-sm text-red-600"
+                    class="mt-1 text-sm text-danger"
                 >
                     {{ form.errors.salary_expense_ledger_account_id }}
                 </p>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="salary_payable_ledger_account_id"
+                <label class="block text-sm text-ink-muted" for="salary_payable_ledger_account_id"
                     >Salary payable account</label
                 >
                 <select
                     id="salary_payable_ledger_account_id"
                     v-model="form.salary_payable_ledger_account_id"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1"
                 >
                     <option value="" disabled>Select…</option>
                     <option v-for="a in accounts" :key="a.id" :value="a.id">
@@ -104,16 +104,12 @@ function submit(): void {
                 </select>
                 <p
                     v-if="form.errors.salary_payable_ledger_account_id"
-                    class="mt-1 text-sm text-red-600"
+                    class="mt-1 text-sm text-danger"
                 >
                     {{ form.errors.salary_payable_ledger_account_id }}
                 </p>
             </div>
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
+            <button type="submit" :disabled="form.processing" class="btn btn-primary">
                 {{ form.processing ? 'Saving…' : 'Save configuration' }}
             </button>
         </form>

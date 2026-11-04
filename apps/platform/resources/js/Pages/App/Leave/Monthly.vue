@@ -33,21 +33,21 @@ function apply(): void {
 
 <template>
     <Head title="Leave by month" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/leave/requests">← Leave requests</a>
         <h1 class="mt-2 text-xl font-semibold">Leave taken by month</h1>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Approved leave days in the month, per employee and leave type. Half days count as 0.5.
         </p>
 
         <form class="mt-6 flex items-end gap-3" @submit.prevent="apply">
             <div>
-                <label class="block text-xs text-slate-600" for="leave-month">Month</label>
+                <label class="block text-xs text-ink-muted" for="leave-month">Month</label>
                 <input
                     id="leave-month"
                     v-model="month"
                     type="month"
-                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    class="input mt-1 w-auto"
                     @change="apply"
                 />
             </div>
@@ -65,7 +65,7 @@ function apply(): void {
                     Approved leave days by employee and leave type
                 </caption>
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <tr class="border-b border-line text-xs text-ink-muted">
                         <th scope="col" class="py-2 font-medium">Employee</th>
                         <th
                             v-for="t in usedTypes"
@@ -78,7 +78,7 @@ function apply(): void {
                         <th scope="col" class="py-2 text-right font-medium">Total days</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-line">
                     <tr v-for="row in summary.rows" :key="row.employmentRecordId">
                         <td class="py-2">{{ employeeName(employees, row.employmentRecordId) }}</td>
                         <td v-for="t in usedTypes" :key="t.id" class="py-2 text-right font-mono">
@@ -88,7 +88,7 @@ function apply(): void {
                     </tr>
                 </tbody>
                 <tfoot>
-                    <tr class="border-t border-slate-200 font-medium">
+                    <tr class="border-t border-line font-medium">
                         <td class="py-2">All employees</td>
                         <td v-for="t in usedTypes" :key="t.id" class="py-2 text-right font-mono">
                             {{ days(summary.totals[t.id]) }}

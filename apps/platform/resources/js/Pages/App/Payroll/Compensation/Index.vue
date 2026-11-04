@@ -40,24 +40,19 @@ watch(query, (value) => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/payroll">← Payroll</a>
 
         <h1 class="mt-2 text-xl font-semibold">Employee Compensation</h1>
-        <p class="mt-1 text-sm text-slate-500">Search by employee name or employee number.</p>
+        <p class="mt-1 text-sm text-ink-muted">Search by employee name or employee number.</p>
 
-        <input
-            v-model="query"
-            type="text"
-            placeholder="Search…"
-            class="mt-4 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
-        />
+        <input v-model="query" type="text" placeholder="Search…" class="input mt-4 max-w-md" />
 
         <ul class="mt-4 space-y-1 text-sm">
             <li v-for="r in results" :key="r.employmentRecordId">
                 <a class="underline" :href="`/app/payroll/compensation/${r.employmentRecordId}`">
                     {{ r.employeeFullName ?? 'Employee record unavailable' }}
-                    <span v-if="r.employeeNumber" class="text-xs text-slate-500"
+                    <span v-if="r.employeeNumber" class="text-xs text-ink-muted"
                         >({{ r.employeeNumber }})</span
                     >
                 </a>
@@ -65,7 +60,7 @@ watch(query, (value) => {
         </ul>
         <p
             v-if="query.trim().length >= 2 && !searching && results.length === 0"
-            class="mt-4 text-sm text-slate-500"
+            class="mt-4 text-sm text-ink-muted"
         >
             No matching EmploymentRecords.
         </p>

@@ -92,17 +92,17 @@ const leaveError = useLeaveError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Leave approvals</h1>
         <p
             v-if="leaveError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError }}
         </p>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Requests of the staff who currently report to you.
             <span class="font-medium">{{ pendingCount }} waiting for your decision.</span>
         </p>
@@ -110,10 +110,7 @@ const leaveError = useLeaveError();
         <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters()">
             <label class="text-sm"
                 >Show
-                <select
-                    v-model="filterForm.status"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <select v-model="filterForm.status" class="input ml-1 w-auto">
                     <option value="live">Submitted and approved</option>
                     <option value="pending">Waiting for a decision</option>
                     <option value="decided">Decided (history)</option>
@@ -122,29 +119,18 @@ const leaveError = useLeaveError();
             </label>
             <label class="text-sm"
                 >Leave type
-                <select
-                    v-model="filterForm.leave_type_id"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                >
+                <select v-model="filterForm.leave_type_id" class="input ml-1 w-auto">
                     <option value="">Any</option>
                     <option v-for="t in types" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>
             </label>
             <label class="text-sm"
                 >From
-                <input
-                    v-model="filterForm.from"
-                    type="date"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                />
+                <input v-model="filterForm.from" type="date" class="input ml-1 w-auto" />
             </label>
             <label class="text-sm"
                 >To
-                <input
-                    v-model="filterForm.to"
-                    type="date"
-                    class="ml-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                />
+                <input v-model="filterForm.to" type="date" class="input ml-1 w-auto" />
             </label>
             <button type="submit" class="underline">Apply</button>
         </form>
@@ -157,7 +143,7 @@ const leaveError = useLeaveError();
         />
         <table v-else class="mt-6 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th scope="col" class="py-2">Employee</th>
                     <th scope="col" class="py-2">Leave type</th>
                     <th scope="col" class="py-2">Period</th>
@@ -167,7 +153,7 @@ const leaveError = useLeaveError();
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="row in requests" :key="row.id" class="border-b border-slate-100">
+                <tr v-for="row in requests" :key="row.id" class="border-b border-line">
                     <td class="py-2">{{ employeeName(employees, row.employmentRecordId) }}</td>
                     <td class="py-2">{{ typeName(types, row.leaveTypeId) }}</td>
                     <td class="py-2">
@@ -216,34 +202,26 @@ const leaveError = useLeaveError();
 
         <form
             v-if="rejecting !== null"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             @submit.prevent="reject"
         >
             <h2 class="text-sm font-semibold">Reject request</h2>
             <div class="mt-3 flex flex-wrap items-center gap-3">
-                <label class="text-sm text-slate-600" for="reject-reason">Reason</label>
-                <select
-                    id="reject-reason"
-                    v-model="form.reason_code"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="text-sm text-ink-muted" for="reject-reason">Reason</label>
+                <select id="reject-reason" v-model="form.reason_code" class="input w-auto">
                     <option value="">Select a reason</option>
                     <option v-for="r in rejectionReasons" :key="r" :value="r">
                         {{ reasonLabels[r] ?? r }}
                     </option>
                 </select>
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="form.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="form.processing">
                     Reject
                 </button>
                 <button type="button" class="text-sm underline" @click="rejecting = null">
                     Back
                 </button>
             </div>
-            <p v-if="form.errors.reason_code" class="mt-2 text-sm text-red-700">
+            <p v-if="form.errors.reason_code" class="mt-2 text-sm text-danger">
                 {{ form.errors.reason_code }}
             </p>
         </form>

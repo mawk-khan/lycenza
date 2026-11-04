@@ -46,15 +46,15 @@ const pathLabels: Record<string, string> = {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/my-leave">← My leave</a>
         <h1 class="mt-2 text-xl font-semibold">{{ typeName(types, request.leaveTypeId) }}</h1>
-        <p class="mt-1 text-sm text-slate-600">
+        <p class="mt-1 text-sm text-ink-muted">
             {{ request.startsOn }} ({{ portionLabels[request.startPortion] }}) →
             {{ request.endsOn }} ({{ portionLabels[request.endPortion] }}) ·
             {{ requestStatusLabels[request.status] ?? request.status }}
         </p>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Requested {{ units(request.submittedUnits)
             }}<span v-if="request.reasonCode">
                 · {{ reasonLabels[request.reasonCode] ?? request.reasonCode }}</span
@@ -62,7 +62,7 @@ const pathLabels: Record<string, string> = {
         </p>
 
         <h2 class="mt-6 text-sm font-semibold">Days charged</h2>
-        <p v-if="request.days.length === 0" class="mt-2 text-sm text-slate-500">
+        <p v-if="request.days.length === 0" class="mt-2 text-sm text-ink-muted">
             Days are fixed when the request is approved.
         </p>
         <ul v-else class="mt-2 space-y-1 text-sm">

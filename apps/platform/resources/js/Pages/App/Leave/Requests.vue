@@ -134,17 +134,17 @@ const leaveError = useLeaveError();
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-6xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Leave requests</h1>
         <p
             v-if="leaveError"
             role="alert"
-            class="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+            class="mt-3 rounded-xs border border-danger/40 bg-danger-tint p-3 text-sm text-danger"
         >
             {{ leaveError }}
         </p>
-        <p class="mt-1 text-sm text-slate-500">
+        <p class="mt-1 text-sm text-ink-muted">
             Administration of staff leave. Units are half-days (2 = one full day). Only working time
             in the staff calendar is charged.
         </p>
@@ -156,12 +156,8 @@ const leaveError = useLeaveError();
         </nav>
 
         <div class="mt-6">
-            <label class="block text-sm text-slate-600" for="filter-status">Status</label>
-            <select
-                id="filter-status"
-                v-model="status"
-                class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
-            >
+            <label class="block text-sm text-ink-muted" for="filter-status">Status</label>
+            <select id="filter-status" v-model="status" class="input mt-1 w-56">
                 <option value="">All</option>
                 <option v-for="s in statuses" :key="s" :value="s">
                     {{ requestStatusLabels[s] }}
@@ -170,12 +166,8 @@ const leaveError = useLeaveError();
         </div>
         <form class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>
-                <label class="block text-sm text-slate-600" for="filter-employee">Employee</label>
-                <select
-                    id="filter-employee"
-                    v-model="filterEmployee"
-                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="filter-employee">Employee</label>
+                <select id="filter-employee" v-model="filterEmployee" class="input mt-1 w-56">
                     <option value="">All employees</option>
                     <option
                         v-for="e in employments"
@@ -187,12 +179,8 @@ const leaveError = useLeaveError();
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-type">Leave type</label>
-                <select
-                    id="filter-type"
-                    v-model="filterType"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
-                >
+                <label class="block text-sm text-ink-muted" for="filter-type">Leave type</label>
+                <select id="filter-type" v-model="filterType" class="input mt-1 w-auto">
                     <option value="">All types</option>
                     <option v-for="t in types" :key="t.id" :value="t.id">
                         {{ t.name }} ({{ t.code }})
@@ -200,30 +188,23 @@ const leaveError = useLeaveError();
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-from">On or after</label>
+                <label class="block text-sm text-ink-muted" for="filter-from">On or after</label>
                 <input
                     id="filter-from"
                     v-model="filterFrom"
                     type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input mt-1 w-auto"
                 />
             </div>
             <div>
-                <label class="block text-sm text-slate-600" for="filter-to">On or before</label>
-                <input
-                    id="filter-to"
-                    v-model="filterTo"
-                    type="date"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
-                />
+                <label class="block text-sm text-ink-muted" for="filter-to">On or before</label>
+                <input id="filter-to" v-model="filterTo" type="date" class="input mt-1 w-auto" />
             </div>
-            <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
-                Filter
-            </button>
+            <button type="submit" class="btn btn-secondary">Filter</button>
         </form>
         <p
             v-if="filterErrors.to || filterErrors.from"
-            class="mt-2 text-sm text-red-700"
+            class="mt-2 text-sm text-danger"
             role="alert"
         >
             {{ filterErrors.to ?? filterErrors.from }}
@@ -237,7 +218,7 @@ const leaveError = useLeaveError();
         />
         <table v-else class="mt-6 w-full border-collapse text-sm">
             <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
+                <tr class="border-b border-line text-left text-ink-muted">
                     <th class="py-2">Employee</th>
                     <th class="py-2">Leave type</th>
                     <th class="py-2">Period</th>
@@ -247,7 +228,7 @@ const leaveError = useLeaveError();
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="row in requests" :key="row.id" class="border-b border-slate-100">
+                <tr v-for="row in requests" :key="row.id" class="border-b border-line">
                     <td class="py-2">{{ employeeName(employees, row.employmentRecordId) }}</td>
                     <td class="py-2">{{ typeName(types, row.leaveTypeId) }}</td>
                     <td class="py-2">{{ period(row) }}</td>
@@ -285,7 +266,7 @@ const leaveError = useLeaveError();
 
         <form
             v-if="canManage && acting !== null"
-            class="mt-6 rounded border border-slate-300 p-4"
+            class="mt-6 rounded-xs border border-control-line p-4"
             @submit.prevent="confirmDecision"
         >
             <h2 class="text-sm font-semibold">
@@ -299,11 +280,11 @@ const leaveError = useLeaveError();
                 request
             </h2>
             <div class="mt-3 flex flex-wrap items-center gap-3">
-                <label class="text-sm text-slate-600" for="decision-reason">Reason</label>
+                <label class="text-sm text-ink-muted" for="decision-reason">Reason</label>
                 <select
                     id="decision-reason"
                     v-model="decisionForm.reason_code"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm"
+                    class="input w-auto"
                 >
                     <option value="">Select a reason</option>
                     <option
@@ -316,37 +297,33 @@ const leaveError = useLeaveError();
                         {{ reasonLabels[reason] ?? reason }}
                     </option>
                 </select>
-                <button
-                    type="submit"
-                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                    :disabled="decisionForm.processing"
-                >
+                <button type="submit" class="btn btn-primary" :disabled="decisionForm.processing">
                     Confirm
                 </button>
                 <button type="button" class="text-sm underline" @click="acting = null">Back</button>
             </div>
-            <p v-if="decisionForm.errors.reason_code" class="mt-2 text-sm text-red-700">
+            <p v-if="decisionForm.errors.reason_code" class="mt-2 text-sm text-danger">
                 {{ decisionForm.errors.reason_code }}
             </p>
         </form>
 
         <form
             v-if="canManage"
-            class="mt-8 rounded border border-slate-300 p-4"
+            class="mt-8 rounded-xs border border-control-line p-4"
             @submit.prevent="submitRequest"
         >
             <h2 class="text-sm font-semibold">Submit a request on an employee's behalf</h2>
-            <p class="mt-1 text-sm text-slate-500">
+            <p class="mt-1 text-sm text-ink-muted">
                 One day: choose full, first half or second half. Several days: the first day may
                 start at the second half and the last day may end after the first half.
             </p>
             <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                    <label class="block text-sm text-slate-600" for="req-employee">Employee</label>
+                    <label class="block text-sm text-ink-muted" for="req-employee">Employee</label>
                     <select
                         id="req-employee"
                         v-model="submitForm.employment_record_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="">Select an employee</option>
                         <option
@@ -359,12 +336,8 @@ const leaveError = useLeaveError();
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="req-type">Leave type</label>
-                    <select
-                        id="req-type"
-                        v-model="submitForm.leave_type_id"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    >
+                    <label class="block text-sm text-ink-muted" for="req-type">Leave type</label>
+                    <select id="req-type" v-model="submitForm.leave_type_id" class="input mt-1">
                         <option value="">Select a leave type</option>
                         <option
                             v-for="t in types.filter((x) => x.status === 'active')"
@@ -376,18 +349,18 @@ const leaveError = useLeaveError();
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="req-from">From</label>
+                    <label class="block text-sm text-ink-muted" for="req-from">From</label>
                     <div class="mt-1 flex gap-2">
                         <input
                             id="req-from"
                             v-model="submitForm.starts_on"
                             type="date"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         />
                         <select
                             v-model="submitForm.start_portion"
                             aria-label="First day portion"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         >
                             <option v-for="p in portions" :key="p" :value="p">
                                 {{ portionLabels[p] }}
@@ -396,7 +369,7 @@ const leaveError = useLeaveError();
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="req-to"
+                    <label class="block text-sm text-ink-muted" for="req-to"
                         >To (leave empty for one day)</label
                     >
                     <div class="mt-1 flex gap-2">
@@ -404,12 +377,12 @@ const leaveError = useLeaveError();
                             id="req-to"
                             v-model="submitForm.ends_on"
                             type="date"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         />
                         <select
                             v-model="submitForm.end_portion"
                             aria-label="Last day portion"
-                            class="rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input w-auto"
                         >
                             <option v-for="p in portions" :key="p" :value="p">
                                 {{ portionLabels[p] }}
@@ -418,14 +391,10 @@ const leaveError = useLeaveError();
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="req-reason"
+                    <label class="block text-sm text-ink-muted" for="req-reason"
                         >Reason (optional)</label
                     >
-                    <select
-                        id="req-reason"
-                        v-model="submitForm.reason_code"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    >
+                    <select id="req-reason" v-model="submitForm.reason_code" class="input mt-1">
                         <option value="">No reason</option>
                         <option v-for="r in requestReasons" :key="r" :value="r">
                             {{ reasonLabels[r] ?? r }}
@@ -433,17 +402,13 @@ const leaveError = useLeaveError();
                     </select>
                 </div>
             </div>
-            <button
-                type="submit"
-                class="mt-4 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                :disabled="submitForm.processing"
-            >
+            <button type="submit" class="btn btn-primary mt-4" :disabled="submitForm.processing">
                 Submit request
             </button>
             <p
                 v-for="(message, field) in submitForm.errors"
                 :key="field"
-                class="mt-2 text-sm text-red-700"
+                class="mt-2 text-sm text-danger"
             >
                 {{ message }}
             </p>

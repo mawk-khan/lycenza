@@ -794,13 +794,13 @@ function submitNote(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app/hr/employees">← Employees</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">{{ workspace.summary.display_name }}</h1>
-                <p class="mt-1 text-sm text-slate-500">{{ workspace.summary.employee_number }}</p>
+                <p class="mt-1 text-sm text-ink-muted">{{ workspace.summary.employee_number }}</p>
                 <p v-if="can.viewTeachingAssignments" class="mt-1 text-sm">
                     <a
                         class="underline"
@@ -810,17 +810,8 @@ function submitNote(): void {
                 </p>
             </div>
             <div v-if="can.manageEmployees" class="flex items-center gap-2">
-                <a
-                    :href="`${base}/edit`"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                >
-                    Edit
-                </a>
-                <button
-                    type="button"
-                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    @click="toggleArchive"
-                >
+                <a :href="`${base}/edit`" class="btn btn-secondary"> Edit </a>
+                <button type="button" class="btn btn-secondary" @click="toggleArchive">
                     {{
                         workspace.summary.employee_record_status === 'active'
                             ? 'Archive'
@@ -832,38 +823,38 @@ function submitNote(): void {
 
         <!-- Summary -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Summary</h2>
+            <h2 class="text-sm font-medium text-ink-muted">Summary</h2>
             <dl
-                class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded border border-slate-200 p-4 text-sm sm:grid-cols-2"
+                class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded-xs border border-line p-4 text-sm sm:grid-cols-2"
             >
                 <div>
-                    <dt class="text-slate-500">Status</dt>
+                    <dt class="text-ink-muted">Status</dt>
                     <dd class="mt-0.5">
                         <StatusBadge :status="workspace.summary.employee_record_status" />
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Current employment status</dt>
+                    <dt class="text-ink-muted">Current employment status</dt>
                     <dd class="mt-0.5">{{ workspace.summary.current_employment_status ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Position</dt>
+                    <dt class="text-ink-muted">Position</dt>
                     <dd class="mt-0.5">{{ workspace.summary.position_name ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Department</dt>
+                    <dt class="text-ink-muted">Department</dt>
                     <dd class="mt-0.5">{{ workspace.summary.department_name ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Campus</dt>
+                    <dt class="text-ink-muted">Campus</dt>
                     <dd class="mt-0.5">{{ workspace.summary.campus_name ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Reports to</dt>
+                    <dt class="text-ink-muted">Reports to</dt>
                     <dd class="mt-0.5">{{ workspace.summary.manager_display_name ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Sign-in account</dt>
+                    <dt class="text-ink-muted">Sign-in account</dt>
                     <dd class="mt-0.5">
                         <template v-if="workspace.summary.user_linked">
                             {{ linkedAccountName ?? 'Linked' }}
@@ -873,12 +864,12 @@ function submitNote(): void {
                 </div>
                 <!-- HR.2A: derived from the dated records, never a stored number. -->
                 <div v-if="staffProfile.experience.previous">
-                    <dt class="text-slate-500">Previous experience</dt>
+                    <dt class="text-ink-muted">Previous experience</dt>
                     <dd class="mt-0.5">
                         {{ duration(staffProfile.experience.previous) }}
                         <span
                             v-if="staffProfile.experience.previous.openEnded > 0"
-                            class="text-slate-500"
+                            class="text-ink-muted"
                         >
                             ({{ staffProfile.experience.previous.openEnded }} without an end date,
                             not counted)
@@ -886,33 +877,31 @@ function submitNote(): void {
                     </dd>
                 </div>
                 <div v-if="staffProfile.experience.service">
-                    <dt class="text-slate-500">Service in this School</dt>
+                    <dt class="text-ink-muted">Service in this School</dt>
                     <dd class="mt-0.5">{{ duration(staffProfile.experience.service) }}</dd>
                 </div>
             </dl>
 
             <div
                 v-if="can.manageEmployees"
-                class="mt-3 rounded border border-slate-200 p-4 text-sm"
+                class="mt-3 rounded-xs border border-line p-4 text-sm"
                 aria-labelledby="account-link-heading"
             >
-                <h3 id="account-link-heading" class="font-medium text-slate-900">
-                    Sign-in account
-                </h3>
+                <h3 id="account-link-heading" class="font-medium text-ink">Sign-in account</h3>
                 <template v-if="workspace.summary.user_linked">
-                    <p class="mt-1 text-slate-600">
+                    <p class="mt-1 text-ink-muted">
                         Linked to <strong>{{ linkedAccountName }}</strong
                         >. This person's own attendance, leave and payslip pages use this Employee
                         record. To link a different account, remove this link first.
                     </p>
                     <button
                         type="button"
-                        class="mt-2 rounded border border-red-300 px-3 py-1.5 font-medium text-red-700 hover:bg-red-50"
+                        class="mt-2 rounded-xs border border-danger/40 px-3 py-1.5 font-medium text-danger hover:bg-danger-tint"
                         @click="removeAccountLink"
                     >
                         Remove link
                     </button>
-                    <p v-if="accountError" class="mt-1 text-red-600" role="alert">
+                    <p v-if="accountError" class="mt-1 text-danger" role="alert">
                         {{ accountError }}
                     </p>
                 </template>
@@ -921,12 +910,12 @@ function submitNote(): void {
                     class="mt-1"
                     @submit.prevent="submitAccountLink"
                 >
-                    <p class="text-slate-600">
+                    <p class="text-ink-muted">
                         Link the Lycenza account this person signs in with (for example after they
                         accept a staff invitation), so their own attendance, leave and payslip pages
                         work.
                     </p>
-                    <label class="mt-2 block text-slate-600" for="account-search"
+                    <label class="mt-2 block text-ink-muted" for="account-search"
                         >Account (an active member of this School)</label
                     >
                     <div class="relative mt-1 flex flex-wrap items-start gap-3">
@@ -935,7 +924,7 @@ function submitNote(): void {
                                 id="account-search"
                                 v-model="accountQuery"
                                 placeholder="Search by name"
-                                class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                                 :options="accountOptions"
                                 :option-key="(o) => o.userId"
                                 :error="accountForm.errors.account"
@@ -943,7 +932,7 @@ function submitNote(): void {
                             >
                                 <template #option="{ option }"
                                     >{{ option.name }}
-                                    <span class="text-slate-500"
+                                    <span class="text-ink-muted"
                                         >({{ accountKindLabels[option.accountKind] }})</span
                                     ></template
                                 >
@@ -952,20 +941,20 @@ function submitNote(): void {
                         <button
                             type="submit"
                             :disabled="accountForm.processing || accountForm.account === ''"
-                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Link account
                         </button>
                     </div>
                     <p
                         v-if="accountError && !accountForm.errors.account"
-                        class="mt-1 text-red-600"
+                        class="mt-1 text-danger"
                         role="alert"
                     >
                         {{ accountError }}
                     </p>
                 </form>
-                <p v-else class="mt-1 text-slate-600">
+                <p v-else class="mt-1 text-ink-muted">
                     An archived Employee cannot be linked to an account.
                 </p>
             </div>
@@ -989,7 +978,7 @@ function submitNote(): void {
         <!-- HR.2A (D1-03): external reference codes -- never the identity, never reused. -->
         <section id="profile-reference-codes" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Reference codes</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Reference codes</h2>
                 <button
                     v-if="staffProfile.can.manageReferenceCodes"
                     type="button"
@@ -999,15 +988,15 @@ function submitNote(): void {
                     {{ showReferenceForm ? 'Cancel' : '+ Add reference code' }}
                 </button>
             </div>
-            <p v-if="staffProfile.referenceCodes.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="staffProfile.referenceCodes.length === 0" class="mt-3 text-sm text-ink-muted">
                 No reference codes recorded.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="r in staffProfile.referenceCodes"
                     :key="r.id"
-                    class="rounded border border-slate-200 p-3 text-sm"
-                    :class="r.retired ? 'text-slate-500' : ''"
+                    class="rounded-xs border border-line p-3 text-sm"
+                    :class="r.retired ? 'text-ink-muted' : ''"
                 >
                     <div class="flex items-start justify-between gap-3">
                         <p>
@@ -1021,7 +1010,7 @@ function submitNote(): void {
                         <button
                             v-if="staffProfile.can.manageReferenceCodes && !r.retired"
                             type="button"
-                            class="text-red-600 underline"
+                            class="text-danger underline"
                             @click="
                                 retiringReferenceId = retiringReferenceId === r.id ? null : r.id
                             "
@@ -1036,7 +1025,7 @@ function submitNote(): void {
                     >
                         <div>
                             <label
-                                class="block text-sm text-slate-600"
+                                class="block text-sm text-ink-muted"
                                 :for="`retire-reference-${r.id}`"
                                 >Reason</label
                             >
@@ -1044,7 +1033,7 @@ function submitNote(): void {
                                 :id="`retire-reference-${r.id}`"
                                 v-model="retireReferenceForm.reason_code"
                                 required
-                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                class="input mt-1 w-auto"
                             >
                                 <option value="" disabled>Select a reason</option>
                                 <option
@@ -1062,11 +1051,11 @@ function submitNote(): void {
                                 retireReferenceForm.processing ||
                                 retireReferenceForm.reason_code === ''
                             "
-                            class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Retire code
                         </button>
-                        <p class="w-full text-sm text-red-600">
+                        <p class="w-full text-sm text-danger">
                             {{ retireReferenceForm.errors.reason_code }}
                         </p>
                     </form>
@@ -1074,16 +1063,16 @@ function submitNote(): void {
             </ul>
             <form
                 v-if="showReferenceForm"
-                class="mt-3 grid grid-cols-1 gap-3 rounded border border-slate-200 p-4 sm:grid-cols-2"
+                class="mt-3 grid grid-cols-1 gap-3 rounded-xs border border-line p-4 sm:grid-cols-2"
                 @submit.prevent="submitReference"
             >
                 <div>
-                    <label class="block text-sm text-slate-600" for="reference-kind">Kind</label>
+                    <label class="block text-sm text-ink-muted" for="reference-kind">Kind</label>
                     <select
                         id="reference-kind"
                         v-model="referenceForm.kind"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     >
                         <option value="" disabled>Select a kind</option>
                         <option
@@ -1096,23 +1085,23 @@ function submitNote(): void {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-600" for="reference-value">Code</label>
+                    <label class="block text-sm text-ink-muted" for="reference-value">Code</label>
                     <input
                         id="reference-value"
                         v-model="referenceForm.value"
                         type="text"
                         maxlength="64"
                         required
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        class="input mt-1"
                     />
                 </div>
-                <p class="text-sm text-red-600 sm:col-span-2">
+                <p class="text-sm text-danger sm:col-span-2">
                     {{ referenceError }}
                 </p>
                 <button
                     type="submit"
                     :disabled="referenceForm.processing"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2 sm:justify-self-start"
+                    class="btn btn-primary sm:col-span-2 sm:justify-self-start"
                 >
                     Save reference code
                 </button>
@@ -1122,7 +1111,7 @@ function submitNote(): void {
         <!-- Personal & contact -->
         <section id="profile-personal" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">
+                <h2 class="text-sm font-medium text-ink-muted">
                     Personal &amp; contact (Restricted)
                 </h2>
                 <button
@@ -1137,93 +1126,89 @@ function submitNote(): void {
 
             <dl
                 v-if="!editingPersonal"
-                class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded border border-slate-200 p-4 text-sm sm:grid-cols-2"
+                class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded-xs border border-line p-4 text-sm sm:grid-cols-2"
             >
                 <div>
-                    <dt class="text-slate-500">Date of birth</dt>
+                    <dt class="text-ink-muted">Date of birth</dt>
                     <dd class="mt-0.5">{{ workspace.personal_details?.date_of_birth ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Nationality</dt>
+                    <dt class="text-ink-muted">Nationality</dt>
                     <dd class="mt-0.5">{{ workspace.personal_details?.nationality ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Personal email</dt>
+                    <dt class="text-ink-muted">Personal email</dt>
                     <dd class="mt-0.5">{{ workspace.contact?.personal_email ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Personal phone</dt>
+                    <dt class="text-ink-muted">Personal phone</dt>
                     <dd class="mt-0.5">{{ workspace.contact?.personal_phone ?? '—' }}</dd>
                 </div>
             </dl>
 
             <form
                 v-else
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitPersonal"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Date of birth</label>
+                        <label class="block text-sm text-ink-muted">Date of birth</label>
                         <input
                             v-model="personalForm.date_of_birth"
                             type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Nationality</label>
-                        <input
-                            v-model="personalForm.nationality"
-                            type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">Nationality</label>
+                        <input v-model="personalForm.nationality" type="text" class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Marital status</label>
+                        <label class="block text-sm text-ink-muted">Marital status</label>
                         <input
                             v-model="personalForm.marital_status"
                             type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Preferred language</label>
+                        <label class="block text-sm text-ink-muted">Preferred language</label>
                         <input
                             v-model="personalForm.preferred_language"
                             type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Personal email</label>
+                        <label class="block text-sm text-ink-muted">Personal email</label>
                         <input
                             v-model="personalForm.personal_email"
                             type="email"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Personal phone</label>
+                        <label class="block text-sm text-ink-muted">Personal phone</label>
                         <input
                             v-model="personalForm.personal_phone"
                             type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Alternate phone</label>
+                        <label class="block text-sm text-ink-muted">Alternate phone</label>
                         <input
                             v-model="personalForm.alternate_phone"
                             type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="personalForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Save
                 </button>
@@ -1233,7 +1218,7 @@ function submitNote(): void {
         <!-- Addresses -->
         <section id="profile-addresses" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Addresses</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Addresses</h2>
                 <button
                     v-if="can.managePersonal"
                     type="button"
@@ -1244,18 +1229,18 @@ function submitNote(): void {
                 </button>
             </div>
 
-            <p v-if="workspace.addresses.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.addresses.length === 0" class="mt-3 text-sm text-ink-muted">
                 No addresses yet.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="a in workspace.addresses"
                     :key="a.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p class="font-medium capitalize">{{ a.address_type }}</p>
-                        <p class="mt-0.5 text-slate-600">
+                        <p class="mt-0.5 text-ink-muted">
                             {{
                                 [
                                     a.address_line1,
@@ -1282,16 +1267,13 @@ function submitNote(): void {
 
             <form
                 v-if="showAddressForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitAddress"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Type</label>
-                        <select
-                            v-model="addressForm.address_type"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        >
+                        <label class="block text-sm text-ink-muted">Type</label>
+                        <select v-model="addressForm.address_type" class="input mt-1">
                             <option value="current">Current</option>
                             <option value="permanent">Permanent</option>
                             <option value="mailing">Mailing</option>
@@ -1299,52 +1281,40 @@ function submitNote(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Address line 1</label>
+                        <label class="block text-sm text-ink-muted">Address line 1</label>
                         <input
                             v-model="addressForm.address_line1"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">City</label>
-                        <input
-                            v-model="addressForm.city"
-                            type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">City</label>
+                        <input v-model="addressForm.city" type="text" class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">State/region</label>
-                        <input
-                            v-model="addressForm.state_region"
-                            type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">State/region</label>
+                        <input v-model="addressForm.state_region" type="text" class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Postal code</label>
-                        <input
-                            v-model="addressForm.postal_code"
-                            type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">Postal code</label>
+                        <input v-model="addressForm.postal_code" type="text" class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Country code</label>
+                        <label class="block text-sm text-ink-muted">Country code</label>
                         <input
                             v-model="addressForm.country_code"
                             type="text"
                             maxlength="2"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="addressForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Add address
                 </button>
@@ -1354,7 +1324,7 @@ function submitNote(): void {
         <!-- Emergency contacts -->
         <section class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Emergency contacts</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Emergency contacts</h2>
                 <button
                     v-if="can.managePersonal"
                     type="button"
@@ -1365,25 +1335,25 @@ function submitNote(): void {
                 </button>
             </div>
 
-            <p v-if="workspace.emergency_contacts.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.emergency_contacts.length === 0" class="mt-3 text-sm text-ink-muted">
                 No emergency contacts yet.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="c in workspace.emergency_contacts"
                     :key="c.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p class="font-medium">
                             {{ c.name }}
                             <span
                                 v-if="c.is_primary"
-                                class="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
+                                class="ml-2 rounded-xs bg-graphite-100 px-2 py-0.5 text-xs text-ink"
                                 >Primary</span
                             >
                         </p>
-                        <p class="mt-0.5 text-slate-600">
+                        <p class="mt-0.5 text-ink-muted">
                             {{ [c.relationship, c.phone, c.email].filter(Boolean).join(' · ') }}
                         </p>
                     </div>
@@ -1408,49 +1378,36 @@ function submitNote(): void {
 
             <form
                 v-if="showContactForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitContact"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Name</label>
-                        <input
-                            v-model="contactForm.name"
-                            type="text"
-                            required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">Name</label>
+                        <input v-model="contactForm.name" type="text" required class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Relationship</label>
-                        <input
-                            v-model="contactForm.relationship"
-                            type="text"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">Relationship</label>
+                        <input v-model="contactForm.relationship" type="text" class="input mt-1" />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Phone</label>
+                        <label class="block text-sm text-ink-muted">Phone</label>
                         <input
                             v-model="contactForm.phone"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Email</label>
-                        <input
-                            v-model="contactForm.email"
-                            type="email"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">Email</label>
+                        <input v-model="contactForm.email" type="email" class="input mt-1" />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="contactForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Add contact
                 </button>
@@ -1460,7 +1417,7 @@ function submitNote(): void {
         <!-- Employment history -->
         <section id="profile-employment" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Employment history</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Employment history</h2>
                 <div v-if="can.manageAssignments" class="flex items-center gap-3">
                     <button
                         type="button"
@@ -1479,7 +1436,7 @@ function submitNote(): void {
                 </div>
             </div>
 
-            <p v-if="workspace.employment_history.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.employment_history.length === 0" class="mt-3 text-sm text-ink-muted">
                 No employment history visible (either none exists yet, or it requires
                 assignments-view access).
             </p>
@@ -1487,7 +1444,7 @@ function submitNote(): void {
                 <li
                     v-for="e in workspace.employment_history"
                     :key="e.id"
-                    class="rounded border border-slate-200 p-3 text-sm"
+                    class="rounded-xs border border-line p-3 text-sm"
                 >
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -1498,17 +1455,17 @@ function submitNote(): void {
                                 }}
                                 <span
                                     v-if="workforceHistory[e.id]?.currentTerms"
-                                    class="ml-1 text-slate-500"
+                                    class="ml-1 text-ink-muted"
                                     >·
                                     {{ workforceHistory[e.id]?.currentTerms?.staffTypeLabel }}</span
                                 >
                                 <span
                                     v-if="e.is_current"
-                                    class="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
+                                    class="ml-2 rounded-xs bg-graphite-100 px-2 py-0.5 text-xs text-ink"
                                     >Current</span
                                 >
                             </p>
-                            <p class="mt-0.5 text-slate-500">
+                            <p class="mt-0.5 text-ink-muted">
                                 {{ e.starts_on }} – {{ e.ends_on ?? 'present' }} · {{ e.status }}
                             </p>
                         </div>
@@ -1534,7 +1491,7 @@ function submitNote(): void {
                             <button
                                 v-if="e.ends_on === null"
                                 type="button"
-                                class="text-red-600 underline"
+                                class="text-danger underline"
                                 @click="
                                     endingEmploymentId = endingEmploymentId === e.id ? null : e.id
                                 "
@@ -1546,24 +1503,24 @@ function submitNote(): void {
 
                     <form
                         v-if="endingEmploymentId === e.id"
-                        class="mt-3 border-t border-slate-100 pt-3"
+                        class="mt-3 border-t border-line pt-3"
                         @submit.prevent="submitEndEmployment(e.id)"
                     >
                         <div class="flex flex-wrap items-end gap-3">
                             <div>
-                                <label class="block text-sm text-slate-600">End date</label>
+                                <label class="block text-sm text-ink-muted">End date</label>
                                 <input
                                     v-model="endEmploymentForm.ends_on"
                                     type="date"
                                     required
-                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1 w-auto"
                                 />
                             </div>
                             <div>
-                                <label class="block text-sm text-slate-600">Status</label>
+                                <label class="block text-sm text-ink-muted">Status</label>
                                 <select
                                     v-model="endEmploymentForm.status"
-                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1 w-auto"
                                 >
                                     <option value="separated">Separated</option>
                                     <option value="terminated">Terminated</option>
@@ -1574,7 +1531,7 @@ function submitNote(): void {
                             <button
                                 type="submit"
                                 :disabled="endEmploymentForm.processing"
-                                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                class="btn btn-primary"
                             >
                                 Confirm
                             </button>
@@ -1584,17 +1541,17 @@ function submitNote(): void {
                     <!-- HR.1A: dated terms change -->
                     <form
                         v-if="termsEmploymentId === e.id"
-                        class="mt-3 space-y-3 border-t border-slate-100 pt-3"
+                        class="mt-3 space-y-3 border-t border-line pt-3"
                         @submit.prevent="submitTerms(e.id)"
                     >
-                        <p class="text-slate-600">
+                        <p class="text-ink-muted">
                             New terms take effect on the date below; earlier terms stay in the
                             history.
                         </p>
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`terms-from-${e.id}`"
                                     >Effective from</label
                                 >
@@ -1603,15 +1560,15 @@ function submitNote(): void {
                                     v-model="termsForm.effective_from"
                                     type="date"
                                     required
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 />
-                                <p class="mt-1 text-sm text-red-600">
+                                <p class="mt-1 text-sm text-danger">
                                     {{ termsForm.errors.effective_from }}
                                 </p>
                             </div>
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`terms-type-${e.id}`"
                                     >Employment type</label
                                 >
@@ -1619,7 +1576,7 @@ function submitNote(): void {
                                     :id="`terms-type-${e.id}`"
                                     v-model="termsForm.employment_type"
                                     required
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 >
                                     <option
                                         v-for="t in workforceOptions.employmentTypes"
@@ -1632,7 +1589,7 @@ function submitNote(): void {
                             </div>
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`terms-staff-${e.id}`"
                                     >Staff type</label
                                 >
@@ -1640,7 +1597,7 @@ function submitNote(): void {
                                     :id="`terms-staff-${e.id}`"
                                     v-model="termsForm.staff_type"
                                     required
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 >
                                     <option value="" disabled>Select a staff type</option>
                                     <option
@@ -1651,20 +1608,20 @@ function submitNote(): void {
                                         {{ t.label }}
                                     </option>
                                 </select>
-                                <p class="mt-1 text-sm text-red-600">
+                                <p class="mt-1 text-sm text-danger">
                                     {{ termsForm.errors.staff_type }}
                                 </p>
                             </div>
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`terms-cat-${e.id}`"
                                     >Category (optional)</label
                                 >
                                 <select
                                     :id="`terms-cat-${e.id}`"
                                     v-model="termsForm.employee_category_id"
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 >
                                     <option value="">None</option>
                                     <option
@@ -1678,7 +1635,7 @@ function submitNote(): void {
                             </div>
                             <div>
                                 <label
-                                    class="block text-sm text-slate-600"
+                                    class="block text-sm text-ink-muted"
                                     :for="`terms-reason-${e.id}`"
                                     >Reason</label
                                 >
@@ -1686,7 +1643,7 @@ function submitNote(): void {
                                     :id="`terms-reason-${e.id}`"
                                     v-model="termsForm.reason_code"
                                     required
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 >
                                     <option value="" disabled>Select a reason</option>
                                     <option
@@ -1699,13 +1656,13 @@ function submitNote(): void {
                                 </select>
                             </div>
                         </div>
-                        <p class="text-sm text-red-600">
+                        <p class="text-sm text-danger">
                             {{ termsForm.errors.employment_type ?? termsForm.errors.reason_code }}
                         </p>
                         <button
                             type="submit"
                             :disabled="termsForm.processing"
-                            class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Record new terms
                         </button>
@@ -1714,12 +1671,12 @@ function submitNote(): void {
                     <!-- HR.1A: terms history and named placement changes -->
                     <details
                         v-if="workforceHistory[e.id]"
-                        class="mt-3 border-t border-slate-100 pt-3 text-slate-600"
+                        class="mt-3 border-t border-line pt-3 text-ink-muted"
                     >
-                        <summary class="cursor-pointer text-sm font-medium text-slate-700">
+                        <summary class="cursor-pointer text-sm font-medium text-ink">
                             Terms and placement history
                         </summary>
-                        <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
                             Terms
                         </h4>
                         <ul class="mt-1 space-y-1">
@@ -1727,10 +1684,10 @@ function submitNote(): void {
                                 From {{ t.effectiveFrom }}: {{ t.employmentTypeLabel }} ·
                                 {{ t.staffTypeLabel
                                 }}<template v-if="t.categoryName"> · {{ t.categoryName }}</template>
-                                <span class="text-slate-500"> ({{ t.reasonLabel }})</span>
+                                <span class="text-ink-muted"> ({{ t.reasonLabel }})</span>
                             </li>
                         </ul>
-                        <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-ink-muted">
                             Placement changes
                         </h4>
                         <p v-if="(workforceHistory[e.id]?.changes ?? []).length === 0" class="mt-1">
@@ -1740,10 +1697,10 @@ function submitNote(): void {
                             <li v-for="c in workforceHistory[e.id]?.changes ?? []" :key="c.id">
                                 {{ c.effectiveOn }} · {{ c.kindLabel }}:
                                 <template v-if="c.from">{{ c.from }} → </template>{{ c.to }}
-                                <span class="text-slate-500"> ({{ c.reasonLabel }})</span>
+                                <span class="text-ink-muted"> ({{ c.reasonLabel }})</span>
                             </li>
                         </ul>
-                        <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-ink-muted">
                             Reporting lines
                         </h4>
                         <p
@@ -1756,11 +1713,11 @@ function submitNote(): void {
                             <li
                                 v-for="r in workforceHistory[e.id]?.reporting ?? []"
                                 :key="r.id"
-                                :class="r.voided ? 'text-slate-400 line-through' : ''"
+                                :class="r.voided ? 'text-ink-muted line-through' : ''"
                             >
                                 {{ r.startsOn }} – {{ r.endsOn ?? 'open' }}: reports to
                                 {{ r.managerName ?? '—' }}
-                                <span class="text-slate-500">
+                                <span class="text-ink-muted">
                                     ({{ r.startedLabel
                                     }}<template v-if="r.startReasonLabel"
                                         >, {{ r.startReasonLabel }}</template
@@ -1780,11 +1737,11 @@ function submitNote(): void {
                                 </button>
                                 <form
                                     v-if="correctingLineId === r.id"
-                                    class="mt-2 space-y-2 rounded bg-slate-50 p-3 no-underline"
+                                    class="mt-2 space-y-2 rounded-xs bg-graphite-100 p-3 no-underline"
                                     @submit.prevent="submitCorrection(e.id, r.id)"
                                 >
                                     <label
-                                        class="block text-sm text-slate-600"
+                                        class="block text-sm text-ink-muted"
                                         for="correction-manager-search"
                                         >Correct manager (leave blank to void the line)</label
                                     >
@@ -1792,7 +1749,7 @@ function submitNote(): void {
                                         id="correction-manager-search"
                                         v-model="correctionQuery"
                                         placeholder="Search for the manager"
-                                        class="w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
+                                        class="w-full max-w-md rounded-xs border border-control-line px-3 py-2 text-sm"
                                         :options="correctionOptions"
                                         :option-key="(o) => o.assignmentId"
                                         :error="correctionForm.errors.manager_assignment_id"
@@ -1801,7 +1758,7 @@ function submitNote(): void {
                                         <template #option="{ option }">{{ option.label }}</template>
                                     </SearchCombobox>
                                     <label
-                                        class="block text-sm text-slate-600"
+                                        class="block text-sm text-ink-muted"
                                         :for="`correct-reason-${r.id}`"
                                         >Reason</label
                                     >
@@ -1809,7 +1766,7 @@ function submitNote(): void {
                                         :id="`correct-reason-${r.id}`"
                                         v-model="correctionForm.reason_code"
                                         required
-                                        class="rounded border border-slate-300 px-3 py-2 text-sm"
+                                        class="input w-auto"
                                     >
                                         <option value="" disabled>Select a reason</option>
                                         <option
@@ -1820,7 +1777,7 @@ function submitNote(): void {
                                             {{ o.label }}
                                         </option>
                                     </select>
-                                    <p class="text-sm text-red-600">
+                                    <p class="text-sm text-danger">
                                         {{ correctionForm.errors.reason_code }}
                                     </p>
                                     <button
@@ -1829,7 +1786,7 @@ function submitNote(): void {
                                             correctionForm.processing ||
                                             correctionForm.reason_code === ''
                                         "
-                                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                        class="btn btn-primary"
                                     >
                                         Record correction
                                     </button>
@@ -1841,14 +1798,14 @@ function submitNote(): void {
                     <!-- Assignments under this employment -->
                     <ul
                         v-if="workspace.assignments.some((a) => a.employment_record_id === e.id)"
-                        class="mt-3 space-y-2 border-t border-slate-100 pt-3"
+                        class="mt-3 space-y-2 border-t border-line pt-3"
                     >
                         <li
                             v-for="a in workspace.assignments.filter(
                                 (x) => x.employment_record_id === e.id,
                             )"
                             :key="a.id"
-                            class="rounded bg-slate-50 p-3"
+                            class="rounded-xs bg-graphite-100 p-3"
                         >
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div>
@@ -1856,16 +1813,16 @@ function submitNote(): void {
                                         {{ a.position_name ?? '—' }}
                                         <span
                                             v-if="a.is_primary"
-                                            class="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
+                                            class="ml-2 rounded-xs bg-graphite-100 px-2 py-0.5 text-xs text-ink"
                                             >Primary</span
                                         >
                                         <span
                                             v-if="a.is_current"
-                                            class="ml-2 rounded-full bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
+                                            class="ml-2 rounded-xs bg-accent-100 px-2 py-0.5 text-xs text-accent-strong"
                                             >Current</span
                                         >
                                     </p>
-                                    <p class="mt-0.5 text-slate-500">
+                                    <p class="mt-0.5 text-ink-muted">
                                         {{
                                             [a.department_name, a.campus_name]
                                                 .filter(Boolean)
@@ -1910,7 +1867,7 @@ function submitNote(): void {
                                     <button
                                         v-if="a.ends_on === null"
                                         type="button"
-                                        class="text-red-600 underline"
+                                        class="text-danger underline"
                                         @click="
                                             endingAssignmentId =
                                                 endingAssignmentId === a.id ? null : a.id
@@ -1924,17 +1881,17 @@ function submitNote(): void {
                             <!-- HR.1A: transfer / promotion / designation / department change -->
                             <form
                                 v-if="placementAssignmentId === a.id"
-                                class="mt-3 space-y-3 border-t border-slate-200 pt-3"
+                                class="mt-3 space-y-3 border-t border-line pt-3"
                                 @submit.prevent="submitPlacement(a)"
                             >
-                                <p class="text-slate-600">
+                                <p class="text-ink-muted">
                                     This placement ends the day before the effective date and a new
                                     primary placement starts on it; both stay in the history.
                                 </p>
                                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`placement-kind-${a.id}`"
                                             >Change</label
                                         >
@@ -1942,7 +1899,7 @@ function submitNote(): void {
                                             :id="`placement-kind-${a.id}`"
                                             v-model="placementForm.change_kind"
                                             required
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         >
                                             <option value="" disabled>Select the change</option>
                                             <option
@@ -1956,7 +1913,7 @@ function submitNote(): void {
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`placement-from-${a.id}`"
                                             >Effective on</label
                                         >
@@ -1965,19 +1922,19 @@ function submitNote(): void {
                                             v-model="placementForm.effective_on"
                                             type="date"
                                             required
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         />
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`placement-campus-${a.id}`"
                                             >Campus</label
                                         >
                                         <select
                                             :id="`placement-campus-${a.id}`"
                                             v-model="placementForm.campus_id"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         >
                                             <option value="">School-wide (no Campus)</option>
                                             <option v-for="c in campuses" :key="c.id" :value="c.id">
@@ -1987,14 +1944,14 @@ function submitNote(): void {
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`placement-dept-${a.id}`"
                                             >Department</label
                                         >
                                         <select
                                             :id="`placement-dept-${a.id}`"
                                             v-model="placementForm.department_id"
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         >
                                             <option value="">None</option>
                                             <option
@@ -2008,7 +1965,7 @@ function submitNote(): void {
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`placement-position-${a.id}`"
                                             >Designation</label
                                         >
@@ -2016,7 +1973,7 @@ function submitNote(): void {
                                             :id="`placement-position-${a.id}`"
                                             v-model="placementForm.position_id"
                                             required
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         >
                                             <option
                                                 v-for="p in positions"
@@ -2029,7 +1986,7 @@ function submitNote(): void {
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`placement-reason-${a.id}`"
                                             >Reason</label
                                         >
@@ -2037,7 +1994,7 @@ function submitNote(): void {
                                             :id="`placement-reason-${a.id}`"
                                             v-model="placementForm.reason_code"
                                             required
-                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1"
                                         >
                                             <option value="" disabled>Select a reason</option>
                                             <option
@@ -2050,7 +2007,7 @@ function submitNote(): void {
                                         </select>
                                     </div>
                                 </div>
-                                <p class="text-sm text-red-600">
+                                <p class="text-sm text-danger">
                                     {{
                                         placementForm.errors.change_kind ??
                                         placementForm.errors.position_id ??
@@ -2060,7 +2017,7 @@ function submitNote(): void {
                                 <button
                                     type="submit"
                                     :disabled="placementForm.processing"
-                                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                    class="btn btn-primary"
                                 >
                                     Record change
                                 </button>
@@ -2068,10 +2025,10 @@ function submitNote(): void {
 
                             <form
                                 v-if="managingAssignmentId === a.id"
-                                class="mt-3 border-t border-slate-200 pt-3"
+                                class="mt-3 border-t border-line pt-3"
                                 @submit.prevent="submitManager(a)"
                             >
-                                <label class="block text-sm text-slate-600" for="manager-search"
+                                <label class="block text-sm text-ink-muted" for="manager-search"
                                     >Reports to (search by name or employee number)</label
                                 >
                                 <div class="mt-1 flex flex-wrap items-start gap-3">
@@ -2080,7 +2037,7 @@ function submitNote(): void {
                                             id="manager-search"
                                             v-model="managerQuery"
                                             placeholder="Search for the manager"
-                                            class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="w-full rounded-xs border border-control-line px-3 py-2 text-sm"
                                             :options="managerOptions"
                                             :option-key="(o) => o.assignmentId"
                                             :error="managerForm.errors.manager_assignment_id"
@@ -2093,7 +2050,7 @@ function submitNote(): void {
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`manager-effective-${a.id}`"
                                             >Effective from (blank = today)</label
                                         >
@@ -2101,12 +2058,12 @@ function submitNote(): void {
                                             :id="`manager-effective-${a.id}`"
                                             v-model="managerForm.effective_on"
                                             type="date"
-                                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1 w-auto"
                                         />
                                     </div>
                                     <div>
                                         <label
-                                            class="block text-sm text-slate-600"
+                                            class="block text-sm text-ink-muted"
                                             :for="`manager-reason-${a.id}`"
                                             >Reason</label
                                         >
@@ -2114,7 +2071,7 @@ function submitNote(): void {
                                             :id="`manager-reason-${a.id}`"
                                             v-model="managerForm.reason_code"
                                             required
-                                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                                            class="input mt-1 w-auto"
                                         >
                                             <option value="" disabled>Select a reason</option>
                                             <option
@@ -2125,7 +2082,7 @@ function submitNote(): void {
                                                 {{ r.label }}
                                             </option>
                                         </select>
-                                        <p class="mt-1 text-sm text-red-600">
+                                        <p class="mt-1 text-sm text-danger">
                                             {{
                                                 managerForm.errors.reason_code ??
                                                 managerForm.errors.effective_on
@@ -2139,7 +2096,7 @@ function submitNote(): void {
                                             managerForm.manager_assignment_id === '' ||
                                             managerForm.reason_code === ''
                                         "
-                                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                        class="btn btn-primary"
                                     >
                                         Save
                                     </button>
@@ -2148,7 +2105,7 @@ function submitNote(): void {
                                         :disabled="
                                             managerForm.processing || managerForm.reason_code === ''
                                         "
-                                        class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                                        class="btn btn-secondary"
                                         @click="clearManager(a)"
                                     >
                                         Remove manager
@@ -2158,21 +2115,21 @@ function submitNote(): void {
 
                             <form
                                 v-if="endingAssignmentId === a.id"
-                                class="mt-3 border-t border-slate-200 pt-3"
+                                class="mt-3 border-t border-line pt-3"
                                 @submit.prevent="submitEndAssignment(a)"
                             >
-                                <label class="block text-sm text-slate-600">End date</label>
+                                <label class="block text-sm text-ink-muted">End date</label>
                                 <div class="mt-1 flex items-center gap-3">
                                     <input
                                         v-model="endAssignmentForm.ends_on"
                                         type="date"
                                         required
-                                        class="rounded border border-slate-300 px-3 py-2 text-sm"
+                                        class="input w-auto"
                                     />
                                     <button
                                         type="submit"
                                         :disabled="endAssignmentForm.processing"
-                                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                        class="btn btn-primary"
                                     >
                                         Confirm
                                     </button>
@@ -2183,16 +2140,16 @@ function submitNote(): void {
 
                     <form
                         v-if="assigningEmploymentId === e.id"
-                        class="mt-3 space-y-3 border-t border-slate-100 pt-3"
+                        class="mt-3 space-y-3 border-t border-line pt-3"
                         @submit.prevent="submitAssignment(e.id)"
                     >
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
-                                <label class="block text-sm text-slate-600">Position</label>
+                                <label class="block text-sm text-ink-muted">Position</label>
                                 <select
                                     v-model="assignmentForm.position_id"
                                     required
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 >
                                     <option value="" disabled>Select a Position</option>
                                     <option v-for="p in positions" :key="p.id" :value="p.id">
@@ -2201,13 +2158,10 @@ function submitNote(): void {
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-sm text-slate-600"
+                                <label class="block text-sm text-ink-muted"
                                     >Department (optional)</label
                                 >
-                                <select
-                                    v-model="assignmentForm.department_id"
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                                >
+                                <select v-model="assignmentForm.department_id" class="input mt-1">
                                     <option value="">None</option>
                                     <option v-for="d in departments" :key="d.id" :value="d.id">
                                         {{ d.name }}
@@ -2215,20 +2169,20 @@ function submitNote(): void {
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-sm text-slate-600">Start date</label>
+                                <label class="block text-sm text-ink-muted">Start date</label>
                                 <input
                                     v-model="assignmentForm.starts_on"
                                     type="date"
                                     required
-                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                    class="input mt-1"
                                 />
                             </div>
                         </div>
-                        <p class="text-sm text-red-600">{{ assignmentForm.errors.position_id }}</p>
+                        <p class="text-sm text-danger">{{ assignmentForm.errors.position_id }}</p>
                         <button
                             type="submit"
                             :disabled="assignmentForm.processing"
-                            class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                            class="btn btn-primary"
                         >
                             Add assignment
                         </button>
@@ -2238,19 +2192,19 @@ function submitNote(): void {
 
             <form
                 v-if="showRehireForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitRehire"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600" for="rehire-type"
+                        <label class="block text-sm text-ink-muted" for="rehire-type"
                             >Employment type</label
                         >
                         <select
                             id="rehire-type"
                             v-model="rehireForm.employment_type"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option
                                 v-for="t in workforceOptions.employmentTypes"
@@ -2262,14 +2216,14 @@ function submitNote(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="rehire-staff"
+                        <label class="block text-sm text-ink-muted" for="rehire-staff"
                             >Staff type</label
                         >
                         <select
                             id="rehire-staff"
                             v-model="rehireForm.staff_type"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option value="" disabled>Select a staff type</option>
                             <option
@@ -2280,22 +2234,22 @@ function submitNote(): void {
                                 {{ t.label }}
                             </option>
                         </select>
-                        <p class="mt-1 text-sm text-red-600">{{ rehireForm.errors.staff_type }}</p>
+                        <p class="mt-1 text-sm text-danger">{{ rehireForm.errors.staff_type }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Start date</label>
+                        <label class="block text-sm text-ink-muted">Start date</label>
                         <input
                             v-model="rehireForm.starts_on"
                             type="date"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="rehireForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Rehire
                 </button>
@@ -2303,19 +2257,19 @@ function submitNote(): void {
 
             <form
                 v-if="showEmploymentForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitEmployment"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600" for="employment-type"
+                        <label class="block text-sm text-ink-muted" for="employment-type"
                             >Employment type</label
                         >
                         <select
                             id="employment-type"
                             v-model="employmentForm.employment_type"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option
                                 v-for="t in workforceOptions.employmentTypes"
@@ -2327,14 +2281,14 @@ function submitNote(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="employment-staff"
+                        <label class="block text-sm text-ink-muted" for="employment-staff"
                             >Staff type</label
                         >
                         <select
                             id="employment-staff"
                             v-model="employmentForm.staff_type"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option value="" disabled>Select a staff type</option>
                             <option
@@ -2345,16 +2299,13 @@ function submitNote(): void {
                                 {{ t.label }}
                             </option>
                         </select>
-                        <p class="mt-1 text-sm text-red-600">
+                        <p class="mt-1 text-sm text-danger">
                             {{ employmentForm.errors.staff_type }}
                         </p>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Category (optional)</label>
-                        <select
-                            v-model="employmentForm.employee_category_id"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        >
+                        <label class="block text-sm text-ink-muted">Category (optional)</label>
+                        <select v-model="employmentForm.employee_category_id" class="input mt-1">
                             <option value="">None</option>
                             <option v-for="c in employeeCategories" :key="c.id" :value="c.id">
                                 {{ c.name }}
@@ -2362,19 +2313,19 @@ function submitNote(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Start date</label>
+                        <label class="block text-sm text-ink-muted">Start date</label>
                         <input
                             v-model="employmentForm.starts_on"
                             type="date"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="employmentForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Add employment
                 </button>
@@ -2384,7 +2335,7 @@ function submitNote(): void {
         <!-- Qualifications -->
         <section id="profile-qualifications" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Qualifications</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Qualifications</h2>
                 <button
                     v-if="can.manageQualifications"
                     type="button"
@@ -2395,23 +2346,23 @@ function submitNote(): void {
                 </button>
             </div>
 
-            <p v-if="workspace.qualifications.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.qualifications.length === 0" class="mt-3 text-sm text-ink-muted">
                 No qualifications visible.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="q in workspace.qualifications"
                     :key="q.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p class="font-medium">
                             {{ q.qualification_name }}
-                            <span class="font-normal text-slate-500"
+                            <span class="font-normal text-ink-muted"
                                 >({{ q.qualification_type }})</span
                             >
                         </p>
-                        <p class="mt-0.5 text-slate-600">
+                        <p class="mt-0.5 text-ink-muted">
                             {{ q.institution }} · {{ q.completed_on ?? 'ongoing' }} ·
                             {{ q.verification_status }}
                         </p>
@@ -2445,16 +2396,13 @@ function submitNote(): void {
 
             <form
                 v-if="showQualificationForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitQualification"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Type</label>
-                        <select
-                            v-model="qualificationForm.qualification_type"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        >
+                        <label class="block text-sm text-ink-muted">Type</label>
+                        <select v-model="qualificationForm.qualification_type" class="input mt-1">
                             <option value="secondary">Secondary</option>
                             <option value="higher_secondary">Higher secondary</option>
                             <option value="diploma">Diploma</option>
@@ -2466,36 +2414,36 @@ function submitNote(): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Name</label>
+                        <label class="block text-sm text-ink-muted">Name</label>
                         <input
                             v-model="qualificationForm.qualification_name"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Institution</label>
+                        <label class="block text-sm text-ink-muted">Institution</label>
                         <input
                             v-model="qualificationForm.institution"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Completed on</label>
+                        <label class="block text-sm text-ink-muted">Completed on</label>
                         <input
                             v-model="qualificationForm.completed_on"
                             type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="qualificationForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Add qualification
                 </button>
@@ -2505,7 +2453,7 @@ function submitNote(): void {
         <!-- Experience -->
         <section class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Experience</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Experience</h2>
                 <button
                     v-if="can.manageQualifications"
                     type="button"
@@ -2516,18 +2464,18 @@ function submitNote(): void {
                 </button>
             </div>
 
-            <p v-if="workspace.experience.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.experience.length === 0" class="mt-3 text-sm text-ink-muted">
                 No experience records visible.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="x in workspace.experience"
                     :key="x.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p class="font-medium">{{ x.job_title }} · {{ x.organization }}</p>
-                        <p class="mt-0.5 text-slate-600">
+                        <p class="mt-0.5 text-ink-muted">
                             {{ x.starts_on }} – {{ x.ends_on ?? 'present' }}
                         </p>
                     </div>
@@ -2543,50 +2491,46 @@ function submitNote(): void {
 
             <form
                 v-if="showExperienceForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitExperience"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Organization</label>
+                        <label class="block text-sm text-ink-muted">Organization</label>
                         <input
                             v-model="experienceForm.organization"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Job title</label>
+                        <label class="block text-sm text-ink-muted">Job title</label>
                         <input
                             v-model="experienceForm.job_title"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Start date</label>
+                        <label class="block text-sm text-ink-muted">Start date</label>
                         <input
                             v-model="experienceForm.starts_on"
                             type="date"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">End date</label>
-                        <input
-                            v-model="experienceForm.ends_on"
-                            type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
+                        <label class="block text-sm text-ink-muted">End date</label>
+                        <input v-model="experienceForm.ends_on" type="date" class="input mt-1" />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="experienceForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Add experience
                 </button>
@@ -2596,7 +2540,7 @@ function submitNote(): void {
         <!-- Certifications -->
         <section class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Certifications</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Certifications</h2>
                 <button
                     v-if="can.manageQualifications"
                     type="button"
@@ -2607,18 +2551,18 @@ function submitNote(): void {
                 </button>
             </div>
 
-            <p v-if="workspace.certifications.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.certifications.length === 0" class="mt-3 text-sm text-ink-muted">
                 No certifications visible.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="c in workspace.certifications"
                     :key="c.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p class="font-medium">{{ c.name }}</p>
-                        <p class="mt-0.5 text-slate-600">
+                        <p class="mt-0.5 text-ink-muted">
                             {{ c.issuer }} · expires {{ c.expires_on ?? 'never' }} ·
                             {{ c.verification_status }}
                         </p>
@@ -2652,49 +2596,49 @@ function submitNote(): void {
 
             <form
                 v-if="showCertificationForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitCertification"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm text-slate-600">Name</label>
+                        <label class="block text-sm text-ink-muted">Name</label>
                         <input
                             v-model="certificationForm.name"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Issuer</label>
+                        <label class="block text-sm text-ink-muted">Issuer</label>
                         <input
                             v-model="certificationForm.issuer"
                             type="text"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Issued on</label>
+                        <label class="block text-sm text-ink-muted">Issued on</label>
                         <input
                             v-model="certificationForm.issued_on"
                             type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Expires on</label>
+                        <label class="block text-sm text-ink-muted">Expires on</label>
                         <input
                             v-model="certificationForm.expires_on"
                             type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                 </div>
                 <button
                     type="submit"
                     :disabled="certificationForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Add certification
                 </button>
@@ -2704,7 +2648,7 @@ function submitNote(): void {
         <!-- Documents -->
         <section id="profile-documents" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Documents</h2>
+                <h2 class="text-sm font-medium text-ink-muted">Documents</h2>
                 <button
                     v-if="can.manageDocuments"
                     type="button"
@@ -2714,22 +2658,22 @@ function submitNote(): void {
                     {{ showDocumentForm ? 'Cancel' : '+ Upload document' }}
                 </button>
             </div>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-ink-muted">
                 PDF, JPEG or PNG. Highly Sensitive documents are listed separately and need MFA.
             </p>
 
-            <p v-if="workspace.documents.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.documents.length === 0" class="mt-3 text-sm text-ink-muted">
                 No documents recorded.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="d in workspace.documents"
                     :key="d.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p class="font-medium">{{ d.category_label }}</p>
-                        <p class="mt-0.5 text-slate-600">
+                        <p class="mt-0.5 text-ink-muted">
                             {{ d.status }} · expires {{ d.expires_on ?? 'never' }}
                             <template v-if="!d.has_file">
                                 · recorded before uploads (no file)</template
@@ -2745,7 +2689,7 @@ function submitNote(): void {
                     <button
                         v-if="can.manageDocuments && d.status === 'active'"
                         type="button"
-                        class="text-red-600 underline"
+                        class="text-danger underline"
                         @click="archiveDocument(d.id)"
                     >
                         Archive
@@ -2755,12 +2699,12 @@ function submitNote(): void {
 
             <form
                 v-if="showDocumentForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitDocument"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div class="sm:col-span-2">
-                        <label class="block text-sm text-slate-600" for="hr-document-file"
+                        <label class="block text-sm text-ink-muted" for="hr-document-file"
                             >File</label
                         >
                         <input
@@ -2771,17 +2715,17 @@ function submitNote(): void {
                             class="mt-1 w-full text-sm"
                             @change="pickDocumentFile"
                         />
-                        <p class="mt-1 text-sm text-red-600">{{ documentForm.errors.file }}</p>
+                        <p class="mt-1 text-sm text-danger">{{ documentForm.errors.file }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="hr-document-category"
+                        <label class="block text-sm text-ink-muted" for="hr-document-category"
                             >Category</label
                         >
                         <select
                             id="hr-document-category"
                             v-model="documentForm.category"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option value="" disabled>Select a category</option>
                             <option
@@ -2792,43 +2736,43 @@ function submitNote(): void {
                                 {{ c.label }}
                             </option>
                         </select>
-                        <p class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</p>
+                        <p class="mt-1 text-sm text-danger">{{ documentForm.errors.category }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="hr-document-tier"
+                        <label class="block text-sm text-ink-muted" for="hr-document-tier"
                             >Classification</label
                         >
                         <select
                             id="hr-document-tier"
                             v-model="documentForm.classification_tier"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         >
                             <option value="restricted">Restricted</option>
                             <option value="highly_sensitive">Highly sensitive</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="hr-document-issued"
+                        <label class="block text-sm text-ink-muted" for="hr-document-issued"
                             >Issued on</label
                         >
                         <input
                             id="hr-document-issued"
                             v-model="documentForm.issued_on"
                             type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600" for="hr-document-expires"
+                        <label class="block text-sm text-ink-muted" for="hr-document-expires"
                             >Expires on</label
                         >
                         <input
                             id="hr-document-expires"
                             v-model="documentForm.expires_on"
                             type="date"
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="input mt-1"
                         />
-                        <p class="mt-1 text-sm text-red-600">
+                        <p class="mt-1 text-sm text-danger">
                             {{ documentForm.errors.expires_on }}
                         </p>
                     </div>
@@ -2849,7 +2793,7 @@ function submitNote(): void {
                         documentForm.file === null ||
                         (documentForm.classification_tier === 'highly_sensitive' && !hasMfaFactor)
                     "
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="btn btn-primary mt-3"
                 >
                     Upload document
                 </button>
@@ -2859,7 +2803,7 @@ function submitNote(): void {
         <!-- Notes -->
         <section class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">
+                <h2 class="text-sm font-medium text-ink-muted">
                     HR notes (Restricted/Confidential)
                 </h2>
                 <button
@@ -2872,18 +2816,18 @@ function submitNote(): void {
                 </button>
             </div>
 
-            <p v-if="workspace.notes.length === 0" class="mt-3 text-sm text-slate-500">
+            <p v-if="workspace.notes.length === 0" class="mt-3 text-sm text-ink-muted">
                 No notes visible.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
                     v-for="n in workspace.notes"
                     :key="n.id"
-                    class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                    class="flex items-start justify-between gap-3 rounded-xs border border-line p-3 text-sm"
                 >
                     <div>
                         <p>{{ n.body }}</p>
-                        <p class="mt-1 text-xs text-slate-500">
+                        <p class="mt-1 text-xs text-ink-muted">
                             {{ n.classification_tier }} ·
                             {{ n.author_display_name ?? 'Unknown author' }} · {{ n.created_at }}
                         </p>
@@ -2900,31 +2844,19 @@ function submitNote(): void {
 
             <form
                 v-if="showNoteForm"
-                class="mt-3 rounded border border-slate-200 p-4"
+                class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitNote"
             >
-                <label class="block text-sm text-slate-600">Note</label>
-                <textarea
-                    v-model="noteForm.body"
-                    required
-                    rows="3"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                ></textarea>
+                <label class="block text-sm text-ink-muted">Note</label>
+                <textarea v-model="noteForm.body" required rows="3" class="input mt-1"></textarea>
                 <div class="mt-3">
-                    <label class="block text-sm text-slate-600">Classification</label>
-                    <select
-                        v-model="noteForm.classification_tier"
-                        class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
-                    >
+                    <label class="block text-sm text-ink-muted">Classification</label>
+                    <select v-model="noteForm.classification_tier" class="input mt-1 w-48">
                         <option value="sensitive">Sensitive</option>
                         <option value="confidential">Confidential</option>
                     </select>
                 </div>
-                <button
-                    type="submit"
-                    :disabled="noteForm.processing"
-                    class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                >
+                <button type="submit" :disabled="noteForm.processing" class="btn btn-primary mt-3">
                     Add note
                 </button>
             </form>

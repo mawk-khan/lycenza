@@ -15,7 +15,7 @@ defineProps<Props>();
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl p-8 font-sans text-ink">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <h1 class="mt-2 text-xl font-semibold">Payroll</h1>
@@ -52,7 +52,7 @@ defineProps<Props>();
                 !can.managePeriods &&
                 !can.manageAccounting
             "
-            class="mt-6 text-sm text-slate-500"
+            class="mt-6 text-sm text-ink-muted"
         >
             You don't hold any Payroll capability yet.
         </p>
