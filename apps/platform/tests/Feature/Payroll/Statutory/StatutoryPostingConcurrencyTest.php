@@ -65,7 +65,7 @@ class StatutoryPostingConcurrencyTest extends TestCase
     {
         $context = app(TenantContext::class);
         $preparer = $this->createUser();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($this->school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         return $context->withSchool($this->school, function () use ($preparer, $poster) {
             $salaryExpense = LedgerAccount::factory()->for($this->school, 'school')->type('expense')->create();
@@ -128,7 +128,7 @@ class StatutoryPostingConcurrencyTest extends TestCase
 
             app(CompensationService::class)->assign(
                 $this->school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($basicSc->id, '10000.00')], $preparer,
+                [new FixedComponentValueInput($basicSc->id, '10000.00')], $preparer, $this->freshMfaProofFor($preparer),
             );
 
             $periodService = app(PayrollPeriodService::class);
@@ -141,8 +141,8 @@ class StatutoryPostingConcurrencyTest extends TestCase
             app(StatutoryPayrollCalculationService::class)->calculateForRun($run, $preparer);
 
             $approver = $this->createUser();
-            $run = $runService->approve($run->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
-            app(PayrollPostingService::class)->post($run, $poster);
+            $run = $runService->approve($run->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+            app(PayrollPostingService::class)->post($run, $poster, $this->freshMfaProofFor($poster));
 
             return $run->fresh();
         });

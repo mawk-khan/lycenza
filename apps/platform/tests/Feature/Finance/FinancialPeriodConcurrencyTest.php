@@ -127,7 +127,7 @@ class FinancialPeriodConcurrencyTest extends TestCase
     {
         $w = $this->world();
         $run = $this->approvedPayrollRun($w['school']);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($w['school'], ['payroll.runs.post', 'payroll.runs.reverse']);
 
         [$holder, $contender] = $this->raceWithHeldHolder($this->closing($w), $this->op('payroll-post', $w['school']->id, $run->id, $poster->id));
 

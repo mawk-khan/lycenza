@@ -122,7 +122,7 @@ class PayrollRunServiceTest extends TestCase
 
         $context->withSchool($school, fn () => app(CompensationService::class)->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-            [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
+            [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
 
         $period = $context->withSchool($school, fn () => $this->makeOpenPeriod($school));
@@ -149,10 +149,10 @@ class PayrollRunServiceTest extends TestCase
         $er2 = $context->withSchool($school, fn () => $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']));
 
         $context->withSchool($school, fn () => app(CompensationService::class)->assign(
-            $school, $er1, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
+            $school, $er1, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
         $context->withSchool($school, fn () => app(CompensationService::class)->assign(
-            $school, $er2, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '75000.00')], $actor,
+            $school, $er2, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '75000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
 
         $period = $context->withSchool($school, fn () => $this->makeOpenPeriod($school));
@@ -176,7 +176,7 @@ class PayrollRunServiceTest extends TestCase
         $employmentRecord = $context->withSchool($school, fn () => $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2026-09-15']));
 
         $context->withSchool($school, fn () => app(CompensationService::class)->assign(
-            $school, $employmentRecord, $structure, Carbon::parse('2026-09-15'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
+            $school, $employmentRecord, $structure, Carbon::parse('2026-09-15'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
 
         $period = $context->withSchool($school, fn () => $this->makeOpenPeriod($school, '2026-09-01'));
@@ -201,7 +201,7 @@ class PayrollRunServiceTest extends TestCase
         ]));
 
         $context->withSchool($school, fn () => app(CompensationService::class)->assign(
-            $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
+            $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
 
         $period = $context->withSchool($school, fn () => $this->makeOpenPeriod($school, '2026-09-01'));
@@ -223,10 +223,10 @@ class PayrollRunServiceTest extends TestCase
 
         $context->withSchool($school, function () use ($school, $employmentRecord, $structure, $basicComponentId, $actor) {
             $service = app(CompensationService::class);
-            $service->assign($school, $employmentRecord, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor);
+            $service->assign($school, $employmentRecord, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor));
             // Raise effective mid-September -- compensation changes
             // INSIDE the period being calculated.
-            $service->assign($school, $employmentRecord, $structure, Carbon::parse('2026-09-15'), [new FixedComponentValueInput($basicComponentId, '55000.00')], $actor);
+            $service->assign($school, $employmentRecord, $structure, Carbon::parse('2026-09-15'), [new FixedComponentValueInput($basicComponentId, '55000.00')], $actor, $this->freshMfaProofFor($actor));
         });
 
         $period = $context->withSchool($school, fn () => $this->makeOpenPeriod($school, '2026-09-01'));
@@ -248,7 +248,7 @@ class PayrollRunServiceTest extends TestCase
         $employmentRecord = $context->withSchool($school, fn () => $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2026-09-15']));
 
         $context->withSchool($school, fn () => app(CompensationService::class)->assign(
-            $school, $employmentRecord, $structure, Carbon::parse('2026-09-15'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
+            $school, $employmentRecord, $structure, Carbon::parse('2026-09-15'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
 
         $period = $context->withSchool($school, fn () => $this->makeOpenPeriod($school, '2026-09-01'));

@@ -78,7 +78,9 @@ use App\Domain\Transport\Infrastructure\TransportVehicle;
 use App\Domain\Visitor\Application\VisitorVisitService;
 use App\Domain\Visitor\Infrastructure\Visitor;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Money\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -590,6 +592,18 @@ final class DemoModuleData
 
     // --- Payroll (Phase 9) --------------------------------------------------
 
+    /**
+     * HR.R1-C1 (S-5): the Payroll services require a fresh-MFA proof. The demo
+     * world is seeded by no human, so there is no code to verify; this proof
+     * stands for the seeding itself and exists ONLY here -- DemoSeeder refuses
+     * to run outside local DDEV (DemoEnvironmentGuard), and application code
+     * never mints a proof except FreshMfaRequirement (ApprovalWorkflowRegistryTest).
+     */
+    private function demoAssurance(User $user): FreshMfaProof
+    {
+        return new FreshMfaProof($user->id, CarbonImmutable::now());
+    }
+
     private function payroll(): void
     {
         $d = $this->demo;
@@ -624,7 +638,7 @@ final class DemoModuleData
                 new FixedComponentValueInput($basicSc->id, $basicAmount),
                 new FixedComponentValueInput($hraSc->id, $hraAmount),
                 new FixedComponentValueInput($pfSc->id, $pfAmount),
-            ], $preparer);
+            ], $preparer, $this->demoAssurance($preparer));
         }
 
         $periods = app(PayrollPeriodService::class);
@@ -637,8 +651,9 @@ final class DemoModuleData
         $runs->calculate($augustRun, $preparer);
         $augustFresh = $d->inSchool(fn () => $augustRun->fresh());
         // OD-HR-1: an approval names the calculation it reviewed.
-        $augustRun = $runs->approve($augustFresh, $d->admin, null, (string) $runs->latestCalculationId($augustFresh));
-        app(PayrollPostingService::class)->post($augustRun, $preparer);
+        $augustRun = $runs->approve($augustFresh, $d->admin, $this->demoAssurance($d->admin), (string) $runs->latestCalculationId($augustFresh));
+        // HR.R1-C1 (S-13): posted by the School Admin, who holds payroll.runs.post (the posting core now checks it).
+        app(PayrollPostingService::class)->post($augustRun, $d->admin, $this->demoAssurance($d->admin));
 
         // September 2026: calculated, awaiting approval.
         $september = $periods->open($periods->createPeriod($d->school, Carbon::parse('2026-09-01'), Carbon::parse('2026-09-30'), $preparer), $preparer);

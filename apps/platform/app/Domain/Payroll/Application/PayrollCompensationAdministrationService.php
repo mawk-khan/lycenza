@@ -9,6 +9,7 @@ use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Support\Carbon;
 
@@ -46,6 +47,7 @@ class PayrollCompensationAdministrationService
         Carbon $effectiveFrom,
         array $fixedValues,
         User $actor,
+        FreshMfaProof $mfa,
     ): EmployeeCompensationAssignment {
         $this->authorizeCapabilityFor($actor, 'payroll.compensation.sensitive.manage', $school);
         // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
@@ -53,6 +55,6 @@ class PayrollCompensationAdministrationService
             throw new PayrollSelfAdministrationException('compensation.assign');
         }
 
-        return $this->compensation->assign($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor);
+        return $this->compensation->assign($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor, $mfa);
     }
 }

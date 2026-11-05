@@ -10,8 +10,10 @@ use App\Domain\Payroll\Application\PayrollPostingService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
 
@@ -58,7 +60,7 @@ try {
 
                 return 'reversed:'.$result->journalEntryId;
             case 'payroll-post':
-                $posting = $app->make(PayrollPostingService::class)->post(PayrollRun::query()->findOrFail($args[1]), User::query()->findOrFail($args[2]));
+                $posting = $app->make(PayrollPostingService::class)->post(PayrollRun::query()->findOrFail($args[1]), $mfaActor = User::query()->findOrFail($args[2]), new FreshMfaProof($mfaActor->id, CarbonImmutable::now()));
 
                 return 'posted:'.$posting->journal_entry_id;
             case 'set-month':

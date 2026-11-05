@@ -5,7 +5,9 @@ use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\Concurrency\HeldTransaction;
@@ -40,7 +42,7 @@ try {
                 return 'ok:'.DB::table('payroll_run_hrx_inputs')->where('payroll_run_id', $run->id)->where('employment_record_id', $args[3])->value('fingerprint');
             })(),
             'post' => (function () use ($app, $run, $actor) {
-                $app->make(PayrollPostingAdministrationService::class)->post($run, $actor);
+                $app->make(PayrollPostingAdministrationService::class)->post($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return 'ok:posted';
             })(),

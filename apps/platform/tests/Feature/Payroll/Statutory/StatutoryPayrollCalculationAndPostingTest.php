@@ -131,7 +131,7 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
                 new FixedComponentValueInput($basicSc->id, '20000.00'),
                 new FixedComponentValueInput($hraSc->id, '8000.00'),
             ],
-            $preparer,
+            $preparer, $this->freshMfaProofFor($preparer),
         );
 
         $periodService = app(PayrollPeriodService::class);
@@ -225,7 +225,7 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
         $school = $this->createSchool();
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedRun($school));
         $approver = $this->createUser();
-        $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run'], $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run'])));
+        $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run'], $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($built['run'])));
 
         $this->expectException(StatutoryRunNotEligibleForCalculationException::class);
 
@@ -247,15 +247,15 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
     public function posting_produces_a_balanced_journal_entry_matching_hand_verified_totals(): void
     {
         $school = $this->createSchool();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $accounting = $this->context()->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedRun($school));
 
         $this->context()->withSchool($school, fn () => $this->calculationService()->calculateForRun($built['run'], $built['actor']));
 
         $approver = $this->createUser();
-        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
-        $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
+        $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster, $this->freshMfaProofFor($poster)));
         $run = $this->context()->withSchool($school, fn () => $built['run']->fresh());
 
         $posting = $this->context()->withSchool($school, fn () => $this->postingService()->post($run, $poster));
@@ -304,13 +304,13 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
     public function posting_is_rejected_when_statutory_calculation_has_not_run(): void
     {
         $school = $this->createSchool();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $this->context()->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedRun($school));
 
         $approver = $this->createUser();
-        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
-        $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster, $this->freshMfaProofFor($poster)));
 
         $this->expectException(StatutoryCalculationMissingException::class);
 
@@ -321,14 +321,14 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
     public function posting_twice_is_rejected(): void
     {
         $school = $this->createSchool();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $this->context()->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedRun($school));
         $this->context()->withSchool($school, fn () => $this->calculationService()->calculateForRun($built['run'], $built['actor']));
 
         $approver = $this->createUser();
-        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
-        $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster, $this->freshMfaProofFor($poster)));
 
         $this->context()->withSchool($school, fn () => $this->postingService()->post($built['run']->fresh(), $poster));
 

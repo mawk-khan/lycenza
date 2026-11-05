@@ -34,8 +34,8 @@ class PayrollRunPostingController extends Controller
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // SR.4 (ADR 0071 §26.7): capability first, then a fresh code, outside the posting transaction.
         $this->authorizeCapability('payroll.runs.post', $school);
-        $mfa->requireForAction($request, $context->actor());
-        $service->post($run, $context->actor());
+        $proof = $mfa->requireForAction($request, $context->actor());
+        $service->post($run, $context->actor(), $proof);
 
         return redirect("/app/payroll/runs/{$run->id}");
     }
@@ -49,9 +49,9 @@ class PayrollRunPostingController extends Controller
         $validated = $request->validate([
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
-        $mfa->requireForAction($request, $context->actor());
+        $proof = $mfa->requireForAction($request, $context->actor());
 
-        $service->reverse($run, $context->actor(), $validated['reason'] ?? null);
+        $service->reverse($run, $context->actor(), $proof, $validated['reason'] ?? null);
 
         return redirect("/app/payroll/runs/{$run->id}");
     }

@@ -52,6 +52,7 @@ const props = defineProps<{
             approvedBy: string | null;
             approvedAt: string | null;
             approvedCalculationId: string | null;
+            approvalEvidence: 'bound' | 'legacy' | null;
         };
         calculation: {
             id: string;
@@ -60,6 +61,7 @@ const props = defineProps<{
             calculatedBy: string | null;
             complete: boolean;
             adjustmentCount: number;
+            compensationSourcesRecorded: boolean;
         } | null;
         previousRun: { id: string; periodMonth: string | null; status: string } | null;
         totals: Totals;
@@ -216,6 +218,19 @@ function approve(): void {
                     <dt class="text-ink-muted">Approved</dt>
                     <dd>
                         {{ review.run.approvedBy }} · {{ formatDateTime(review.run.approvedAt) }}
+                        <span
+                            v-if="review.run.approvalEvidence === 'legacy'"
+                            class="block text-ink-muted"
+                        >
+                            Approved before approvals recorded the reviewed calculation; which
+                            calculation was reviewed is not known.
+                        </span>
+                        <span
+                            v-else-if="review.run.approvalEvidence === 'bound'"
+                            class="block text-ink-muted"
+                        >
+                            Approved against the calculation recorded for this run.
+                        </span>
                     </dd>
                 </div>
             </dl>
@@ -416,15 +431,19 @@ function approve(): void {
 
         <section class="mt-6" aria-labelledby="review-compensation">
             <h2 id="review-compensation" class="text-sm font-semibold">
-                Compensation changes since the previous run ({{ review.compensation.total }})
+                Compensation changes this run pays first ({{ review.compensation.total }})
             </h2>
+            <p class="mt-1 text-sm text-ink-muted">
+                Changes no earlier approved run has paid. Whoever recorded one cannot approve this
+                run.
+            </p>
             <p v-if="review.compensation.total === 0" class="mt-1 text-sm text-ink-muted">
                 None recorded.
             </p>
             <div v-else class="relative mt-2 overflow-x-auto">
                 <table class="data-table w-full min-w-[40rem] text-sm">
                     <caption class="sr-only">
-                        Compensation assignments new to this run
+                        Compensation changes this run pays first
                     </caption>
                     <thead>
                         <tr>

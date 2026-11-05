@@ -82,6 +82,8 @@ class DatabaseRoleVerifier
         'payroll_lwf_annual_charges',
         // ORG.8B (ADR 0076 §60): who calculated a run is approval provenance; it leaves only with its run.
         'payroll_run_calculations',
+        // HR.R1-C1: the compensation a calculation rested on is approval provenance; it leaves only with its calculation.
+        'payroll_run_calculation_sources',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
@@ -111,6 +113,8 @@ class DatabaseRoleVerifier
         'payroll_lwf_annual_charges',
         // ORG.8B (ADR 0076 §60): a recorded calculation never changes.
         'payroll_run_calculations',
+        // HR.R1-C1: recorded compensation provenance never changes.
+        'payroll_run_calculation_sources',
         // ORG.8E (ADR 0076 §63): evidence rows are never rewritten.
         'student_lifecycle_events', 'attendance_record_corrections',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
@@ -604,8 +608,32 @@ class DatabaseRoleVerifier
         $narrowFinance = array_filter($finance, fn ($f) => in_array($f->proname, self::FINANCE_FUNCTIONS, true)
             && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
+        $results[] = $this->payrollApprovalProvenanceCheck();
 
         return $results;
+    }
+
+    /**
+     * HR.R1-C1 (PAY-2/3/4/5): the payroll approval guard enforces recorded
+     * provenance, freshness, first-paid author exclusion and reconciliation;
+     * compensation writes take the School's compensation lock; calculated
+     * results and lines are never rewritten.
+     */
+    private function payrollApprovalProvenanceCheck(): CheckResult
+    {
+        $guard = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'payroll_runs_approval_evidence_guard' and p.pronamespace = 'public'::regnamespace");
+        $guarded = $guard !== null
+            && str_contains($guard->src, 'payroll_calculation_compensation_fresh(')
+            && str_contains($guard->src, 'payroll_run_first_paid_compensation(')
+            && str_contains($guard->src, 'payroll_run_results_reconcile(')
+            && str_contains($guard->src, 'compensation_sources_recorded')
+            && str_contains($guard->src, 'pg_advisory_xact_lock_shared');
+        $enabled = (int) DB::selectOne(
+            "select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in
+             ('payroll_runs_approval_evidence_guard', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
+        )->c;
+
+        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 5);
     }
 
     /**

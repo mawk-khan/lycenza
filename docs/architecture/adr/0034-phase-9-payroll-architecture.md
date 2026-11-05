@@ -303,3 +303,35 @@ explicitly reject exactly that mechanism for an analogous case.
 3. Compensation assignments record their author; authors of changes the run
    rests on are participants (maker/checker).
 4. No new state, no rejection workflow, no calculation change, no export.
+
+### HR.R1-C1 correction (2026-11-05): first-paid attribution, freshness, service assurance
+
+Item 3 above was implemented at `3254e1a0` as a window over when changes
+were RECORDED relative to the previous approval. HR.R1-0 (PAY-2) found, and
+HR.R1-C1 reproduced, a sequence in which an author escaped it: a run approved
+on a calculation that predated a compensation change of its period, then the
+author approving the next run, which first paid the change. Amended:
+
+5. Every calculation of a regular run records its compensation sources
+   (`payroll_run_calculation_sources`, append-only): every assignment
+   overlapping the period of every employment resolved into a result, with the
+   effective range read. A change counts as paid only once an approved run
+   PRICED the period from it (basis `structure`, not a manual override). Results carry their
+   calculation (`payroll_run_results.payroll_run_calculation_id`) and are
+   never rewritten.
+6. A run pays an assignment its approved/latest calculation recorded; it pays
+   it FIRST when no other approved or posted regular run's approved
+   calculation did. The authors of changes a run pays first are its makers.
+7. A calculation is stale once the period's compensation (ids and ranges,
+   clipped to the period) differs from what it recorded; approval then
+   requires a recalculation (`PAYROLL_RUN_RECALCULATION_REQUIRED`).
+   Compensation writes take the School's compensation lock exclusively;
+   calculation and approval take it shared.
+8. `payroll_runs_approval_evidence_guard` enforces 5-7 plus per-result
+   reconciliation with the lines for every role; only who acted stays an
+   application boundary (rule 102).
+9. Approve, post, reverse and compensation assignment require the actor's own
+   fresh-MFA proof at the service; post and reverse re-read the actor's
+   current capability under the run lock (S-5, S-13).
+10. A regular run is compared with the latest approved or posted REGULAR run
+    of an earlier period (PAY-1); a correction run with the run it corrects.

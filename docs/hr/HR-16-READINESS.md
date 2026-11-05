@@ -39,7 +39,7 @@ Owner decisions (2026-11-05):
 | New: forged report parameters redirected back with no visible error | FIX NOW | **CLOSED.** The report now renders with the bad parameter dropped and the message shown on the page. | `HrReportsTest` (`assertReportError`); browser step "Forged column salary refused". |
 | New: the register made the page scroll sideways at 375 px | FIX NOW | **CLOSED.** The table scrolls inside its own region. | Browser responsive check. |
 | New: the month view takes about 4.3 s at 5,000 staff | HARDEN (later) | **RECORDED** as R-HR16-1, because totals compose the whole population. No target exists, and one is recommended for the owner to set. | §3 |
-| OD-HR-1/2: Payroll approver visibility | OWNER DECISION | **OPEN**, unchanged. Blocks Payroll production. | Gate register. |
+| OD-HR-1/2: Payroll approver visibility | OWNER DECISION | **OPEN** at HR.16; since DECIDED and implemented for development (OD-HR-1/2, §6), corrected by HR.R1-C1 (PAY-2). Payroll production stays blocked by HRX-L4, E45 and the statutory gates. | Gate register. |
 | HRX-L2 / OD-HR-14: clock and biometric attendance | LEGAL GATE | Kept. | — |
 
 ## 2. Authorization boundary (repository capabilities)

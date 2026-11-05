@@ -115,7 +115,7 @@ class PayrollIdempotencyTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             $periodService = app(PayrollPeriodAdministrationService::class);
@@ -153,7 +153,7 @@ class PayrollIdempotencyTest extends TestCase
         app(TenantContext::class)->withSchool($f['school'], function () use ($f) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
             $throwawayApprover = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
-            app(PayrollRunAdministrationService::class)->approve($run, $throwawayApprover, null, app(PayrollRunService::class)->latestCalculationId($run));
+            app(PayrollRunAdministrationService::class)->approve($run, $throwawayApprover, $this->freshMfaProofFor($throwawayApprover), app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         return $f;

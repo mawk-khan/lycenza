@@ -92,7 +92,7 @@ class PayrollPostingConcurrencyTest extends TestCase
 
             app(CompensationService::class)->assign(
                 $this->school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($basicStructureComponent->id, '50000.00')], $preparer,
+                [new FixedComponentValueInput($basicStructureComponent->id, '50000.00')], $preparer, $this->freshMfaProofFor($preparer),
             );
 
             $period = $periodService->open($periodService->createPeriod($this->school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
@@ -100,7 +100,7 @@ class PayrollPostingConcurrencyTest extends TestCase
             $runService->calculate($run, $preparer);
 
             $approver = $this->createUser();
-            $run = $runService->approve($run->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+            $run = $runService->approve($run->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
 
             return $run;
         });
@@ -111,8 +111,8 @@ class PayrollPostingConcurrencyTest extends TestCase
     {
         $this->school = $this->createSchool();
         $run = $this->makeApprovedRun();
-        $posterA = $this->createUser();
-        $posterB = $this->createUser();
+        $posterA = $this->createUserWithCapabilities($this->school, ['payroll.runs.post']);
+        $posterB = $this->createUserWithCapabilities($this->school, ['payroll.runs.post']);
 
         $script = __DIR__.'/../../Support/post-payroll-run.php';
         $processA = new Process(['php', $script, $this->school->id, $run->id, $posterA->id]);
@@ -162,15 +162,15 @@ class PayrollPostingConcurrencyTest extends TestCase
     {
         $this->school = $this->createSchool();
         $run = $this->makeApprovedRun();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($this->school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         $postScript = __DIR__.'/../../Support/post-payroll-run.php';
         $postProcess = new Process(['php', $postScript, $this->school->id, $run->id, $poster->id]);
         $postProcess->run();
         $this->assertStringStartsWith('posted:', $postProcess->getOutput(), 'Setup precondition failed: run must be posted before racing reversal.');
 
-        $reverserA = $this->createUser();
-        $reverserB = $this->createUser();
+        $reverserA = $this->createUserWithCapabilities($this->school, ['payroll.runs.reverse']);
+        $reverserB = $this->createUserWithCapabilities($this->school, ['payroll.runs.reverse']);
 
         $script = __DIR__.'/../../Support/reverse-payroll-run.php';
         $processA = new Process(['php', $script, $this->school->id, $run->id, $reverserA->id]);

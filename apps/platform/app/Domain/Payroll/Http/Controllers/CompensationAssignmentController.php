@@ -69,9 +69,9 @@ class CompensationAssignmentController extends Controller
         );
 
         // SR.4 (ADR 0071 §26.7): a fresh code for a Highly Sensitive write.
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
         $assignment = $service->assign(
-            $school, $record, $structure, Carbon::parse($validated['effective_from']), $fixedValues, $request->user(),
+            $school, $record, $structure, Carbon::parse($validated['effective_from']), $fixedValues, $request->user(), $proof,
         );
 
         return response()->json(['data' => $this->presentSummary(CompensationAssignmentSummary::fromModel($assignment))], 201);

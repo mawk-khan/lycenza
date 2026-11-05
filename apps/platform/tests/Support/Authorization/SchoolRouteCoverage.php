@@ -57,6 +57,7 @@ use App\Domain\Payroll\Application\PayrollCompensationReadService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunReadService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Application\PayrollStructureReadService;
 use App\Domain\Payroll\Application\PayslipReadService;
@@ -1355,13 +1356,15 @@ final class SchoolRouteCoverage
 
             // Http\Controllers\App\Payroll\PayrollRunController
             Coverage::service('app.payroll.periods.runs.store', PayrollRunAdministrationService::class, 'createRun'),
-            Coverage::service('app.payroll.runs.show', PayrollStructureReadService::class, 'listComponents'),
+            // HR.R1-0 GOV-5: the run page's own check is getRun (payroll.runs.view); listComponents runs only for structures.view.
+            Coverage::service('app.payroll.runs.show', PayrollRunReadService::class, 'getRun'),
             Coverage::service('app.payroll.runs.calculate', PayrollRunAdministrationService::class, 'calculate'),
             Coverage::service('app.payroll.runs.manual-overrides.store', PayrollRunAdministrationService::class, 'recordManualOverride'),
             Coverage::service('app.payroll.runs.correction-deltas.store', PayrollRunAdministrationService::class, 'recordCorrectionDelta'),
             Coverage::service('app.payroll.runs.correction.store', PayrollRunAdministrationService::class, 'createCorrectionRun'),
             Coverage::service('app.payroll.runs.hrx-inputs.difference-checks', PayrollHrxInputReadService::class, 'checkDifferences'),
-            Coverage::gate('app.payroll.runs.approve', 'payroll.runs.approve'),
+            // HR.R1-C1 (PAY-7): both keys are pinned -- approving needs sight of the pay it approves.
+            Coverage::gate('app.payroll.runs.approve', ['payroll.runs.approve', 'payroll.compensation.sensitive.view']),
 
             // Http\Controllers\App\Payroll\PayrollRunPostingController
             Coverage::gate('app.payroll.runs.post', 'payroll.runs.post'),

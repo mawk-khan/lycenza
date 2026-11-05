@@ -6,6 +6,7 @@ use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\ApiIdempotencyKey;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
 
 /**
@@ -13,8 +14,9 @@ use App\Support\Authorization\AuthorizesCapability;
  * and reversing Payroll runs, mirroring
  * `App\Domain\Finance\Application\LedgerAdministrationService`'s exact
  * per-method distinct-capability shape (its own trusted core,
- * `PayrollPostingService`, performs no capability check itself -- see
- * that class's own docblock). No transport may call
+ * `PayrollPostingService`, since HR.R1-C1 (S-13) ALSO re-reads the
+ * actor's current capability under the run lock and requires a fresh-MFA
+ * proof (S-5) -- this class's cached check stays the early refusal). No transport may call
  * `PayrollPostingService` directly; a future controller depends on
  * this class.
  *
@@ -43,17 +45,17 @@ class PayrollPostingAdministrationService
      * double-check every Administration service already performs
      * regardless of idempotency, not the primary guarantee.
      */
-    public function post(PayrollRun $run, User $actor, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
+    public function post(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.post', $run->school);
 
-        return $this->posting->post($run, $actor, $idempotencyRecord);
+        return $this->posting->post($run, $actor, $mfa, $idempotencyRecord);
     }
 
-    public function reverse(PayrollRun $run, User $actor, ?string $reason = null, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
+    public function reverse(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?string $reason = null, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.reverse', $run->school);
 
-        return $this->posting->reverse($run, $actor, $reason, $idempotencyRecord);
+        return $this->posting->reverse($run, $actor, $mfa, $reason, $idempotencyRecord);
     }
 }

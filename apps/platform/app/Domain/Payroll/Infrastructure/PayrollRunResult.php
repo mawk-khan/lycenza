@@ -40,6 +40,8 @@ class PayrollRunResult extends Model
         'payroll_run_id',
         'employment_record_id',
         'employee_id',
+        // HR.R1-C1 (PAY-4): the calculation these results are the output of.
+        'payroll_run_calculation_id',
         'gross_amount',
         'total_deductions',
         'net_amount',

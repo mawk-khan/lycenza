@@ -13,7 +13,6 @@ use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -58,6 +57,7 @@ final class PayrollApprovalReviewService
         private readonly CapabilityResolver $capabilities,
         private readonly EmploymentRoster $roster,
         private readonly AuditRecorder $audit,
+        private readonly PayrollCompensationProvenance $provenance,
     ) {}
 
     public function mayReview(User $actor, School $school): bool
@@ -100,6 +100,9 @@ final class PayrollApprovalReviewService
                     'approvedAt' => $run->approved_at?->toIso8601String(),
                     // The calculation an earlier approval was bound to (NULL before OD-HR-1: never recorded).
                     'approvedCalculationId' => $run->approved_calculation_id,
+                    // HR.R1-C1 (PAY-6): 'bound' = approved against a recorded calculation; 'legacy' = approved before
+                    // that evidence existed (nothing backfilled); NULL = not approved.
+                    'approvalEvidence' => in_array($run->status, ['approved', 'posted'], true) ? ($run->approved_calculation_id === null ? 'legacy' : 'bound') : null,
                 ],
                 'calculation' => $latest === null ? null : [
                     'id' => $latest->id,
@@ -108,6 +111,8 @@ final class PayrollApprovalReviewService
                     'calculatedBy' => $names[$latest->calculated_by_user_id] ?? null,
                     'complete' => (bool) $latest->complete,
                     'adjustmentCount' => $latest->adjustment_count,
+                    // HR.R1-C1: FALSE only for a calculation made before compensation provenance existed.
+                    'compensationSourcesRecorded' => (bool) $latest->compensation_sources_recorded,
                 ],
                 'previousRun' => $previous === null ? null : [
                     'id' => $previous->id,
@@ -117,10 +122,10 @@ final class PayrollApprovalReviewService
                 'totals' => $this->totals($school, $run->id),
                 'previousTotals' => $previous === null ? null : $this->totals($school, $previous->id),
                 'components' => $this->componentTotals($school, $run->id),
-                ...$this->decision($school, $run, $latest, $actor),
+                ...$this->decision($school, $run, $latest, $previous, $actor),
                 'changes' => $this->changes($school, $run, $previous, $pages['changes'] ?? 1),
                 'adjustments' => $this->adjustments($school, $run, $pages['adjustments'] ?? 1),
-                'compensation' => $this->compensationChanges($school, $run, $previous, $pages['compensation'] ?? 1),
+                'compensation' => $this->compensationChanges($school, $run, $latest, $pages['compensation'] ?? 1),
             ];
 
             $this->audit->school($school, 'payroll.run.review_viewed', actor: $actor, subject: $run, metadata: [
@@ -133,26 +138,10 @@ final class PayrollApprovalReviewService
     }
 
     /**
-     * OD-HR-2: the users who recorded a compensation assignment the run's pay
-     * rests on -- an assignment of one of the run's employments that is new
-     * to this run (see compensationQuery(); every one, for a first run). Rows recorded
-     * before 2026-11-05 have no recorded author and add nobody.
-     *
-     * @return list<string>
-     */
-    public function compensationAuthors(PayrollRun $run): array
-    {
-        return $this->context->withSchool($run->school, function () use ($run): array {
-            return $this->compensationQuery($run->school_id, $run->id, $this->previousRun($run))
-                ->whereNotNull('a.assigned_by_user_id')->distinct()->pluck('a.assigned_by_user_id')
-                ->map(fn ($id) => (string) $id)->values()->all();
-        });
-    }
-
-    /**
      * The run this one is compared with: for a correction run, the run it
-     * corrects; otherwise the latest approved or posted run of the School
-     * for an EARLIER period.
+     * corrects; otherwise the latest approved or posted REGULAR run of the
+     * School for an EARLIER period (HR.R1-C1, PAY-1: a correction run holds
+     * deltas only, so it is never a regular run's baseline).
      */
     public function previousRun(PayrollRun $run): ?PayrollRun
     {
@@ -167,18 +156,27 @@ final class PayrollApprovalReviewService
         return PayrollRun::query()->select('payroll_runs.*')
             ->join('payroll_periods as p', fn ($j) => $j->on('p.id', '=', 'payroll_runs.payroll_period_id')->on('p.school_id', '=', 'payroll_runs.school_id'))
             ->where('payroll_runs.school_id', $run->school_id)->where('payroll_runs.id', '<>', $run->id)
+            ->where('payroll_runs.run_kind', 'regular')
             ->whereIn('payroll_runs.status', ['approved', 'posted'])->where('p.ends_on', '<', $period->starts_on->toDateString())
             ->orderByDesc('p.ends_on')->orderByDesc('payroll_runs.approved_at')->orderByDesc('payroll_runs.id')->first();
     }
 
-    /** @return array{gross: string, deductions: string, net: string, entries: int, reconciles: bool} */
+    /**
+     * HR.R1-C1 (PAY-5): `reconciles` means every result's gross and deductions
+     * equal its own stored lines (earnings and deductions, signed by effect) and
+     * gross - deductions = net -- `payroll_run_results_reconcile`, the same SQL
+     * the approval guard enforces -- not merely the per-row CHECK.
+     *
+     * @return array{gross: string, deductions: string, net: string, entries: int, reconciles: bool}
+     */
     private function totals(School $school, string $runId): array
     {
         $t = DB::table('payroll_run_results')->where('school_id', $school->id)->where('payroll_run_id', $runId)
-            ->selectRaw('coalesce(sum(gross_amount), 0)::text AS gross, coalesce(sum(total_deductions), 0)::text AS deductions, coalesce(sum(net_amount), 0)::text AS net, count(*) AS entries, coalesce(sum(gross_amount) - sum(total_deductions) - sum(net_amount), 0) = 0 AS reconciles')
+            ->selectRaw('coalesce(sum(gross_amount), 0)::text AS gross, coalesce(sum(total_deductions), 0)::text AS deductions, coalesce(sum(net_amount), 0)::text AS net, count(*) AS entries')
             ->first();
+        $reconciles = (bool) DB::selectOne('SELECT payroll_run_results_reconcile(?, ?) AS ok', [$school->id, $runId])->ok;
 
-        return ['gross' => self::money($t->gross), 'deductions' => self::money($t->deductions), 'net' => self::money($t->net), 'entries' => (int) $t->entries, 'reconciles' => (bool) $t->reconciles];
+        return ['gross' => self::money($t->gross), 'deductions' => self::money($t->deductions), 'net' => self::money($t->net), 'entries' => (int) $t->entries, 'reconciles' => $reconciles];
     }
 
     /** @return list<array{code: string, name: string, type: string, effect: string, amount: string, currency: string}> */
@@ -200,7 +198,7 @@ final class PayrollApprovalReviewService
      *
      * @return array{approvable: bool, blocking: list<array{code: string, message: string}>, warnings: list<array{code: string, message: string}>}
      */
-    private function decision(School $school, PayrollRun $run, ?PayrollRunCalculation $latest, User $actor): array
+    private function decision(School $school, PayrollRun $run, ?PayrollRunCalculation $latest, ?PayrollRun $previous, User $actor): array
     {
         $blocking = [];
         $warnings = [];
@@ -210,6 +208,12 @@ final class PayrollApprovalReviewService
         $adjustments = DB::table('payroll_adjustments')->where('school_id', $school->id)->where('payroll_run_id', $run->id)->count();
         if ($latest === null || ! $latest->complete || $latest->adjustment_count < $adjustments) {
             $blocking[] = ['code' => 'PAYROLL_RUN_RECALCULATION_REQUIRED', 'message' => 'The run needs a complete recalculation of every adjustment before approval.'];
+        } elseif (! $latest->compensation_sources_recorded) {
+            // HR.R1-C1: calculated before compensation provenance existed -- nothing is backfilled.
+            $blocking[] = ['code' => 'PAYROLL_RUN_RECALCULATION_REQUIRED', 'message' => 'This calculation did not record the compensation it used; recalculate the run before approval.'];
+        } elseif (! $this->provenance->isFresh($run, $latest->id)) {
+            // HR.R1-C1 (PAY-2): the same SQL the approval itself checks under the compensation lock.
+            $blocking[] = ['code' => 'PAYROLL_RUN_RECALCULATION_REQUIRED', 'message' => 'Compensation for this period changed after the calculation; recalculate the run before approval.'];
         }
         // Shown here only; the decision itself is MakerCheckerPolicy's (PayrollRunService::approve()).
         if (app(PayrollRunService::class)->participants($run)->participationOf($actor->id) !== null) {
@@ -219,10 +223,11 @@ final class PayrollApprovalReviewService
         if (! $totals['reconciles']) {
             $blocking[] = ['code' => 'PAYROLL_TOTALS_DO_NOT_RECONCILE', 'message' => 'Gross minus deductions does not equal net over the run.'];
         }
-        if ($this->compensationQuery($school->id, $run->id, $this->previousRun($run))->whereNull('a.assigned_by_user_id')->exists()) {
+        if ($latest !== null && $latest->compensation_sources_recorded && $run->run_kind === 'regular'
+            && $this->provenance->firstPaid($run, $latest->id)->whereNull('f.assigned_by_user_id')->exists()) {
             $warnings[] = ['code' => 'PAYROLL_COMPENSATION_AUTHOR_NOT_RECORDED', 'message' => 'Some compensation changes were recorded before authors were recorded; their author is not known.'];
         }
-        if ($this->previousRun($run) === null) {
+        if ($previous === null) {
             $warnings[] = ['code' => 'PAYROLL_NO_PREVIOUS_RUN', 'message' => 'There is no earlier approved run to compare with, so every entry is listed as new.'];
         }
 
@@ -285,10 +290,22 @@ final class PayrollApprovalReviewService
         return $presented;
     }
 
-    /** @return LengthAwarePaginator<int, array<string, mixed>> */
-    private function compensationChanges(School $school, PayrollRun $run, ?PayrollRun $previous, int $page): LengthAwarePaginator
+    /**
+     * HR.R1-C1 (PAY-2): the compensation changes this run pays FIRST, from its
+     * latest calculation's recorded sources (PayrollCompensationProvenance) --
+     * exactly the set whose authors the decision refuses. Empty when the
+     * calculation recorded none (a correction run, or a calculation made
+     * before provenance existed, which blocks approval).
+     *
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    private function compensationChanges(School $school, PayrollRun $run, ?PayrollRunCalculation $latest, int $page): LengthAwarePaginator
     {
-        $paginator = $this->compensationQuery($school->id, $run->id, $previous)
+        $query = ($latest === null || ! $latest->compensation_sources_recorded || $run->run_kind !== 'regular')
+            ? DB::table('employee_compensation_assignments as a')->whereRaw('false')->select('a.*')
+            : $this->provenance->firstPaid($run, $latest->id)
+                ->join('employee_compensation_assignments as a', fn ($j) => $j->on('a.id', '=', 'f.compensation_assignment_id')->where('a.school_id', '=', $school->id));
+        $paginator = $query
             ->join('salary_structures as s', fn ($j) => $j->on('s.id', '=', 'a.salary_structure_id')->on('s.school_id', '=', 'a.school_id'))
             ->orderBy('a.created_at')->orderBy('a.id')
             ->paginate(self::PER_PAGE, ['a.id', 'a.employment_record_id', 'a.effective_from', 'a.effective_to', 'a.assigned_by_user_id', 'a.created_at', 's.code', 's.name', 's.version'], 'compensation_page', max(1, $page));
@@ -308,33 +325,6 @@ final class PayrollApprovalReviewService
         ]);
 
         return $presented;
-    }
-
-    /**
-     * Assignments of the run's employments that are new to this run: recorded
-     * since the previous approved run, OR taking effect after the previous
-     * run's period and no later than this run's period (a change recorded
-     * early, with a future effective date, is paid first by THIS run -- its
-     * author is a maker of this run even though it was recorded before the
-     * previous approval). All of them, for a first run.
-     */
-    private function compensationQuery(string $schoolId, string $runId, ?PayrollRun $previous): Builder
-    {
-        $query = DB::table('employee_compensation_assignments as a')->where('a.school_id', $schoolId)
-            ->whereIn('a.employment_record_id', fn ($q) => $q->select('employment_record_id')->from('payroll_run_results')->where('school_id', $schoolId)->where('payroll_run_id', $runId));
-        if ($previous === null || $previous->approved_at === null) {
-            return $query;
-        }
-        $previousEnd = DB::table('payroll_periods')->where('school_id', $schoolId)->where('id', $previous->payroll_period_id)->value('ends_on');
-        $runEnd = DB::table('payroll_runs as r')->join('payroll_periods as p', fn ($j) => $j->on('p.id', '=', 'r.payroll_period_id')->on('p.school_id', '=', 'r.school_id'))
-            ->where('r.school_id', $schoolId)->where('r.id', $runId)->value('p.ends_on');
-
-        return $query->where(function ($q) use ($previous, $previousEnd, $runEnd): void {
-            $q->where('a.created_at', '>', $previous->approved_at);
-            if ($previousEnd !== null && $runEnd !== null) {
-                $q->orWhere(fn ($e) => $e->where('a.effective_from', '>', $previousEnd)->where('a.effective_from', '<=', $runEnd));
-            }
-        });
     }
 
     /**

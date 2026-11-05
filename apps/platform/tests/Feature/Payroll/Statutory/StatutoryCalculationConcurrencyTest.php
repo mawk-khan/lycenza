@@ -102,7 +102,7 @@ class StatutoryCalculationConcurrencyTest extends TestCase
 
             app(CompensationService::class)->assign(
                 $this->school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($basicSc->id, '10000.00')], $preparer,
+                [new FixedComponentValueInput($basicSc->id, '10000.00')], $preparer, $this->freshMfaProofFor($preparer),
             );
 
             $periodService = app(PayrollPeriodService::class);

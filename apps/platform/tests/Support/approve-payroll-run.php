@@ -4,7 +4,9 @@ use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
 
@@ -35,7 +37,7 @@ try {
     $run = PayrollRun::query()->findOrFail($runId);
     $approver = User::query()->findOrFail($approverUserId);
     $reviewed ??= $app->make(PayrollRunService::class)->latestCalculationId($run);
-    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver, null, $reviewed));
+    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver, new FreshMfaProof($approver->id, CarbonImmutable::now()), $reviewed));
     echo 'approved';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

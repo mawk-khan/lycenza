@@ -1055,11 +1055,8 @@ review lists what changed, never the unchanged register.
   entries, gross − deductions = net) and totals per salary component beside the
   previous approved run (the corrected run for a correction run); paged:
   entries whose gross, deductions or net differ (new / left / changed), every
-  manual override and correction delta (amount, reason, author), every
-  compensation assignment NEW to this run -- recorded since the previous
-  approval, OR taking effect after the previous run's period and no later than
-  this run's period (a change recorded early with a future effective date is
-  paid first by this run; security review 2026-11-05) -- with its author, or
+  manual override and correction delta (amount, reason, author), and every
+  compensation change the run PAYS FIRST (HR.R1-C1, below) with its author, or
   "not recorded" for rows older than 2026-11-05. Blocking codes and warnings
   are the server's. Current MFA (`mfa-page` / `mfa`); every view audited
   `payroll.run.review_viewed` (ids only). Never an HR profile, bank, statutory
@@ -1072,16 +1069,122 @@ review lists what changed, never the unchanged register.
   approval, never set otherwise, never changed). Runs approved earlier keep
   NULL -- nothing is backfilled or certified.
 - **Participants:** creator, calculators, adjustment authors and (OD-HR-2) the
-  recorded authors of compensation assignments the run rests on -- the same
-  "new to this run" set the review lists
+  recorded author of every compensation change the run pays first
   (`employee_compensation_assignments.assigned_by_user_id`, from 2026-11-05).
-  The compensation-author check is application-enforced under the run lock;
-  `payroll_runs_participant_approval_guard` backs the creator, calculators and
-  adjustment authors only (residual: a direct runtime-role UPDATE could skip
-  the author check, exactly like every other User-identity boundary, rule 102).
+- **Correction (HR.R1-C1, 2026-11-05).** The OD-HR-2 implementation published
+  at `3254e1a0` chose authors by a WINDOW over when changes were recorded
+  relative to the previous approval. HR.R1-0 (finding PAY-2) showed, and
+  HR.R1-C1 reproduced, that this was not enough: October was calculated, X
+  recorded a raise effective 1 October, October was approved on the stale
+  calculation (paying the old salary), and X then approved November, the run
+  that first paid X's own raise. The statement in the OD-HR-1/2 report that
+  compensation authors could not approve a run paying their change was wrong
+  for that sequence. Replaced by:
+
+### Compensation provenance, freshness and first-paid attribution (HR.R1-C1)
+
+- **What a run pays.** Every calculation of a regular run records, in
+  `payroll_run_calculation_sources` (append-only, forced RLS), every
+  compensation assignment overlapping the run's period of every employment it
+  resolved into a result (for a complete calculation, the only kind approved,
+  that is every assignment overlapping the period), with the effective range
+  it read and the basis (`structure`: the whole period came from that
+  assignment; `period_override`: the period changed, so a manual override
+  priced it). A run PAYS an assignment its approved (or, before approval, its
+  latest) calculation recorded. A correction run is priced by its deltas and
+  pays no compensation directly.
+- **First paid.** A run pays an assignment FIRST when no other approved or
+  posted regular run's approved calculation PRICED the period from it
+  (`basis = structure`; `payroll_run_first_paid_compensation`). A period a
+  manual override priced never approved the assignment's own values, so the
+  author stays a maker of every run until one prices from the assignment and
+  an independent checker approves it (security review 2026-11-05). The author of a change the run pays
+  first is a maker of that run -- however long before the previous approval
+  it was recorded, and whatever its effective date. A later run paying a
+  change that an independent checker already approved does not re-attribute
+  it (an author is not barred indefinitely). A future-effective change the
+  run does not pay is not attributed. A change identical in amount to the
+  previous one is still a different assignment (a different source), so its
+  author is still a maker: provenance, never amounts, decides.
+- **Freshness.** A calculation is current while the compensation overlapping
+  the period is exactly what it recorded -- ids and effective ranges, each
+  clipped to the period (`payroll_calculation_compensation_fresh`). A change of
+  the period recorded after the calculation makes the run stale:
+  `PAYROLL_RUN_RECALCULATION_REQUIRED` (409) at approval, and the same code
+  in the review packet. A change recorded for a LATER period (which closes
+  the current assignment after this period) leaves the run current.
+- **Legacy.** A calculation made before 2026-11-05 recorded no sources
+  (`compensation_sources_recorded = false`) and nothing is backfilled: such a
+  run is approved only after a recalculation. Approved runs from before keep
+  their history; their approval label is `legacy` (PAY-6).
+- **Serialization.** A compensation write takes the School's
+  `payroll.compensation:{school}` advisory lock EXCLUSIVELY (in
+  `CompensationService` before its row locks, and in the assignment trigger);
+  a calculation and an approval take it SHARED after the run row lock. A
+  freshness check can never be overtaken by a concurrent compensation write.
+- **One resolver.** The rules are SQL functions; the review packet
+  (`PayrollApprovalReviewService`), the maker/checker participants
+  (`PayrollRunService::participants()`) and the database guard all call them
+  through `PayrollCompensationProvenance`.
+- **Database backstop (PAY-3, PAY-4, PAY-5).**
+  `payroll_runs_approval_evidence_guard` now refuses, for every role, a
+  calculated -> approved transition whose calculation recorded no sources,
+  whose results are not exactly that calculation's
+  (`payroll_run_results.payroll_run_calculation_id`, a deferred composite key),
+  whose results do not reconcile with their lines
+  (`payroll_run_results_reconcile`: per result, gross = earnings lines and
+  deductions = deduction lines, signed by effect, and gross − deductions =
+  net), whose period's compensation changed after the calculation, or whose
+  recorded approver authored a change the run first pays. A calculated result
+  or line is never rewritten (`trg_payroll_run_results_reject_rewrite`,
+  `trg_payroll_run_result_lines_reject_rewrite`); a recalculation replaces
+  them under a new calculation. A provenance row is written only for the
+  latest calculation of a regular run still being prepared, and only as the
+  assignment is now (`trg_payroll_run_calculation_sources_guard`), so "already
+  paid" can never be forged onto an approved run. Only WHO acted remains an application
+  boundary (rule 102); every structural rule above is in PostgreSQL.
+- **Service-level assurance (S-5, S-13).** Approve, post, reverse and
+  compensation assignment require the acting User's own `FreshMfaProof` in
+  the service itself (not only the route), and posting and reversal re-read
+  the actor's CURRENT `payroll.runs.post` / `payroll.runs.reverse` under the
+  run lock. The guarded local demo seeds with a labelled demo proof
+  (`DemoModuleData::demoAssurance()`, local DDEV only); application code never
+  mints a proof except `FreshMfaRequirement`.
+- **Granting the checker (PAY-9).** No default role holds both
+  `payroll.runs.approve` and `payroll.compensation.sensitive.view`, so a School
+  cannot approve payroll until it names a checker: an administrator holding
+  `school.roles.manage` and the `school.roles.grant.payroll_sensitive` grant
+  right grants the `payroll_approval_reviewer` add-on (Settings → Staff
+  accounts) to a person who already holds `payroll.runs.approve` (e.g. School
+  Admin), never to the preparer. The checker then enrols an MFA factor
+  (Account security) before reviewing. Runbook: `docs/operations/HR-OPERATIONS.md`.
 - **No rejection state** exists: a checker who does not approve leaves the run
   calculated; the preparer adjusts and recalculates, which makes any earlier
   review stale.
-- **Not changed:** calculation, posting, the HRX evidence freeze, statutory
-  payroll (ADR 0036 gates), exports (D-11). Residual: an unchanged-but-wrong
-  salary is not re-listed (it was reviewed when it changed).
+- **Performance (PAY-12, measured 2026-11-05, local DDEV, one machine).**
+  Committed synthetic data (one run against an approved previous run, 10 % of
+  entries changed), `ANALYZE` run, normal planner (nestloop NOT disabled),
+  10 packet builds per size:
+
+  | Entries | Queries / packet | Packet p50 | Packet p95 | Freshness | First-paid authors | Approval |
+  |---:|---:|---:|---:|---:|---:|---:|
+  | 500 | 42 | 59 ms | 81 ms | 3 ms | 3 ms | 35 ms |
+  | 2,000 | 42 | 172 ms | 184 ms | 6 ms | 15 ms | 80 ms |
+  | 5,000 | 42 | 392 ms | 455 ms | 13 ms | 29 ms | 181 ms |
+  | 10,000 | 42 | 759 ms | 900 ms | 25 ms | 53 ms | 289 ms |
+
+  The query count is constant (pinned at <= 45 by
+  `PayrollApprovalReviewLargeRunTest`); latency grows linearly. The slowest
+  query is `payroll_run_results_reconcile`, called three times per packet
+  (about 130-160 ms each at 10,000 entries) -- a later optimization can call
+  it once. No approved performance target exists; proposed for owner
+  approval: packet p95 under 1 s and approval under 1 s at 10,000 entries.
+  The measurement script was a scratch test (not committed).
+- **Not changed:** the calculation formulas, the posting state machine, the
+  HRX evidence freeze, statutory payroll (ADR 0036 gates), exports (D-11), and
+  there is still no rejection state. Residuals: an unchanged-but-wrong salary
+  is not re-listed (it was reviewed when it was first paid); freshness covers
+  compensation, not later employment-date changes (those surface as HRX
+  evidence differences and the run's own partial-period gate); if the
+  privileged 8-year evidence purge removes an assignment before its run, that
+  run's provenance rows go with it.

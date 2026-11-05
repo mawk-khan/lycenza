@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $ordinal 1, 2, ... per run (the latest decides)
  * @property int $adjustment_count
  * @property bool $complete every employment resolved, at least one result
+ * @property bool $compensation_sources_recorded HR.R1-C1: the calculation recorded its compensation sources (FALSE only for calculations made before provenance existed)
  */
 class PayrollRunCalculation extends Model
 {
@@ -31,6 +32,6 @@ class PayrollRunCalculation extends Model
 
     protected function casts(): array
     {
-        return ['ordinal' => 'integer', 'adjustment_count' => 'integer', 'complete' => 'boolean'];
+        return ['ordinal' => 'integer', 'adjustment_count' => 'integer', 'complete' => 'boolean', 'compensation_sources_recorded' => 'boolean'];
     }
 }

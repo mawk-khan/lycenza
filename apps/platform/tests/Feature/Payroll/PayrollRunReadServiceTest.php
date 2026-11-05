@@ -53,7 +53,7 @@ class PayrollRunReadServiceTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             $periodService = app(PayrollPeriodAdministrationService::class);

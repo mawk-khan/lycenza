@@ -81,7 +81,7 @@ trait CreatesPayrollRetentionFixtures
         $employee = $this->createEmployee($school);
         $record = $this->createEmploymentRecord($employee, ['status' => 'active', 'starts_on' => '2014-01-01', 'ends_on' => null]);
         $this->inSchool($school, fn () => app(CompensationService::class)->assign(
-            $school, $record, $setup['structure'], Carbon::parse('2014-01-01'), [new FixedComponentValueInput($setup['line'], '50000.00')], $setup['actor'],
+            $school, $record, $setup['structure'], Carbon::parse('2014-01-01'), [new FixedComponentValueInput($setup['line'], '50000.00')], $setup['actor'], $this->freshMfaProofFor($setup['actor']),
         ));
 
         return $employee;
@@ -125,12 +125,13 @@ trait CreatesPayrollRetentionFixtures
         }
 
         if ($approve) {
-            $run = $this->inSchool($school, fn () => app(PayrollRunService::class)->approve($run, $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run)));
+            $run = $this->inSchool($school, fn () => app(PayrollRunService::class)->approve($run, $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run)));
         }
         if ($approve && $postedOn !== null) {
             $this->travelTo(Carbon::parse($postedOn.' 06:00:00'));
-            $poster = $this->createUser();
-            $this->inSchool($school, fn () => app(PayrollPostingService::class)->post($run->fresh(), $poster));
+            // HR.R1-C1 (S-13): the posting core requires the poster's current payroll.runs.post.
+            $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
+            $this->inSchool($school, fn () => app(PayrollPostingService::class)->post($run->fresh(), $poster, $this->freshMfaProofFor($poster)));
             if ($statutory && $postStatutory) {
                 $this->inSchool($school, fn () => app(StatutoryPayrollPostingService::class)->post($run->fresh(), $poster));
             }

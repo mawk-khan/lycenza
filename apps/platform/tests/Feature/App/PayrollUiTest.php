@@ -94,7 +94,7 @@ class PayrollUiTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure->fresh(), Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             $periodService = app(PayrollPeriodAdministrationService::class);
@@ -258,7 +258,7 @@ class PayrollUiTest extends TestCase
         $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
         $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
         $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
-        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
 
         $this->actingAs($viewer)->get("/app/payroll/runs/{$runId}")->assertInertia(fn ($page) => $page
             ->where('canPost', false)
@@ -436,7 +436,7 @@ class PayrollUiTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2026-10-15']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2026-10-15'),
-                [new FixedComponentValueInput($structureComponentId, '30000.00')], $structureManager,
+                [new FixedComponentValueInput($structureComponentId, '30000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             $period = PayrollPeriod::query()->findOrFail($fixtures['periodId']);
@@ -464,7 +464,7 @@ class PayrollUiTest extends TestCase
         $poster = $this->memberWith(['payroll.runs.post', 'payroll.runs.view'], $school);
 
         $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
-        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
 
         // No accounting configuration was ever created for this School.
         $this->actingAs($poster)->get("/app/payroll/runs/{$runId}")->assertInertia(fn ($page) => $page
@@ -500,7 +500,7 @@ class PayrollUiTest extends TestCase
         $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
         $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
         $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
-        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
 
         $sensitiveViewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
         $response = $this->actingAs($sensitiveViewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}");
@@ -530,7 +530,7 @@ class PayrollUiTest extends TestCase
         $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
         $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
         $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
-        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
 
         // LC-3 (M3): labels come from the run's fixed period month and kind.
         $sensitiveViewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
@@ -555,7 +555,7 @@ class PayrollUiTest extends TestCase
         $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
         $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
         $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
-        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId))));
 
         $viewer = $this->memberWith(['payroll.runs.view'], $school);
         $this->actingAs($viewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}")

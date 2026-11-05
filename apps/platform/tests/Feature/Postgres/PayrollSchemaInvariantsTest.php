@@ -180,6 +180,20 @@ class PayrollSchemaInvariantsTest extends TestCase
         $this->admin()->table('payroll_run_calculations')->insert([
             'id' => $id, 'school_id' => $schoolId, 'payroll_run_id' => $runId,
             'calculated_by_user_id' => $calculatorId, 'ordinal' => 1, 'adjustment_count' => 0, 'complete' => true, 'created_at' => now(),
+            // HR.R1-C1: a calculation made today records its compensation provenance (none overlaps this period).
+            'compensation_sources_recorded' => true,
+        ]);
+        // HR.R1-C1 (PAY-4/PAY-5): the results the approval binds to are this calculation's, and reconcile with their lines.
+        $employeeId = $this->makeEmployee($schoolId);
+        $resultId = $this->uuid();
+        $this->admin()->table('payroll_run_results')->insert([
+            'id' => $resultId, 'school_id' => $schoolId, 'payroll_run_id' => $runId, 'payroll_run_calculation_id' => $id,
+            'employment_record_id' => $this->makeEmploymentRecord($schoolId, $employeeId), 'employee_id' => $employeeId,
+            'gross_amount' => 1000, 'total_deductions' => 0, 'net_amount' => 1000, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->admin()->table('payroll_run_result_lines')->insert([
+            'id' => $this->uuid(), 'school_id' => $schoolId, 'payroll_run_result_id' => $resultId, 'salary_component_id' => $this->makeComponent($schoolId),
+            'amount' => 1000, 'effect' => 'increase', 'currency' => 'INR', 'created_at' => now(), 'updated_at' => now(),
         ]);
 
         return $id;

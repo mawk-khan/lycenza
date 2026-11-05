@@ -284,7 +284,7 @@ class EmployeeRetentionPruneTest extends TestCase
         $paidEmployment = $this->createEmploymentRecord($paid, ['status' => 'active', 'starts_on' => '2025-01-01', 'ends_on' => null]);
         foreach ([$configuredEmployment, $paidEmployment] as $employment) {
             $this->inSchool($school, fn () => app(CompensationService::class)->assign(
-                $school, $employment, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
+                $school, $employment, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor, $this->freshMfaProofFor($actor),
             ));
         }
         // Only $paid is in the calculated run: it now has payroll results (payroll evidence).

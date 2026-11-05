@@ -106,7 +106,7 @@ class PayrollRunAdministrationService
      * `payroll.runs.prepare` as an alternative. An actor is never
      * authorized to approve merely because they can prepare payroll.
      */
-    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
+    public function approve(PayrollRun $run, User $approver, FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
     {
         $this->authorizeCapabilityFor($approver, 'payroll.runs.approve', $run->school);
         // OD-HR-1 (owner decision 2026-11-05): nobody approves what they cannot see.

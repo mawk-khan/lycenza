@@ -73,7 +73,7 @@ class PayrollCorrectionRunTest extends TestCase
         $school = $this->createSchool();
         $context = $this->context();
         $preparer = $this->createUser();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         return $context->withSchool($school, function () use ($school, $preparer, $poster) {
             $expense = LedgerAccount::factory()->for($school, 'school')->type('expense')->create();
@@ -100,14 +100,14 @@ class PayrollCorrectionRunTest extends TestCase
                     new FixedComponentValueInput($basicSc->id, '50000.00'),
                     new FixedComponentValueInput($pfSc->id, '1800.00'),
                 ],
-                $preparer,
+                $preparer, $this->freshMfaProofFor($preparer),
             );
 
             $period = $this->periodService()->open($this->periodService()->createPeriod($school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
             $run = $this->runService()->createRun($period, $preparer);
             $this->runService()->calculate($run, $preparer);
-            $run = $this->runService()->approve($run->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
-            $postedRun = $this->postingService()->post($run, $poster);
+            $run = $this->runService()->approve($run->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+            $postedRun = $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster));
             $run = $run->fresh();
 
             return compact('school', 'preparer', 'poster', 'basic', 'pf', 'expense', 'payable', 'pfLedger', 'employmentRecord') + ['postedRun' => $run];
@@ -173,9 +173,9 @@ class PayrollCorrectionRunTest extends TestCase
                 'test correction', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
-            return $this->postingService()->post($correction, $f['poster']);
+            return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
 
         $this->expectException(InvalidCorrectionTargetException::class);
@@ -194,7 +194,7 @@ class PayrollCorrectionRunTest extends TestCase
         $f = $this->makePostedRegularRun();
         $context = $this->context();
 
-        $context->withSchool($f['school'], fn () => $this->postingService()->reverse($f['postedRun'], $this->createUser()));
+        $context->withSchool($f['school'], fn () => $this->postingService()->reverse($f['postedRun'], $mfaActor = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']), $this->freshMfaProofFor($mfaActor)));
 
         $this->expectException(CorrectionTargetAlreadyReversedException::class);
 
@@ -217,7 +217,7 @@ class PayrollCorrectionRunTest extends TestCase
             return $this->runService()->createCorrectionRun($f['postedRun'], $period, $f['preparer']);
         });
 
-        $reversal = $context->withSchool($f['school'], fn () => $this->postingService()->reverse($f['postedRun'], $this->createUser()));
+        $reversal = $context->withSchool($f['school'], fn () => $this->postingService()->reverse($f['postedRun'], $mfaActor = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']), $this->freshMfaProofFor($mfaActor)));
 
         $this->assertSame('reversal', $reversal->posting_kind);
     }
@@ -238,9 +238,9 @@ class PayrollCorrectionRunTest extends TestCase
             );
             $outcome = $this->runService()->calculate($correction, $f['preparer']);
             $this->assertTrue($outcome->transitionedToCalculated);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
-            return $this->postingService()->post($correction, $f['poster']);
+            return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
 
         $lines = $context->withSchool($f['school'], fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());
@@ -266,9 +266,9 @@ class PayrollCorrectionRunTest extends TestCase
                 'basic pay was overpaid', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
-            return $this->postingService()->post($correction, $f['poster']);
+            return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
 
         $lines = $context->withSchool($f['school'], fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());
@@ -294,9 +294,9 @@ class PayrollCorrectionRunTest extends TestCase
                 'PF was underwithheld', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
-            return $this->postingService()->post($correction, $f['poster']);
+            return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
 
         $lines = $context->withSchool($f['school'], fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());
@@ -322,9 +322,9 @@ class PayrollCorrectionRunTest extends TestCase
                 'PF was overwithheld', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
-            return $this->postingService()->post($correction, $f['poster']);
+            return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
 
         $lines = $context->withSchool($f['school'], fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());
@@ -377,9 +377,9 @@ class PayrollCorrectionRunTest extends TestCase
                 'basic increased, PF adjusted accordingly', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
-            return $this->postingService()->post($correction, $f['poster']);
+            return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
 
         $lines = $context->withSchool($f['school'], fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());

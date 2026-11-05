@@ -201,6 +201,14 @@ final class ApprovalWorkflowRegistry
      * @var array<class-string, array{capability: string, action: string, freshAuthority: true, freshMfa: true, reason: string, evidence: string, relationshipConflict: string|null, dbGuard?: array{trigger: string, refusal: string}, accountingOwner?: string, entryPoints?: list<string>}>
      */
     public const DIRECT_ASSURED = [
+        // HR.R1-C1 (S-5, S-13): posting an approved payroll run (and reversing its posting, payroll.runs.reverse)
+        // is a direct action, not a request/decide workflow: current capability re-read under the run lock, the
+        // actor's own fresh-MFA proof, the posting row as evidence.
+        'App\Domain\Payroll\Application\PayrollPostingService' => [
+            'capability' => 'payroll.runs.post', 'action' => 'Payroll run posting (and its reversal, payroll.runs.reverse)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
+            'evidence' => 'payroll_run_postings (append-only) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
+        ],
         // ORG.12C (ADR 0080 §8): legal name, registration and affiliation references.
         'App\Domain\Schools\Application\SchoolIdentityService' => [
             'capability' => 'school.profile.manage', 'action' => 'School institutional identity change',

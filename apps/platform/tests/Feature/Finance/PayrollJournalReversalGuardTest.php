@@ -35,7 +35,8 @@ class PayrollJournalReversalGuardTest extends TestCase
         $this->paidEmployee($school, $setup);
         $run = $this->postedRun($school, '2015-08-01', '2015-08-31', statutory: true);
 
-        return [$school, $run->id, $this->createUserWithCapabilities($school, ['finance.ledger.view', 'finance.ledger.reverse']), $setup['actor']];
+        // HR.R1-C1 (S-13): the payroll reverser holds the current payroll.runs.reverse.
+        return [$school, $run->id, $this->createUserWithCapabilities($school, ['finance.ledger.view', 'finance.ledger.reverse']), $this->createUserWithCapabilities($school, ['payroll.runs.reverse'])];
     }
 
     /** @return array<string, string> posting kind => journal entry id, for both posting tables */
@@ -72,7 +73,7 @@ class PayrollJournalReversalGuardTest extends TestCase
 
         $run = $this->inSchool($school, fn () => PayrollRun::query()->findOrFail($runId));
         $this->inSchool($school, fn () => app(StatutoryPayrollPostingService::class)->reverse($run, $actor, 'posted in error'));
-        $this->inSchool($school, fn () => app(PayrollPostingService::class)->reverse($run->fresh(), $actor, 'posted in error'));
+        $this->inSchool($school, fn () => app(PayrollPostingService::class)->reverse($run->fresh(), $actor, $this->freshMfaProofFor($actor), 'posted in error'));
         $this->inSchool($school, function (): void {
             DB::statement('SET CONSTRAINTS ALL IMMEDIATE');
             DB::statement('SET CONSTRAINTS ALL DEFERRED');
@@ -91,7 +92,7 @@ class PayrollJournalReversalGuardTest extends TestCase
         [$school, $runId, , $actor] = $this->postedWorld();
         $run = $this->inSchool($school, fn () => PayrollRun::query()->findOrFail($runId));
         $this->inSchool($school, fn () => app(StatutoryPayrollPostingService::class)->reverse($run, $actor));
-        $this->inSchool($school, fn () => app(PayrollPostingService::class)->reverse($run->fresh(), $actor));
+        $this->inSchool($school, fn () => app(PayrollPostingService::class)->reverse($run->fresh(), $actor, $this->freshMfaProofFor($actor)));
 
         $expected = [
             'payroll_original' => 'payroll_posting', 'payroll_reversal' => 'payroll_posting_reversal',

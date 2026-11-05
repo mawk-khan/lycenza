@@ -9,6 +9,7 @@ use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -57,7 +58,7 @@ try {
                 return 'rehired';
             }),
             'reverse' => $context->withSchool($school, function () use ($app, $args): string {
-                $app->make(PayrollPostingService::class)->reverse(PayrollRun::query()->findOrFail($args[1]), User::query()->findOrFail($args[2]), 'late');
+                $app->make(PayrollPostingService::class)->reverse(PayrollRun::query()->findOrFail($args[1]), $mfaActor = User::query()->findOrFail($args[2]), new FreshMfaProof($mfaActor->id, CarbonImmutable::now()), 'late');
 
                 return 'reversed';
             }),

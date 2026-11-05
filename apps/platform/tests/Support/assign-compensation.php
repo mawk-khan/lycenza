@@ -5,7 +5,9 @@ use App\Domain\Payroll\Application\CompensationService;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Carbon;
 
@@ -41,7 +43,7 @@ try {
         $structure,
         Carbon::parse($effectiveFrom),
         [],
-        $actor,
+        $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()),
     );
     echo 'assigned';
 } catch (Throwable $e) {

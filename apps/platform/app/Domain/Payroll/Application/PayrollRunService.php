@@ -42,6 +42,8 @@ use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
+use Symfony\Component\Uid\UuidV7;
 
 /**
  * Phase 9.3 -- creates and calculates `payroll_runs` (ADR 0034 "Run
@@ -65,6 +67,12 @@ class PayrollRunService
 {
     private const CURRENCY = 'INR';
 
+    /** The calculation being written (HR.R1-C1): its results carry its id. */
+    private ?string $calculationId = null;
+
+    /** @var list<string> employments the calculation being written priced by manual override */
+    private array $overridden = [];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -72,6 +80,7 @@ class PayrollRunService
         private readonly PayrollCalculationEngine $engine,
         private readonly PayrollAbsenceEvidenceReader $hrx,
         private readonly MakerCheckerPolicy $makerChecker,
+        private readonly PayrollCompensationProvenance $provenance,
     ) {}
 
     public const WORKFLOW = 'payroll_runs';
@@ -82,6 +91,11 @@ class PayrollRunService
      * `payroll_run_calculations`) and every override/delta author
      * (append-only `payroll_adjustments`). Monotonic: nothing removes a
      * participant. Bounded to the one run (two indexed queries).
+     *
+     * HR.R1-C1 (PAY-2): plus every recorded author of a compensation change
+     * the run's latest calculation pays FIRST (PayrollCompensationProvenance,
+     * the same SQL the review packet and the approval guard use) -- never a
+     * window over when changes were recorded.
      */
     public function participants(PayrollRun $run): ApprovalParticipants
     {
@@ -89,8 +103,9 @@ class PayrollRunService
             'creator' => [$run->prepared_by_user_id],
             'calculator' => PayrollRunCalculation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->distinct()->pluck('calculated_by_user_id')->all(),
             'adjustment_author' => PayrollAdjustment::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->distinct()->pluck('actor_user_id')->all(),
-            // OD-HR-2 (owner decision 2026-11-05): whoever recorded a compensation change the run's pay rests on.
-            'compensation_author' => app(PayrollApprovalReviewService::class)->compensationAuthors($run),
+            // OD-HR-2 / HR.R1-C1: whoever recorded a compensation change the run pays first.
+            'compensation_author' => $this->provenance->authors($run, PayrollRunCalculation::query()->where('school_id', $run->school_id)
+                ->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->value('id')),
         ])));
     }
 
@@ -308,6 +323,11 @@ class PayrollRunService
                 if (! in_array($locked->status, ['draft', 'calculated'], true)) {
                     throw new RunNotEditableException($run->id, $locked->status);
                 }
+                // HR.R1-C1: no compensation write runs while this calculation reads compensation.
+                $this->provenance->lock($school->id, shared: true);
+                // HR.R1-C1 (PAY-4): the results are this calculation's output (deferred key to its row, below).
+                $this->calculationId = (string) new UuidV7;
+                $this->overridden = [];
 
                 // Whole-result-set replacement -- never a partial patch
                 // (ADR 0034). Cascades to payroll_run_result_lines.
@@ -325,7 +345,7 @@ class PayrollRunService
 
                 // ORG.8B: the calculator is a participant of this run for good (append-only), and the
                 // adjustment count says whether these results include every recorded adjustment.
-                PayrollRunCalculation::query()->create([
+                $calculation = new PayrollRunCalculation([
                     'school_id' => $school->id,
                     'payroll_run_id' => $run->id,
                     'calculated_by_user_id' => $actor->id,
@@ -335,6 +355,13 @@ class PayrollRunService
                     // status (no calculated -> draft), so completeness is recorded and checked at approval.
                     'complete' => empty($unresolved) && ! empty($resolved),
                 ]);
+                $calculation->id = $this->calculationId;
+                $calculation->compensation_sources_recorded = true;
+                $calculation->save();
+                // HR.R1-C1 (PAY-2): the compensation this calculation rested on (a correction run rests on its deltas).
+                if (! $locked->isCorrection()) {
+                    $this->provenance->record($locked, $locked->period, $this->calculationId, $resolved, $this->overridden);
+                }
 
                 $this->audit->school($school, 'payroll.run.calculated', actor: $actor, subject: $run, metadata: [
                     'resolvedCount' => count($resolved),
@@ -503,12 +530,16 @@ class PayrollRunService
      * results refused. The conditional UPDATE stays. `$mfa` is the fresh
      * code the transport verified, recorded as approval provenance.
      */
-    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
+    public function approve(PayrollRun $run, User $approver, FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
     {
         $school = $run->school;
 
         if ($run->status !== 'calculated') {
             throw new InvalidRunTransitionException($run->status, 'approved');
+        }
+        // HR.R1-C1 (S-5): the service itself requires the approver's own fresh-MFA proof.
+        if (! $mfa->isFor($approver->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
         }
 
         return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa, $reviewedCalculationId) {
@@ -519,6 +550,8 @@ class PayrollRunService
                 if ($locked->status !== 'calculated') {
                     throw new ConcurrentRunApprovalConflictException($run->id);
                 }
+                // HR.R1-C1: no compensation write of this School can overtake the freshness check below.
+                $this->provenance->lock($school->id, shared: true);
                 $participants = $this->assertMayDecide($locked, $approver);
 
                 // OD-HR-1: the decision binds to the EXACT calculation reviewed -- under the run lock, so no
@@ -577,15 +610,18 @@ class PayrollRunService
      */
     private function assertMayDecide(PayrollRun $run, User $approver): ApprovalParticipants
     {
+        $latest = PayrollRunCalculation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->first();
+        $adjustments = PayrollAdjustment::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->count();
+        // HR.R1-C1 (PAY-2): the calculation also recorded its compensation (made after provenance existed)
+        // and the period's compensation is still exactly what it read -- otherwise it is stale.
+        if ($latest === null || ! $latest->complete || $latest->adjustment_count < $adjustments
+            || ! $latest->compensation_sources_recorded || ! $this->provenance->isFresh($run, $latest->id)) {
+            throw new RunRecalculationRequiredException($run->id);
+        }
+
         $participants = $this->participants($run);
         if (! $this->makerChecker->permits($approver, $participants)) {
             throw new SelfApprovalNotAllowedException($run->id);
-        }
-
-        $latest = PayrollRunCalculation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->first();
-        $adjustments = PayrollAdjustment::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->count();
-        if ($latest === null || ! $latest->complete || $latest->adjustment_count < $adjustments) {
-            throw new RunRecalculationRequiredException($run->id);
         }
 
         return $participants;
@@ -618,6 +654,8 @@ class PayrollRunService
         $needsManualOverride = $partialStart || $partialEnd || $compensationChangedInPeriod;
 
         if ($needsManualOverride) {
+            $this->overridden[] = $employmentRecord->id;
+
             return $this->calculateFromManualOverride($run, $employmentRecord);
         }
 
@@ -748,6 +786,7 @@ class PayrollRunService
             'payroll_run_id' => $run->id,
             'employment_record_id' => $employmentRecord->id,
             'employee_id' => $employmentRecord->employee_id,
+            'payroll_run_calculation_id' => $this->calculationId,
             'gross_amount' => $result->grossAmount,
             'total_deductions' => $result->totalDeductions,
             'net_amount' => $result->netAmount,

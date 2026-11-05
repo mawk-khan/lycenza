@@ -115,7 +115,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $assignment = $this->context()->withSchool($school, fn () => app(PayrollCompensationAdministrationService::class)->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-            [new FixedComponentValueInput($sc->id, '50000.00')], $actor,
+            [new FixedComponentValueInput($sc->id, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
 
         $this->assertNotNull($assignment->id);
@@ -144,7 +144,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->context()->withSchool($school, fn () => app(PayrollCompensationAdministrationService::class)->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-            [new FixedComponentValueInput($sc->id, '50000.00')], $actor,
+            [new FixedComponentValueInput($sc->id, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
     }
 
@@ -228,7 +228,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($f['school']), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $f['school'], $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'],
+                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'], $this->freshMfaProofFor($f['structureManager']),
             );
 
             $period = app(PayrollPeriodAdministrationService::class);
@@ -240,7 +240,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
             $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
-            return $runService->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
+            return $runService->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         $this->assertSame('approved', $run->status);
@@ -271,7 +271,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer, null, app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer, $this->freshMfaProofFor($viewer), app(PayrollRunService::class)->latestCalculationId($run)));
     }
 
     /**
@@ -292,7 +292,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($f['school']), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $f['school'], $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'],
+                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'], $this->freshMfaProofFor($f['structureManager']),
             );
 
             $period = app(PayrollPeriodAdministrationService::class);
@@ -316,7 +316,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor, null, app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor, $this->freshMfaProofFor($prepareOnlyActor), app(PayrollRunService::class)->latestCalculationId($run)));
     }
 
     #[Test]
@@ -352,7 +352,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($f['school']), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $f['school'], $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'],
+                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'], $this->freshMfaProofFor($f['structureManager']),
             );
 
             $period = app(PayrollPeriodAdministrationService::class);
@@ -371,7 +371,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
         // this, since they themselves prepared this exact run.
         $this->expectException(SelfApprovalNotAllowedException::class);
 
-        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities, null, app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities, $this->freshMfaProofFor($bothCapabilities), app(PayrollRunService::class)->latestCalculationId($run)));
     }
 
     /**
@@ -393,7 +393,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($f['school']), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $f['school'], $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'],
+                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'], $this->freshMfaProofFor($f['structureManager']),
             );
 
             $period = app(PayrollPeriodAdministrationService::class);
@@ -405,7 +405,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
             $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
-            return $runService->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
+            return $runService->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         $poster = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']);
@@ -418,10 +418,10 @@ class PayrollAdministrationAuthorizationTest extends TestCase
     {
         $f = $this->makeApprovedRunForPosting();
 
-        $posting = $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $f['poster']));
+        $posting = $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $f['poster'], $this->freshMfaProofFor($f['poster'])));
         $this->assertSame('original', $posting->posting_kind);
 
-        $reversal = $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->reverse($f['run'], $f['poster']));
+        $reversal = $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->reverse($f['run'], $f['poster'], $this->freshMfaProofFor($f['poster'])));
         $this->assertSame('reversal', $reversal->posting_kind);
     }
 
@@ -433,7 +433,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $viewer));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $viewer, $this->freshMfaProofFor($viewer)));
     }
 
     #[Test]
@@ -442,18 +442,18 @@ class PayrollAdministrationAuthorizationTest extends TestCase
         $f = $this->makeApprovedRunForPosting();
         $postOnlyActor = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post']);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $postOnlyActor));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $postOnlyActor, $this->freshMfaProofFor($postOnlyActor)));
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->reverse($f['run'], $postOnlyActor));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->reverse($f['run'], $postOnlyActor, $this->freshMfaProofFor($postOnlyActor)));
     }
 
     #[Test]
     public function correction_run_administration_authorized_actor_can_create_and_calculate(): void
     {
         $f = $this->makeApprovedRunForPosting();
-        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $f['poster']));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $f['poster'], $this->freshMfaProofFor($f['poster'])));
 
         $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage']);
         $runService = app(PayrollRunAdministrationService::class);

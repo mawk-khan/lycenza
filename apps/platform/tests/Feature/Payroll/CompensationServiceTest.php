@@ -74,7 +74,7 @@ class CompensationServiceTest extends TestCase
         $assignment = $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-01-01'),
             [new FixedComponentValueInput($basicComponentId, '50000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $this->assertSame($employmentRecord->id, $assignment->employment_record_id);
@@ -93,7 +93,7 @@ class CompensationServiceTest extends TestCase
         $assignment = $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-01-01'),
             [new FixedComponentValueInput($basicComponentId, '50000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $value = $context->withSchool($school, fn () => CompensationAssignmentValue::query()->where('assignment_id', $assignment->id)->first());
@@ -119,7 +119,7 @@ class CompensationServiceTest extends TestCase
                 new FixedComponentValueInput($basicComponentId, '50000.00'),
                 new FixedComponentValueInput($hraStructureComponentId, '1000.00'),
             ],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
     }
 
@@ -135,7 +135,7 @@ class CompensationServiceTest extends TestCase
         $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-01-01'),
             [new FixedComponentValueInput($basicComponentId, '50000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $resolved = $context->withSchool($school, fn () => $this->service()->resolveEffective($employmentRecord, Carbon::parse('2026-06-15')));
@@ -157,13 +157,13 @@ class CompensationServiceTest extends TestCase
         $first = $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-01-01'),
             [new FixedComponentValueInput($basicComponentId, '50000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $second = $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-07-01'),
             [new FixedComponentValueInput($basicComponentId, '60000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $firstFresh = $context->withSchool($school, fn () => $first->fresh());
@@ -192,7 +192,7 @@ class CompensationServiceTest extends TestCase
         $context->withSchool($school, fn () => $this->service()->assign(
             $school, $firstEmployment, $structure, Carbon::parse('2026-01-01'),
             [new FixedComponentValueInput($basicComponentId, '40000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         // No overlap error -- a DIFFERENT EmploymentRecord for the SAME
@@ -200,7 +200,7 @@ class CompensationServiceTest extends TestCase
         $second = $context->withSchool($school, fn () => $this->service()->assign(
             $school, $secondEmployment, $structure, Carbon::parse('2026-06-01'),
             [new FixedComponentValueInput($basicComponentId, '55000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $this->assertSame($secondEmployment->id, $second->employment_record_id);
@@ -225,7 +225,7 @@ class CompensationServiceTest extends TestCase
         // lock-then-check step's firstOrFail() throws.
         $context->withSchool($schoolA, fn () => $this->service()->assign(
             $schoolA, $employmentInB, $structureA, Carbon::parse('2026-01-01'),
-            [new FixedComponentValueInput($basicComponentIdA, '50000.00')], $actor,
+            [new FixedComponentValueInput($basicComponentIdA, '50000.00')], $actor, $this->freshMfaProofFor($actor),
         ));
     }
 
@@ -241,7 +241,7 @@ class CompensationServiceTest extends TestCase
         $assignment = $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-01-01'),
             [new FixedComponentValueInput($basicComponentId, '50000.00')],
-            $actor,
+            $actor, $this->freshMfaProofFor($actor),
         ));
 
         $event = $context->withSchool(

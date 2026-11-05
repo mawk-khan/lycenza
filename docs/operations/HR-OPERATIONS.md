@@ -108,3 +108,31 @@ this.
   `BACKUP-AND-RESTORE.md`. HR.2A's rollback can lose archive and
   reference-code evidence. Each migration's `down()` refuses when evidence
   would be destroyed.
+
+## 8. Naming a Payroll checker (HR.R1-C1, PAY-9)
+
+No default role can approve a payroll run on its own: approving needs
+`payroll.runs.approve` AND `payroll.compensation.sensitive.view`, and no
+default role holds both (School Admin holds the first only). Until a School
+names a checker, every calculated run waits.
+
+1. An administrator with `school.roles.manage` and the grant right
+   `school.roles.grant.payroll_sensitive` opens **Settings → Staff accounts**
+   and grants the **Payroll Approval Reviewer** add-on
+   (`payroll_approval_reviewer`) to a person who already holds
+   `payroll.runs.approve` (for example the School Admin).
+2. Never grant it to the person who prepares, calculates, adjusts or changes
+   compensation for payroll: the decision refuses them for any run they made
+   or whose compensation change it pays first, but naming an independent
+   checker avoids blocked runs.
+3. The checker enrols an MFA factor under **Account security**. The review
+   needs current MFA; approving asks for a fresh code.
+4. A run calculated before 2026-11-05 shows "recalculate the run before
+   approval": its calculation did not record the compensation it used. Ask
+   the preparer to recalculate; nothing is backfilled.
+5. If the review says compensation for the period changed after the
+   calculation, the preparer recalculates and the checker opens the review
+   again. The earlier review can no longer be approved.
+
+**Rolling back HR.R1-C1:** its migration refuses once any calculation has
+recorded compensation provenance. Fix forward.

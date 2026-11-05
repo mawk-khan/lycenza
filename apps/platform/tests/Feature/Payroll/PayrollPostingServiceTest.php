@@ -98,7 +98,7 @@ class PayrollPostingServiceTest extends TestCase
                 new FixedComponentValueInput($basicSc->id, '50000.00'),
                 new FixedComponentValueInput($pfSc->id, '1800.00'),
             ],
-            $preparer,
+            $preparer, $this->freshMfaProofFor($preparer),
         );
 
         $period = $this->periodService()->open($this->periodService()->createPeriod($school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
@@ -107,7 +107,7 @@ class PayrollPostingServiceTest extends TestCase
         $run = $run->fresh();
 
         $approver = $this->createUser();
-        $run = $this->runService()->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
+        $run = $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
 
         return [$run, $preparer, $deductionLedgerAccount];
     }
@@ -117,12 +117,12 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         [$expense, $payable] = $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
 
-        $posting = $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $posting = $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
 
         $freshRun = $context->withSchool($school, fn () => $run->fresh());
         $this->assertSame('original', $posting->posting_kind);
@@ -151,7 +151,7 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
 
         $preparer = $this->createUser();
@@ -160,7 +160,7 @@ class PayrollPostingServiceTest extends TestCase
 
         $this->expectException(InvalidRunTransitionException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
     }
 
     #[Test]
@@ -169,11 +169,11 @@ class PayrollPostingServiceTest extends TestCase
         $school = $this->createSchool();
         $context = app(TenantContext::class);
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         $this->expectException(PayrollAccountingNotConfiguredException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
     }
 
     #[Test]
@@ -181,13 +181,13 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school, withDeductionMapping: false));
 
         $this->expectException(DeductionMissingLedgerMappingException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
     }
 
     #[Test]
@@ -195,15 +195,15 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
 
         $this->expectException(InvalidRunTransitionException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run->fresh(), $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run->fresh(), $poster, $this->freshMfaProofFor($poster)));
     }
 
     #[Test]
@@ -211,11 +211,11 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
 
         $event = $context->withSchool(
             $school,
@@ -231,13 +231,13 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
-        $original = $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $original = $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
 
-        $reverser = $this->createUser();
-        $reversal = $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser, 'payroll correction needed'));
+        $reverser = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
+        $reversal = $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser, $this->freshMfaProofFor($reverser), 'payroll correction needed'));
 
         $this->assertSame('reversal', $reversal->posting_kind);
         $this->assertSame($original->id, $reversal->reversal_of_payroll_run_posting_id);
@@ -258,11 +258,11 @@ class PayrollPostingServiceTest extends TestCase
         $school = $this->createSchool();
         $context = app(TenantContext::class);
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
-        $reverser = $this->createUser();
+        $reverser = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         $this->expectException(PayrollRunNotPostedException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser));
+        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser, $this->freshMfaProofFor($reverser)));
     }
 
     #[Test]
@@ -270,17 +270,17 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
 
-        $reverser = $this->createUser();
-        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser));
+        $reverser = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
+        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser, $this->freshMfaProofFor($reverser)));
 
         $this->expectException(PayrollRunAlreadyReversedException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser));
+        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser, $this->freshMfaProofFor($reverser)));
     }
 
     #[Test]
@@ -288,13 +288,13 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
         [$run] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
 
-        $reverser = $this->createUser();
-        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser));
+        $reverser = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
+        $context->withSchool($school, fn () => $this->postingService()->reverse($run, $reverser, $this->freshMfaProofFor($reverser)));
 
         $event = $context->withSchool(
             $school,
@@ -321,7 +321,7 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
 
         $preparer = $this->createUser();
@@ -347,7 +347,7 @@ class PayrollPostingServiceTest extends TestCase
                     new FixedComponentValueInput($basicSc->id, '50000.00'),
                     new FixedComponentValueInput($pfSc->id, '1800.00'),
                 ],
-                $preparer,
+                $preparer, $this->freshMfaProofFor($preparer),
             );
 
             $period = $this->periodService()->open($this->periodService()->createPeriod($school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
@@ -356,7 +356,7 @@ class PayrollPostingServiceTest extends TestCase
             $run = $run->fresh();
 
             $approver = $this->createUser();
-            $run = $this->runService()->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
+            $run = $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
 
             // Reconfigure PF's liability account to a DIFFERENT one
             // AFTER calculation/approval -- the frozen
@@ -368,7 +368,7 @@ class PayrollPostingServiceTest extends TestCase
             return compact('run', 'oldLedgerAccount', 'newLedgerAccount');
         });
 
-        $posting = $context->withSchool($school, fn () => $this->postingService()->post($result['run'], $poster));
+        $posting = $context->withSchool($school, fn () => $this->postingService()->post($result['run'], $poster, $this->freshMfaProofFor($poster)));
 
         $lines = $context->withSchool($school, fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());
 
@@ -383,7 +383,7 @@ class PayrollPostingServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $context = app(TenantContext::class);
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
 
         [$run, , $deductionLedgerAccount] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
@@ -392,6 +392,6 @@ class PayrollPostingServiceTest extends TestCase
 
         $this->expectException(DeductionMissingLedgerMappingException::class);
 
-        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster)));
     }
 }

@@ -121,7 +121,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             return ['structureId' => $structure->id, 'employmentRecordId' => $employmentRecord->id];
@@ -152,7 +152,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
         $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         app(TenantContext::class)->withSchool($f['school'], function () use ($f, $approver) {
-            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
+            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
         });
 
         return $f + ['approver' => $approver];
@@ -164,7 +164,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
         $poster = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']);
 
         app(TenantContext::class)->withSchool($f['school'], function () use ($f, $poster) {
-            app(PayrollPostingAdministrationService::class)->post(PayrollRun::query()->findOrFail($f['runId']), $poster);
+            app(PayrollPostingAdministrationService::class)->post(PayrollRun::query()->findOrFail($f['runId']), $poster, $this->freshMfaProofFor($poster));
         });
 
         return $f + ['poster' => $poster];
@@ -229,7 +229,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
 
     private function actApprove(array $ctx): void
     {
-        app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['approver'], null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($ctx['runId'])));
+        app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['approver'], $this->freshMfaProofFor($ctx['approver']), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($ctx['runId'])));
     }
 
     private function arrangePost(): array
@@ -242,7 +242,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
 
     private function actPost(array $ctx): void
     {
-        app(PayrollPostingAdministrationService::class)->post(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['poster']);
+        app(PayrollPostingAdministrationService::class)->post(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['poster'], $this->freshMfaProofFor($ctx['poster']));
     }
 
     private function arrangeReverse(): array
@@ -252,7 +252,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
 
     private function actReverse(array $ctx): void
     {
-        app(PayrollPostingAdministrationService::class)->reverse(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['poster'], 'rollback test');
+        app(PayrollPostingAdministrationService::class)->reverse(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['poster'], $this->freshMfaProofFor($ctx['poster']), 'rollback test');
     }
 
     private function arrangeAssign(): array
@@ -268,7 +268,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
 
         app(PayrollCompensationAdministrationService::class)->assign(
             $ctx['school'], $employmentRecord, $structure, Carbon::parse('2027-01-01'),
-            [new FixedComponentValueInput($component->id, '70000.00')], $ctx['structureManager'],
+            [new FixedComponentValueInput($component->id, '70000.00')], $ctx['structureManager'], $this->freshMfaProofFor($ctx['structureManager']),
         );
     }
 }

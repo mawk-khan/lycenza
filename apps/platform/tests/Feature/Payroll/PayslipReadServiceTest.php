@@ -79,7 +79,7 @@ class PayslipReadServiceTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             $periodService = app(PayrollPeriodAdministrationService::class);
@@ -105,7 +105,7 @@ class PayslipReadServiceTest extends TestCase
 
         $this->context()->withSchool($f['school'], function () use ($f, $approver) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
-            app(PayrollRunAdministrationService::class)->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
+            app(PayrollRunAdministrationService::class)->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         return $f;
@@ -121,7 +121,7 @@ class PayslipReadServiceTest extends TestCase
 
         $this->context()->withSchool($f['school'], function () use ($f, $poster) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
-            app(PayrollPostingAdministrationService::class)->post($run, $poster);
+            app(PayrollPostingAdministrationService::class)->post($run, $poster, $this->freshMfaProofFor($poster));
         });
 
         return $f + ['poster' => $poster];
@@ -201,7 +201,7 @@ class PayslipReadServiceTest extends TestCase
             // calculate() mutates the row in the database, not this
             // in-memory $correction instance -- refresh before the
             // status-sensitive approve() call.
-            $runService->approve($correction->refresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($correction->refresh()));
+            $runService->approve($correction->refresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($correction->refresh()));
 
             return $correction->id;
         });
@@ -222,7 +222,7 @@ class PayslipReadServiceTest extends TestCase
 
         $this->context()->withSchool($f['school'], function () use ($f) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
-            app(PayrollPostingAdministrationService::class)->reverse($run, $f['poster'], 'test reversal');
+            app(PayrollPostingAdministrationService::class)->reverse($run, $f['poster'], $this->freshMfaProofFor($f['poster']), 'test reversal');
         });
 
         $actor = $this->createUserWithCapabilities($f['school'], ['payroll.compensation.sensitive.view']);

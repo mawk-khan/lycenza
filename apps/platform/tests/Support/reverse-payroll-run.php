@@ -4,7 +4,9 @@ use App\Domain\Payroll\Application\PayrollPostingService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 
 // Standalone bootstrap script for PayrollPostingConcurrencyTest: run in
@@ -31,7 +33,7 @@ $context->set($school);
 try {
     $run = PayrollRun::query()->findOrFail($runId);
     $actor = User::query()->findOrFail($actorUserId);
-    $reversal = $app->make(PayrollPostingService::class)->reverse($run, $actor, 'concurrency test reversal');
+    $reversal = $app->make(PayrollPostingService::class)->reverse($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), 'concurrency test reversal');
     echo 'reversed:'.$reversal->journal_entry_id;
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

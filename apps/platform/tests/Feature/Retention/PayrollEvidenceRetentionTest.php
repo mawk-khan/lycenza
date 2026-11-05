@@ -162,7 +162,7 @@ class PayrollEvidenceRetentionTest extends TestCase
         $a = $this->paidEmployee($reversed, $setup);
         $run = $this->postedRun($reversed, '2015-08-01', '2015-08-31');
         $this->separate($a, '2015-12-31');
-        $this->inSchool($reversed, fn () => app(PayrollPostingService::class)->reverse($run->fresh(), $this->createUser(), 'late'));
+        $this->inSchool($reversed, fn () => app(PayrollPostingService::class)->reverse($run->fresh(), $mfaActor = $this->createUserWithCapabilities($reversed, ['payroll.runs.reverse']), $this->freshMfaProofFor($mfaActor), 'late'));
 
         // Corrected today: a draft correction run names the Employee.
         $corrected = $this->createSchool();

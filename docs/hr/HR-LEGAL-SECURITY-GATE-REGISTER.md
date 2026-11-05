@@ -175,7 +175,13 @@ These are records of direction, not approvals. No gate changes.
     MFA and audited per view.
   - The approver never gains general confidential HR-profile access.
   - Implementation: the HR.15 Payroll-integrity slice. **Not implemented**
-    by HR.1A; S-1 stays OPEN.
+    by HR.1A; S-1 stayed OPEN then.
+  - **Outcome (2026-11-05):** implemented as OD-HR-1/2 (`3254e1a0`) and
+    corrected by HR.R1-C1. What was built is a LIVE review packet over the
+    stored results bound to the reviewed calculation (not a stored snapshot),
+    reviewed under current MFA and approved with a fresh code; the
+    compensation changes listed are the ones the run pays FIRST (recorded
+    calculation provenance). See S-1, S-2 and `docs/modules/PAYROLL.md`.
 
 ## 4. Production effect summary
 
@@ -198,10 +204,10 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | # | Severity | Finding | Status | Destination |
 |---|---|---|---|---|
 | **S-1** | **MEDIUM (P0)** | **The Payroll checker approves what it cannot see.** `school_admin` holds `payroll.runs.approve`/`.post` but not `payroll.compensation.sensitive.view`, and `PayrollRunSummary` carries **no figure at all** (0R-F3). A `payroll_officer` override is approved blind | **CLOSED for development (OD-HR-1, 2026-11-05)**: approval needs sensitive view, review packet, evidence binding (`PayrollApprovalReviewTest`) | — |
-| S-2 | MEDIUM-adjacent, recorded residual | Compensation changes have no maker-checker (ADR 0076 §60.8a); compounds S-1 | **CLOSED for development (OD-HR-2, 2026-11-05)**: changes since the previous approval are listed in the run's review with their author, who joins the maker set (no separate request workflow, by decision) | — |
+| S-2 | MEDIUM-adjacent, recorded residual | Compensation changes have no maker-checker (ADR 0076 §60.8a); compounds S-1 | **CLOSED for development (OD-HR-2, 2026-11-05; corrected by HR.R1-C1)**: the first implementation (`3254e1a0`) chose authors by a recording-time window, which HR.R1-0 (PAY-2) showed an author could escape (stale earlier approval, then approving the run that first paid the raise). HR.R1-C1 records each calculation's compensation sources, refuses a stale calculation, and excludes the author of every change the run pays FIRST, in the service and in `payroll_runs_approval_evidence_guard` (no separate request workflow, by decision) | — |
 | S-3 | LOW | The HR self-administration guard does not cover notes, documents, personal details, addresses, emergency contacts or credential verification (ADR 0071 §26.13, extended) | **FIXED (HR.2A)**: every profile write (identity, personal, addresses, emergency contacts, notes, qualifications/experience/certifications incl. verify/reject, HR documents, reference codes) refuses one's own record. OD-HR-3 (self-service READ of one's own record) stays open | — |
 | S-4 | LOW (latent) | Statutory identifier reveal and the ECR/TDS exports carry no MFA or no-store header | latent | before any statutory grant |
-| S-5 | LOW | Fresh-MFA proof is optional at the Payroll service layer | open | with OD-HR-1 |
+| S-5 | LOW | Fresh-MFA proof is optional at the Payroll service layer | **CLOSED for development (HR.R1-C1, 2026-11-05)**: approve, post, reverse and compensation assignment require the acting User's own `FreshMfaProof` in the service (`isFor`), not only at the route; the guarded local demo uses a labelled demo proof (`DemoModuleData::demoAssurance()`); application code mints proofs only in `FreshMfaRequirement` | — |
 | S-6 | LOW | Staff attendance correction: no window, MFA or second person; cached check | recorded decision; re-review at HRX-L4 activation | HR.7 |
 | S-7 | LOW | Leave adjustments and allocations need no fresh MFA; cached check | open | HR.10 |
 | S-8 | LOW | Employment create (API) accepts any status; `/end` accepts a future date | **FIXED (HR.1A)**: create accepts draft / pre_joining (future) / active only; web and API `/end` go through the separation command (no future date) | — |
@@ -209,7 +215,7 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | S-10 | LOW | "One current employment" and indirect reporting cycles are application-only | **FIXED (HR.1A + HR.3A)**: `trg_employment_records_no_overlap`, `trg_employee_assignments_primary_no_overlap` (HR.1A); reporting loops and overlap by `trg_reporting_relationships_guard`, date-aware, with two-process tests (HR.3A) | — |
 | S-11 | LOW | `Employee::$fillable` includes `school_id` / `record_status`; `employee_number` immutability is Eloquent-only | **FIXED (HR.1A)**: `school_id` / `record_status` not fillable; `trg_employees_identity_guard` | — |
 | S-12 | LOW | `employment_type` and document `category` are free text | **FIXED**: `employment_type` closed (HR.1A); HR document `category` closed `EmployeeDocumentCategory`, database CHECK, identity documents always Highly Sensitive (HR.2A) | — |
-| S-13 | LOW | `PayrollPostingService::post()` has no capability check; the demo posts as a user without the key | open | with OD-HR-1 |
+| S-13 | LOW | `PayrollPostingService::post()` has no capability check; the demo posts as a user without the key | **CLOSED for development (HR.R1-C1, 2026-11-05)**: `post()` / `reverse()` re-read the actor's CURRENT `payroll.runs.post` / `payroll.runs.reverse` under the run lock (`ApprovalDecisionAuthority::requireCurrent`); the demo posts as the School Admin, who holds the key | — |
 | S-14 | LOW | G-9 `setManager` / manager-path Leave deadlock returns a 500 | **FIXED (HR.3A)**: the assignment pair locks are gone. A Leave decision share-locks the one line row and the manager's employment. A writer takes placement locks, the reporting advisory lock and the employment share locks (all compatible with the decision's) before the line FOR UPDATE, so one side always waits and no cycle forms (`LeaveRequestConcurrencyTest`, both orders) | — |
 | S-15 | LOW | A Guardian-only account can be linked as an Employee and counts as current Staff | **FIXED (HR.1A)**: the link picker shows the account kind (staff / Guardian-only / member) | — |
 | S-16 | LOW | Six ancillary profile tables and `staff_holidays` are hard-deleted at runtime | **FIXED for the six profile tables (HR.2A)**: archived with a closed reason, frozen by trigger, runtime DELETE revoked (OD-HR-13 decided: archive). `staff_holidays` remains | HR.4 (`staff_holidays`) |

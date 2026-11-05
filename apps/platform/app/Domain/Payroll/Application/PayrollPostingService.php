@@ -21,11 +21,14 @@ use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;
 use App\Models\ApiIdempotencyKey;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Phase 9.5 (ADR 0034 "Run kinds, correction model, and posting" /
@@ -97,6 +100,7 @@ class PayrollPostingService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly IdempotencyGuard $idempotency,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -139,13 +143,20 @@ class PayrollPostingService
      * retains transaction ownership throughout; no controller-owned
      * transaction was introduced to achieve this.
      */
-    public function post(PayrollRun $run, User $actor, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
+    public function post(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
     {
         $school = $run->school;
+        // HR.R1-C1 (S-5): the poster's own fresh-MFA proof is required here, not only at the route.
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor, $idempotencyRecord) {
             return DB::transaction(function () use ($school, $run, $actor, $idempotencyRecord) {
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
+                // HR.R1-C1 (S-13): this core itself refuses an actor without CURRENT payroll.runs.post (a fresh
+                // read under the run lock) -- no caller, the demo included, posts without the key.
+                $this->authority->requireCurrent($actor, 'payroll.runs.post', $school);
                 if ($locked->status !== 'approved') {
                     throw new InvalidRunTransitionException($locked->status, 'posted');
                 }
@@ -211,13 +222,19 @@ class PayrollPostingService
      * literal `Idempotency-Key` string for both; no extra scoping work
      * was needed here to satisfy that.
      */
-    public function reverse(PayrollRun $run, User $actor, ?string $reason = null, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
+    public function reverse(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?string $reason = null, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
     {
         $school = $run->school;
+        // HR.R1-C1 (S-5): the reverser's own fresh-MFA proof is required here, not only at the route.
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor, $reason, $idempotencyRecord) {
             return DB::transaction(function () use ($school, $run, $actor, $reason, $idempotencyRecord) {
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
+                // HR.R1-C1 (S-13): CURRENT payroll.runs.reverse, read fresh under the run lock.
+                $this->authority->requireCurrent($actor, 'payroll.runs.reverse', $school);
                 if ($locked->status !== 'posted') {
                     throw new PayrollRunNotPostedException($run->id, $locked->status);
                 }

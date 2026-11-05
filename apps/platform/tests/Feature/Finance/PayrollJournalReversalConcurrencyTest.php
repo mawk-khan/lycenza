@@ -46,7 +46,7 @@ class PayrollJournalReversalConcurrencyTest extends TestCase
         $script = __DIR__.'/../../Support/subledger-reversal-op.php';
         [$holder, $contender] = $this->raceWithHeldHolder(
             ['php', $script, 'raw-reverse', $this->school->id, $original],
-            ['php', $script, 'reverse-payroll', $this->school->id, $run->id, $setup['actor']->id],
+            ['php', $script, 'reverse-payroll', $this->school->id, $run->id, $this->createUserWithCapabilities($this->school, ['payroll.runs.reverse'])->id],
         );
 
         $this->assertSame('rejected:guard', $holder, 'the back door fails at its own COMMIT');

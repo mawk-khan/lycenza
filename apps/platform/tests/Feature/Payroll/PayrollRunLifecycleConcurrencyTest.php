@@ -90,7 +90,7 @@ class PayrollRunLifecycleConcurrencyTest extends TestCase
 
             app(CompensationService::class)->assign(
                 $this->school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($basicStructureComponent->id, '50000.00')], $preparer,
+                [new FixedComponentValueInput($basicStructureComponent->id, '50000.00')], $preparer, $this->freshMfaProofFor($preparer),
             );
 
             $period = $periodService->open($periodService->createPeriod($this->school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);

@@ -54,9 +54,9 @@ class PayrollRunPostingController extends Controller
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // SR.4 (ADR 0071 §26.7): a fresh code, before the posting transaction.
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
-        $posting = $service->post($run, $request->user(), $record);
+        $posting = $service->post($run, $request->user(), $proof, $record);
 
         return response()->json(['data' => PayrollRunPostingSummary::fromModel($posting)->toArray()], 201);
     }
@@ -68,10 +68,10 @@ class PayrollRunPostingController extends Controller
         $validated = $request->validate([
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
 
         $record = $request->attributes->get('idempotency_record');
-        $posting = $service->reverse($run, $request->user(), $validated['reason'] ?? null, $record);
+        $posting = $service->reverse($run, $request->user(), $proof, $validated['reason'] ?? null, $record);
 
         return response()->json(['data' => PayrollRunPostingSummary::fromModel($posting)->toArray()], 201);
     }

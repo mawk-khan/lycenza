@@ -170,8 +170,8 @@ class CompensationController extends Controller
         );
 
         // SR.4 (ADR 0071 §26.7): a fresh code, outside the assignment transaction.
-        $mfa->requireForAction($request, $context->actor());
-        $service->assign($school, $record, $structure, Carbon::parse($validated['effective_from']), $fixedValues, $context->actor());
+        $proof = $mfa->requireForAction($request, $context->actor());
+        $service->assign($school, $record, $structure, Carbon::parse($validated['effective_from']), $fixedValues, $context->actor(), $proof);
 
         return redirect("/app/payroll/compensation/{$record->id}");
     }

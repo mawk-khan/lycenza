@@ -59,6 +59,10 @@ Timetable substitution, Analytics (headcount, rates).
 
 **Evidence recorded (OD-HR-1/2, 2026-11-05):** S-1 and S-2 closed for development (approval needs sight of pay, review packet, evidence binding, compensation authorship); Payroll production still gated (HRX-L4, E45, statutory).
 
+**HR.R1-0 audit (2026-11-05):** verdict PARTIALLY READY -- REMEDIATION REQUIRED. P1 findings PAY-2 (a compensation author could approve the run that first paid the change), HRC-1, HRC-2; R1-02, R1-03, R1-07, R1-09 and R1-12 open.
+
+**Evidence recorded (HR.R1-C1, 2026-11-05):** PAY-2 CLOSED for development (reproduced against `3254e1a0`; calculation compensation provenance, freshness and first-paid author exclusion in the service AND `payroll_runs_approval_evidence_guard`; two-process races); S-5 and S-13 CLOSED for development (service-level fresh-MFA proof; posting core re-reads current capability); PAY-1, PAY-3, PAY-4, PAY-5, PAY-6, PAY-7, PAY-9, PAY-11 closed; PAY-12 measured (`docs/modules/PAYROLL.md`). For R1-12 this removes S-5 and S-13; S-4, S-7 (partial) and HRC-3 remain. HRC-1, HRC-2, XRP-1 and every other HR.R1-0 finding stay open. HR.R1 remains OPEN.
+
 ## 4. Output
 
 - An HR.R1 record in `docs/hr/` with a verdict of **PASS**, **PASS WITH

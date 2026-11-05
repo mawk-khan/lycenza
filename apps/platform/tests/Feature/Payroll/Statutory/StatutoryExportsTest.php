@@ -99,7 +99,7 @@ class StatutoryExportsTest extends TestCase
                 new FixedComponentValueInput($basicSc->id, '20000.00'),
                 new FixedComponentValueInput($hraSc->id, '8000.00'),
             ],
-            $preparer,
+            $preparer, $this->freshMfaProofFor($preparer),
         );
 
         $periodService = app(PayrollPeriodService::class);

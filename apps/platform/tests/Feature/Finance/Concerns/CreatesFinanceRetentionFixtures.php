@@ -57,7 +57,7 @@ trait CreatesFinanceRetentionFixtures
         $w['run'] = $this->approvedPayrollRun($w['school'], '2015-08-01');
 
         $this->travelTo(Carbon::parse('2015-09-30 06:00:00', 'UTC'));
-        $w['payroll_entry'] = app(PayrollPostingService::class)->post($this->inSchool($w['school'], fn () => $w['run']->fresh()), $this->createUser())->journal_entry_id;
+        $w['payroll_entry'] = app(PayrollPostingService::class)->post($this->inSchool($w['school'], fn () => $w['run']->fresh()), $mfaActor = $this->createUserWithCapabilities($w['school'], ['payroll.runs.post', 'payroll.runs.reverse']), $this->freshMfaProofFor($mfaActor))->journal_entry_id;
 
         $this->travelTo(Carbon::parse('2015-11-10 06:00:00', 'UTC'));
         $w['p2'] = $this->pay($w, '700.00', null, $w['c1'])->paymentId;

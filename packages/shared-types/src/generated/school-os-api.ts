@@ -9467,6 +9467,8 @@ export interface components {
                 calculatedBy?: string | null;
                 complete: boolean;
                 adjustmentCount: number;
+                /** @description HR.R1-C1: FALSE only for a calculation made before compensation provenance existed; such a run must be recalculated before approval. */
+                compensationSourcesRecorded?: boolean;
             } | null;
             previousRun: {
                 [key: string]: unknown;
@@ -9492,6 +9494,7 @@ export interface components {
             }[];
             changes: components["schemas"]["PayrollReviewPage"];
             adjustments: components["schemas"]["PayrollReviewPage"];
+            /** @description HR.R1-C1 (PAY-2): the compensation changes this run pays FIRST (recorded by its latest calculation and paid by no other approved or posted regular run); their authors cannot approve the run. */
             compensation: components["schemas"]["PayrollReviewPage"];
         };
         StaffAttendanceRegister: {
@@ -10343,6 +10346,16 @@ export interface components {
              * @description E21.3F (E21-D9): when payroll retention first deleted a separated Employee's results from this run (8 calendar years after final separation). Non-null means the run's per-Employee results and statutory exports no longer cover the whole run; its ledger posting is unchanged.
              */
             resultsExpiredAt?: string | null;
+            /**
+             * Format: uuid
+             * @description OD-HR-1: the calculation the approval was bound to. NULL for an approval made before that evidence was recorded (never backfilled).
+             */
+            approvedCalculationId?: string | null;
+            /**
+             * @description HR.R1-C1 (PAY-6): `bound` = approved against a recorded calculation; `legacy` = approved before approvals recorded the reviewed calculation; NULL = not approved.
+             * @enum {string|null}
+             */
+            approvalEvidence?: "bound" | "legacy" | null;
         };
         PayrollCalculationOutcome: {
             resolvedCount: number;

@@ -565,7 +565,14 @@ reservation.
 
 > **OD-HR-1 / OD-HR-2 (2026-11-05): DECIDED and IMPLEMENTED for development**
 > (the Payroll-integrity slice's S-1 / S-2; `docs/modules/PAYROLL.md` "Approval
-> integrity"). S-5 and S-13 are unchanged.
+> integrity"). S-5 and S-13 were unchanged then.
+>
+> **HR.R1-C1 (2026-11-05):** HR.R1-0 found PAY-2 (the first OD-HR-2
+> implementation's recording-time window could be escaped); corrected with
+> recorded calculation provenance, freshness and first-paid author exclusion,
+> enforced in the service and the database. S-5 and S-13 CLOSED for
+> development. HR.R1 stays open (HRC-1, HRC-2, XRP-1 and the other HR.R1-0
+> findings are next).
 
 > **Status (2026-11-04): PARTIAL.** HR.15A (one candidate reader for every
 > operational picker; X-1 / R-HR12-1 closed) and HR.15E/F (RETAINED and

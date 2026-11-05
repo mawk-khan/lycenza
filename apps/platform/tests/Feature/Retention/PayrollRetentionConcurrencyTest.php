@@ -119,7 +119,7 @@ class PayrollRetentionConcurrencyTest extends TestCase
         $w = $this->world();
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->script('reverse', $w['school']->id, $w['run']->id, $this->createUser()->id),
+            $this->script('reverse', $w['school']->id, $w['run']->id, $this->createUserWithCapabilities($w['school'], ['payroll.runs.reverse'])->id),
             $this->script('payroll-prune', $w['school']->id),
         );
 
@@ -136,7 +136,7 @@ class PayrollRetentionConcurrencyTest extends TestCase
 
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('payroll-prune', $w['school']->id),
-            $this->script('reverse', $w['school']->id, $w['run']->id, $this->createUser()->id),
+            $this->script('reverse', $w['school']->id, $w['run']->id, $this->createUserWithCapabilities($w['school'], ['payroll.runs.reverse'])->id),
         );
 
         $this->assertSame('deleted:1/1 errors:0', $holder);

@@ -167,6 +167,9 @@ class PayrollRunController extends Controller
             'approvedAt' => $summary->approvedAt?->toIso8601String(),
             'postedAt' => $summary->postedAt?->toIso8601String(),
             'resultsExpiredAt' => $summary->resultsExpiredAt?->toIso8601String(),
+            // HR.R1-C1 (PAY-6): 'legacy' = approved before approvals recorded the reviewed calculation.
+            'approvedCalculationId' => $summary->approvedCalculationId,
+            'approvalEvidence' => in_array($summary->status, ['approved', 'posted'], true) ? ($summary->approvedCalculationId === null ? 'legacy' : 'bound') : null,
         ];
     }
 }

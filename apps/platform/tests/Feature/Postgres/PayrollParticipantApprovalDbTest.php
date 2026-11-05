@@ -150,14 +150,15 @@ class PayrollParticipantApprovalDbTest extends TestCase
         $db->table('payroll_run_calculations')->insert([
             'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'payroll_run_id' => $w['run']->id,
             'calculated_by_user_id' => $this->createUser()->id, 'ordinal' => 2, 'adjustment_count' => 0, 'complete' => false,
+            'compensation_sources_recorded' => true,
         ]);
-        $this->assertStringContainsString('changed after its last recorded calculation', (string) $this->approve($w, $outsider->id), 'the LATEST calculation decides');
+        // HR.R1-C1: the evidence guard (which runs first) also sees that the results are not this calculation's.
+        $this->assertMatchesRegularExpression('/results are not those of the approved calculation|changed after its last recorded calculation/', (string) $this->approve($w, $outsider->id), 'the LATEST calculation decides');
 
+        // A real, complete recalculation (it records its provenance and its own results).
         $complete = $this->createUser();
-        $db->table('payroll_run_calculations')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'payroll_run_id' => $w['run']->id,
-            'calculated_by_user_id' => $complete->id, 'ordinal' => 3, 'adjustment_count' => 0, 'complete' => true,
-        ]);
+        $this->inSchool($w['school'], fn () => app(PayrollRunService::class)->calculate($w['run']->fresh(), $complete));
+        $db = $this->runtime($w['school']); // leaving inSchool() cleared the session's School
         $db->update("update payroll_runs set status = 'approved', approved_by_user_id = ?, approved_at = now(), approved_calculation_id = (select c.id from payroll_run_calculations c where c.payroll_run_id = payroll_runs.id order by c.ordinal desc limit 1) where id = ?", [$outsider->id, $w['run']->id]);
 
         $refused = function (callable $statement) use ($db): string {

@@ -83,6 +83,9 @@ class EmployeeRetentionClassificationTest extends TestCase
         ],
         'employee_compensation_assignments' => [
             'compensation_assignment_values' => 'D9 evidence: append-only values follow their assignment by FK cascade',
+            // HR.R1-C1: a calculation's record of the assignment it priced exists only beside that employment's
+            // result, which already keeps the Employee; it then leaves with the assignment (cascade).
+            'payroll_run_calculation_sources' => 'retained, blocks: calculation provenance exists only beside a payroll result (E21.3F)',
         ],
         'employee_personal_details' => [], 'employee_documents' => [],
         'employee_addresses' => [], 'employee_emergency_contacts' => [], 'employee_notes' => [],

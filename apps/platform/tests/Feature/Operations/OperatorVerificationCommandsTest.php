@@ -73,6 +73,8 @@ class OperatorVerificationCommandsTest extends TestCase
             // SR.1 (ADR 0071 §23.6)
             'role_catalogue_runtime_read_only', 'role_grant_history_restricted', 'role_identity_immutable',
             'role_grantor_coverage_enforced', 'role_lifecycle_columns', 'local_fixture_seam_absent_outside_development',
+            // HR.R1-C1 (PAY-2/3/4/5)
+            'payroll_approval_provenance_guarded',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

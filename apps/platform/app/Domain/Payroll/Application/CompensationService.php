@@ -15,10 +15,12 @@ use App\Domain\Payroll\Infrastructure\SalaryStructureComponent;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Phase 9.2 -- the sole write path for `employee_compensation_assignments`/
@@ -72,7 +74,12 @@ class CompensationService
         Carbon $effectiveFrom,
         array $fixedValues,
         User $actor,
+        FreshMfaProof $mfa,
     ): EmployeeCompensationAssignment {
+        // HR.R1-C1 (S-5): a pay change needs the author's own fresh-MFA proof at the service, not only the route.
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
         if (! $structure->isActive()) {
             throw new StructureNotActiveException($structure->id, $structure->status);
         }
@@ -86,6 +93,10 @@ class CompensationService
                 // real set) if it were resolved before the context is
                 // active.
                 $this->assertEveryFixedComponentHasAValue($structure, $fixedValues);
+
+                // HR.R1-C1 (PAY-2): EXCLUSIVE School compensation lock, before any row lock -- no payroll
+                // calculation or approval of this School reads compensation while it changes.
+                app(PayrollCompensationProvenance::class)->lock($school->id, shared: false);
 
                 // Serializes concurrent assign() calls for the SAME
                 // EmploymentRecord; a different EmploymentRecord takes a

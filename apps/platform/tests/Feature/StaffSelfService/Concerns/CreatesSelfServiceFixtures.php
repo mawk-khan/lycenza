@@ -78,7 +78,7 @@ trait CreatesSelfServiceFixtures
                 $structure = $structures->activateStructure($structure, $structureManager);
                 foreach ($employments as $i => $employment) {
                     app(PayrollCompensationAdministrationService::class)->assign($school, $employment, $structure, Carbon::parse('2024-01-01'),
-                        [new FixedComponentValueInput($line->id, (string) (40000 + $i * 1000).'.00')], $structureManager);
+                        [new FixedComponentValueInput($line->id, (string) (40000 + $i * 1000).'.00')], $structureManager, $this->freshMfaProofFor($structureManager));
                 }
             }
 
@@ -91,10 +91,10 @@ trait CreatesSelfServiceFixtures
             }
             $runs->calculate($run, $runManager);
             if (in_array($finalStatus, ['approved', 'posted'], true)) {
-                $runs->approve($run->refresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->refresh()));
+                $runs->approve($run->refresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->refresh()));
             }
             if ($finalStatus === 'posted') {
-                app(PayrollPostingAdministrationService::class)->post($run->refresh(), $poster);
+                app(PayrollPostingAdministrationService::class)->post($run->refresh(), $poster, $this->freshMfaProofFor($poster));
             }
 
             return $run->id;

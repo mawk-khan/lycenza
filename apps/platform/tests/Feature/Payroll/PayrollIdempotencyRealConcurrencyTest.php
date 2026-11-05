@@ -203,7 +203,7 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             $periodService = app(PayrollPeriodAdministrationService::class);
@@ -212,7 +212,7 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
             $runService = app(PayrollRunAdministrationService::class);
             $run = $runService->createRun($period, $runManager);
             $runService->calculate($run, $runManager);
-            $run = $runService->approve($run->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+            $run = $runService->approve($run->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
 
             // See $adHocRoleIds's docblock: captured here, before the
             // fixture-building TenantContext scope closes, so tearDown()

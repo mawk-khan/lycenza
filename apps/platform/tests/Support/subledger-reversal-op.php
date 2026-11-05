@@ -69,7 +69,7 @@ try {
                 return 'ok';
             case 'reverse-payroll':
                 [$runId, $actorId] = $args;
-                $app->make(PayrollPostingService::class)->reverse(PayrollRun::query()->findOrFail($runId), User::query()->findOrFail($actorId));
+                $app->make(PayrollPostingService::class)->reverse(PayrollRun::query()->findOrFail($runId), $mfaActor = User::query()->findOrFail($actorId), new FreshMfaProof($mfaActor->id, CarbonImmutable::now()));
 
                 return 'ok';
             default:

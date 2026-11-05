@@ -6,7 +6,9 @@ use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
 
@@ -45,8 +47,8 @@ try {
 
                 return 'overridden';
             })(),
-            'approve' => $runs->approve($run, $actor, null, app(PayrollRunService::class)->latestCalculationId($run))->status,
-            'approve-entry' => $app->make(PayrollRunAdministrationService::class)->approve($run, $actor, null, app(PayrollRunService::class)->latestCalculationId($run))->status,
+            'approve' => $runs->approve($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), app(PayrollRunService::class)->latestCalculationId($run))->status,
+            'approve-entry' => $app->make(PayrollRunAdministrationService::class)->approve($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), app(PayrollRunService::class)->latestCalculationId($run))->status,
             default => throw new InvalidArgumentException("Unknown operation {$operation}"),
         };
     });

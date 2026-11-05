@@ -111,7 +111,7 @@ class StatutoryPayslipTest extends TestCase
                 new FixedComponentValueInput($basicSc->id, '20000.00'),
                 new FixedComponentValueInput($hraSc->id, '8000.00'),
             ],
-            $preparer,
+            $preparer, $this->freshMfaProofFor($preparer),
         );
 
         $periodService = app(PayrollPeriodService::class);
@@ -124,7 +124,7 @@ class StatutoryPayslipTest extends TestCase
         app(StatutoryPayrollCalculationService::class)->calculateForRun($run, $preparer);
 
         $approver = $this->createUser();
-        $run = $runService->approve($run->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+        $run = $runService->approve($run->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
 
         return ['run' => $run, 'employmentRecordId' => $employmentRecord->id, 'actor' => $preparer];
     }
@@ -221,7 +221,7 @@ class StatutoryPayslipTest extends TestCase
     public function reversal_does_not_change_the_immutable_statutory_payslip(): void
     {
         $school = $this->createSchool();
-        $poster = $this->createUser();
+        $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
         $built = $this->context()->withSchool($school, fn () => $this->buildPostedStatutoryRun($school));
 
         $this->context()->withSchool($school, function () use ($school, $poster) {
@@ -230,9 +230,9 @@ class StatutoryPayslipTest extends TestCase
             app(PayrollAccountingConfigurationService::class)->configure($school, $expense->id, $payable->id, $poster);
         });
 
-        $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($built['run']->fresh(), $poster));
-        $reverser = $this->createUser();
-        $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->reverse($built['run']->fresh(), $reverser, 'statutory payslip immutability test'));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($built['run']->fresh(), $poster, $this->freshMfaProofFor($poster)));
+        $reverser = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
+        $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->reverse($built['run']->fresh(), $reverser, $this->freshMfaProofFor($reverser), 'statutory payslip immutability test'));
 
         $viewer = $this->createUserWithCapabilities($school, ['payroll.compensation.sensitive.view', 'payroll.statutory.view']);
         $afterReversal = $this->context()->withSchool($school, fn () => $this->service()->render($school, $built['run']->id, $built['employmentRecordId'], $viewer));

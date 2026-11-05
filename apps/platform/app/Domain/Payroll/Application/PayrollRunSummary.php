@@ -33,6 +33,8 @@ final class PayrollRunSummary
         public readonly ?Carbon $approvedAt,
         public readonly ?Carbon $postedAt,
         public readonly ?Carbon $resultsExpiredAt = null,
+        // HR.R1-C1 (PAY-6): the calculation an approval was bound to; NULL for an approval made before that evidence existed.
+        public readonly ?string $approvedCalculationId = null,
     ) {}
 
     public static function fromModel(PayrollRun $run): self
@@ -49,6 +51,7 @@ final class PayrollRunSummary
             approvedAt: $run->approved_at,
             postedAt: $run->posted_at,
             resultsExpiredAt: $run->results_expired_at,
+            approvedCalculationId: $run->approved_calculation_id,
         );
     }
 }

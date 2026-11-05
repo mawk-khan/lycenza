@@ -185,7 +185,7 @@ trait CreatesFinancialPeriodFixtures
             $employee = Employee::factory()->for($school, 'school')->create();
             $starts = min('2025-01-01', Carbon::parse($month)->subYear()->startOfYear()->toDateString());
             $record = EmploymentRecord::factory()->create(['school_id' => $school->id, 'employee_id' => $employee->id, 'starts_on' => $starts]);
-            app(CompensationService::class)->assign($school, $record, $structure, Carbon::parse($starts), [new FixedComponentValueInput($component->id, '50000.00')], $preparer);
+            app(CompensationService::class)->assign($school, $record, $structure, Carbon::parse($starts), [new FixedComponentValueInput($component->id, '50000.00')], $preparer, $this->freshMfaProofFor($preparer));
 
             $periods = app(PayrollPeriodService::class);
             $period = $periods->open($periods->createPeriod($school, Carbon::parse($month), null, $preparer), $preparer);
@@ -193,7 +193,7 @@ trait CreatesFinancialPeriodFixtures
             $run = $runs->createRun($period, $preparer);
             $runs->calculate($run, $preparer);
 
-            return $runs->approve($run->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+            return $runs->approve($run->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
         });
     }
 }

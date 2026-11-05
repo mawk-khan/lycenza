@@ -85,7 +85,7 @@ class PayrollDomainEventsTest extends TestCase
             $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
             $assignment = app(PayrollCompensationAdministrationService::class)->assign(
                 $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
-                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager,
+                [new FixedComponentValueInput($sc->id, '50000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
             );
 
             return ['structureId' => $structure->id, 'employmentRecordId' => $employmentRecord->id, 'assignmentId' => $assignment->id];
@@ -124,7 +124,7 @@ class PayrollDomainEventsTest extends TestCase
         $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         $this->context()->withSchool($f['school'], function () use ($f, $approver) {
-            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
+            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
         });
 
         return $f + ['approver' => $approver];
@@ -139,7 +139,7 @@ class PayrollDomainEventsTest extends TestCase
         $poster = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']);
 
         $this->context()->withSchool($f['school'], function () use ($f, $poster) {
-            app(PayrollPostingAdministrationService::class)->post(PayrollRun::query()->findOrFail($f['runId']), $poster);
+            app(PayrollPostingAdministrationService::class)->post(PayrollRun::query()->findOrFail($f['runId']), $poster, $this->freshMfaProofFor($poster));
         });
 
         return $f + ['poster' => $poster];
@@ -235,7 +235,7 @@ class PayrollDomainEventsTest extends TestCase
         $this->context()->withSchool($f['school'], function () use ($runId, $bothCapabilities) {
             $run = PayrollRun::query()->findOrFail($runId);
             try {
-                app(PayrollRunAdministrationService::class)->approve($run, $bothCapabilities, null, app(PayrollRunService::class)->latestCalculationId($run));
+                app(PayrollRunAdministrationService::class)->approve($run, $bothCapabilities, $this->freshMfaProofFor($bothCapabilities), app(PayrollRunService::class)->latestCalculationId($run));
                 $this->fail('Expected SelfApprovalNotAllowedException.');
             } catch (SelfApprovalNotAllowedException) {
                 // expected
@@ -254,7 +254,7 @@ class PayrollDomainEventsTest extends TestCase
         $this->context()->withSchool($f['school'], function () use ($f, $unauthorizedActor) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
             try {
-                app(PayrollRunAdministrationService::class)->approve($run, $unauthorizedActor, null, app(PayrollRunService::class)->latestCalculationId($run));
+                app(PayrollRunAdministrationService::class)->approve($run, $unauthorizedActor, $this->freshMfaProofFor($unauthorizedActor), app(PayrollRunService::class)->latestCalculationId($run));
                 $this->fail('Expected AuthorizationException.');
             } catch (AuthorizationException) {
                 // expected
@@ -285,7 +285,7 @@ class PayrollDomainEventsTest extends TestCase
         $f = $this->arrangePostedRun();
 
         $this->context()->withSchool($f['school'], function () use ($f) {
-            app(PayrollPostingAdministrationService::class)->reverse(PayrollRun::query()->findOrFail($f['runId']), $f['poster'], 'test reversal');
+            app(PayrollPostingAdministrationService::class)->reverse(PayrollRun::query()->findOrFail($f['runId']), $f['poster'], $this->freshMfaProofFor($f['poster']), 'test reversal');
         });
 
         $row = $this->outboxRow($f['school']->id, 'payroll_run.reversed.v1');
@@ -325,7 +325,7 @@ class PayrollDomainEventsTest extends TestCase
 
             return app(PayrollCompensationAdministrationService::class)->assign(
                 $f['school'], $employmentRecord, $structure, Carbon::parse('2026-01-01'),
-                [new FixedComponentValueInput($component->id, '60000.00')], $f['structureManager'],
+                [new FixedComponentValueInput($component->id, '60000.00')], $f['structureManager'], $this->freshMfaProofFor($f['structureManager']),
             )->id;
         });
 

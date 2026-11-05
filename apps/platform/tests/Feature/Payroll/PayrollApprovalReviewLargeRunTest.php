@@ -37,6 +37,10 @@ class PayrollApprovalReviewLargeRunTest extends TestCase
         $september = (string) Str::uuid7();
         $previous = (string) Str::uuid7();
         $current = (string) Str::uuid7();
+        // HR.R1-C1: results are the output of one calculation (deferred key), which recorded its provenance.
+        $previousCalculation = (string) Str::uuid7();
+        $currentCalculation = (string) Str::uuid7();
+        $calculationOf = [$previous => $previousCalculation, $current => $currentCalculation];
         $rows = ['employees' => [], 'employment_records' => [], 'payroll_run_results' => [], 'payroll_run_result_lines' => []];
         $expected = ['current' => 0, 'previous' => 0, 'changed' => 0];
 
@@ -58,7 +62,7 @@ class PayrollApprovalReviewLargeRunTest extends TestCase
             $after = $i % 2 === 0 ? $before + 100 : $before; // every second entry changes
             foreach ([[$previous, $before], [$current, $after]] as [$run, $amount]) {
                 $result = (string) Str::uuid7();
-                $rows['payroll_run_results'][] = ['id' => $result, 'school_id' => $school->id, 'payroll_run_id' => $run, 'employment_record_id' => $employment, 'employee_id' => $employee, 'gross_amount' => "{$amount}.00", 'total_deductions' => '0.00', 'net_amount' => "{$amount}.00", 'created_at' => $now, 'updated_at' => $now];
+                $rows['payroll_run_results'][] = ['id' => $result, 'school_id' => $school->id, 'payroll_run_id' => $run, 'payroll_run_calculation_id' => $calculationOf[$run], 'employment_record_id' => $employment, 'employee_id' => $employee, 'gross_amount' => "{$amount}.00", 'total_deductions' => '0.00', 'net_amount' => "{$amount}.00", 'created_at' => $now, 'updated_at' => $now];
                 $rows['payroll_run_result_lines'][] = ['id' => (string) Str::uuid7(), 'school_id' => $school->id, 'payroll_run_result_id' => $result, 'salary_component_id' => $component, 'amount' => "{$amount}.00", 'effect' => 'increase', 'currency' => 'INR', 'created_at' => $now, 'updated_at' => $now];
             }
             $expected['previous'] += $before;
@@ -70,17 +74,21 @@ class PayrollApprovalReviewLargeRunTest extends TestCase
                 DB::table($table)->insert($chunk);
             }
         }
-        $previousCalculation = (string) Str::uuid7();
         DB::table('payroll_run_calculations')->insert([
-            ['id' => $previousCalculation, 'school_id' => $school->id, 'payroll_run_id' => $previous, 'calculated_by_user_id' => $preparer->id, 'ordinal' => 1, 'adjustment_count' => 0, 'complete' => true],
-            ['id' => (string) Str::uuid7(), 'school_id' => $school->id, 'payroll_run_id' => $current, 'calculated_by_user_id' => $preparer->id, 'ordinal' => 1, 'adjustment_count' => 0, 'complete' => true],
+            ['id' => $previousCalculation, 'school_id' => $school->id, 'payroll_run_id' => $previous, 'calculated_by_user_id' => $preparer->id, 'ordinal' => 1, 'adjustment_count' => 0, 'complete' => true, 'compensation_sources_recorded' => true],
+            ['id' => $currentCalculation, 'school_id' => $school->id, 'payroll_run_id' => $current, 'calculated_by_user_id' => $preparer->id, 'ordinal' => 1, 'adjustment_count' => 0, 'complete' => true, 'compensation_sources_recorded' => true],
         ]);
         // August is approved through the guarded transition, bound to its calculation.
         DB::table('payroll_runs')->where('id', $previous)->update(['status' => 'approved', 'approved_by_user_id' => $checker->id, 'approved_at' => '2015-08-25 06:00:00', 'approved_calculation_id' => $previousCalculation]);
         DB::statement('SET LOCAL enable_nestloop = off'); // no planner statistics for uncommitted bulk rows (see HrReportsLargePopulationTest)
 
         $reviews = app(PayrollApprovalReviewService::class);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
         $first = $reviews->packet($school, $current, $checker);
+        // HR.R1-C1 (PAY-12): a bounded number of queries whatever the run's size (42 measured at 500 to 10,000 entries).
+        $this->assertLessThanOrEqual(45, count(DB::getQueryLog()), 'the review packet never issues a query per entry');
+        DB::disableQueryLog();
         $this->assertSame([number_format($expected['current'], 2, '.', ''), number_format($expected['previous'], 2, '.', ''), self::ENTRIES, true], [$first['totals']['net'], $first['previousTotals']['net'], $first['totals']['entries'], $first['totals']['reconciles']]);
         $this->assertSame(number_format($expected['current'], 2, '.', ''), $first['components'][0]['amount'], 'component totals equal the run total');
         $this->assertSame($expected['changed'], $first['changes']->total());

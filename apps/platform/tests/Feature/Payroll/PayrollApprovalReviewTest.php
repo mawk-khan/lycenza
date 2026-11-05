@@ -5,6 +5,7 @@ namespace Tests\Feature\Payroll;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CompensationService;
+use App\Domain\Payroll\Application\Exceptions\RunRecalculationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Application\Exceptions\StaleRunReviewException;
 use App\Domain\Payroll\Application\FixedComponentValueInput;
@@ -24,6 +25,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
@@ -82,12 +84,12 @@ class PayrollApprovalReviewTest extends TestCase
             DB::table('employee_compensation_assignments')->where('employment_record_id', $record('C')->id)->update(['effective_to' => '2015-08-31']);
             // B: a new assignment mid-September (so the run needs an override), recorded by the HR officer.
             app(CompensationService::class)->assign($this->school, $record('B'), $setup['structure'], Carbon::parse('2015-09-16'),
-                [new FixedComponentValueInput($setup['line'], '55000.00')], $this->people['hr']);
+                [new FixedComponentValueInput($setup['line'], '55000.00')], $this->people['hr'], $this->freshMfaProofFor($this->people['hr']));
             // D joined on 1 September, recorded by the HR officer.
             $this->staff['D'] = $this->createEmployee($this->school);
             $d = $this->createEmploymentRecord($this->staff['D'], ['status' => 'active', 'starts_on' => '2015-09-01', 'ends_on' => null]);
             app(CompensationService::class)->assign($this->school, $d, $setup['structure'], Carbon::parse('2015-09-01'),
-                [new FixedComponentValueInput($setup['line'], '40000.00')], $this->people['hr']);
+                [new FixedComponentValueInput($setup['line'], '40000.00')], $this->people['hr'], $this->freshMfaProofFor($this->people['hr']));
 
             $periods = app(PayrollPeriodService::class);
             $period = $periods->open($periods->createPeriod($this->school, Carbon::parse('2015-09-01'), null, $this->people['preparer']), $this->people['preparer']);
@@ -119,12 +121,22 @@ class PayrollApprovalReviewTest extends TestCase
             $a = EmploymentRecord::query()->where('employee_id', $this->staff['A']->id)->firstOrFail();
 
             return app(CompensationService::class)->assign($this->school, $a, $this->setup['structure'], Carbon::parse('2015-09-01'),
-                [new FixedComponentValueInput($this->setup['line'], '50000.00')], $early);
+                [new FixedComponentValueInput($this->setup['line'], '50000.00')], $early, $this->freshMfaProofFor($early));
         });
         // Recorded on 20 August -- before August's approval on 5 September -- effective from 1 September.
-        DB::table('employee_compensation_assignments')->where('id', $assignment->id)->update(['created_at' => '2015-08-20 06:00:00']);
+        $this->inSchool($this->school, fn () => DB::table('employee_compensation_assignments')->where('id', $assignment->id)->update(['created_at' => '2015-08-20 06:00:00']));
 
-        $this->assertContains($early->id, $this->inSchool($this->school, fn () => app(PayrollApprovalReviewService::class)->compensationAuthors($this->run->fresh())));
+        // HR.R1-C1: September's calculation predates the change of its period -- stale until recalculated.
+        $this->assertContains('PAYROLL_RUN_RECALCULATION_REQUIRED', array_column($this->packet()['blocking'], 'code'));
+        try {
+            $this->approve($this->people['checker'], app(PayrollRunService::class)->latestCalculationId($this->run));
+            $this->fail('a calculation overtaken by a compensation change of its period was approved');
+        } catch (RunRecalculationRequiredException) {
+            $this->inSchool($this->school, fn () => app(PayrollRunService::class)->calculate($this->run->fresh(), $this->people['preparer']));
+        }
+
+        // Recalculated, September first pays the change: whenever it was recorded, its author is a maker.
+        $this->assertContains($early->id, $this->inSchool($this->school, fn () => app(PayrollRunService::class)->participants($this->run->fresh())->all()['compensation_author'] ?? []));
         $this->assertSame(3, $this->packet()['compensation']->total(), 'the checker sees the change too');
         $this->assertContains('PAYROLL_SELF_APPROVAL', array_column($this->packet($early)['blocking'], 'code'));
         try {
@@ -283,6 +295,32 @@ class PayrollApprovalReviewTest extends TestCase
             ->assertStatus(422)->assertJsonPath('error.errors.calculation_id.0', 'The calculation id field is required.');
         $this->withToken($token)->withHeader('Idempotency-Key', 'odhr1-ok')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $review['calculation']['id']])
             ->assertOk()->assertJsonPath('data.status', 'approved');
+    }
+
+    #[Test]
+    public function pay_11_the_api_never_reaches_another_schools_review_or_approval(): void
+    {
+        $calc = app(PayrollRunService::class)->latestCalculationId($this->run);
+        // A fully-keyed checker of ANOTHER School, with a current MFA token.
+        $other = $this->createSchool();
+        $outsider = $this->createUserWithCapabilities($other, ['payroll.runs.approve', 'payroll.runs.view', 'payroll.compensation.sensitive.view']);
+        $token = $this->mfaToken($outsider);
+
+        // Forged run id under the outsider's own School: the run is not found there.
+        $this->withToken($token)->getJson("/api/v1/schools/{$other->id}/payroll-runs/{$this->run->id}/review")->assertNotFound();
+        $this->withToken($token)->withHeader('Idempotency-Key', 'pay11-own')->postJson("/api/v1/schools/{$other->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $calc])->assertNotFound();
+        // Forged School id: no membership there, so nothing is answered.
+        // (the private not-found / forbidden contract: never the packet, never a decision)
+        $this->assertContains($this->withToken($token)->getJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/review")->status(), [403, 404]);
+        $this->assertContains($this->withToken($token)->withHeader('Idempotency-Key', 'pay11-forged')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $calc])->status(), [403, 404]);
+
+        // The School's own checker naming another run's calculation is a stale review, never an approval.
+        $this->app['auth']->forgetGuards(); // the test client otherwise keeps the outsider's resolved token
+        $checker = $this->people['checker'];
+        $own = $this->mfaToken($checker);
+        $this->withToken($own)->withHeader('Idempotency-Key', 'pay11-wrong-calc')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($own), 'calculation_id' => (string) Str::uuid7()])
+            ->assertStatus(409)->assertJsonPath('error.code', 'PAYROLL_REVIEW_STALE');
+        $this->assertSame(['calculated', null], $this->inSchool($this->school, fn () => array_values((array) DB::table('payroll_runs')->where('id', $this->run->id)->first(['status', 'approved_calculation_id']))));
     }
 
     #[Test]
