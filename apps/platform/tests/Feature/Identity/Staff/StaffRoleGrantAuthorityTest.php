@@ -81,7 +81,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
     /** SR.3: the offered catalogue -- the four original School roles and the thirteen production roles. */
     private const SR3_CATALOGUE = [
         'accountant', 'admissions_officer', 'canteen_operator', 'cashier', 'communications_coordinator', 'front_office',
-        'hostel_warden', 'hr_officer', 'hr_sensitive_records', 'librarian', 'line_manager', 'payroll_officer', 'principal',
+        'hostel_warden', 'hr_officer', 'hr_sensitive_records', 'librarian', 'line_manager', 'payroll_approval_reviewer', 'payroll_officer', 'principal',
         'school_admin', 'staff_self_service', 'stores_officer', 'teacher', 'team_task_manager', 'transport_coordinator',
     ];
 

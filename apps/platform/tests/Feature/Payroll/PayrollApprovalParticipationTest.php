@@ -14,6 +14,7 @@ use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\SalaryComponent;
+use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Auth\Mfa\FreshMfaProof;
@@ -67,6 +68,11 @@ class PayrollApprovalParticipationTest extends TestCase
         ];
     }
 
+    private function compensationAuthor(School $school): string
+    {
+        return (string) $this->inSchool($school, fn () => DB::table('employee_compensation_assignments')->whereNotNull('assigned_by_user_id')->value('assigned_by_user_id'));
+    }
+
     private function runs(): PayrollRunService
     {
         return app(PayrollRunService::class);
@@ -89,7 +95,7 @@ class PayrollApprovalParticipationTest extends TestCase
 
     private function approve(array $w, User $approver): PayrollRun
     {
-        return $this->inSchool($w['school'], fn () => $this->runs()->approve($this->fresh($w), $approver));
+        return $this->inSchool($w['school'], fn () => $this->runs()->approve($this->fresh($w), $approver, null, app(PayrollRunService::class)->latestCalculationId($this->fresh($w))));
     }
 
     private function assertRefused(array $w, User $approver, string $exception): void
@@ -161,7 +167,7 @@ class PayrollApprovalParticipationTest extends TestCase
         });
         $this->travelBack();
 
-        $this->assertSame('approved', $this->inSchool($w['school'], fn () => $this->runs()->approve($other, $w['creator']))->status, 'the creator of run 1 approves run 2');
+        $this->assertSame('approved', $this->inSchool($w['school'], fn () => $this->runs()->approve($other, $w['creator'], null, app(PayrollRunService::class)->latestCalculationId($other)))->status, 'the creator of run 1 approves run 2');
     }
 
     #[Test]
@@ -181,7 +187,7 @@ class PayrollApprovalParticipationTest extends TestCase
         $this->inSchool($w['school'], fn () => DB::table('payroll_runs')->where('id', $legacy->id)->update(['status' => 'calculated']));
 
         $this->expectException(RunRecalculationRequiredException::class);
-        $this->inSchool($w['school'], fn () => $this->runs()->approve($legacy->fresh(), $this->createUser()));
+        $this->inSchool($w['school'], fn () => $this->runs()->approve($legacy->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($legacy->fresh())));
     }
 
     #[Test]
@@ -198,26 +204,27 @@ class PayrollApprovalParticipationTest extends TestCase
     public function the_authorized_entry_reads_current_authority_and_records_provenance(): void
     {
         $w = $this->world();
-        $approver = $this->createUserWithCapabilities($w['school'], ['payroll.runs.view', 'payroll.runs.approve']);
-        $revoked = $this->createUserWithCapabilities($w['school'], ['payroll.runs.view', 'payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($w['school'], ['payroll.runs.view', 'payroll.runs.approve', 'payroll.compensation.sensitive.view']);
+        $revoked = $this->createUserWithCapabilities($w['school'], ['payroll.runs.view', 'payroll.runs.approve', 'payroll.compensation.sensitive.view']);
         $this->assertTrue(Gate::forUser($revoked)->allows('capability', ['payroll.runs.approve', $w['school']]));
         $this->inSchool($w['school'], fn () => DB::table('membership_role_assignments')
             ->whereIn('school_membership_id', DB::table('school_memberships')->where('user_id', $revoked->id)->pluck('id'))
             ->update(['revoked_at' => now(), 'revocation_reason' => 'revoked']));
 
         try {
-            app(PayrollRunAdministrationService::class)->approve($this->fresh($w), $revoked);
+            app(PayrollRunAdministrationService::class)->approve($this->fresh($w), $revoked, null, app(PayrollRunService::class)->latestCalculationId($this->fresh($w)));
             $this->fail('A revoked approver must be refused at decision time, behind the cache.');
         } catch (AuthorizationException) {
             $this->assertSame('calculated', $this->fresh($w)->status);
         }
 
         $proof = new FreshMfaProof($approver->id, CarbonImmutable::now());
-        $this->assertSame('approved', app(PayrollRunAdministrationService::class)->approve($this->fresh($w), $approver, $proof)->status);
+        $this->assertSame('approved', app(PayrollRunAdministrationService::class)->approve($this->fresh($w), $approver, $proof, app(PayrollRunService::class)->latestCalculationId($this->fresh($w)))->status);
 
         $metadata = $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', 'payroll.run.approved')->firstOrFail()->metadata);
         $this->assertSame(['payroll_runs', 'approved', $approver->id, 'school', true], [$metadata['approvalWorkflow'], $metadata['approvalDecision'], $metadata['decidedByUserId'], $metadata['decisionScope'], $metadata['freshMfa']]);
-        $this->assertSame(['creator' => [$w['creator']->id], 'calculator' => [$w['creator']->id]], $metadata['participants']);
+        // OD-HR-2: whoever recorded the compensation the pay rests on is a participant too.
+        $this->assertSame(['creator' => [$w['creator']->id], 'calculator' => [$w['creator']->id], 'compensation_author' => [$this->compensationAuthor($w['school'])]], $metadata['participants']);
         $this->assertArrayNotHasKey('netAmount', $metadata, 'no pay data in audit');
     }
 
@@ -250,7 +257,7 @@ class PayrollApprovalParticipationTest extends TestCase
         $this->assertSame('calculated', $this->inSchool($school, fn () => $run->fresh()->status), 'the status cannot go back to draft');
 
         $this->expectException(RunRecalculationRequiredException::class);
-        $this->inSchool($school, fn () => $this->runs()->approve($run->fresh(), $this->createUser()));
+        $this->inSchool($school, fn () => $this->runs()->approve($run->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run->fresh())));
     }
 
     #[Test]
@@ -278,12 +285,12 @@ class PayrollApprovalParticipationTest extends TestCase
         $this->travelBack();
 
         try {
-            $this->inSchool($school, fn () => $this->runs()->approve($correction, $author));
+            $this->inSchool($school, fn () => $this->runs()->approve($correction, $author, null, app(PayrollRunService::class)->latestCalculationId($correction)));
             $this->fail('The delta author must not approve.');
         } catch (SelfApprovalNotAllowedException) {
-            $this->assertSame(['creator' => [$creator->id], 'calculator' => [$creator->id], 'adjustment_author' => [$author->id]], $this->runs()->participants($correction)->all());
+            $this->assertSame(['creator' => [$creator->id], 'calculator' => [$creator->id], 'adjustment_author' => [$author->id], 'compensation_author' => [$this->compensationAuthor($school)]], $this->runs()->participants($correction)->all());
         }
-        $this->assertSame('approved', $this->inSchool($school, fn () => $this->runs()->approve($correction, $this->createUser()))->status);
+        $this->assertSame('approved', $this->inSchool($school, fn () => $this->runs()->approve($correction, $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction)))->status);
     }
 
     #[Test]

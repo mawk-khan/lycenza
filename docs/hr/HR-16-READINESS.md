@@ -145,3 +145,16 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 | **Staging testing** | **CONDITIONAL.** It may test the implemented HR scope with synthetic data only, provided: the staging environment and its approvals exist; E16 is current (the 2026-11-01 decision runs out after 2026-11-28); the legacy-document inventory is done; the API client MFA note is published; and backup and restore evidence exists for staging (a documented policy is not a tested restore). Payroll, clock attendance, exports and person-count analytics stay disabled. |
 | **Production** | **NO-GO.** Blocked by OD-HR-1/2 (Payroll), HRX-L2/OD-HR-14, ADR 0040 cohort size, D-11, the legal gates, staging evidence and HR.R1 |
 | HR.R1 | Open (mandatory) |
+
+## 6. OD-HR-1 / OD-HR-2 update (2026-11-05)
+
+- **Decided and implemented for development:** approval needs
+  `payroll.runs.approve` + `payroll.compensation.sensitive.view`; a
+  purpose-limited review packet; the approval binds to the reviewed calculation
+  (stale refused, recorded, database-frozen); compensation authors join the
+  maker set. Evidence: `PayrollApprovalReviewTest`, `PayrollApprovalReviewLargeRunTest`
+  (2,100 entries), the two-process approval/recalculation races in
+  `PayrollRunLifecycleConcurrencyTest`.
+- **Readiness:** local GO for the Payroll review. Staging stays CONDITIONAL
+  (prerequisites in §5 unchanged; E16 through 2026-11-28 only). Production
+  stays NO-GO: HRX-L4, E45, statutory gates, D-11 and HR.R1 remain open.

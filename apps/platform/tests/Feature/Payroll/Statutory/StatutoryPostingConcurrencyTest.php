@@ -141,7 +141,7 @@ class StatutoryPostingConcurrencyTest extends TestCase
             app(StatutoryPayrollCalculationService::class)->calculateForRun($run, $preparer);
 
             $approver = $this->createUser();
-            $run = $runService->approve($run->fresh(), $approver);
+            $run = $runService->approve($run->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
             app(PayrollPostingService::class)->post($run, $poster);
 
             return $run->fresh();

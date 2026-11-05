@@ -107,7 +107,7 @@ class PayrollPostingServiceTest extends TestCase
         $run = $run->fresh();
 
         $approver = $this->createUser();
-        $run = $this->runService()->approve($run, $approver);
+        $run = $this->runService()->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
 
         return [$run, $preparer, $deductionLedgerAccount];
     }
@@ -356,7 +356,7 @@ class PayrollPostingServiceTest extends TestCase
             $run = $run->fresh();
 
             $approver = $this->createUser();
-            $run = $this->runService()->approve($run, $approver);
+            $run = $this->runService()->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
 
             // Reconfigure PF's liability account to a DIFFERENT one
             // AFTER calculation/approval -- the frozen

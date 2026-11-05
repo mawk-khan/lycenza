@@ -56,6 +56,7 @@ class PayrollRun extends Model
     {
         return [
             'approved_at' => 'datetime',
+            // OD-HR-1: the calculation the checker reviewed; set once by the approval (database-guarded), never fillable.
             'posted_at' => 'datetime',
             // E21.3F: set only by payroll retention (database-guarded), never fillable.
             'results_expired_at' => 'datetime',

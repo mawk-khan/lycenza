@@ -4,6 +4,7 @@ namespace App\Domain\Payroll\Http\Controllers;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CorrectionDeltaInput;
+use App\Domain\Payroll\Application\PayrollApprovalReviewService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunReadService;
 use App\Domain\Payroll\Application\PayrollRunSummary;
@@ -127,12 +128,26 @@ class PayrollRunController extends Controller
     public function approve(Request $request, School $school, string $payrollRun, PayrollRunAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        // OD-HR-1: the approval names the calculation the checker reviewed (GET .../review).
+        $validated = $request->validate(['calculation_id' => ['required', 'uuid']]);
         // SR.4 (ADR 0071 §26.7): `mfa_code` re-verified now; a refusal is a
         // deterministic 422 for this Idempotency-Key (retry with a new key).
         $proof = $mfa->requireForAction($request, $request->user());
-        $run = $service->approve($run, $request->user(), $proof);
+        $run = $service->approve($run, $request->user(), $proof, $validated['calculation_id']);
 
         return response()->json(['data' => $this->present(PayrollRunSummary::fromModel($run))]);
+    }
+
+    /** OD-HR-1 / OD-HR-2: the purpose-limited approval review (approve + sensitive view, current MFA by route). */
+    public function review(Request $request, School $school, string $payrollRun, PayrollApprovalReviewService $reviews): JsonResponse
+    {
+        $validated = $request->validate(array_fill_keys(array_map(fn (string $s) => "{$s}_page", PayrollApprovalReviewService::SECTIONS), ['sometimes', 'integer', 'min:1', 'max:100000']));
+        $pages = [];
+        foreach (PayrollApprovalReviewService::SECTIONS as $section) {
+            $pages[$section] = (int) ($validated["{$section}_page"] ?? 1);
+        }
+
+        return response()->json(['data' => $reviews->packet($school, $payrollRun, $request->user(), $pages)]);
     }
 
     /**

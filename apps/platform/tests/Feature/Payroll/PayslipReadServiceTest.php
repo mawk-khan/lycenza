@@ -16,6 +16,7 @@ use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Application\Payslip;
 use App\Domain\Payroll\Application\PayslipReadService;
@@ -100,11 +101,11 @@ class PayslipReadServiceTest extends TestCase
     private function makeApprovedRun(): array
     {
         $f = $this->makeCalculatedRun();
-        $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         $this->context()->withSchool($f['school'], function () use ($f, $approver) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
-            app(PayrollRunAdministrationService::class)->approve($run, $approver);
+            app(PayrollRunAdministrationService::class)->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         return $f;
@@ -196,11 +197,11 @@ class PayslipReadServiceTest extends TestCase
             );
             $runService->calculate($correction, $f['runManager']);
 
-            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
             // calculate() mutates the row in the database, not this
             // in-memory $correction instance -- refresh before the
             // status-sensitive approve() call.
-            $runService->approve($correction->refresh(), $approver);
+            $runService->approve($correction->refresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($correction->refresh()));
 
             return $correction->id;
         });

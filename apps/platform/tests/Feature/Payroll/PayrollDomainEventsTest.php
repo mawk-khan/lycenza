@@ -12,6 +12,7 @@ use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
@@ -120,10 +121,10 @@ class PayrollDomainEventsTest extends TestCase
     private function arrangeApprovedRun(): array
     {
         $f = $this->arrangeCalculatedRun();
-        $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         $this->context()->withSchool($f['school'], function () use ($f, $approver) {
-            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver);
+            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
         });
 
         return $f + ['approver' => $approver];
@@ -220,7 +221,7 @@ class PayrollDomainEventsTest extends TestCase
         // Holds BOTH .prepare and .approve -- the actor-level SoD rule
         // (never approve your own prepared run) is what must block this,
         // independent of capability grants.
-        $bothCapabilities = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage', 'payroll.runs.approve']);
+        $bothCapabilities = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage', 'payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         $runId = $this->context()->withSchool($f['school'], function () use ($f, $bothCapabilities) {
             $periodService = app(PayrollPeriodAdministrationService::class);
@@ -234,7 +235,7 @@ class PayrollDomainEventsTest extends TestCase
         $this->context()->withSchool($f['school'], function () use ($runId, $bothCapabilities) {
             $run = PayrollRun::query()->findOrFail($runId);
             try {
-                app(PayrollRunAdministrationService::class)->approve($run, $bothCapabilities);
+                app(PayrollRunAdministrationService::class)->approve($run, $bothCapabilities, null, app(PayrollRunService::class)->latestCalculationId($run));
                 $this->fail('Expected SelfApprovalNotAllowedException.');
             } catch (SelfApprovalNotAllowedException) {
                 // expected
@@ -253,7 +254,7 @@ class PayrollDomainEventsTest extends TestCase
         $this->context()->withSchool($f['school'], function () use ($f, $unauthorizedActor) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
             try {
-                app(PayrollRunAdministrationService::class)->approve($run, $unauthorizedActor);
+                app(PayrollRunAdministrationService::class)->approve($run, $unauthorizedActor, null, app(PayrollRunService::class)->latestCalculationId($run));
                 $this->fail('Expected AuthorizationException.');
             } catch (AuthorizationException) {
                 // expected

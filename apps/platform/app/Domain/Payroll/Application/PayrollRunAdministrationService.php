@@ -106,18 +106,21 @@ class PayrollRunAdministrationService
      * `payroll.runs.prepare` as an alternative. An actor is never
      * authorized to approve merely because they can prepare payroll.
      */
-    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa = null): PayrollRun
+    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
     {
         $this->authorizeCapabilityFor($approver, 'payroll.runs.approve', $run->school);
+        // OD-HR-1 (owner decision 2026-11-05): nobody approves what they cannot see.
+        $this->authorizeCapabilityFor($approver, PayrollApprovalReviewService::SENSITIVE_VIEW, $run->school);
 
         // ORG.8B (ADR 0076 §60): under the run lock, the approver's CURRENT authority (fresh grant,
         // module and School read), then the core decision (participants, results, transition) in the
         // same transaction.
-        return $this->context->withSchool($run->school, fn (): PayrollRun => DB::transaction(function () use ($run, $approver, $mfa): PayrollRun {
+        return $this->context->withSchool($run->school, fn (): PayrollRun => DB::transaction(function () use ($run, $approver, $mfa, $reviewedCalculationId): PayrollRun {
             PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
             $this->authority->requireCurrent($approver, 'payroll.runs.approve', $run->school);
+            $this->authority->requireCurrent($approver, PayrollApprovalReviewService::SENSITIVE_VIEW, $run->school);
 
-            return $this->runs->approve($run, $approver, $mfa);
+            return $this->runs->approve($run, $approver, $mfa, $reviewedCalculationId);
         }));
     }
 }

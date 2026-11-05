@@ -149,7 +149,9 @@ class DemoDataBuilderTest extends TestCase
         $this->assertTrue($resolver->canInSchool($admin, 'finance.ledger.view', $school));
         $this->assertTrue($resolver->canInSchool($admin, 'finance.payments.record', $school));
         $this->assertTrue($resolver->canInSchool($admin, 'students.manage', $school));
-        $this->assertFalse($resolver->canInSchool($admin, 'payroll.compensation.sensitive.view', $school));
+        // OD-HR-1: the demo approver is named as checker (payroll_approval_reviewer): it sees pay, never manages it.
+        $this->assertTrue($resolver->canInSchool($admin, 'payroll.compensation.sensitive.view', $school));
+        $this->assertFalse($resolver->canInSchool($admin, 'payroll.compensation.sensitive.manage', $school));
         $this->assertFalse($resolver->canInSchool($admin, 'students.view', $annexe));
 
         $this->assertTrue($resolver->canInSchool($principal, 'students.view', $school));

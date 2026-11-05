@@ -2415,6 +2415,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/runs/{payrollRun}/correction-deltas', [PayrollRunController::class, 'correctionDelta'])->name('runs.correction-deltas.store');
         Route::post('/runs/{payrollRun}/correction', [PayrollRunController::class, 'storeCorrection'])->name('runs.correction.store');
         Route::post('/runs/{payrollRun}/hrx-inputs/difference-checks', [PayrollRunController::class, 'checkHrxDifferences'])->name('runs.hrx-inputs.difference-checks');
+        // OD-HR-1 / OD-HR-2 (owner decisions 2026-11-05): the approval review -- approve AND sensitive view, current MFA.
+        Route::get('/runs/{payrollRun}/review', [PayrollRunController::class, 'review'])->middleware(['capability:payroll.runs.approve', 'capability:payroll.compensation.sensitive.view', 'mfa-page', 'private-no-store'])->name('runs.review');
         Route::post('/runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])->name('runs.approve');
         Route::post('/runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])->name('runs.post');
         Route::post('/runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])->name('runs.reverse');

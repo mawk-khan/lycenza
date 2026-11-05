@@ -17,6 +17,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -146,17 +147,23 @@ class PayrollRunLifecycleConcurrencyTest extends TestCase
         $processCalculate->wait();
         $processApprove->wait();
 
-        // Approve always eventually succeeds in this scenario (nothing
-        // else contends for it); calculate() either completed fully
-        // BEFORE approval (in which case it also succeeds) or is
-        // correctly rejected once it observes the now-approved status
-        // after acquiring its row lock -- never a corrupted mix.
-        $this->assertSame('approved', $processApprove->getOutput());
+        // OD-HR-1: the approver names the calculation it saw when it started.
+        // Either approval wins (calculate() is then refused, never mutating an
+        // approved run), or a recalculation lands first and the approval of
+        // the calculation it reviewed is refused as STALE -- never an approval
+        // of results nobody reviewed, never a corrupted mix.
+        $approved = $processApprove->getOutput();
+        $this->assertContains($approved, ['approved', 'rejected:App\\Domain\\Payroll\\Application\\Exceptions\\StaleRunReviewException']);
         $this->assertContains($processCalculate->getOutput(), ['calculated:transitioned', 'rejected:App\\Domain\\Payroll\\Application\\Exceptions\\RunNotEditableException']);
 
         $context = app(TenantContext::class);
-        $finalStatus = $context->withSchool($this->school, fn () => $run->fresh()->status);
-        $this->assertSame('approved', $finalStatus);
+        $final = $context->withSchool($this->school, fn () => $run->fresh());
+        $latest = $context->withSchool($this->school, fn () => DB::table('payroll_run_calculations')->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->value('id'));
+        if ($approved === 'approved') {
+            $this->assertSame(['approved', $latest], [$final->status, $final->approved_calculation_id], 'approved against the calculation that is still the latest');
+        } else {
+            $this->assertSame(['calculated', 'calculated:transitioned'], [$final->status, $processCalculate->getOutput()]);
+        }
     }
 
     #[Test]
@@ -190,5 +197,47 @@ class PayrollRunLifecycleConcurrencyTest extends TestCase
         $fresh = $context->withSchool($this->school, fn () => $run->fresh());
         $this->assertSame('approved', $fresh->status);
         $this->assertContains($fresh->approved_by_user_id, [$approverA->id, $approverB->id]);
+    }
+
+    #[Test]
+    public function od_hr_1_a_recalculation_held_open_makes_the_waiting_approval_of_the_reviewed_calculation_stale(): void
+    {
+        $this->school = $this->createSchool();
+        $run = $this->makeCalculatedRun();
+        $preparer = User::query()->find($run->prepared_by_user_id);
+        $approver = $this->createUser();
+        $reviewed = app(PayrollRunService::class)->latestCalculationId($run);
+
+        // The recalculation holds the run row (and its new calculation) uncommitted; the approval of
+        // the calculation the checker REVIEWED is observed blocked, then refused once it commits.
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            ['php', __DIR__.'/../../Support/calculate-payroll-run.php', $this->school->id, $run->id, $preparer->id],
+            ['php', __DIR__.'/../../Support/approve-payroll-run.php', $this->school->id, $run->id, $approver->id, (string) $reviewed],
+        );
+
+        $this->assertSame('calculated:transitioned', $holder);
+        $this->assertSame('rejected:App\\Domain\\Payroll\\Application\\Exceptions\\StaleRunReviewException', $contender, 'never an approval of results the checker did not review');
+        $final = app(TenantContext::class)->withSchool($this->school, fn () => $run->fresh());
+        $this->assertSame(['calculated', null], [$final->status, $final->approved_calculation_id]);
+    }
+
+    #[Test]
+    public function od_hr_1_an_approval_held_open_refuses_the_waiting_recalculation_and_keeps_its_evidence(): void
+    {
+        $this->school = $this->createSchool();
+        $run = $this->makeCalculatedRun();
+        $preparer = User::query()->find($run->prepared_by_user_id);
+        $approver = $this->createUser();
+        $reviewed = app(PayrollRunService::class)->latestCalculationId($run);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            ['php', __DIR__.'/../../Support/approve-payroll-run.php', $this->school->id, $run->id, $approver->id, (string) $reviewed],
+            ['php', __DIR__.'/../../Support/calculate-payroll-run.php', $this->school->id, $run->id, $preparer->id],
+        );
+
+        $this->assertSame('approved', $holder);
+        $this->assertSame('rejected:App\\Domain\\Payroll\\Application\\Exceptions\\RunNotEditableException', $contender);
+        $final = app(TenantContext::class)->withSchool($this->school, fn () => $run->fresh());
+        $this->assertSame(['approved', $reviewed], [$final->status, $final->approved_calculation_id], 'the approval is bound to the calculation that was reviewed');
     }
 }

@@ -563,6 +563,10 @@ reservation.
 
 ### HR.15 — Cross-ERP integrations
 
+> **OD-HR-1 / OD-HR-2 (2026-11-05): DECIDED and IMPLEMENTED for development**
+> (the Payroll-integrity slice's S-1 / S-2; `docs/modules/PAYROLL.md` "Approval
+> integrity"). S-5 and S-13 are unchanged.
+
 > **Status (2026-11-04): PARTIAL.** HR.15A (one candidate reader for every
 > operational picker; X-1 / R-HR12-1 closed) and HR.15E/F (RETAINED and
 > UNAVAILABLE obligation states, contained owner reads) are built. HR.15B

@@ -11,6 +11,7 @@ use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
@@ -148,10 +149,10 @@ class PayrollDomainEventsRollbackTest extends TestCase
     private function arrangeApprovedRunBaseline(): array
     {
         $f = $this->arrangeCalculatedRunBaseline();
-        $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         app(TenantContext::class)->withSchool($f['school'], function () use ($f, $approver) {
-            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver);
+            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
         });
 
         return $f + ['approver' => $approver];
@@ -221,14 +222,14 @@ class PayrollDomainEventsRollbackTest extends TestCase
     private function arrangeApprove(): array
     {
         $f = $this->arrangeCalculatedRunBaseline();
-        $f['approver'] = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+        $f['approver'] = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         return $f;
     }
 
     private function actApprove(array $ctx): void
     {
-        app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['approver']);
+        app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['approver'], null, app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($ctx['runId'])));
     }
 
     private function arrangePost(): array

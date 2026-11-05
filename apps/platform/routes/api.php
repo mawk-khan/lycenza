@@ -1925,8 +1925,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/payroll-runs/{payrollRun}/calculate', [PayrollRunController::class, 'calculate'])
                 ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations'])
                 ->name('schools.payroll-runs.calculate');
+            // OD-HR-1 / OD-HR-2: the approval review packet; approve names its calculation.
+            Route::get('/payroll-runs/{payrollRun}/review', [PayrollRunController::class, 'review'])
+                ->middleware(['capability:payroll.runs.approve', 'capability:payroll.compensation.sensitive.view', 'mfa', 'private-no-store'])
+                ->name('schools.payroll-runs.review');
             Route::post('/payroll-runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])
-                ->middleware(['capability:payroll.runs.approve', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:payroll.runs.approve', 'capability:payroll.compensation.sensitive.view', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.approve');
 
             Route::get('/payroll-runs/{payrollRun}/results', [PayrollRunPostingController::class, 'results'])

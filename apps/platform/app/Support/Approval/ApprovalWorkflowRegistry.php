@@ -149,11 +149,14 @@ final class ApprovalWorkflowRegistry
             'domain' => 'Payroll',
             'tables' => ['payroll_runs', 'payroll_run_calculations'],
             'request' => ['payroll.runs.prepare'],
-            'decide' => ['payroll.runs.approve'],
-            // ORG.8B (§60): every material preparer -- creator, every recorded calculator, every adjustment author.
-            'participants' => ['payroll_runs.prepared_by_user_id', 'payroll_run_calculations.calculated_by_user_id', 'payroll_adjustments.actor_user_id'],
+            // OD-HR-1 (ADR 0034 amendment): approving needs sight of the pay it approves.
+            'decide' => ['payroll.runs.approve', 'payroll.compensation.sensitive.view'],
+            // ORG.8B (§60): every material preparer -- creator, every recorded calculator, every adjustment author;
+            // OD-HR-2: and the recorded author of every compensation change the run rests on.
+            'participants' => ['payroll_runs.prepared_by_user_id', 'payroll_run_calculations.calculated_by_user_id', 'payroll_adjustments.actor_user_id', 'employee_compensation_assignments.assigned_by_user_id'],
             'decider' => 'payroll_runs.approved_by_user_id',
             'otherDecisionColumns' => ['payroll_runs.posted_by_user_id'],
+            // The evidence binding is payroll_runs_approval_evidence_guard (approved_calculation_id, OD-HR-1).
             'dbBackstop' => 'payroll_runs_participant_approval_guard',
             'makerChecker' => 'shared',
             'service' => 'App\Domain\Payroll\Application\PayrollRunService',

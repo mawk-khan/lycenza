@@ -635,7 +635,9 @@ final class DemoModuleData
         $august = $periods->open($periods->createPeriod($d->school, Carbon::parse('2026-08-01'), Carbon::parse('2026-08-31'), $preparer), $preparer);
         $augustRun = $runs->createRun($august, $preparer);
         $runs->calculate($augustRun, $preparer);
-        $augustRun = $runs->approve($d->inSchool(fn () => $augustRun->fresh()), $d->admin);
+        $augustFresh = $d->inSchool(fn () => $augustRun->fresh());
+        // OD-HR-1: an approval names the calculation it reviewed.
+        $augustRun = $runs->approve($augustFresh, $d->admin, null, (string) $runs->latestCalculationId($augustFresh));
         app(PayrollPostingService::class)->post($augustRun, $preparer);
 
         // September 2026: calculated, awaiting approval.

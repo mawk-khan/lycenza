@@ -75,6 +75,8 @@ final class UserReferenceCatalog
         // HRX.5 (ADR 0065 §26.8): who calculated the run that captured the HRX evidence.
         'payroll_run_hrx_inputs' => ['captured_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_run_calculations' => ['calculated_by_user_id' => self::RETAIN_REFERENCE],
+        // OD-HR-2: who recorded a compensation change (the run's maker set).
+        'employee_compensation_assignments' => ['assigned_by_user_id' => self::RETAIN_REFERENCE],
         'account_activation_credentials' => ['user_id' => self::DELETE_CHILD],
         'account_recovery_requests' => ['user_id' => self::DELETE_CHILD],
         'api_clients' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'revoked_by_user_id' => self::RETAIN_REFERENCE],

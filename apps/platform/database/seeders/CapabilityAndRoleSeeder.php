@@ -1815,6 +1815,18 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.tasks.team',
                 ],
             ],
+            // OD-HR-1 (owner decision 2026-11-05, ADR 0071 §33): an ADD-ON holding exactly the
+            // payroll results a checker must see to approve a run. Granted (through the
+            // payroll_sensitive grant right) to the person who also holds payroll.runs.approve;
+            // it neither prepares nor approves anything by itself, and school_admin's
+            // defaults are unchanged (no default sensitive view).
+            'payroll_approval_reviewer' => [
+                'name' => 'Payroll Approval Reviewer',
+                'scope' => 'school',
+                'capabilities' => [
+                    'payroll.runs.view', 'payroll.compensation.sensitive.view',
+                ],
+            ],
             'payroll_officer' => [ // ADR 0071 §4.3; SR.4 §26.5: no payroll.accounting.manage
                 'name' => 'Payroll Officer',
                 'scope' => 'school',

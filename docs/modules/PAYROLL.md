@@ -1038,3 +1038,50 @@ the run; that is open owner decision OD-8.4.
   before Payroll production (already gated by HRX-L4 and E45): approver !=
   poster, refuse approval of a run with one's own result, and a listed
   reverse reason.
+
+## Approval integrity (OD-HR-1 / OD-HR-2, 2026-11-05)
+
+Owner decisions (2026-11-05): approval needs `payroll.runs.approve` AND
+`payroll.compensation.sensitive.view` (nobody approves what they cannot see);
+a new add-on role `payroll_approval_reviewer` (exactly
+`payroll.compensation.sensitive.view` + `payroll.runs.view`) lets a School
+consciously name its checker; compensation changes since the previous approved
+run are shown in the run's review and their authors join the maker set; the
+review lists what changed, never the unchanged register.
+
+- **Review packet** (`PayrollApprovalReviewService`, `/app/payroll/runs/{run}/review`,
+  `GET .../payroll-runs/{run}/review`): run, period, LATEST calculation
+  (ordinal, calculator, time, completeness), totals (gross, deductions, net,
+  entries, gross − deductions = net) and totals per salary component beside the
+  previous approved run (the corrected run for a correction run); paged:
+  entries whose gross, deductions or net differ (new / left / changed), every
+  manual override and correction delta (amount, reason, author), every
+  compensation assignment NEW to this run -- recorded since the previous
+  approval, OR taking effect after the previous run's period and no later than
+  this run's period (a change recorded early with a future effective date is
+  paid first by this run; security review 2026-11-05) -- with its author, or
+  "not recorded" for rows older than 2026-11-05. Blocking codes and warnings
+  are the server's. Current MFA (`mfa-page` / `mfa`); every view audited
+  `payroll.run.review_viewed` (ids only). Never an HR profile, bank, statutory
+  identifier or document; amounts are the stored results.
+- **Binding:** the approval names the reviewed calculation (`calculation_id`).
+  Under the run lock it must be the run's latest calculation or the decision
+  is refused `PAYROLL_REVIEW_STALE` (409); the approved calculation is stored
+  in `payroll_runs.approved_calculation_id` (composite key to a calculation of
+  that run; `payroll_runs_approval_evidence_guard`: only the latest at
+  approval, never set otherwise, never changed). Runs approved earlier keep
+  NULL -- nothing is backfilled or certified.
+- **Participants:** creator, calculators, adjustment authors and (OD-HR-2) the
+  recorded authors of compensation assignments the run rests on -- the same
+  "new to this run" set the review lists
+  (`employee_compensation_assignments.assigned_by_user_id`, from 2026-11-05).
+  The compensation-author check is application-enforced under the run lock;
+  `payroll_runs_participant_approval_guard` backs the creator, calculators and
+  adjustment authors only (residual: a direct runtime-role UPDATE could skip
+  the author check, exactly like every other User-identity boundary, rule 102).
+- **No rejection state** exists: a checker who does not approve leaves the run
+  calculated; the preparer adjusts and recalculates, which makes any earlier
+  review stale.
+- **Not changed:** calculation, posting, the HRX evidence freeze, statutory
+  payroll (ADR 0036 gates), exports (D-11). Residual: an unchanged-but-wrong
+  salary is not re-listed (it was reviewed when it changed).

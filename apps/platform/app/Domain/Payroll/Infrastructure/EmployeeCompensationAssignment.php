@@ -38,6 +38,8 @@ class EmployeeCompensationAssignment extends Model
         'employment_record_id',
         'salary_structure_id',
         'effective_from',
+        // OD-HR-2: who recorded the change (the run's maker set); NULL for rows recorded before 2026-11-05.
+        'assigned_by_user_id',
         'effective_to',
     ];
 

@@ -193,7 +193,7 @@ trait CreatesFinancialPeriodFixtures
             $run = $runs->createRun($period, $preparer);
             $runs->calculate($run, $preparer);
 
-            return $runs->approve($run->fresh(), $this->createUser());
+            return $runs->approve($run->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
         });
     }
 }

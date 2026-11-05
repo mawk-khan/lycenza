@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for PayrollRunLifecycleConcurrencyTest:
 // run in a GENUINELY separate OS process (via Symfony\Process::start(),
@@ -31,7 +32,8 @@ $context->set($school);
 try {
     $run = PayrollRun::query()->findOrFail($runId);
     $actor = User::query()->findOrFail($actorUserId);
-    $outcome = $app->make(PayrollRunService::class)->calculate($run, $actor);
+    // OD-HR-1: HeldTransaction lets a race hold this recalculation uncommitted (no-op otherwise).
+    $outcome = HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->calculate($run, $actor));
     echo 'calculated:'.($outcome->transitionedToCalculated ? 'transitioned' : 'partial');
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

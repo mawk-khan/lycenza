@@ -4,6 +4,8 @@ namespace App\Http\Controllers\App\Payroll;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CorrectionDeltaInput;
+use App\Domain\Payroll\Application\Exceptions\PayrollException;
+use App\Domain\Payroll\Application\PayrollApprovalReviewService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunReadService;
@@ -27,6 +29,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -154,16 +157,44 @@ class PayrollRunController extends Controller
         return redirect("/app/payroll/runs/{$run->id}")->with('status', "HRX evidence checked: {$result['changed']} of {$result['checked']} changed since capture.");
     }
 
+    /**
+     * OD-HR-1 / OD-HR-2 (owner decisions 2026-11-05): the purpose-limited
+     * approval review (whole-School payroll.runs.approve AND
+     * payroll.compensation.sensitive.view, current MFA by route). Read only;
+     * every view is audited by the service.
+     */
+    public function review(Request $request, TenantContext $context, PayrollApprovalReviewService $reviews, string $payrollRun): Response
+    {
+        $school = $context->requireSchool();
+        $pages = [];
+        foreach (PayrollApprovalReviewService::SECTIONS as $section) {
+            $pages[$section] = max(1, (int) $request->query("{$section}_page", 1));
+        }
+
+        return Inertia::render('App/Payroll/Runs/Review', [
+            'review' => $reviews->packet($school, $payrollRun, $context->actor(), $pages),
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
+        ]);
+    }
+
     public function approve(Request $request, TenantContext $context, string $payrollRun, PayrollRunAdministrationService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // SR.4 (ADR 0071 §26.7): capability first, then a fresh code, outside the approval transaction.
+        // OD-HR-1: approving also needs the sensitive view, and names the calculation that was reviewed.
         $this->authorizeCapability('payroll.runs.approve', $school);
+        $this->authorizeCapability(PayrollApprovalReviewService::SENSITIVE_VIEW, $school);
+        $validated = $request->validate(['calculation_id' => ['required', 'uuid']]);
         $proof = $mfa->requireForAction($request, $context->actor());
-        $service->approve($run, $context->actor(), $proof);
+        try {
+            $service->approve($run, $context->actor(), $proof, $validated['calculation_id']);
+        } catch (PayrollException $e) {
+            // A domain refusal (stale review, participant, not approvable) is shown on the review, by its fixed message.
+            throw ValidationException::withMessages(['payroll' => $e->getMessage()]);
+        }
 
-        return redirect("/app/payroll/runs/{$run->id}");
+        return redirect("/app/payroll/runs/{$run->id}/review")->with('status', 'Payroll run approved.');
     }
 
     /**
@@ -351,6 +382,8 @@ class PayrollRunController extends Controller
             'hrxInputs' => $summary->runKind === 'regular' && $capabilities->canInSchool($actor, PayrollHrxInputReadService::CAPABILITY, $school)
                 ? app(PayrollHrxInputReadService::class)->forRun($school, $run->id, $actor)
                 : null,
+            // OD-HR-1: approval happens on the review page, which needs both keys.
+            'canReview' => app(PayrollApprovalReviewService::class)->mayReview($actor, $school),
             'canApprove' => $capabilities->canInSchool($actor, 'payroll.runs.approve', $school)
                 && $summary->preparedByUserId !== $actor->id,
             'isSelfPrepared' => $summary->preparedByUserId === $actor->id,

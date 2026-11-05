@@ -40,6 +40,8 @@ final class StaffRolePresentation
         'line_manager' => ['group' => 'people', 'purpose' => 'Approves or rejects the leave requests of the people who report to this person today. Granted in addition to their usual role; it shows nothing else.', 'addOn' => true],
         // HR.13: assigns and reviews only the tasks of the people who report to this person today.
         'team_task_manager' => ['group' => 'people', 'purpose' => 'Assigns and reviews the staff tasks of the people who report to this person today. Granted in addition to their usual role; it shows nothing else.', 'addOn' => true],
+        // OD-HR-1: lets an approver see the pay they approve (the review packet and run results).
+        'payroll_approval_reviewer' => ['group' => 'people', 'purpose' => 'Sees payroll run results and the approval review so that an approver can check the pay they approve. Granted in addition to the approver\'s usual role; it prepares and approves nothing by itself.', 'addOn' => true],
         'payroll_officer' => ['group' => 'people', 'purpose' => 'Salary structures, compensation, payroll periods and preparing payroll runs; approval and posting stay with an administrator.'],
         'accountant' => ['group' => 'finance', 'purpose' => 'Ledger posting, charges, fee setup and assessment runs, payments and concession requests; reversals, period closing and approvals stay with an administrator.'],
         'cashier' => ['group' => 'finance', 'purpose' => 'Records payments received and views charges.'],

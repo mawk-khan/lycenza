@@ -106,7 +106,7 @@ class PayrollCorrectionRunTest extends TestCase
             $period = $this->periodService()->open($this->periodService()->createPeriod($school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
             $run = $this->runService()->createRun($period, $preparer);
             $this->runService()->calculate($run, $preparer);
-            $run = $this->runService()->approve($run->fresh(), $this->createUser());
+            $run = $this->runService()->approve($run->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
             $postedRun = $this->postingService()->post($run, $poster);
             $run = $run->fresh();
 
@@ -173,7 +173,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'test correction', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser());
+            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster']);
         });
@@ -238,7 +238,7 @@ class PayrollCorrectionRunTest extends TestCase
             );
             $outcome = $this->runService()->calculate($correction, $f['preparer']);
             $this->assertTrue($outcome->transitionedToCalculated);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser());
+            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster']);
         });
@@ -266,7 +266,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'basic pay was overpaid', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser());
+            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster']);
         });
@@ -294,7 +294,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'PF was underwithheld', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser());
+            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster']);
         });
@@ -322,7 +322,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'PF was overwithheld', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser());
+            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster']);
         });
@@ -377,7 +377,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'basic increased, PF adjusted accordingly', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $this->createUser());
+            $correction = $this->runService()->approve($correction->fresh(), $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster']);
         });

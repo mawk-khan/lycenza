@@ -23,7 +23,9 @@ $app = require __DIR__.'/../../bootstrap/app.php';
 $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
-[, $schoolId, $runId, $approverUserId] = $argv;
+// OD-HR-1: an optional 4th argument names the calculation the approver REVIEWED; without it the
+// approver names the latest one at start-up.
+[, $schoolId, $runId, $approverUserId, $reviewed] = array_pad($argv, 5, null);
 
 $context = $app->make(TenantContext::class);
 $school = School::query()->findOrFail($schoolId);
@@ -32,7 +34,8 @@ $context->set($school);
 try {
     $run = PayrollRun::query()->findOrFail($runId);
     $approver = User::query()->findOrFail($approverUserId);
-    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver));
+    $reviewed ??= $app->make(PayrollRunService::class)->latestCalculationId($run);
+    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver, null, $reviewed));
     echo 'approved';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

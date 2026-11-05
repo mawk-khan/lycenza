@@ -13,6 +13,7 @@ use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
 use App\Domain\Payroll\Application\Exceptions\RunRecalculationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
+use App\Domain\Payroll\Application\Exceptions\StaleRunReviewException;
 use App\Domain\Payroll\Application\Exceptions\ZeroEffectCorrectionException;
 use App\Domain\Payroll\Events\PayrollRunApproved;
 use App\Domain\Payroll\Events\PayrollRunCalculated;
@@ -88,6 +89,8 @@ class PayrollRunService
             'creator' => [$run->prepared_by_user_id],
             'calculator' => PayrollRunCalculation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->distinct()->pluck('calculated_by_user_id')->all(),
             'adjustment_author' => PayrollAdjustment::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->distinct()->pluck('actor_user_id')->all(),
+            // OD-HR-2 (owner decision 2026-11-05): whoever recorded a compensation change the run's pay rests on.
+            'compensation_author' => app(PayrollApprovalReviewService::class)->compensationAuthors($run),
         ])));
     }
 
@@ -500,7 +503,7 @@ class PayrollRunService
      * results refused. The conditional UPDATE stays. `$mfa` is the fresh
      * code the transport verified, recorded as approval provenance.
      */
-    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa = null): PayrollRun
+    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
     {
         $school = $run->school;
 
@@ -508,8 +511,8 @@ class PayrollRunService
             throw new InvalidRunTransitionException($run->status, 'approved');
         }
 
-        return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa) {
-            return DB::transaction(function () use ($school, $run, $approver, $mfa) {
+        return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa, $reviewedCalculationId) {
+            return DB::transaction(function () use ($school, $run, $approver, $mfa, $reviewedCalculationId) {
                 // ORG.8B: the run row is locked, so no calculation or adjustment (both lock it) can change
                 // the participants or the results between this decision and its commit.
                 $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
@@ -518,6 +521,14 @@ class PayrollRunService
                 }
                 $participants = $this->assertMayDecide($locked, $approver);
 
+                // OD-HR-1: the decision binds to the EXACT calculation reviewed -- under the run lock, so no
+                // recalculation can slip between this check and the commit (database-backed:
+                // payroll_runs_approval_evidence_guard).
+                $latest = PayrollRunCalculation::query()->where('school_id', $locked->school_id)->where('payroll_run_id', $locked->id)->orderByDesc('ordinal')->value('id');
+                if ($latest === null || $reviewedCalculationId === null || strtolower((string) $latest) !== strtolower($reviewedCalculationId)) {
+                    throw new StaleRunReviewException($run->id);
+                }
+
                 $affected = PayrollRun::query()
                     ->where('id', $run->id)
                     ->where('status', 'calculated')
@@ -525,6 +536,7 @@ class PayrollRunService
                         'status' => 'approved',
                         'approved_by_user_id' => $approver->id,
                         'approved_at' => now(),
+                        'approved_calculation_id' => $latest,
                     ]);
 
                 if ($affected === 0) {
@@ -533,6 +545,7 @@ class PayrollRunService
 
                 $this->audit->school($school, 'payroll.run.approved', actor: $approver, subject: $run, metadata: [
                     'preparedByUserId' => $run->prepared_by_user_id,
+                    'approvedCalculationId' => $latest,
                     ...ApprovalProvenance::metadata($participants, ApprovalProvenance::APPROVED, $approver, 'school', $mfa),
                 ]);
 
@@ -541,6 +554,17 @@ class PayrollRunService
                 return $run->fresh();
             });
         });
+    }
+
+    /**
+     * OD-HR-1: the id of the run's latest recorded calculation -- the evidence
+     * version an approval names (the review packet shows it). NULL when the run
+     * was never calculated.
+     */
+    public function latestCalculationId(PayrollRun $run): ?string
+    {
+        return $this->context->withSchool($run->school, fn (): ?string => PayrollRunCalculation::query()->where('school_id', $run->school_id)
+            ->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->value('id'));
     }
 
     /**

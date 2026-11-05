@@ -10,6 +10,7 @@ use App\Domain\Payroll\Application\PayrollAccountingAdministrationService;
 use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\ApiIdempotencyKey;
@@ -185,7 +186,7 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
             'payroll.structures.manage', 'payroll.accounting.manage', 'payroll.compensation.sensitive.manage',
         ]);
         $runManager = $this->createUserWithCapabilities($school, ['payroll.runs.prepare', 'payroll.periods.manage']);
-        $approver = $this->createUserWithCapabilities($school, ['payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
         $this->poster = $this->createUserWithCapabilities($school, ['payroll.runs.post']);
 
         return $context->withSchool($school, function () use ($school, $structureManager, $runManager, $approver) {
@@ -211,7 +212,7 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
             $runService = app(PayrollRunAdministrationService::class);
             $run = $runService->createRun($period, $runManager);
             $runService->calculate($run, $runManager);
-            $run = $runService->approve($run->fresh(), $approver);
+            $run = $runService->approve($run->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->fresh()));
 
             // See $adHocRoleIds's docblock: captured here, before the
             // fixture-building TenantContext scope closes, so tearDown()

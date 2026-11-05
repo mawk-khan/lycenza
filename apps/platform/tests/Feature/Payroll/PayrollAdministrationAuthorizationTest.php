@@ -13,6 +13,7 @@ use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\SalaryComponent;
@@ -237,9 +238,9 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $runService->calculate($run, $runManager);
             $run = $run->fresh();
 
-            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
-            return $runService->approve($run, $approver);
+            return $runService->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         $this->assertSame('approved', $run->status);
@@ -270,7 +271,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer, null, app(PayrollRunService::class)->latestCalculationId($run)));
     }
 
     /**
@@ -315,7 +316,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor, null, app(PayrollRunService::class)->latestCalculationId($run)));
     }
 
     #[Test]
@@ -323,7 +324,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
     {
         $school = $this->createSchool();
         $periodManager = $this->createUserWithCapabilities($school, ['payroll.periods.manage']);
-        $approveOnlyActor = $this->createUserWithCapabilities($school, ['payroll.runs.approve']);
+        $approveOnlyActor = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         $period = $this->context()->withSchool($school, fn () => app(PayrollPeriodAdministrationService::class)->open(
             app(PayrollPeriodAdministrationService::class)->createPeriod($school, Carbon::parse('2026-09-01'), null, $periodManager), $periodManager,
@@ -338,7 +339,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
     public function run_administration_rejects_self_approval_even_when_the_actor_holds_both_capabilities(): void
     {
         $f = $this->baseFixtures();
-        $bothCapabilities = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.runs.approve', 'payroll.periods.manage']);
+        $bothCapabilities = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.runs.approve', 'payroll.compensation.sensitive.view', 'payroll.periods.manage']);
         $structureService = app(PayrollStructureAdministrationService::class);
         $runService = app(PayrollRunAdministrationService::class);
 
@@ -370,7 +371,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
         // this, since they themselves prepared this exact run.
         $this->expectException(SelfApprovalNotAllowedException::class);
 
-        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities));
+        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities, null, app(PayrollRunService::class)->latestCalculationId($run)));
     }
 
     /**
@@ -402,9 +403,9 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $runService->calculate($run, $runManager);
             $run = $run->fresh();
 
-            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
+            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
-            return $runService->approve($run, $approver);
+            return $runService->approve($run, $approver, null, app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         $poster = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']);

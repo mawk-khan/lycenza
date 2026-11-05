@@ -146,7 +146,11 @@ class PayrollCapabilityRegistryTest extends TestCase
         );
         // "By default" = the SYSTEM catalogue: committed non-system fixture roles
         // (e.g. a best-effort concurrency-test teardown) are never defaults.
-        $roleKeys = Role::query()->where('scope', 'school')->where('is_system', true)->where('key', '<>', 'payroll_officer')->pluck('key');
+        // OD-HR-1 (owner decision 2026-11-05, ADR 0071 §33): the add-on `payroll_approval_reviewer`
+        // holds exactly the sensitive VIEW (never manage), granted under the same grant right.
+        $this->assertSame(['payroll.compensation.sensitive.view'], Role::query()->where('key', 'payroll_approval_reviewer')->firstOrFail()->capabilities->pluck('key')
+            ->filter(fn (string $key) => in_array($key, self::NOBODY_BY_DEFAULT_KEYS, true))->values()->all());
+        $roleKeys = Role::query()->where('scope', 'school')->where('is_system', true)->whereNotIn('key', ['payroll_officer', 'payroll_approval_reviewer'])->pluck('key');
 
         foreach ($roleKeys as $roleKey) {
             $role = Role::query()->where('key', $roleKey)->firstOrFail();
@@ -185,8 +189,11 @@ class PayrollCapabilityRegistryTest extends TestCase
             $this->assertNotContains($checker, $officer);
         }
 
+        // OD-HR-1: the reviewer add-on reads runs (payroll.runs.view) and nothing else of the defaults.
+        $this->assertSame(['payroll.runs.view'], collect(Role::query()->where('key', 'payroll_approval_reviewer')->firstOrFail()->capabilities->pluck('key')->all())
+            ->filter(fn (string $key) => in_array($key, self::SCHOOL_ADMIN_DEFAULT_KEYS, true))->values()->all());
         $otherRoleKeys = Role::query()
-            ->whereNotIn('key', ['school_admin', 'payroll_officer'])
+            ->whereNotIn('key', ['school_admin', 'payroll_officer', 'payroll_approval_reviewer'])
             ->where('scope', 'school')
             ->where('is_system', true)
             ->pluck('key');

@@ -153,7 +153,7 @@ class PayrollApprovalParticipationConcurrencyTest extends TestCase
     public function the_authorized_entry_waits_on_the_run_and_still_refuses_the_recalculator(): void
     {
         $w = $this->world();
-        $b = $this->createUserWithCapabilities($this->school, ['payroll.runs.view', 'payroll.runs.prepare', 'payroll.runs.approve']);
+        $b = $this->createUserWithCapabilities($this->school, ['payroll.runs.view', 'payroll.runs.prepare', 'payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         [$holder, $contender] = $this->raceWithHeldHolder($this->op($w, 'calculate', $b), $this->op($w, 'approve-entry', $b));
 

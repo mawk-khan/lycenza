@@ -4366,6 +4366,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OD-HR-1 / OD-HR-2: the purpose-limited approval review of a run -- its latest calculation (the evidence version an approval names), totals and totals per salary component beside the previous approved run, and paged: entries whose pay changed (new, left, changed), every manual override and correction delta (amount, reason, author), and every compensation assignment recorded since the previous approved run (author). Never an HR profile, bank or statutory identifier. Requires payroll.runs.approve AND payroll.compensation.sensitive.view and an MFA-assured token; every view is audited. */
+        get: operations["getPayrollRunApprovalReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/payroll-runs/{payrollRunId}/approve": {
         parameters: {
             query?: never;
@@ -4375,7 +4392,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
+        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). OD-HR-1: also needs payroll.compensation.sensitive.view, and names the calculation reviewed (`calculation_id`, from the review); a run recalculated since is refused PAYROLL_REVIEW_STALE (409). */
         post: operations["approvePayrollRun"];
         delete?: never;
         options?: never;
@@ -9414,6 +9431,68 @@ export interface components {
             fullName: string | null;
             status: string;
             recordable: boolean;
+        };
+        PayrollRunApprovalInput: components["schemas"]["StepUpMfaCode"] & {
+            /**
+             * Format: uuid
+             * @description OD-HR-1: the calculation the checker reviewed (review.calculation.id).
+             */
+            calculation_id: string;
+        };
+        PayrollReviewAmounts: {
+            /** @description Decimal, 2 places. */
+            gross: string;
+            deductions: string;
+            net: string;
+        };
+        PayrollReviewPage: {
+            data: {
+                [key: string]: unknown;
+            }[];
+            current_page: number;
+            last_page: number;
+            per_page: number;
+            total: number;
+        };
+        PayrollRunApprovalReview: {
+            run: {
+                [key: string]: unknown;
+            };
+            calculation: {
+                /** Format: uuid */
+                id: string;
+                ordinal: number;
+                /** Format: date-time */
+                calculatedAt?: string | null;
+                calculatedBy?: string | null;
+                complete: boolean;
+                adjustmentCount: number;
+            } | null;
+            previousRun: {
+                [key: string]: unknown;
+            } | null;
+            totals: components["schemas"]["PayrollReviewAmounts"] & {
+                entries: number;
+                reconciles: boolean;
+            };
+            previousTotals: {
+                [key: string]: unknown;
+            } | null;
+            components: {
+                [key: string]: unknown;
+            }[];
+            approvable: boolean;
+            blocking: {
+                code: string;
+                message: string;
+            }[];
+            warnings: {
+                code: string;
+                message: string;
+            }[];
+            changes: components["schemas"]["PayrollReviewPage"];
+            adjustments: components["schemas"]["PayrollReviewPage"];
+            compensation: components["schemas"]["PayrollReviewPage"];
         };
         StaffAttendanceRegister: {
             /** Format: date */
@@ -27272,6 +27351,60 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    getPayrollRunApprovalReview: {
+        parameters: {
+            query?: {
+                changes_page?: number;
+                adjustments_page?: number;
+                compensation_page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
+                payrollRunId: components["parameters"]["PayrollRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PayrollRunApprovalReview"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking payroll.runs.approve or payroll.compensation.sensitive.view, or the token carries no current MFA. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Nonexistent or cross-School run id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     approvePayrollRun: {
         parameters: {
             query?: never;
@@ -27288,7 +27421,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StepUpMfaCode"];
+                "application/json": components["schemas"]["PayrollRunApprovalInput"];
             };
         };
         responses: {
@@ -27326,7 +27459,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description PAYROLL_SELF_APPROVAL_NOT_ALLOWED or a concurrent approval already won. */
+            /** @description PAYROLL_SELF_APPROVAL_NOT_ALLOWED, PAYROLL_REVIEW_STALE (recalculated since the review) or a concurrent approval already won. */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -174,12 +174,15 @@ class PayrollSchemaInvariantsTest extends TestCase
     }
 
     /** ORG.8B (ADR 0076 §60): a recorded calculation, so an approval covers calculated results. */
-    private function recordCalculation(string $schoolId, string $runId, string $calculatorId): void
+    private function recordCalculation(string $schoolId, string $runId, string $calculatorId): string
     {
+        $id = $this->uuid();
         $this->admin()->table('payroll_run_calculations')->insert([
-            'id' => $this->uuid(), 'school_id' => $schoolId, 'payroll_run_id' => $runId,
+            'id' => $id, 'school_id' => $schoolId, 'payroll_run_id' => $runId,
             'calculated_by_user_id' => $calculatorId, 'ordinal' => 1, 'adjustment_count' => 0, 'complete' => true, 'created_at' => now(),
         ]);
+
+        return $id;
     }
 
     private function makeRun(string $schoolId, string $periodId, string $preparerId, string $status = 'draft', string $runKind = 'regular', ?string $correctsId = null): string
@@ -333,6 +336,8 @@ class PayrollSchemaInvariantsTest extends TestCase
         $runId = $this->makeRun($schoolId, $periodId, $preparerId);
 
         $this->admin()->table('payroll_runs')->where('id', $runId)->update(['status' => 'calculated']);
+        // OD-HR-1: name the latest calculation, so the participant guard is what refuses.
+        $calculation = $this->recordCalculation($schoolId, $runId, $this->makeUser());
 
         // ORG.8B: the participant guard (BEFORE UPDATE) refuses first; payroll_runs_sod_check stays as the creator backstop.
         $this->assertNotNull($this->admin()->selectOne("select 1 as ok from pg_constraint where conname = 'payroll_runs_sod_check'"));
@@ -343,6 +348,7 @@ class PayrollSchemaInvariantsTest extends TestCase
             'status' => 'approved',
             'approved_by_user_id' => $preparerId,
             'approved_at' => now(),
+            'approved_calculation_id' => $calculation,
         ]);
     }
 
@@ -358,11 +364,12 @@ class PayrollSchemaInvariantsTest extends TestCase
         $runId = $this->makeRun($schoolId, $periodId, $preparerId);
 
         $this->admin()->table('payroll_runs')->where('id', $runId)->update(['status' => 'calculated']);
-        $this->recordCalculation($schoolId, $runId, $preparerId);
+        $calculation = $this->recordCalculation($schoolId, $runId, $preparerId);
         $this->admin()->table('payroll_runs')->where('id', $runId)->update([
             'status' => 'approved',
             'approved_by_user_id' => $approverId,
             'approved_at' => now(),
+            'approved_calculation_id' => $calculation,
         ]);
 
         $this->expectException(QueryException::class);
@@ -392,11 +399,12 @@ class PayrollSchemaInvariantsTest extends TestCase
         $runId = $this->makeRun($schoolId, $periodId, $preparerId);
 
         $this->admin()->table('payroll_runs')->where('id', $runId)->update(['status' => 'calculated']);
-        $this->recordCalculation($schoolId, $runId, $preparerId);
+        $calculation = $this->recordCalculation($schoolId, $runId, $preparerId);
         $this->admin()->table('payroll_runs')->where('id', $runId)->update([
             'status' => 'approved',
             'approved_by_user_id' => $approverId,
             'approved_at' => now(),
+            'approved_calculation_id' => $calculation,
         ]);
 
         $this->expectException(QueryException::class);

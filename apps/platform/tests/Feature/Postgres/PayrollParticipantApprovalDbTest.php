@@ -69,7 +69,8 @@ class PayrollParticipantApprovalDbTest extends TestCase
         $db = $this->runtime($w['school']);
         try {
             return $db->transaction(function () use ($db, $w, $approverId) {
-                $rows = $db->update("update payroll_runs set status = 'approved', approved_by_user_id = ?, approved_at = now() where id = ?", [$approverId, $w['run']->id]);
+                // OD-HR-1: an approval names the run's latest calculation (payroll_runs_approval_evidence_guard).
+                $rows = $db->update("update payroll_runs set status = 'approved', approved_by_user_id = ?, approved_at = now(), approved_calculation_id = (select c.id from payroll_run_calculations c where c.payroll_run_id = payroll_runs.id order by c.ordinal desc limit 1) where id = ?", [$approverId, $w['run']->id]);
                 throw new \RuntimeException((string) $rows);
             });
         } catch (QueryException $e) {
@@ -157,7 +158,7 @@ class PayrollParticipantApprovalDbTest extends TestCase
             'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'payroll_run_id' => $w['run']->id,
             'calculated_by_user_id' => $complete->id, 'ordinal' => 3, 'adjustment_count' => 0, 'complete' => true,
         ]);
-        $db->update("update payroll_runs set status = 'approved', approved_by_user_id = ?, approved_at = now() where id = ?", [$outsider->id, $w['run']->id]);
+        $db->update("update payroll_runs set status = 'approved', approved_by_user_id = ?, approved_at = now(), approved_calculation_id = (select c.id from payroll_run_calculations c where c.payroll_run_id = payroll_runs.id order by c.ordinal desc limit 1) where id = ?", [$outsider->id, $w['run']->id]);
 
         $refused = function (callable $statement) use ($db): string {
             try {

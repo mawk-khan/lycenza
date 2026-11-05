@@ -225,7 +225,7 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
         $school = $this->createSchool();
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedRun($school));
         $approver = $this->createUser();
-        $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run'], $approver));
+        $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run'], $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run'])));
 
         $this->expectException(StatutoryRunNotEligibleForCalculationException::class);
 
@@ -254,7 +254,7 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
         $this->context()->withSchool($school, fn () => $this->calculationService()->calculateForRun($built['run'], $built['actor']));
 
         $approver = $this->createUser();
-        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
         $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster));
         $run = $this->context()->withSchool($school, fn () => $built['run']->fresh());
 
@@ -309,7 +309,7 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedRun($school));
 
         $approver = $this->createUser();
-        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
         $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster));
 
         $this->expectException(StatutoryCalculationMissingException::class);
@@ -327,7 +327,7 @@ class StatutoryPayrollCalculationAndPostingTest extends TestCase
         $this->context()->withSchool($school, fn () => $this->calculationService()->calculateForRun($built['run'], $built['actor']));
 
         $approver = $this->createUser();
-        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver));
+        $run = $this->context()->withSchool($school, fn () => app(PayrollRunService::class)->approve($built['run']->fresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($built['run']->fresh())));
         $run = $this->context()->withSchool($school, fn () => app(PayrollPostingService::class)->post($run, $poster));
 
         $this->context()->withSchool($school, fn () => $this->postingService()->post($built['run']->fresh(), $poster));

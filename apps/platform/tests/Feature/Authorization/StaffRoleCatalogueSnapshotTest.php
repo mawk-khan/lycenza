@@ -184,6 +184,10 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         'team_task_manager' => [
             'hr.tasks.team',
         ],
+        // OD-HR-1 (ADR 0071 §33): the add-on that lets an approver see the pay they approve.
+        'payroll_approval_reviewer' => [
+            'payroll.compensation.sensitive.view', 'payroll.runs.view',
+        ],
         'stores_officer' => [
             'communications.events.view', 'communications.inbox.view', 'inventory.directory.manage', 'inventory.directory.view', 'inventory.stock.manage',
             'inventory.stock.view',
@@ -233,7 +237,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         $expected = self::SNAPSHOT;
         ksort($expected);
         $this->assertSame($expected, $actual, 'The School staff catalogue changed: review the role/capability diff against ADR 0071 §4.');
-        $this->assertCount(19, $actual, 'Four original roles + the thirteen ADR 0071 §4 roles + the HR.11 line_manager add-on (OD-HR-5) + the HR.13 team_task_manager add-on.');
+        $this->assertCount(20, $actual, 'Four original roles + the thirteen ADR 0071 §4 roles + the HR.11 line_manager add-on (OD-HR-5) + the HR.13 team_task_manager add-on + the OD-HR-1 payroll_approval_reviewer add-on.');
         $lineManager = Role::query()->where('key', 'line_manager')->sole();
         $this->assertSame(['school', true], [$lineManager->scope, $lineManager->is_system], 'line_manager');
 
@@ -286,7 +290,8 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         // Highly sensitive / grant-right-covered: exactly the contracted operational roles.
         $this->assertSame(['hr_sensitive_records'], $holders('hr.employees.sensitive.view'));
         $this->assertSame(['hr_sensitive_records'], $holders('hr.employees.sensitive.manage'));
-        $this->assertSame(['payroll_officer'], $holders('payroll.compensation.sensitive.view'));
+        // OD-HR-1 (ADR 0071 §33): the reviewer add-on also sees pay (never manages it).
+        $this->assertSame(['payroll_approval_reviewer', 'payroll_officer'], $holders('payroll.compensation.sensitive.view'));
         $this->assertSame(['payroll_officer'], $holders('payroll.compensation.sensitive.manage'));
         foreach (CapabilityClasses::GRANT_RIGHTS as $covered => $right) {
             $this->assertNotContains('school_admin', $holders($covered), "school_admin never holds the covered {$covered} (D3).");

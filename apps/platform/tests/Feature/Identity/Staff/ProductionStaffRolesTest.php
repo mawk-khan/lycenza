@@ -45,6 +45,8 @@ class ProductionStaffRolesTest extends TestCase
         'line_manager' => [],
         // HR.13: school_admin holds hr.tasks.team itself, so no grant right is used.
         'team_task_manager' => [],
+        // OD-HR-1: sensitive view is covered by the payroll_sensitive grant right.
+        'payroll_approval_reviewer' => ['school.roles.grant.payroll_sensitive'],
         'payroll_officer' => ['school.roles.grant.payroll_sensitive'],
         'accountant' => [],
         'cashier' => [],
@@ -275,7 +277,7 @@ class ProductionStaffRolesTest extends TestCase
 
         $this->assertSame([
             'school_admin', 'principal', 'teacher', 'staff_self_service',
-            'hr_officer', 'hr_sensitive_records', 'line_manager', 'team_task_manager', 'payroll_officer', 'accountant', 'cashier',
+            'hr_officer', 'hr_sensitive_records', 'line_manager', 'team_task_manager', 'payroll_approval_reviewer', 'payroll_officer', 'accountant', 'cashier',
             'librarian', 'transport_coordinator', 'hostel_warden', 'front_office', 'stores_officer', 'canteen_operator',
             'admissions_officer', 'communications_coordinator',
         ], array_column($catalog, 'key'), 'Stable functional order.');

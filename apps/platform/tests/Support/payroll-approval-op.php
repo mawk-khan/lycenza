@@ -45,8 +45,8 @@ try {
 
                 return 'overridden';
             })(),
-            'approve' => $runs->approve($run, $actor)->status,
-            'approve-entry' => $app->make(PayrollRunAdministrationService::class)->approve($run, $actor)->status,
+            'approve' => $runs->approve($run, $actor, null, app(PayrollRunService::class)->latestCalculationId($run))->status,
+            'approve-entry' => $app->make(PayrollRunAdministrationService::class)->approve($run, $actor, null, app(PayrollRunService::class)->latestCalculationId($run))->status,
             default => throw new InvalidArgumentException("Unknown operation {$operation}"),
         };
     });

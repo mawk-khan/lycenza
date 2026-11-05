@@ -125,7 +125,7 @@ trait CreatesPayrollRetentionFixtures
         }
 
         if ($approve) {
-            $run = $this->inSchool($school, fn () => app(PayrollRunService::class)->approve($run, $this->createUser()));
+            $run = $this->inSchool($school, fn () => app(PayrollRunService::class)->approve($run, $this->createUser(), null, app(PayrollRunService::class)->latestCalculationId($run)));
         }
         if ($approve && $postedOn !== null) {
             $this->travelTo(Carbon::parse($postedOn.' 06:00:00'));

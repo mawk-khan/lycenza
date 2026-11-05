@@ -1901,3 +1901,18 @@ A reviewed catalogue release adds five `school` capabilities and one role
   without a current HR.3A reporting line; `line_manager` is unchanged.
 - No grant-right coverage changes: school_admin holds every key itself.
 - School capability count 201 → 206; total 226 → 231.
+
+## 33. OD-HR-1 amendment — the Payroll Approval Reviewer add-on (2026-11-05)
+
+A reviewed catalogue release (owner decision 2026-11-05):
+
+| Role | Holds | Purpose |
+|---|---|---|
+| `payroll_approval_reviewer` (add-on) | `payroll.runs.view`, `payroll.compensation.sensitive.view` | lets the person who also holds `payroll.runs.approve` see the pay they approve |
+
+- No new capability; the staff catalogue goes from 19 to 20 system roles.
+- Granted under the existing `school.roles.grant.payroll_sensitive` right
+  (school_admin holds it); `school_admin`'s own defaults are unchanged -- never
+  a default sensitive view.
+- It prepares, approves, posts and manages nothing by itself; approval still
+  needs `payroll.runs.approve` and never by a run participant.

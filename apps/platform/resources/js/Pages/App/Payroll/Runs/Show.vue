@@ -82,6 +82,7 @@ interface Props {
     components: Component[];
     canPrepare: boolean;
     canApprove: boolean;
+    canReview: boolean;
     isSelfPrepared: boolean;
     canPost: boolean;
     accountingReadiness: AccountingReadiness | null;
@@ -212,26 +213,6 @@ function mfaOptions(scope: string) {
             mfaCode.value = '';
         },
     };
-}
-
-// -- Approve --------------------------------------------------------------
-
-const approving = ref(false);
-function approve(): void {
-    if (!window.confirm('Approve this payroll run? Once approved, results become immutable.'))
-        return;
-
-    approving.value = true;
-    const key = idempotencyKey(`payroll-approve-${props.run.id}`);
-    router.post(
-        `/app/payroll/runs/${props.run.id}/approve`,
-        { mfa_code: mfaCode.value },
-        {
-            headers: { 'Idempotency-Key': key },
-            ...mfaOptions(`payroll-approve-${props.run.id}`),
-            onFinish: () => (approving.value = false),
-        },
-    );
 }
 
 // -- Post -------------------------------------------------------------------
@@ -604,23 +585,16 @@ const reversalPosting = computed(
                 A different authorized user must approve this payroll run. The preparer of a run may
                 never approve it themselves, regardless of what capabilities they hold.
             </p>
-            <div v-else-if="canApprove" class="mt-2 space-y-2">
-                <MfaCodeField
-                    id="payroll-approve-mfa"
-                    v-model="mfaCode"
-                    :has-mfa-factor="hasMfaFactor"
-                    action="Approving a payroll run"
-                    :error="mfaError"
-                />
-                <button
-                    type="button"
-                    :disabled="approving || !hasMfaFactor"
-                    class="rounded-xs bg-accent-strong px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                    @click="approve"
+            <!-- OD-HR-1: approval happens on the review page, which shows what is approved. -->
+            <p v-else-if="canReview" class="mt-2 text-sm">
+                <Link class="underline" :href="`/app/payroll/runs/${run.id}/review`"
+                    >Review and approve this run</Link
                 >
-                    {{ approving ? 'Approving…' : 'Approve run' }}
-                </button>
-            </div>
+            </p>
+            <p v-else-if="canApprove" class="mt-1 text-sm text-ink">
+                Approving a run also needs sight of its pay: an administrator must grant you the
+                Payroll Approval Reviewer role before you can review and approve it.
+            </p>
             <p v-else class="mt-1 text-sm text-ink-muted">
                 You don't hold payroll.runs.approve -- you cannot approve this run.
             </p>

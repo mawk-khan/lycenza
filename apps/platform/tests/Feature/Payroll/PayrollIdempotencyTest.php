@@ -10,6 +10,7 @@ use App\Domain\Payroll\Application\PayrollAccountingAdministrationService;
 use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\ApiIdempotencyKey;
@@ -19,6 +20,7 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -56,7 +58,15 @@ class PayrollIdempotencyTest extends TestCase
      */
     private function mfaFor(string $key, string $url, string $token): array
     {
-        return $this->codesByKey[$key.' '.$url] ??= $this->mfaBody($token);
+        $body = $this->codesByKey[$key.' '.$url] ??= $this->mfaBody($token);
+        // OD-HR-1: an approval names the run's latest calculation.
+        if (preg_match('#/payroll-runs/([0-9a-f-]{36})/approve$#', $url, $m) === 1) {
+            $schoolId = preg_match('#/schools/([0-9a-f-]{36})/#', $url, $s) === 1 ? $s[1] : null;
+            $body['calculation_id'] = app(TenantContext::class)->withSchool(School::query()->findOrFail($schoolId),
+                fn () => DB::table('payroll_run_calculations')->where('payroll_run_id', $m[1])->orderByDesc('ordinal')->value('id'));
+        }
+
+        return $body;
     }
 
     private function as(string $token): self
@@ -118,7 +128,7 @@ class PayrollIdempotencyTest extends TestCase
             return $run->id;
         });
 
-        $approver = $this->createUserWithCapabilities($school, ['payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
         $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         return [
@@ -142,8 +152,8 @@ class PayrollIdempotencyTest extends TestCase
 
         app(TenantContext::class)->withSchool($f['school'], function () use ($f) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
-            $throwawayApprover = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
-            app(PayrollRunAdministrationService::class)->approve($run, $throwawayApprover);
+            $throwawayApprover = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
+            app(PayrollRunAdministrationService::class)->approve($run, $throwawayApprover, null, app(PayrollRunService::class)->latestCalculationId($run));
         });
 
         return $f;

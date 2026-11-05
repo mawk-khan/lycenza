@@ -290,3 +290,16 @@ explicitly reject exactly that mechanism for an analogous case.
   represented as fully closed while it remains open, per
   `MASTER-ROADMAP.md`'s own closure-note convention (see ADR 0028's
   closure note for the exact precedent this follows).
+
+## OD-HR-1 / OD-HR-2 amendment (2026-11-05): approval integrity
+
+1. Approval needs `payroll.runs.approve` AND `payroll.compensation.sensitive.view`,
+   both re-read in the decision transaction (ADR 0071 §33 adds the reviewer
+   add-on role).
+2. The approver reviews a purpose-limited packet from the stored results and
+   names the calculation reviewed; a run recalculated since is refused, and the
+   approved calculation is recorded and database-frozen
+   (`payroll_runs.approved_calculation_id`).
+3. Compensation assignments record their author; authors of changes the run
+   rests on are participants (maker/checker).
+4. No new state, no rejection workflow, no calculation change, no export.

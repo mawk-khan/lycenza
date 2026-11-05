@@ -299,8 +299,11 @@ final class DemoDataBuilder
         $this->account('Platform Manager', $manager, '(none -- platform scope)', 'School Registry, School Groups (read), onboarding: create a School in provisioning and set its bootstrap administrator, and enable or disable optional School modules (needs MFA); cannot activate, suspend or close');
 
         $this->admin = $this->user('Asha Rao (School Admin)', 'school.admin@example.test');
-        $this->assignSchoolRole($this->member($this->admin, $this->school), 'school_admin');
-        $this->account('School Admin', $this->admin, $this->school->name, 'All school_admin capabilities (seeded system role)');
+        $adminMembership = $this->member($this->admin, $this->school);
+        $this->assignSchoolRole($adminMembership, 'school_admin');
+        // OD-HR-1 (2026-11-05): the demo's payroll approver is named as a checker, so the approval review shows the pay it approves.
+        $this->assignSchoolRole($adminMembership, 'payroll_approval_reviewer');
+        $this->account('School Admin', $this->admin, $this->school->name, 'All school_admin capabilities (seeded system role) + payroll_approval_reviewer (sees the pay it approves)');
 
         $principal = $this->user('Dr. Vikram Menon (Principal)', 'principal@example.test');
         $this->assignSchoolRole($this->member($principal, $this->school), 'principal');

@@ -13,6 +13,7 @@ use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Models\School;
 use App\Models\User;
@@ -59,7 +60,7 @@ trait CreatesSelfServiceFixtures
     {
         $structureManager = $this->createUserWithCapabilities($school, ['payroll.structures.manage', 'payroll.accounting.manage', 'payroll.compensation.sensitive.manage']);
         $runManager = $this->createUserWithCapabilities($school, ['payroll.runs.prepare', 'payroll.periods.manage']);
-        $approver = $this->createUserWithCapabilities($school, ['payroll.runs.approve']);
+        $approver = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
         $poster = $this->createUserWithCapabilities($school, ['payroll.runs.post', 'payroll.runs.reverse']);
 
         return $this->inSchool($school, function () use ($school, $employments, $month, $finalStatus, $compensate, $structureManager, $runManager, $approver, $poster) {
@@ -90,7 +91,7 @@ trait CreatesSelfServiceFixtures
             }
             $runs->calculate($run, $runManager);
             if (in_array($finalStatus, ['approved', 'posted'], true)) {
-                $runs->approve($run->refresh(), $approver);
+                $runs->approve($run->refresh(), $approver, null, app(PayrollRunService::class)->latestCalculationId($run->refresh()));
             }
             if ($finalStatus === 'posted') {
                 app(PayrollPostingAdministrationService::class)->post($run->refresh(), $poster);

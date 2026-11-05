@@ -9727,6 +9727,42 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/review:
+    get:
+      operationId: getPayrollRunApprovalReview
+      summary: >
+        OD-HR-1 / OD-HR-2: the purpose-limited approval review of a run --
+        its latest calculation (the evidence version an approval names),
+        totals and totals per salary component beside the previous approved
+        run, and paged: entries whose pay changed (new, left, changed), every
+        manual override and correction delta (amount, reason, author), and
+        every compensation assignment recorded since the previous approved
+        run (author). Never an HR profile, bank or statutory identifier.
+        Requires payroll.runs.approve AND payroll.compensation.sensitive.view
+        and an MFA-assured token; every view is audited.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+        - { name: changes_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+        - { name: adjustments_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+        - { name: compensation_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRunApprovalReview" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking payroll.runs.approve or payroll.compensation.sensitive.view, or the token carries no current MFA.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/payroll-runs/{payrollRunId}/approve:
     post:
       operationId: approvePayrollRun
@@ -9738,6 +9774,9 @@ paths:
         The preparer of this run may never approve it, enforced at the
         actor level regardless of capability grants. Idempotency-Key
         required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
+        OD-HR-1: also needs payroll.compensation.sensitive.view, and names the
+        calculation reviewed (`calculation_id`, from the review); a run
+        recalculated since is refused PAYROLL_REVIEW_STALE (409).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
@@ -9746,7 +9785,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
+            schema: { $ref: "#/components/schemas/PayrollRunApprovalInput" }
       responses:
         "200":
           description: OK
@@ -9763,7 +9802,7 @@ paths:
         "404":
           description: Nonexistent or cross-School run id.
         "409":
-          description: PAYROLL_SELF_APPROVAL_NOT_ALLOWED or a concurrent approval already won.
+          description: PAYROLL_SELF_APPROVAL_NOT_ALLOWED, PAYROLL_REVIEW_STALE (recalculated since the review) or a concurrent approval already won.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -18142,6 +18181,60 @@ components:
         fullName: { type: string, nullable: true }
         status: { type: string }
         recordable: { type: boolean }
+    PayrollRunApprovalInput:
+      allOf:
+        - { $ref: "#/components/schemas/StepUpMfaCode" }
+        - type: object
+          required: [calculation_id]
+          properties:
+            calculation_id: { type: string, format: uuid, description: "OD-HR-1: the calculation the checker reviewed (review.calculation.id)." }
+    PayrollReviewAmounts:
+      type: object
+      required: [gross, deductions, net]
+      properties:
+        gross: { type: string, description: "Decimal, 2 places." }
+        deductions: { type: string }
+        net: { type: string }
+    PayrollReviewPage:
+      type: object
+      required: [data, current_page, last_page, per_page, total]
+      properties:
+        data: { type: array, items: { type: object, additionalProperties: true } }
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    PayrollRunApprovalReview:
+      type: object
+      required: [run, calculation, previousRun, totals, previousTotals, components, approvable, blocking, warnings, changes, adjustments, compensation]
+      properties:
+        run: { type: object, additionalProperties: true }
+        calculation:
+          type: object
+          nullable: true
+          required: [id, ordinal, complete, adjustmentCount]
+          properties:
+            id: { type: string, format: uuid }
+            ordinal: { type: integer }
+            calculatedAt: { type: string, format: date-time, nullable: true }
+            calculatedBy: { type: string, nullable: true }
+            complete: { type: boolean }
+            adjustmentCount: { type: integer }
+        previousRun: { type: object, nullable: true, additionalProperties: true }
+        totals:
+          allOf:
+            - { $ref: "#/components/schemas/PayrollReviewAmounts" }
+            - type: object
+              required: [entries, reconciles]
+              properties: { entries: { type: integer }, reconciles: { type: boolean } }
+        previousTotals: { type: object, nullable: true, additionalProperties: true }
+        components: { type: array, items: { type: object, additionalProperties: true } }
+        approvable: { type: boolean }
+        blocking: { type: array, items: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string } } } }
+        warnings: { type: array, items: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string } } } }
+        changes: { $ref: "#/components/schemas/PayrollReviewPage" }
+        adjustments: { $ref: "#/components/schemas/PayrollReviewPage" }
+        compensation: { $ref: "#/components/schemas/PayrollReviewPage" }
     StaffAttendanceRegister:
       type: object
       required: [date, calendarConfigured, calendar, rows, page]

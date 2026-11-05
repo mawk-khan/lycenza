@@ -117,6 +117,7 @@ class CompensationService
                         'salary_structure_id' => $structure->id,
                         'effective_from' => $effectiveFrom,
                         'effective_to' => null,
+                        'assigned_by_user_id' => $actor->id,
                     ]);
                 } catch (QueryException $e) {
                     if (str_contains($e->getMessage(), 'overlaps existing assignment')) {
