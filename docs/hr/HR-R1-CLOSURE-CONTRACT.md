@@ -65,6 +65,14 @@ Timetable substitution, Analytics (headcount, rates).
 
 **Evidence recorded (HR.R1-C2, 2026-11-05):** HRC-1, HRC-2, XRP-1, XRP-2 and LVA-2 CLOSED for development, HRC-12 PARTIAL (deceased closed; archived open as an owner decision), each reproduced against `852fb06a` (`WorkforceLifecycleIntegrityTest`, `TimetableEmploymentEligibilityTest`, `LeaveSeparationCreditBoundaryTest`, `WorkforceLifecycleConcurrencyTest`; ADR 0028 HR.R1-C2 amendment). R1-07 (lifecycle) loses its two verified defects; R1-09 keeps the owner-deferred Library/Inventory/Finance clearance. Still open: HRC-12 (archived identity), HRC-3, HRC-4 to HRC-11 (except HRC-9's empty-interval case), LVA-1, LVA-3 to LVA-9, XRP-3 to XRP-7, the HR.4-HR.8 deferral record, R1-02, S-4, S-7. HR.R1 remains OPEN.
 
+**Evidence recorded (HR.R1-C2 gap closure, 2026-11-05):** re-verification found that the published C2 did not fully meet its own closure: a whole-School assignment could still land on an ended employment, the never-effective guard could be bypassed through `starts_on`, and the XRP-2 web test could pass without reaching the service. Each was reproduced against `cc5c14a8` and corrected (ADR 0028 "HR.R1-C2 gap closure"). The first independent review of the C1 and C2 changes found no HIGH. Its C2 findings are corrected, except the policy half of the back-dated end (OD-HR-21). Its Payroll findings are new and OPEN, not changed here (brief section 70):
+
+| Id | Severity | Finding | Status |
+|---|---|---|---|
+| PAY-13 | MEDIUM | A reversed posted run still counts as having paid a compensation change: `reverse()` leaves the run `posted`, so `payroll_run_first_paid_compensation` excludes the change from the next run and its author may approve that run. The review packet does not list it. No test covers reversal. | OPEN |
+| PAY-14 | LOW | The runtime role can change `assigned_by_user_id` or `salary_structure_id` on a compensation assignment: no trigger freezes them, so raw SQL could defeat author exclusion or reprice unseen. No application path. | OPEN |
+| PAY-15 | LOW, conditional | The HR.R1-C1 `down()` guard reads FORCE-RLS tables with no tenant context. If a production migration role lacks BYPASSRLS, it could see no rows and drop provenance. Not exercised. | OPEN |
+
 ## 4. Output
 
 - An HR.R1 record in `docs/hr/` with a verdict of **PASS**, **PASS WITH

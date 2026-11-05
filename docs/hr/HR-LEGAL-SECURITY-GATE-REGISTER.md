@@ -127,6 +127,12 @@ when a request is drafted.
 | OD-HR-19 | Staff permissions (D16) | **Blocked.** Time fields are HRX-L2 / OD-HR-14; without them a permission duplicates a half-day leave request | OD-HR-14, plus a permission-versus-leave contract |
 | OD-HR-20 | Special leave windows (D17) | **Blocked.** Needs a precedence rule for overlaps and deduction semantics that do not reopen OD-HR-15 | an owner decision on precedence and deduction (a restriction-only "blackout" variant was offered) |
 
+## 2d. Owner decision raised by the HR.R1-C2 gap closure (2026-11-05)
+
+| Id | Subject | Current behaviour | What is needed |
+|---|---|---|---|
+| OD-HR-21 | A back-dated employment end over a placement that had already started on the record | The placement is disposed of as not in effect, and the audit keeps its replaced end. A wrong last day cannot be undone, and a death is a single-actor path. | Decide whether such an end stays as is, needs a second person, or needs a placement correction path first. Refusing it outright would restore the HRC-2 dead end, because no path corrects such a placement |
+
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 
 **Problem.** HRX-L2 currently bundles two very different data classes:

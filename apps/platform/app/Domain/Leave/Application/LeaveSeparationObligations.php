@@ -35,14 +35,13 @@ final class LeaveSeparationObligations implements SeparationObligationSource
         // A monthly credit is for a WHOLE month the employment must span (HR.10, ADR 0065 §29; no proration,
         // OD-HR-17). HR.R1-C2 (LVA-2): a credited month is unearned when the month does not END within the
         // employment -- the month containing a mid-month last day included, not only months starting after it.
-        // The posting time never decides (an accrual is identified by its month); a credit that a correcting
-        // adjustment already names (`source_id`, the R-HR10-1 correction) is no longer outstanding.
+        // The posting time never decides (an accrual is identified by its month). A credit stops being outstanding
+        // only once debit adjustments naming it (`source_id`, the R-HR10-1 correction) cover its units.
         $creditsAfter = DB::table('leave_ledger_entries as l')->where('l.school_id', $school->id)
             ->where('l.employment_record_id', $subject->employmentRecordId)->where('l.kind', 'accrual')
             ->whereRaw("(l.accrual_period + interval '1 month' - interval '1 day')::date > ?::date", [$subject->lastDay])
-            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('leave_ledger_entries as c')
-                ->whereColumn('c.school_id', 'l.school_id')->whereColumn('c.employment_record_id', 'l.employment_record_id')
-                ->where('c.kind', 'adjustment')->whereColumn('c.source_id', 'l.id'))
+            ->whereRaw("COALESCE((SELECT sum(c.units) FROM leave_ledger_entries c WHERE c.school_id = l.school_id AND c.employment_record_id = l.employment_record_id
+                AND c.kind = 'adjustment' AND c.direction = 'debit' AND c.source_id = l.id), 0) < l.units")
             ->count();
 
         return [

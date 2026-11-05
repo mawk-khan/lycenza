@@ -4901,6 +4901,41 @@ future transfer and the waiting Timetable reactivation, and a future
 transfer held open is disposed of by the waiting end
 (`WorkforceLifecycleConcurrencyTest`).
 
+**Gap closure (2026-11-05, ADR 0028).** Re-verifying the above found gaps,
+each reproduced against `cc5c14a8`:
+
+- **Placement writers hold the employment row.** The whole-School placement
+  lock is FOR SHARE on both sides, so it never excluded `end()`. An assignment
+  created while an end was committing landed open on the ended employment.
+  Order: placement lock -> employment -> assignment rows.
+- **The database bounds placements.** A never-effective placement is final; no
+  placement of an ended employment runs past its end; the guard watches
+  `starts_on` as well as `ends_on`. An Employee recorded deceased gets no new
+  employment from the runtime role either.
+- **A never-effective placement stays a record.** It cannot become primary, and
+  the staff history marks its placement change.
+- **Back-dated ends.** A last day can precede a placement that had already
+  started on the record. That placement is disposed of the same way, because it
+  cannot stay outside the employment and refusing would restore the HRC-2 dead
+  end. The audit keeps the end it replaced (`replacedAssignmentEnds`) and names
+  it (`startedBeforeRecordedAssignmentIds`), and the profile says "not in
+  effect". Policy for such ends is open (OD-HR-21).
+- **Leave credits.** A credit clears only when debit adjustments naming it
+  cover its units; a credit-direction or partial adjustment does not.
+
+Concurrency now also proves end vs whole-School assignment, primary correction
+and reporting line (both orders), a retried end (audited once), and a
+reactivation ordered before the end. An entry reactivated first stays active
+through the end, like any live entry, and the separation obligations surface it;
+HR never writes Timetable.
+
+The Timetable teacher check is employment coverage. Timetable does not require a
+`TeachingAssignment` row and never derives anything from Staff Type.
+
+The legacy inventory of the DDEV database found no dead-end employment, no
+placement past an employment's end and no employment after a death (13
+employments, 10 Schools, 2026-11-05). No other database has been inventoried.
+
 ## Separation cases, notice and offboarding (HR.12, 2026-11-04)
 
 Owner decisions (HR-061 and five follow-ups, 2026-11-04; ADR 0028 HR.12

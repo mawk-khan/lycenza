@@ -847,6 +847,13 @@ trait CreatesTenancyFixtures
 
     protected function createEmployeeAssignment(EmploymentRecord $employment, Position $position, array $attributes = []): EmployeeAssignment
     {
+        // HR.R1-C2: the database keeps every placement of an ended employment inside it, so an open placement on an
+        // ended employment is recorded as what it models: one that closed with the employment.
+        $employmentEnd = $employment->ends_on?->toDateString();
+        if ($employmentEnd !== null && (! isset($attributes['ends_on']) || $attributes['ends_on'] > $employmentEnd)) {
+            $attributes['ends_on'] = $employmentEnd;
+        }
+
         return app(TenantContext::class)->withSchool(
             $employment->school,
             fn () => EmployeeAssignment::factory()->create(array_merge([

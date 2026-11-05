@@ -2,6 +2,7 @@
 
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentTermsException;
 use App\Domain\HR\Application\Exceptions\RehireRequiresEmploymentHistoryException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Models\School;
@@ -47,6 +48,9 @@ try {
     echo 'overlap';
 } catch (RehireRequiresEmploymentHistoryException) {
     echo 'no_history';
+} catch (InvalidEmploymentTermsException $e) {
+    // HR.R1-C2: the racing separation records a death; once it commits, no new employment is possible.
+    echo $e->reason === 'employee_deceased' ? 'deceased' : 'error:'.$e->reason;
 } catch (Throwable $e) {
     echo 'error:'.$e::class;
 } finally {

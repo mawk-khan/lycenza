@@ -23,6 +23,7 @@ use App\Domain\HR\Infrastructure\EmployeePlacementChange;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
@@ -93,12 +94,13 @@ class EmployeeAssignmentService
                 if ($guard !== null) {
                     // ORG.7E-1: the decision needs the whole current placement stable.
                     $this->placement->forEmployeeWrite($school, $employment->employee_id);
-                    $guard->beforeAssignmentCreate($employment, $campus?->id, $department, $attributes['starts_on']);
                 } else {
                     $this->placement->forPlacementChange($school, $employment->employee_id);
                 }
+                $current = $this->holdEmployment($school, $employment->id);
+                $guard?->beforeAssignmentCreate($current, $campus?->id, $department, $attributes['starts_on']);
 
-                return $this->createRecord($employment, $attributes, $position, $actor, $campus, $department);
+                return $this->createRecord($current, $attributes, $position, $actor, $campus, $department);
             });
         });
     }
@@ -179,6 +181,7 @@ class EmployeeAssignmentService
         return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor, $guard) {
             return DB::transaction(function () use ($school, $assignment, $endsOn, $actor, $guard) {
                 $this->placement->forPlacementChange($school, $assignment->employmentRecord->employee_id);
+                $employment = $this->holdEmployment($school, $assignment->employment_record_id);
                 if ($guard !== null) {
                     // ORG.7E-1: only a CURRENT in-scope assignment, ended today or later.
                     $guard->beforeAssignmentEnd($this->lockAssignment($assignment->id), $endsOn);
@@ -190,7 +193,7 @@ class EmployeeAssignmentService
                 // records for a placement planned past the employment's end (database-backed:
                 // trg_employee_assignments_never_effective).
                 $locked = $this->lockAssignment($assignment->id);
-                $this->assertWithinEmploymentRange($assignment->employmentRecord()->firstOrFail(), $locked->starts_on->toDateString(), $endsOn);
+                $this->assertWithinEmploymentRange($employment, $locked->starts_on->toDateString(), $endsOn);
 
                 // HR.3A: reporting lines join employments, so ending one
                 // assignment (a transfer's source, a secondary role) never
@@ -255,6 +258,7 @@ class EmployeeAssignmentService
                     // out until commit, so the open primary read below cannot go
                     // stale (security review M2).
                     $this->placement->forEmployeeWrite($school, $assignment->employmentRecord->employee_id);
+                    $this->holdEmployment($school, $assignment->employment_record_id);
                     $openPrimaryId = EmployeeAssignment::query()->where('employment_record_id', $assignment->employment_record_id)
                         ->where('is_primary', true)->whereNull('ends_on')->where('id', '!=', $assignment->id)->value('id');
                     $locked = [];
@@ -268,6 +272,7 @@ class EmployeeAssignmentService
                     $guard->beforeSetPrimary($locked[$assignment->id], $openPrimaryId !== null ? $locked[$openPrimaryId] : null);
                 } else {
                     $this->placement->forPlacementChange($school, $assignment->employmentRecord->employee_id);
+                    $this->holdEmployment($school, $assignment->employment_record_id);
                 }
 
                 return $this->setPrimaryRecord($assignment, $actor, $reason);
@@ -290,7 +295,12 @@ class EmployeeAssignmentService
 
         $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.primary');
 
-        $wasPrimary = (bool) EmployeeAssignment::query()->whereKey($assignment->id)->value('is_primary');
+        $stored = EmployeeAssignment::query()->whereKey($assignment->id)->first(['is_primary', 'starts_on', 'ends_on']);
+        // HR.R1-C2: a placement that never took effect stays a record of a plan -- never the primary placement.
+        if ($stored?->isNeverEffective() === true) {
+            throw new PlacementChangeConflictException('never_effective', 'This placement never took effect; its employment ended before it started.');
+        }
+        $wasPrimary = (bool) $stored?->is_primary;
         $otherPrimaries = EmployeeAssignment::query()
             ->where('employment_record_id', $assignment->employment_record_id)
             ->where('is_primary', true)
@@ -415,6 +425,19 @@ class EmployeeAssignmentService
         if ($department !== null && ! $department->isActive()) {
             throw new AssignmentInactiveDepartmentException($department->id);
         }
+    }
+
+    /**
+     * HR.R1-C2: the employment row as it stands now, FOR SHARE, in the one
+     * order every placement writer uses (placement lock -> employment ->
+     * assignment rows). The whole-School placement lock is itself FOR SHARE
+     * and never excludes EmploymentService::end(); this row lock does, so a
+     * writer that waited for an end decides on the ended row, never on the
+     * model it loaded before the wait.
+     */
+    private function holdEmployment(School $school, string $employmentId): EmploymentRecord
+    {
+        return EmploymentRecord::query()->where('school_id', $school->id)->whereKey($employmentId)->sharedLock()->firstOrFail();
     }
 
     private function assertWithinEmploymentRange(EmploymentRecord $employment, string $startsOn, ?string $endsOn): void

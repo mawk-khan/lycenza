@@ -83,6 +83,10 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
         $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'));
         // Last day = the end of December: every credited month was wholly worked.
         $this->assertSame(['clear', 0], $this->accrualFlag('2026-12-31'));
+        // The posting clock never decides. Every credit here was posted on 2 December: a last day of that same day
+        // leaves only December unearned, and a backdated last day flags the credits posted after it.
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-12-02'));
+        $this->assertSame(['attention', 2], $this->accrualFlag('2026-10-31'));
     }
 
     #[Test]
@@ -94,5 +98,20 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
 
         $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-15'), 'November is still outstanding; December was corrected');
         $this->assertSame(3, app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->count()), 'nothing reversed or deleted');
+    }
+
+    #[Test]
+    public function lva_2_only_debits_covering_the_credit_clear_it(): void
+    {
+        $december = (string) app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')
+            ->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->where('accrual_period', '2026-12-01')->value('id'));
+        $adjust = fn (string $direction, int $units) => app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, $direction, $units, 'administrative_correction', $this->admin, $december);
+
+        $adjust('credit', 2);
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'a credit naming it corrects nothing');
+        $adjust('debit', 2);
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'a partial debit leaves it outstanding');
+        $adjust('debit', 1);
+        $this->assertSame(['clear', 0], $this->accrualFlag('2026-11-30'), 'covered in full, across two adjustments');
     }
 }

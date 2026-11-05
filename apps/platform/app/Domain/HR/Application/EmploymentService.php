@@ -321,22 +321,32 @@ class EmploymentService
 
                 $locked->update(['ends_on' => $endsOn, 'status' => $status]);
 
-                // HR.R1-C2 (HRC-2): every placement ends within the employment (the placement lock is held,
-                // so no transfer or correction can add one meanwhile).
+                // HR.R1-C2 (HRC-2): every placement ends within the employment. The employment row lock taken
+                // above is what excludes other placement writers (the whole-School placement lock is FOR SHARE on
+                // both sides): each of them holds this row FOR SHARE or stronger before it writes.
                 // - one that applies on the last day (or after it, open or with a later planned end) is clipped
                 //   to the last day;
                 // - one that would only START after the last day (a future transfer / promotion) never took
                 //   effect: it becomes the empty interval `ends_on = starts_on - 1` (the HR.3A / ADR 0078
                 //   convention) -- it covers no day, its planned dates and its placement change stay as history.
                 // Placements already ended on or before the last day are untouched.
-                $closedAssignmentIds = $locked->assignments()
+                $closed = $locked->assignments()
                     ->where('starts_on', '<=', $endsOn)
                     ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>', $endsOn))
-                    ->lockForUpdate()->orderBy('id')->pluck('id');
-                $cancelledAssignmentIds = $locked->assignments()
+                    ->lockForUpdate()->orderBy('id')->get(['id', 'starts_on', 'ends_on']);
+                $cancelled = $locked->assignments()
                     ->where('starts_on', '>', $endsOn)
                     ->where(fn ($q) => $q->whereNull('ends_on')->orWhereColumn('ends_on', '>=', 'starts_on'))
-                    ->lockForUpdate()->orderBy('id')->pluck('id');
+                    ->lockForUpdate()->orderBy('id')->get(['id', 'starts_on', 'ends_on']);
+                $closedAssignmentIds = $closed->pluck('id');
+                $cancelledAssignmentIds = $cancelled->pluck('id');
+
+                // The rows below lose their recorded end, and a back-dated last day can precede a placement that had
+                // already started on the record. Neither fact survives in the row, so the audit keeps both.
+                $today = SchoolTimezone::today($school);
+                $replacedEnds = $closed->concat($cancelled)->filter(fn (EmployeeAssignment $a) => $a->ends_on !== null)
+                    ->mapWithKeys(fn (EmployeeAssignment $a) => [$a->id => $a->ends_on->toDateString()])->all();
+                $startedBeforeRecorded = $cancelled->filter(fn (EmployeeAssignment $a) => $a->starts_on->toDateString() <= $today)->pluck('id')->all();
 
                 if ($closedAssignmentIds->isNotEmpty()) {
                     EmployeeAssignment::query()->whereIn('id', $closedAssignmentIds)->update(['ends_on' => $endsOn]);
@@ -357,6 +367,8 @@ class EmploymentService
                     'closedAssignmentIds' => $closedAssignmentIds->all(),
                     // HR.R1-C2: placements planned to start after the last day, recorded as never effective.
                     'cancelledAssignmentIds' => $cancelledAssignmentIds->all(),
+                    'replacedAssignmentEnds' => $replacedEnds,
+                    'startedBeforeRecordedAssignmentIds' => $startedBeforeRecorded,
                 ]);
 
                 event(new EmploymentEnded($school->id, $locked->employee_id, $locked->id, $status));

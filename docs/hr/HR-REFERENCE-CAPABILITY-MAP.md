@@ -127,7 +127,7 @@ both mean HRX-L2.
 | D1-04 | Biometric identity | none (guards) | GATE | H106, H233, H373 | an attendance identity in StaffAttendance; never on Employee | StaffAttendance | HR.8 | H | HRX-L2 (L2b) |
 | D1-05 | Active / inactive state | `record_status` + employment status | IMP | H124, H127 → `EmployeeLifecycleService` | — | HR | — | — | — |
 | D1-06 | Joining date | `employment_records.starts_on` | IMP | H117, H323 | — | HR | — | — | — |
-| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) ; HR.R1-C2: an employment begins open -- no creation path accepts `ends_on` (service, API, DB), HRC-1 closed | PART | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | — |
+| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) ; HR.R1-C2 (gap closure 2026-11-05: the database bounds placements of an ended employment): an employment begins open -- no creation path accepts `ends_on` (service, API, DB), HRC-1 closed | PART | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | — |
 | D1-08 | Campus / School assignment | `employee_assignments.campus_id` (composite FK) | IMP | H174 → `CurrentEmployeeAssignments` | — | HR | — | — | — |
 | D1-09 | Department assignment | `employee_assignments.department_id` | IMP | H134 | — | HR | — | — | — |
 | D1-10 | Designation | `positions` via assignment | IMP | H134, H191 | — | HR | — | — | — |

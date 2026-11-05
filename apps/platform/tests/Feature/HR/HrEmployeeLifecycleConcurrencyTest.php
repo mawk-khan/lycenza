@@ -144,7 +144,8 @@ class HrEmployeeLifecycleConcurrencyTest extends TestCase
         $rehireOutput = trim($rehireProcess->getOutput());
 
         $this->assertMatchesRegularExpression('/^(separated:|already_ended)/', $separateOutput, "Separation must resolve safely; got: {$separateOutput}");
-        $this->assertMatchesRegularExpression('/^(created:|overlap)/', $rehireOutput, "Rehire must resolve safely; got: {$rehireOutput}");
+        // The separation is a death (the only direct separation since HR.12): committed first, it refuses the rehire (HR.R1-C2).
+        $this->assertMatchesRegularExpression('/^(created:|overlap$|deceased$)/', $rehireOutput, "Rehire must resolve safely; got: {$rehireOutput}");
 
         // No ad hoc lock was introduced for this race -- PostgreSQL's
         // MVCC (create()'s Employee-row lock always reading only

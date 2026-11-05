@@ -204,6 +204,7 @@ interface WorkforceHistory {
         reasonLabel: string;
         from: string | null;
         to: string;
+        neverEffective: boolean;
     }[];
     // HR.3A: the employment's reporting lines (voided corrections included, marked).
     reporting: {
@@ -1742,6 +1743,9 @@ function submitNote(): void {
                                 {{ c.effectiveOn }} · {{ c.kindLabel }}:
                                 <template v-if="c.from">{{ c.from }} → </template>{{ c.to }}
                                 <span class="text-ink-muted"> ({{ c.reasonLabel }})</span>
+                                <span v-if="c.neverEffective" class="text-ink-muted">
+                                    · not in effect (the employment's last day came first)</span
+                                >
                             </li>
                         </ul>
                         <h4 class="mt-3 text-xs font-medium uppercase tracking-wide text-ink-muted">
@@ -1873,8 +1877,8 @@ function submitNote(): void {
                                                 .join(' · ')
                                         }}
                                         <template v-if="a.never_effective">
-                                            · planned from {{ a.starts_on }}; never took effect (the
-                                            employment ended first)
+                                            · recorded from {{ a.starts_on }}; not in effect (the
+                                            employment's last day came first)
                                         </template>
                                         <template v-else>
                                             · {{ a.starts_on }} – {{ a.ends_on ?? 'present' }}

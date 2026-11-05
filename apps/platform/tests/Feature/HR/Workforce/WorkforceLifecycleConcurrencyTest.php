@@ -4,8 +4,10 @@ namespace Tests\Feature\HR\Workforce;
 
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Models\School;
+use App\Models\SchoolAuditEvent;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,10 @@ use Tests\TestCase;
  * with a Timetable reactivation (EmploymentCoverage FOR SHARE vs the end's
  * FOR UPDATE) -- whichever commits first, the final state never holds an
  * effective placement or a newly reactivated duty outside the employment.
+ * HR.R1-C2 gap closure: the same proof for a whole-School assignment, a
+ * primary correction and a reporting line (whose placement lock is FOR SHARE
+ * like the end's, so the employment row is what serializes them), and a
+ * retried end.
  */
 class WorkforceLifecycleConcurrencyTest extends TestCase
 {
@@ -122,5 +128,163 @@ class WorkforceLifecycleConcurrencyTest extends TestCase
         $this->assertSame('ok:separated', $holder);
         $this->assertSame('rejected:App\\Domain\\Timetable\\Application\\Exceptions\\TeacherNotAvailableException', $contender);
         $this->assertSame('inactive', app(TenantContext::class)->withSchool($this->school, fn () => (string) DB::table('timetable_entries')->where('id', $entry->id)->value('status')));
+    }
+
+    #[Test]
+    public function an_end_held_open_refuses_the_waiting_whole_school_assignment(): void
+    {
+        // The whole-School placement lock is FOR SHARE on both sides: only the employment row serializes this pair.
+        [$employment, , $position, $b] = $this->placed();
+        $hr = $this->fullHrActor($this->school);
+        $today = CarbonImmutable::now('Asia/Kolkata')->toDateString();
+        $lastDay = CarbonImmutable::now('Asia/Kolkata')->addDays(5)->toDateString();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('end', $employment->id, $lastDay, $hr->id), $this->op('assign', $employment->id, $today, $position, $b, $hr->id));
+
+        $this->assertSame('ok:separated', $holder);
+        $this->assertSame('rejected:App\\Domain\\HR\\Application\\Exceptions\\AssignmentOutsideEmploymentRangeException', $contender, 'no open placement on an ended employment');
+        $this->assertSame([['2026-04-01', $lastDay]], $this->ranges($employment));
+    }
+
+    #[Test]
+    public function an_assignment_held_open_is_clipped_by_the_waiting_end(): void
+    {
+        [$employment, , $position, $b] = $this->placed();
+        $hr = $this->fullHrActor($this->school);
+        $today = CarbonImmutable::now('Asia/Kolkata')->toDateString();
+        $lastDay = CarbonImmutable::now('Asia/Kolkata')->addDays(5)->toDateString();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('assign', $employment->id, $today, $position, $b, $hr->id), $this->op('end', $employment->id, $lastDay, $hr->id));
+
+        $this->assertStringStartsWith('ok:', $holder);
+        $this->assertSame('ok:separated', $contender);
+        $this->assertSame([['2026-04-01', $lastDay], [$today, $lastDay]], $this->ranges($employment));
+    }
+
+    #[Test]
+    public function an_end_held_open_refuses_the_waiting_primary_correction_of_a_placement_that_never_took_effect(): void
+    {
+        [$employment, , $position, $b] = $this->placed();
+        $hr = $this->fullHrActor($this->school);
+        $lastDay = CarbonImmutable::now('Asia/Kolkata')->addDays(5)->toDateString();
+        $plannedOn = CarbonImmutable::now('Asia/Kolkata')->addDays(20);
+        $planned = $this->createEmployeeAssignment($employment, $this->position($position), ['campus_id' => $b, 'is_primary' => false, 'starts_on' => $plannedOn->toDateString(), 'ends_on' => null]);
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('end', $employment->id, $lastDay, $hr->id), $this->op('primary', $planned->id, $hr->id));
+
+        $this->assertSame('ok:separated', $holder);
+        $this->assertSame('rejected:App\\Domain\\HR\\Application\\Exceptions\\PlacementChangeConflictException', $contender);
+        $this->assertSame([['2026-04-01', $lastDay], [$plannedOn->toDateString(), $plannedOn->subDay()->toDateString()]], $this->ranges($employment));
+        $this->assertFalse((bool) app(TenantContext::class)->withSchool($this->school, fn () => DB::table('employee_assignments')->where('id', $planned->id)->value('is_primary')));
+    }
+
+    #[Test]
+    public function a_primary_correction_held_open_is_kept_by_the_waiting_end(): void
+    {
+        [$employment, , $position, $b] = $this->placed();
+        $hr = $this->fullHrActor($this->school);
+        $lastDay = CarbonImmutable::now('Asia/Kolkata')->addDays(5)->toDateString();
+        $second = $this->createEmployeeAssignment($employment, $this->position($position), ['campus_id' => $b, 'is_primary' => false, 'starts_on' => '2026-06-01', 'ends_on' => null]);
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('primary', $second->id, $hr->id), $this->op('end', $employment->id, $lastDay, $hr->id));
+
+        $this->assertStringStartsWith('ok:', $holder);
+        $this->assertSame('ok:separated', $contender);
+        $this->assertSame([['2026-04-01', $lastDay], ['2026-06-01', $lastDay]], $this->ranges($employment));
+        $this->assertTrue((bool) app(TenantContext::class)->withSchool($this->school, fn () => DB::table('employee_assignments')->where('id', $second->id)->value('is_primary')));
+    }
+
+    private function position(string $id): Position
+    {
+        return app(TenantContext::class)->withSchool($this->school, fn () => Position::query()->findOrFail($id));
+    }
+
+    /** @return array{0: EmploymentRecord, 1: EmploymentRecord} subordinate, manager */
+    private function subordinateAndManager(): array
+    {
+        [$subordinate] = $this->placed();
+        $manager = $this->createEmploymentRecord($this->createEmployee($this->school), ['starts_on' => '2026-04-01', 'ends_on' => null, 'status' => 'active']);
+
+        return [$subordinate, $manager];
+    }
+
+    /** @return list<object> */
+    private function lines(EmploymentRecord $subordinate): array
+    {
+        return app(TenantContext::class)->withSchool($this->school, fn () => DB::table('reporting_relationships')->where('subordinate_employment_id', $subordinate->id)->get()->all());
+    }
+
+    #[Test]
+    public function an_end_held_open_refuses_the_waiting_reporting_line(): void
+    {
+        [$subordinate, $manager] = $this->subordinateAndManager();
+        $hr = $this->fullHrActor($this->school);
+        $today = CarbonImmutable::now('Asia/Kolkata')->toDateString();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('end', $subordinate->id, $today, $hr->id), $this->op('report', $subordinate->id, $manager->id, CarbonImmutable::now('Asia/Kolkata')->addDay()->toDateString(), $hr->id));
+
+        $this->assertSame('ok:separated', $holder);
+        $this->assertStringStartsWith('rejected:', $contender, 'the line waited for the employment, then saw it ended');
+        $this->assertSame([], $this->lines($subordinate));
+    }
+
+    #[Test]
+    public function a_reporting_line_held_open_is_closed_by_the_waiting_end(): void
+    {
+        [$subordinate, $manager] = $this->subordinateAndManager();
+        $hr = $this->fullHrActor($this->school);
+        $today = CarbonImmutable::now('Asia/Kolkata')->toDateString();
+        $lastDay = CarbonImmutable::now('Asia/Kolkata')->addDays(5)->toDateString();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('report', $subordinate->id, $manager->id, $today, $hr->id), $this->op('end', $subordinate->id, $lastDay, $hr->id));
+
+        $this->assertStringStartsWith('ok:', $holder);
+        $this->assertSame('ok:separated', $contender);
+        $lines = $this->lines($subordinate);
+        $this->assertCount(1, $lines, 'closed, never deleted or replaced');
+        $this->assertSame($lastDay, (string) $lines[0]->ends_on);
+    }
+
+    #[Test]
+    public function a_retried_end_changes_nothing_and_is_audited_once(): void
+    {
+        [$employment, , $position, $b] = $this->placed();
+        $hr = $this->fullHrActor($this->school);
+        $lastDay = CarbonImmutable::now('Asia/Kolkata')->addDays(5)->toDateString();
+        $plannedOn = CarbonImmutable::now('Asia/Kolkata')->addDays(20);
+        $this->createEmployeeAssignment($employment, $this->position($position), ['campus_id' => $b, 'is_primary' => false, 'starts_on' => $plannedOn->toDateString(), 'ends_on' => null]);
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('end', $employment->id, $lastDay, $hr->id), $this->op('end', $employment->id, $lastDay, $hr->id));
+
+        $this->assertSame('ok:separated', $holder);
+        $this->assertSame('rejected:App\\Domain\\HR\\Application\\Exceptions\\EmploymentAlreadyEndedException', $contender);
+        $this->assertSame([['2026-04-01', $lastDay], [$plannedOn->toDateString(), $plannedOn->subDay()->toDateString()]], $this->ranges($employment));
+        $this->assertSame(1, app(TenantContext::class)->withSchool($this->school, fn () => SchoolAuditEvent::query()->where('event_type', 'hr.employment.ended')->where('subject_id', $employment->id)->count()));
+    }
+
+    #[Test]
+    public function a_reactivation_held_open_is_ordered_before_the_waiting_end(): void
+    {
+        // Ordered first, the duty was valid when it was activated; the end then proceeds exactly as for any live
+        // entry, and the separation obligations surface it. Timetable data is never changed by an employment end.
+        $this->school = $this->createSchool();
+        $campus = $this->createCampus($this->school);
+        $year = $this->createAcademicYear($this->school);
+        $grade = $this->createGradeLevel($this->school);
+        $offering = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($this->school), ['is_required' => true, 'status' => 'active']);
+        $section = $this->createSection($year, $campus, $grade, ['status' => 'active']);
+        $teacher = $this->createEmployedEmployee($this->school, ['record_status' => 'active']);
+        $period = $this->createTimetablePeriod($this->school, ['start_time' => '09:00:00', 'end_time' => '09:45:00']);
+        $actor = $this->fullTimetableActor($this->school);
+        $entry = app(TimetableScheduleService::class)->create($this->school, $offering, $section, $teacher, null, $period, 1, $actor);
+        app(TimetableScheduleService::class)->deactivate($entry, $actor);
+        $employment = app(TenantContext::class)->withSchool($this->school, fn () => EmploymentRecord::query()->where('employee_id', $teacher->id)->firstOrFail());
+        $hr = $this->fullHrActor($this->school);
+        $yesterday = CarbonImmutable::now()->subDay()->toDateString();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('activate', $entry->id, $actor->id), $this->op('end', $employment->id, $yesterday, $hr->id));
+
+        $this->assertSame('ok:active', $holder);
+        $this->assertSame('ok:separated', $contender, 'the end waited for the reactivation (FOR SHARE vs FOR UPDATE)');
     }
 }

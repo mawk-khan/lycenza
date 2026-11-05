@@ -98,6 +98,8 @@ final class WorkforceHistoryReadService
                         'reasonLabel' => PlacementChangeReason::labelFor($c->reason_code),
                         'from' => $c->from_assignment_id === null ? null : self::placementLabel($assignments->get($c->from_assignment_id)),
                         'to' => self::placementLabel($assignments->get($c->to_assignment_id)) ?? '—',
+                        // HR.R1-C2: a change the employment's last day came before is a record, never a completed move.
+                        'neverEffective' => $assignments->get($c->to_assignment_id)?->isNeverEffective() === true,
                     ])->values()->all(),
                     'reporting' => $lines->where('subordinate_employment_id', $employmentId)->map(fn (ReportingRelationship $r) => [
                         'id' => $r->id,

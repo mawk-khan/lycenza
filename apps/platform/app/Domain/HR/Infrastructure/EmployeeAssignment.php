@@ -71,6 +71,16 @@ class EmployeeAssignment extends Model
         return EmployeeAssignmentFactory::new();
     }
 
+    /**
+     * HR.R1-C2: the empty interval `ends_on = starts_on - 1`, which only
+     * EmploymentService::end() records, for a placement planned to start
+     * after the employment's last day. It covers no day in any reader.
+     */
+    public function isNeverEffective(): bool
+    {
+        return $this->ends_on !== null && $this->ends_on->lt($this->starts_on);
+    }
+
     /** @return BelongsTo<EmploymentRecord, $this> */
     public function employmentRecord(): BelongsTo
     {

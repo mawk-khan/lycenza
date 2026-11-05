@@ -473,3 +473,36 @@ against `852fb06a` before it was corrected:
    every credited month that does not END within the employment (the month
    of a mid-month last day included), excluding credits a correcting
    adjustment already names. Nothing is reversed or prorated (OD-HR-17).
+
+### HR.R1-C2 gap closure (2026-11-05)
+
+A re-verification of the published HR.R1-C2 against its brief, plus the first
+independent review of the C1 and C2 changes, found gaps. Each was reproduced
+against `cc5c14a8` first.
+
+1. **Lock order for placement writers.** The whole-School placement lock is
+   FOR SHARE on both `end()` and `EmployeeAssignmentService`, so it never
+   excluded them, and `create()` checked a model loaded before it waited: an
+   open placement could land on an ended employment. Every placement writer
+   now holds the employment row (placement lock -> employment -> assignment
+   rows). `end()`'s FOR UPDATE is what excludes them.
+2. **Database bounds.** `trg_employee_assignments_never_effective` now fires
+   on `starts_on` as well as `ends_on`, makes a never-effective placement
+   final, and keeps every placement of an ended employment inside it, reading
+   the employment FOR KEY SHARE. `trg_employment_records_after_death` backs
+   the deceased refusal (the schema owner stays exempt, as in
+   `retention_guard_end_record`). HRC-12's deceased half is therefore enforced
+   in the service and the database. Its archived half stays open.
+3. **A never-effective placement stays a record.** It cannot become primary,
+   and the staff history marks its placement change.
+4. **A back-dated end can override a placement that had already started.**
+   Item 2 of the amendment above describes a plan, but the selection is
+   `starts_on > last day`, so a placement that ran on the record is disposed
+   of the same way. It cannot stay outside the employment, and refusing would
+   restore the HRC-2 dead end, because no path corrects such a placement. The
+   disposition stays. The audit now keeps what the row loses
+   (`replacedAssignmentEnds`, `startedBeforeRecordedAssignmentIds`), and the
+   profile says "not in effect" rather than "never took effect". Whether such
+   an end should need more than the ordinary path is OD-HR-21.
+5. **Leave credits clear only when covered.** A credit stops being outstanding
+   once debit adjustments naming it cover its units, not on any adjustment.

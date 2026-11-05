@@ -622,9 +622,13 @@ class DatabaseRoleVerifier
     private function employmentLifecycleAdmissionCheck(): CheckResult
     {
         $guard = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'retention_guard_end_record' and p.pronamespace = 'public'::regnamespace");
-        $trigger = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname = 'trg_employee_assignments_never_effective'")->c;
+        // The placement guard must watch BOTH dates (tgattr holds two columns): the CHECK admits the empty interval however it arises.
+        $placement = DB::selectOne("select array_length(string_to_array(t.tgattr::text, ' '), 1) as columns, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employee_assignments_never_effective'");
+        $afterDeath = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname = 'trg_employment_records_after_death'")->c;
 
-        return CheckResult::of('employment_lifecycle_admission_guarded', $guard !== null && str_contains($guard->src, 'never begins with a planned end') && $trigger === 1);
+        return CheckResult::of('employment_lifecycle_admission_guarded', $guard !== null && str_contains($guard->src, 'never begins with a planned end')
+            && $placement !== null && (int) $placement->columns === 2 && str_contains($placement->src, 'never took effect is final') && str_contains($placement->src, 'past its end')
+            && $afterDeath === 1);
     }
 
     /**
