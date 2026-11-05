@@ -205,6 +205,8 @@ final class MetricCatalog
         return [
             'outbox-dispatch', 'webhook-deliveries-redispatch', 'communication-deliveries-redispatch',
             'communications-publish-scheduled', 'automation-executions-redispatch', 'expire-school-elevations',
+            // HR.13: recurring staff tasks (records its own heartbeat).
+            'workforce-tasks-generate',
             'worker-canaries', 'idempotency-prune', 'webhook-deliveries-prune', 'domains-check',
             'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
             'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune',

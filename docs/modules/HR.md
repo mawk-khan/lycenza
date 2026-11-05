@@ -5060,7 +5060,7 @@ applicability (task keys are whole-School).
 
 ### Generation
 
-`TaskGenerationService` (hourly `workforce-tasks:generate` for every active
+`TaskGenerationService` (every-minute `workforce-tasks:generate` for every active
 School, plus "generate now"): only TODAY's occurrences on the School-local
 date, never a backlog. The complete roster is traversed by id in batches
 (`EmploymentRoster::pageOverlapping`, no cap; proven with 2,100 staff).

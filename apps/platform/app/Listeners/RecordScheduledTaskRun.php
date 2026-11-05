@@ -24,6 +24,8 @@ class RecordScheduledTaskRun
     public const SELF_RECORDING = [
         'outbox-dispatch', 'webhook-deliveries-redispatch', 'communication-deliveries-redispatch',
         'communications-publish-scheduled', 'automation-executions-redispatch',
+        // HR.13
+        'workforce-tasks-generate',
     ];
 
     public function __construct(

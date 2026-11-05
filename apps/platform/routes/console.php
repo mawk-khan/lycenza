@@ -58,9 +58,10 @@ Schedule::command('platform:email-messages-redispatch')
 // correctness requirement.
 // HR.13 (owner decision 2026-11-04): today's recurring staff tasks, per School
 // (each on its own School-local date; idempotent and resumable, so a rerun or a
-// second worker never duplicates). Hourly so every timezone's day is covered.
+// second worker never duplicates). Every minute: a School's day starts at its own
+// midnight, and once its run for today is complete a tick is one locked read.
 Schedule::command('workforce-tasks:generate')
-    ->hourlyAt(15)
+    ->everyMinute()
     ->withoutOverlapping()
     ->name('workforce-tasks-generate');
 

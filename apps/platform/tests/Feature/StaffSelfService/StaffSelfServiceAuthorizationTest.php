@@ -47,7 +47,7 @@ class StaffSelfServiceAuthorizationTest extends TestCase
     #[Test]
     public function the_staff_self_service_role_is_exactly_the_three_own_capabilities_and_teacher_is_unchanged(): void
     {
-        $this->assertSame(['communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], $this->roleCapabilities('staff_self_service'), 'ORG.9D-3R1: plus reading the School calendar; ORG.9D-1R1: and own Communications.');
+        $this->assertSame(['communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'hr.tasks.self', 'payroll.payslips.self'], $this->roleCapabilities('staff_self_service'), 'ORG.9D-3R1: plus reading the School calendar; ORG.9D-1R1: and own Communications; HR.13: own staff tasks.');
         $this->assertSame('school', DB::table('roles')->where('key', 'staff_self_service')->value('scope'));
         $this->assertSame(['attendance.teacher', 'communications.events.view', 'communications.inbox.view', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->roleCapabilities('teacher'), 'E33: the pre-HRX.4 bundle plus only the RES.4 owned marks key and the ORG.9D-3R1 School calendar and ORG.9D-1R1 own inbox');
         $this->assertSame([], array_values(array_intersect($this->roleCapabilities('principal'), ['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'])), 'principal unchanged');
