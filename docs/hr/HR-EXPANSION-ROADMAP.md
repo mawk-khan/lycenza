@@ -535,6 +535,13 @@ reservation.
 
 ### HR.14 — Reports / MIS
 
+> **Status (2026-11-05): PUBLISHED** (owner decisions: browser-only,
+> current-employment anniversaries, task rates gated, corrector display name).
+> `HrReportRegistry` with ten rendered reports and eight governed pages; D20-02,
+> D20-06, D20-10, D20-23, D20-33, D4-04, D8-15, D9-15 and D19-25 closed. ADR 0040
+> rows, rates, exports (D-11) and the XDOM reports stay open. See
+> `docs/modules/HR.md` "HR reports (HR.14)".
+
 1. **Prerequisites:** the phases whose data they read; the D-11 extension
    decided.
 2. **Scope:** D20-02/06/11/23/33; D8-15; D9-15; D11-16.

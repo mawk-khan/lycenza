@@ -103,6 +103,7 @@ use App\Http\Controllers\App\HR\HrEmployeeQualificationController;
 use App\Http\Controllers\App\HR\HrEmployeeReferenceCodeController;
 use App\Http\Controllers\App\HR\HrEmploymentController;
 use App\Http\Controllers\App\HR\HrPositionController;
+use App\Http\Controllers\App\HR\HrReportController;
 use App\Http\Controllers\App\HR\HrSeparationController;
 use App\Http\Controllers\App\HR\HrTaskController;
 use App\Http\Controllers\App\IntegrationHubController;
@@ -1701,6 +1702,13 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
 
         Route::get('/employees/import', [HrEmployeeImportController::class, 'create'])->middleware('capability:hr.employees.manage')->name('employees.import.create');
         Route::post('/employees/import', [HrEmployeeImportController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.import.store');
+
+        // HR.14 (owner decisions 2026-11-05): the HR Reports hub and the shared
+        // HR report page (read only, browser-only). Authority per report comes
+        // from the closed HrReportRegistry through HrReportAccess (whole School;
+        // an unknown key is NOT FOUND). No export, print or saved view.
+        Route::get('/reports', [HrReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/{report}', [HrReportController::class, 'show'])->name('reports.show');
 
         // HR.13 (owner decisions 2026-11-04): staff tasks. Whole-School keys; the
         // manager path (hr.tasks.team) and "never one's own" are decided in the

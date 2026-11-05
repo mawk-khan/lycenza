@@ -155,6 +155,68 @@ final class ReportingAsOfReader
     }
 
     /**
+     * HR.14: chain depth on the date for many employments in ONE recursive
+     * query (the batch form of depthOn()): 0 = reports to nobody.
+     *
+     * @param  list<string>  $employmentIds
+     * @return array<string, int> lower-cased employment id => depth
+     */
+    public function depthsOn(School $school, array $employmentIds, string $date): array
+    {
+        $employmentIds = self::uuids($employmentIds);
+        if ($employmentIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $employmentIds, $date): array {
+            $placeholders = implode(', ', array_fill(0, count($employmentIds), '?::uuid'));
+            $rows = DB::select(<<<SQL
+                WITH RECURSIVE chain(start, node, depth, path) AS (
+                    SELECT r.subordinate_employment_id, r.manager_employment_id, 1, ARRAY[r.subordinate_employment_id, r.manager_employment_id]
+                      FROM reporting_relationships r
+                     WHERE r.school_id = ? AND r.subordinate_employment_id IN ({$placeholders}) AND r.voided_at IS NULL
+                       AND r.starts_on <= ?::date AND (r.ends_on IS NULL OR r.ends_on >= ?::date)
+                    UNION ALL
+                    SELECT c.start, r.manager_employment_id, c.depth + 1, c.path || r.manager_employment_id
+                      FROM chain c JOIN reporting_relationships r
+                        ON r.school_id = ? AND r.subordinate_employment_id = c.node AND r.voided_at IS NULL
+                       AND r.starts_on <= ?::date AND (r.ends_on IS NULL OR r.ends_on >= ?::date)
+                     WHERE c.depth < ? AND NOT (r.manager_employment_id = ANY (c.path))
+                )
+                SELECT start, max(depth) AS depth FROM chain GROUP BY start
+                SQL, [$school->id, ...$employmentIds, $date, $date, $school->id, $date, $date, self::MAX_DEPTH]);
+
+            $depths = array_fill_keys($employmentIds, 0);
+            foreach ($rows as $row) {
+                $depths[strtolower((string) $row->start)] = (int) $row->depth;
+            }
+
+            return $depths;
+        });
+    }
+
+    /**
+     * HR.14: narrows an employment query (`employment_records`) to those that
+     * did ($has) or did not report to anyone on the date. MUST run inside the
+     * School's TenantContext.
+     *
+     * @template TBuilder of \Illuminate\Database\Eloquent\Builder<\App\Domain\HR\Infrastructure\EmploymentRecord>
+     *
+     * @param  TBuilder  $query
+     * @return TBuilder
+     */
+    public function constrainLineOn($query, string $date, bool $has)
+    {
+        $exists = fn ($q) => $q->selectRaw('1')->from('reporting_relationships as rl')
+            ->whereColumn('rl.school_id', 'employment_records.school_id')
+            ->whereColumn('rl.subordinate_employment_id', 'employment_records.id')
+            ->whereNull('rl.voided_at')->where('rl.starts_on', '<=', $date)
+            ->where(fn ($w) => $w->whereNull('rl.ends_on')->orWhere('rl.ends_on', '>=', $date));
+
+        return $has ? $query->whereExists($exists) : $query->whereNotExists($exists);
+    }
+
+    /**
      * Everyone below $rootEmploymentId on the date, breadth-first:
      * employment id => [manager employment id, depth below the root].
      *

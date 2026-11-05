@@ -237,3 +237,13 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | R-HR13-1 | LOW | Task remarks and feedback are free text (bounded, escaped, with a fixed notice) -- a user could still type sensitive content | by owner decision; no attachments; never a rating (OD-HR-7) | HR |
 | R-HR13-2 | LOW | Recurrence ignores holidays (calendar-neutral); a task can fall on a School holiday | by owner decision until WorkSchedule (OD-HR-14) | HR.4+ |
 | R-HR13-3 | LOW | A missed generation day is not back-filled (today only) | by owner decision | HR |
+
+## HR.14 residuals (2026-11-05)
+
+| Id | Severity | Finding | Disposition | Owner |
+|---|---|---|---|---|
+| R-HR14-1 | LOW | Leave "as at" uses the ledger's posting clock (when an entry was recorded), not an effective date; a back-dated adjustment counts from when it was posted | documented on the report; the ledger stores no other effective date for most kinds | Leave |
+| R-HR14-2 | LOW | Staff details shows the employment's status TODAY beside an as-of placement (status history is not recorded per date) | labelled "Status today" | HR |
+| R-HR14-3 | LOW | Reports are browser-only: no export or print | owner decision 2026-11-05; a D-11 HR extension is a later decision | HR |
+| R-HR14-4 | LOW | A bulk-loaded School has no planner statistics until autovacuum analyzes it, so the first report pages can be slow | operational (autovacuum); the large-population test sets a planner hint for the same reason | Operations |
+| R-HR14-5 | INFO | Rates, headcount and MIS totals stay GATE (ADR 0040, owner decision) | recorded block, not progress | Analytics |

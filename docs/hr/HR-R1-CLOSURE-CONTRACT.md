@@ -46,6 +46,15 @@ of these:
 | R1-11 | **Retention.** Every HR table has a unit; purge and hold paths are tested | retention catalogue tests |
 | R1-12 | **Security findings.** S-1…S-16 and X-1…X-3 are each FIXED, or a recorded residual with an owner decision | finding register |
 
+**Evidence recorded (HR.14, 2026-11-05) for R1-05:** `HrReportRegistry` is the
+closed catalogue (`Tests\Feature\HR\Reports\HrReportsTest`: 18 entries, owners,
+authority, reference ids, no prohibited column, no headcount/birthday/biometric/
+salary/staff-child/Inventory entry); counts are task occurrences by status only;
+the ADR 0040 rows stay GATE. Integrations authoritative today: HR ↔ Leave
+(balances), HR ↔ Staff Attendance (absentees, corrections), HR ↔ WorkforceTasks;
+still blocked: HR ↔ SIS (staff children), Inventory, Finance, Payroll salary logs,
+Timetable substitution, Analytics (headcount, rates).
+
 ## 4. Output
 
 - An HR.R1 record in `docs/hr/` with a verdict of **PASS**, **PASS WITH

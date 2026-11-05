@@ -82,6 +82,7 @@ use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Transport\Application\TransportRiderImport;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
+use App\Support\HrReports\HrReportAccess;
 use App\Support\StudentReports\Export\StudentReportExportService;
 use App\Support\StudentReports\StudentReportAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
@@ -478,6 +479,9 @@ final class SchoolRouteCoverage
             Coverage::campus('app.students.activities.index', 'students.communities.view', CommunityAdministrationService::class, 'list'),
             Coverage::service('app.students.communities.index', CommunityAdministrationService::class, 'hub'),
             Coverage::service('app.students.reports.index', StudentReportAccess::class, 'authorizeHub'),
+            // HR.14: the HR Reports hub and shared page (HrReportRegistry authority, whole School).
+            Coverage::service('app.hr.reports.index', HrReportAccess::class, 'authorizeHub'),
+            Coverage::service('app.hr.reports.show', HrReportAccess::class, 'authorizeReport'),
             Coverage::service('app.students.reports.show', StudentReportAccess::class, 'authorizeReport'),
             // SIS 11.4 (D-11): export and print -- report authority AND the
             // dataset export capability (StudentReportExportService::prepare

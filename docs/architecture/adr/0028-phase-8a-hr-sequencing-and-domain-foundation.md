@@ -395,3 +395,24 @@ attachments; extending `line_manager`.
 
 **Consequences.** Task history is HR evidence (goes with its employment);
 configuration is tenant-lifetime. Rollback refuses while tasks exist.
+
+## HR.14 amendment (2026-11-05): HR reports
+
+1. **One closed catalogue.** HR operational reports are listed only in
+   `App\Support\HrReports\HrReportRegistry` (code-owned, mirroring
+   `StudentReportRegistry`): rendered `HrReport` read models live in their
+   owning module (HR, Leave, Staff Attendance, WorkforceTasks) and read only
+   through that module's paths; existing pages are governed entries.
+2. **Authority** is all of a report's existing capabilities for the whole
+   School (`HrReportAccess`); no new capability, no `reports.view`, no Campus
+   adoption. Restricted columns need their own key; chosen columns are
+   validated against what the viewer may see.
+3. **History is effective-dated** (HR.1A, HR.3A readers); one row per
+   employment; the movement register projects canonical facts once.
+4. **No person-count Analytics** (ADR 0040, unchanged): reports list records
+   and count recorded facts (task occurrences by status) only; headcount,
+   MIS totals, rates and trends stay GATE.
+5. **Browser-only** (owner decision 2026-11-05): no export, print, saved view
+   or background job; a D-11 HR extension is a separate decision.
+6. **Anniversaries** count from the current employment's start (owner
+   decision 2026-11-05); a rehire restarts. Birthdays stay not adopted.

@@ -7,6 +7,8 @@ use App\Domain\Leave\Infrastructure\LeaveRequestDay;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 
 /**
  * HRX.3 (ADR 0065 §8, §24.4): Leave's read contract for Staff Attendance --
@@ -66,5 +68,29 @@ class LeaveCoverageReader
 
             return $coverage;
         });
+    }
+
+    /**
+     * HR.14: the SQL form of approvedCoverage() for one half -- narrows
+     * $query to rows whose half $half of the employment ($employmentColumn)
+     * on the date ($dateColumn) is NOT covered by approved leave. The same
+     * evidence (approved requests' immutable `leave_request_days`), so a
+     * report filtering in SQL agrees with the composed register exactly.
+     *
+     * @template TBuilder of Builder|QueryBuilder
+     *
+     * @param  TBuilder  $query
+     * @return TBuilder
+     */
+    public function constrainHalfUncovered(Builder|QueryBuilder $query, string $employmentColumn, string $dateColumn, int $half): Builder|QueryBuilder
+    {
+        $portions = array_values(array_map(fn (DayPortion $p) => $p->value, array_filter(DayPortion::cases(), fn (DayPortion $p) => in_array($half, $p->halves(), true))));
+
+        return $query->whereNotExists(fn (QueryBuilder $q) => $q->selectRaw('1')->from('leave_request_days as lrd')
+            ->join('leave_requests as lr', fn ($j) => $j->on('lr.id', '=', 'lrd.leave_request_id')->on('lr.school_id', '=', 'lrd.school_id'))
+            ->where('lr.status', 'approved')
+            ->whereColumn('lr.employment_record_id', $employmentColumn)
+            ->whereColumn('lrd.leave_date', $dateColumn)
+            ->whereIn('lrd.portion', $portions));
     }
 }

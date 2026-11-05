@@ -9,6 +9,8 @@ use App\Domain\HR\Infrastructure\EmploymentTerm;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -152,6 +154,125 @@ final class WorkforceAsOfReader
     public function isCurrentlyEmployed(School $school, string $employeeId): bool
     {
         return $this->context->withSchool($school, fn (): bool => $this->current->currentEmployment($school, $employeeId) !== null);
+    }
+
+    /**
+     * HR.14: the SQL form of employmentOn() for a whole School -- every
+     * employment covering $date (any status but `draft`), narrowed IN SQL by
+     * the terms effective that day (staff type, Employee category) and the
+     * primary assignment covering it (Campus, Department, Position), exactly
+     * the predicates termsFor()/primariesFor() answer with. A report pages
+     * this query; placementsOn() then labels the page. One row per
+     * employment, and the database forbids two employments of one Employee
+     * sharing a day, so a date never counts a person twice. MUST run inside
+     * the School's TenantContext.
+     *
+     * @param  array{staffType?: ?string, categoryId?: ?string, campusId?: ?string, departmentId?: ?string, positionId?: ?string}  $narrow
+     * @return Builder<EmploymentRecord>
+     */
+    public function coveringQuery(School $school, string $date, array $narrow = []): Builder
+    {
+        $date = self::day($date);
+        $query = EmploymentRecord::query()
+            ->where('employment_records.school_id', $school->id)
+            ->where('employment_records.status', '<>', 'draft')
+            ->where('employment_records.starts_on', '<=', $date)
+            ->where(fn ($w) => $w->whereNull('employment_records.ends_on')->orWhere('employment_records.ends_on', '>=', $date));
+
+        foreach (['staffType' => 'staff_type', 'categoryId' => 'employee_category_id'] as $key => $column) {
+            if (($narrow[$key] ?? null) !== null) {
+                $query->where(fn (Builder $w) => $w->whereRaw(
+                    "(SELECT t.{$column} FROM employment_terms t WHERE t.school_id = employment_records.school_id AND t.employment_record_id = employment_records.id AND t.effective_from <= ?::date ORDER BY t.effective_from DESC LIMIT 1) = ?",
+                    [$date, $narrow[$key]],
+                ));
+            }
+        }
+        $placement = array_filter(['campus_id' => $narrow['campusId'] ?? null, 'department_id' => $narrow['departmentId'] ?? null, 'position_id' => $narrow['positionId'] ?? null], fn ($v) => $v !== null);
+        if ($placement !== []) {
+            $query->whereExists(fn (QueryBuilder $q) => $this->primaryCovering($q, 'employment_records.id', $date, $placement));
+        }
+
+        return $query;
+    }
+
+    /**
+     * HR.14: narrows $query to rows whose employment ($employmentColumn) had a
+     * primary assignment in $departmentId on the row's own date
+     * ($dateColumn) -- the historical Department, never today's.
+     *
+     * @template TBuilder of Builder|QueryBuilder
+     *
+     * @param  TBuilder  $query
+     * @return TBuilder
+     */
+    public function constrainPrimaryDepartmentOn(Builder|QueryBuilder $query, string $employmentColumn, string $dateColumn, string $departmentId): Builder|QueryBuilder
+    {
+        return $query->whereExists(fn (QueryBuilder $q) => $q->selectRaw('1')->from('employee_assignments as pa')
+            ->whereColumn('pa.employment_record_id', $employmentColumn)->where('pa.is_primary', true)
+            ->where('pa.department_id', $departmentId)
+            ->whereColumn('pa.starts_on', '<=', $dateColumn)
+            ->where(fn ($w) => $w->whereNull('pa.ends_on')->orWhereColumn('pa.ends_on', '>=', $dateColumn)));
+    }
+
+    /**
+     * HR.14: the primary assignment covering EACH (employment, date) pair --
+     * one query for a whole report page, resolved in memory. Ids only.
+     *
+     * @param  list<array{0: string, 1: string}>  $pairs  [employment id, Y-m-d]
+     * @return array<string, array{campusId: ?string, departmentId: ?string, positionId: ?string}> "employment|date" => ids
+     */
+    public function primariesOnPairs(School $school, array $pairs): array
+    {
+        $pairs = array_values(array_filter($pairs, fn (array $p) => Str::isUuid($p[0])));
+        if ($pairs === []) {
+            return [];
+        }
+        $dates = array_column($pairs, 1);
+
+        return $this->context->withSchool($school, function () use ($school, $pairs, $dates): array {
+            $rows = EmployeeAssignment::query()->where('school_id', $school->id)
+                ->whereIn('employment_record_id', array_values(array_unique(array_map('strtolower', array_column($pairs, 0)))))
+                ->where('is_primary', true)->where('starts_on', '<=', max($dates))
+                ->where(fn ($w) => $w->whereNull('ends_on')->orWhere('ends_on', '>=', min($dates)))
+                ->get(['employment_record_id', 'starts_on', 'ends_on', 'campus_id', 'department_id', 'position_id'])
+                ->groupBy(fn (EmployeeAssignment $a) => strtolower($a->employment_record_id));
+
+            $result = [];
+            foreach ($pairs as [$employment, $date]) {
+                $hit = ($rows[strtolower($employment)] ?? collect())->first(fn (EmployeeAssignment $a) => $a->starts_on->toDateString() <= $date
+                    && ($a->ends_on === null || $a->ends_on->toDateString() >= $date));
+                if ($hit !== null) {
+                    $result[strtolower($employment).'|'.$date] = ['campusId' => $hit->campus_id, 'departmentId' => $hit->department_id, 'positionId' => $hit->position_id];
+                }
+            }
+
+            return $result;
+        });
+    }
+
+    /**
+     * HR.14: SQL for the id of the primary assignment of employment alias
+     * $employmentAlias that applied on the date expression $dateSql (the
+     * latest primary starting on or before it) -- history, the same question
+     * primariesFor() answers, as a correlated expression for a report union.
+     */
+    public static function primaryOnSql(string $employmentAlias, string $dateSql): string
+    {
+        return "(SELECT pa.id FROM employee_assignments pa WHERE pa.school_id = {$employmentAlias}.school_id AND pa.employment_record_id = {$employmentAlias}.id AND pa.is_primary AND pa.starts_on <= {$dateSql} ORDER BY pa.starts_on DESC, pa.id LIMIT 1)";
+    }
+
+    /** @param  array<string, string>  $placement */
+    private function primaryCovering(QueryBuilder $q, string $employmentColumn, string $date, array $placement): QueryBuilder
+    {
+        $q->selectRaw('1')->from('employee_assignments as pa')
+            ->whereColumn('pa.employment_record_id', $employmentColumn)->where('pa.is_primary', true)
+            ->where('pa.starts_on', '<=', $date)
+            ->where(fn ($w) => $w->whereNull('pa.ends_on')->orWhere('pa.ends_on', '>=', $date));
+        foreach ($placement as $column => $value) {
+            $q->where("pa.{$column}", $value);
+        }
+
+        return $q;
     }
 
     /**

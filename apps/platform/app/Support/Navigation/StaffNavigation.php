@@ -159,6 +159,8 @@ final class StaffNavigation
             new E('staff-tasks', 'people', 'Staff tasks', 'app.hr.tasks.index', any: ['hr.tasks.view', 'hr.tasks.manage'], activeWhen: ['app.hr.tasks.index', 'app.hr.tasks.catalogue', 'app.hr.tasks.show', 'app.hr.tasks.create', 'app.hr.tasks.assigned-by-me']),
             new E('team-tasks', 'people', 'Team tasks', 'app.hr.tasks.team', all: ['hr.tasks.team'], activeWhen: ['app.hr.tasks.team']),
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),
+            // HR.14: the HR Reports hub lists only the reports the viewer may open (whole School).
+            new E('hr-reports', 'people', 'HR reports', 'app.hr.reports.index', activeWhen: ['app.hr.reports.*'], any: ['hr.employees.view', 'hr.separations.view', 'hr.leave.view', 'hr.staff_attendance.view', 'hr.tasks.view']),
 
             new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view', 'finance.payment_corrections.view']),
             // ORG.7G-1 (ADR 0076 §50): the Campus-aware Finance reads -- the landing

@@ -195,7 +195,7 @@ both mean HRX-L2.
 | D4-01 | Designation hierarchy (L0–L3) | none on positions; the hierarchy is assignment → assignment | ALT | H160–H172, H191, H565–H580 | L0–L3 becomes a computed presentation (depth); never level columns | HR | HR.3 | L | — |
 | D4-02 | Manager assignment | `ReportingRelationshipService` (dated; HR.3A); `setManager()` kept as the assignment-addressed adapter | IMP | H100, H481 | — | HR | — | — | — |
 | D4-03 | Reporting-manager hierarchy of arbitrary depth | dated employment lines, arbitrary depth (HR.3A) | IMP | H478–H480 | — | HR | — | — | — |
-| D4-04 | Reporting-manager views | directory "reports to" filter, Leave approvals queue | PART | H565–H580 | tree / chain view, as-of date | HR | HR.3 | L | — |
+| D4-04 | Reporting-manager views | directory "reports to" filter, Leave approvals queue, `hr.reporting_lines` as-of report (HR.14, `ReportingAsOfReader::depthsOn()`) | IMP | H565–H580 | — | HR | HR.14 | L | — |
 | D4-05 | Manager changes over time | `reporting_relationships`, answered for any date (`ReportingAsOfReader`, HR.3A) | IMP | H481 | — | HR | HR.3A | M | — |
 | D4-06 | Primary manager | one live line per subordinate employment per day, database-enforced (HR.3A) | IMP | — | — | HR | — | — | — |
 | D4-07 | Dotted-line manager | none | MISS | — | relationship `kind` (primary / dotted); dotted never decides | HR | HR.3 | L | — |
@@ -297,7 +297,7 @@ both mean HRX-L2.
 | D8-12 | Recalculation after correction | recalculation refreshes; after approval it surfaces as `source_changed_after_approval` | ALT | — | — | Payroll | — | — | — |
 | D8-13 | Prevention of unauthorized historical edits | future refused; no window, MFA or second person (S-6) | PART | H589 | correction window + assurance | StaffAttendance | HR.7 | H | — |
 | D8-14 | Work-from-home assignment and marking | none | DEF | H303–H306, H371 | owner decision HR-004 | StaffAttendance | HR.7 | L | — |
-| D8-15 | Modified-attendance report | corrections readable per record | PART | H422–H423 | report (HR-012) | StaffAttendance | HR.14 | L | — |
+| D8-15 | Modified-attendance report | `hr.attendance_corrections` (HR.14, D20-33) | IMP | H422–H423 | — | StaffAttendance | HR.14 | L | — |
 | D8-16 | Free-text attendance remarks / staff reason | none (closed codes) | GATE | H419–H421 | — | — | — | H | HRX-L1 |
 
 ### D9 — Biometric attendance
@@ -318,7 +318,7 @@ both mean HRX-L2.
 | D9-12 | Permitted late / early flags | none | GATE | H369, H399 | — | StaffAttendance | HR.8 | M | L2b |
 | D9-13 | Branch-wise daily report | none | GATE | H599 (menu) | — | StaffAttendance | HR.8 | L | L2b |
 | D9-14 | Department filtering (biometric views) | none (the register has no department filter) | GATE | H281 | — | StaffAttendance | HR.8 | L | L2b |
-| D9-15 | Absentee reports | month report (half-day counts) | PART | H406 | absentee list by date / department | StaffAttendance | HR.14 | L | — |
+| D9-15 | Absentee reports | `hr.attendance_absentees` (HR.14): recorded absent halves not covered by approved leave, by date range and historical Department, paged in SQL (no cap) | IMP | H406 | — | StaffAttendance | HR.14 | L | — |
 | D9-16 | Leave reports (attendance view) | Leave requests and monthly reports | ALT | H402–H404 | — | Leave | — | — | — |
 | D9-17 | Export | none | GATE | H308 (Export xls) | — | — | HR.14 | H | D-11 |
 
@@ -531,7 +531,7 @@ both mean HRX-L2.
 | D19-22 | Assigned by me | Assigned by me (`TaskReadService::assignedByMe`) | IMP | H514 | — | WorkforceTasks | — | L | — |
 | D19-23 | Assigned to me | My tasks (`/app/my-tasks`, current employment) | IMP | H514 | — | WorkforceTasks | — | L | — |
 | D19-24 | Status | closed status (assigned, submitted, returned, completed, cancelled); overdue derived | IMP | H515 | — | WorkforceTasks | — | L | — |
-| D19-25 | Task reports | Staff Task Monitor counts by status + overdue (filters) | PART | H510–H513 | no rates or percentages (ADR 0040); HR.14 reports | WorkforceTasks | HR.14 | L | ADR 0040 for rates |
+| D19-25 | Task reports | Staff Task Monitor + `hr.task_occurrences`, `hr.task_summary` (occurrence counts by status that reconcile) and `hr.task_generation_runs` (coverage per day; missed days shown as "No run") (HR.14) | IMP | H510–H513 | rates stay behind ADR 0040 (owner decision 2026-11-05: gated) | WorkforceTasks | HR.14 | L | ADR 0040 for rates |
 | D19-26 | Task monitoring | Staff Task Monitor (`/app/hr/tasks`, server-filtered and paged) | IMP | H514–H517 | — | WorkforceTasks | — | L | — |
 
 ### D20 — HR reporting and MIS
@@ -539,16 +539,16 @@ both mean HRX-L2.
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
 | D20-01 | Staff directory | `EmployeeDirectoryService` (paged, Campus-scoped, filters); date-aware employment state (HR.1A, ORG10-D01) | IMP | H060, H124 | — | HR | — | L | — |
-| D20-02 | Customizable staff-details report | none (HR-048) | PART | H546–H549 | registry report with server-decided columns | HR | HR.14 | H | D-11 for export |
+| D20-02 | Customizable staff-details report | `hr.staff_details` (HrReportRegistry, HR.14): employments covering a chosen date with the terms and primary placement of THAT day; server-decided columns (placement and manager need whole-School `hr.employees.assignments.view`; a forged or prohibited column is a 422); browser-only (owner decision 2026-11-05) | IMP | H546–H549 | export waits for a D-11 HR extension (owner decision) | HR | HR.14 | H | D-11 for export |
 | D20-03 | Joiners | directory "joined from/to" (HR-056) | IMP | H562 | — | HR | — | — | — |
 | D20-04 | Inactive / leavers | directory employment filter (HR-040) | IMP | H560–H561 | — | HR | — | — | — |
 | D20-05 | Birthdays | none | NR | H120, H557 | birthday features not adopted (`REFERENCE-PARITY-MATRIX.md`) | — | — | M | — |
-| D20-06 | Work anniversaries | none | MISS | H557 | derived from joining date only | HR | HR.14 | L | — |
+| D20-06 | Work anniversaries | `hr.work_anniversaries` (HR.14): from the CURRENT employment's start date only (owner decision 2026-11-05; a rehire restarts); 29 Feb → 28 Feb; no greeting or notification | IMP | H557 | — | HR | HR.14 | L | — |
 | D20-07 | Headcount | none | GATE | H128, H354 | — | Analytics | — | M | ADR 0040 |
 | D20-08 | Yearly headcount comparison | none | GATE | H550 | — | Analytics | — | M | ADR 0040 |
 | D20-09 | Department headcount | none | GATE | H354 | — | Analytics | — | M | ADR 0040 |
-| D20-10 | Reporting hierarchy | reports-to listing (HR-044) | PART | H565–H580 | tree view (D4-04) | HR | HR.3 | L | — |
-| D20-11 | Attendance dashboard | register + month report | PART | H001–H010, H307 | operational status counts only; rates and charts are Analytics | StaffAttendance | HR.14 | M | ADR 0040 for rates |
+| D20-10 | Reporting hierarchy | `hr.reporting_lines` (HR.14): manager and level (any depth) on a chosen date from HR.3A lines; "without a manager" filter | IMP | H565–H580 | — | HR | HR.14 | L | — |
+| D20-11 | Attendance dashboard | register + month report + absentee list (HR.14) | PART | H001–H010, H307 | operational status counts only; rates and charts are Analytics | StaffAttendance | — | M | ADR 0040 for rates |
 | D20-12 | Daily attendance | register | IMP | H307 | — | StaffAttendance | — | — | — |
 | D20-13 | Monthly attendance | `monthSummary()` | IMP | H317–H318 | — | StaffAttendance | — | — | — |
 | D20-14 | Present | register | IMP | H308 | — | StaffAttendance | — | — | — |
@@ -560,17 +560,17 @@ both mean HRX-L2.
 | D20-20 | Late / early reports | none | GATE | H392–H397 | — | StaffAttendance | HR.8 | M | L2a |
 | D20-21 | Staff leave details | Leave requests list (HR-043) | IMP | H591 | — | Leave | — | — | — |
 | D20-22 | Month-wise leave | `/app/leave/monthly` (HR-042) | IMP | H594 | — | Leave | — | — | — |
-| D20-23 | As-on-month leave | balance per year | PART | H563 | as-of statement (D11-16) | Leave | HR.14 | M | — |
+| D20-23 | As-on-month leave | `hr.leave_balances` (HR.14): opening, credits, debits and balance per account as at a School-local date (posting clock) from the one ledger; year-end equals the statement's closing | IMP | H563 | — | Leave | HR.14 | M | — |
 | D20-24 | Leave balances | ledger balance reads | IMP | H449 | — | Leave | — | — | — |
 | D20-25 | Leave analytics | none | GATE | H044–H047, H452 | — | Analytics | — | M | ADR 0040 |
-| D20-26 | Staff task reports | Staff Task Monitor counts (HR.13) | PART | H510–H513 | report registry and rates (ADR 0040) | WorkforceTasks | HR.14 | L | — |
+| D20-26 | Staff task reports | the HR.14 task reports (D19-25) | PART | H510–H513 | rates and percentages (ADR 0040; owner decision 2026-11-05 keeps them gated) | WorkforceTasks | — | L | ADR 0040 |
 | D20-27 | Roaming staff | none (a punch at another branch's device) | GATE | H408, H542 | — | StaffAttendance | HR.8 | M | L2b |
 | D20-28 | GPS / self check-in report | none | GATE | H545 | — | StaffAttendance | HR.8 | H | L2b |
 | D20-29 | Staff-child report | none (the reference matches by mobile number) | XDOM | H518–H520, H541 | an explicit HR ↔ SIS contract (owner decision HR-050); **never PII matching** | SIS + HR | HR.15 | H | M-1, E47 |
 | D20-30 | Inventory issued to staff | none (Inventory issues to Departments) | XDOM | H581–H586 | a new Inventory custody contract | Inventory | HR.15 | M | rule 105 |
 | D20-31 | Staff replacement | none | XDOM | H582 | Timetable substitution record | Timetable | HR.15 | L | — |
 | D20-32 | Sessions attended | none (no screen captured; training) | DEF | H602 (menu only) | training register is outside the D-map | — | — | L | HR-L11 |
-| D20-33 | Attendance modification log | correction rows | PART | H587–H590 | report (HR-012) | StaffAttendance | HR.14 | M | — |
+| D20-33 | Attendance modification log | `hr.attendance_corrections` (HR.14): every correction dated in a range, before/after halves, closed reason, corrector display name only (owner decision 2026-11-05) | IMP | H587–H590 | — | StaffAttendance | HR.14 | M | — |
 | D20-34 | Salary / compensation modification log | effective-dated immutable compensation rows + audit (Payroll) | XDOM | H587–H590 | Payroll-owned, compensation-sensitive tier | Payroll | HR.15 | H | OD-HR-1/2 |
 | D20-35 | MIS (existing + new − inactive) | none | GATE | H550–H559 | — | Analytics | — | M | ADR 0040 |
 | D20-36 | Staff profile cards | none | DEF | H531–H537 | printable minimal card later (HR-053); never DOB, blood group, ids or bank | HR | post-HR.16 | M | — |
@@ -584,17 +584,26 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) |
-|---|---|---|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | **152** (42.1 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | **28** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | **12** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | **20** |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | **49** |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | **161** (44.6 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | **20** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | **11** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+
+HR.14 (2026-11-05, owner decisions: browser-only, current-employment
+anniversaries, task rates gated, corrector display name) closed D20-02, D20-10,
+D20-23, D20-33, D4-04, D8-15, D9-15 and D19-25 (PART → IMP) and D20-06
+(MISS → IMP) through the HR report catalogue (`HrReportRegistry`). D20-11 and
+D20-26 stay PART (rates and charts: ADR 0040). The ADR 0040 rows (D20-07,
+D20-08, D20-09, D20-25, D20-35) stay GATE; D20-05 stays NR; the XDOM rows
+(D20-18, D20-29, D20-30, D20-31, D20-34, D20-37) stay with their owners.
+Previous status of each row is in git history at 7e05f8d6.
 
 HR.13 (2026-11-04, owner decisions) moved all 26 D19 rows from MISS: 18 IMP,
 5 PART (D19-07, D19-14, D19-15, D19-16, D19-25), 2 ALT (D19-08, D19-09:
@@ -662,12 +671,12 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
 | D1 Workforce master | 20 | 1 | 0 | 2 | 1 | 4 | 4 | 3 | 35 |
 | D2 Assignments | 11 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 13 |
 | D3 Organization | 6 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 8 |
-| D4 Hierarchy | 8 | 1 | 1 | 2 | 0 | 1 | 0 | 0 | 13 |
+| D4 Hierarchy | 9 | 0 | 1 | 2 | 0 | 1 | 0 | 0 | 13 |
 | D5 Calendar & shifts | 2 | 2 | 2 | 0 | 0 | 0 | 14 | 0 | 20 |
 | D6 Attendance events | 2 | 0 | 0 | 1 | 0 | 0 | 19 | 0 | 22 |
 | D7 Evaluation | 6 | 1 | 0 | 2 | 0 | 0 | 7 | 0 | 16 |
-| D8 Attendance operations | 6 | 2 | 3 | 1 | 0 | 2 | 2 | 0 | 16 |
-| D9 Biometric | 0 | 1 | 0 | 1 | 0 | 0 | 15 | 0 | 17 |
+| D8 Attendance operations | 7 | 1 | 3 | 1 | 0 | 2 | 2 | 0 | 16 |
+| D9 Biometric | 1 | 0 | 0 | 1 | 0 | 0 | 15 | 0 | 17 |
 | D10 Leave policy | 12 | 2 | 0 | 2 | 0 | 5 | 3 | 0 | 24 |
 | D11 Ledger | 11 | 1 | 0 | 0 | 0 | 2 | 2 | 0 | 16 |
 | D12 Allocation | 9 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 11 |
@@ -677,8 +686,8 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
 | D16 Permissions | 0 | 0 | 0 | 0 | 0 | 7 | 4 | 0 | 11 |
 | D17 Special windows | 0 | 0 | 0 | 0 | 0 | 10 | 0 | 0 | 10 |
 | D18 Lifecycle | 15 | 3 | 1 | 1 | 0 | 1 | 0 | 0 | 21 |
-| D19 Tasks | 18 | 5 | 0 | 2 | 0 | 1 | 0 | 0 | 26 |
-| D20 Reports & MIS | 12 | 6 | 1 | 0 | 6 | 3 | 10 | 1 | 39 |
+| D19 Tasks | 19 | 4 | 0 | 2 | 0 | 1 | 0 | 0 | 26 |
+| D20 Reports & MIS | 17 | 2 | 0 | 0 | 6 | 3 | 10 | 1 | 39 |
 
 **Reading the totals:**
 - **Gates block 87 capabilities:**

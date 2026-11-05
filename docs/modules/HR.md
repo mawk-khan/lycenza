@@ -5093,3 +5093,89 @@ separation case (ATTENTION). A rehire's new employment starts empty.
 Attachments (Documents owner type; owner decision), numeric targets and due
 times, academic references on recurring templates, notifications and
 reminders, rates and percentages (ADR 0040; HR.14), exports (D-11), an API.
+
+## HR reports (HR.14, 2026-11-05)
+
+Owner decisions (2026-11-05): browser-only (no export, print or saved view;
+a D-11 HR extension is a later decision); work anniversaries from the
+CURRENT employment's start; task rates stay gated (ADR 0040); the Staff
+Attendance correction log names the corrector by display name only.
+
+### Catalogue
+
+`App\Support\HrReports\HrReportRegistry` is the ONE closed, code-owned HR
+report catalogue (it mirrors `StudentReportRegistry`, rule 123). A report
+exists only if it is listed; nothing is configured, stored or composed from
+the request.
+
+- **Rendered reports** are `HrReport` read models in their owning module,
+  served by the shared page `/app/hr/reports/{report}`:
+
+| Key | Owner | Basis | Authority (whole School) | Reference |
+|---|---|---|---|---|
+| `hr.staff_details` | HR | as of a date | `hr.employees.view` (placement and manager columns also `hr.employees.assignments.view`) | D20-02 |
+| `hr.staff_movements` | HR | period | `hr.employees.view` + `hr.employees.assignments.view` | D20-03/04, D18 |
+| `hr.work_anniversaries` | HR | current | `hr.employees.view` | D20-06 |
+| `hr.reporting_lines` | HR | as of a date | `hr.employees.view` + `hr.employees.assignments.view` | D20-10, D4-04 |
+| `hr.leave_balances` | Leave | as at a date | `hr.leave.view` | D20-23 |
+| `hr.attendance_absentees` | Staff Attendance | period | `hr.staff_attendance.view` (Department also `hr.employees.assignments.view`) | D9-15 |
+| `hr.attendance_corrections` | Staff Attendance | period | `hr.staff_attendance.view` | D8-15, D20-33 |
+| `hr.task_occurrences` | WorkforceTasks | period | `hr.tasks.view` | D19-25 |
+| `hr.task_summary` | WorkforceTasks | period | `hr.tasks.view` | D19-25 |
+| `hr.task_generation_runs` | WorkforceTasks | period | `hr.tasks.view` | D19-25 |
+
+- **Governed pages** (the existing directory, separation cases, leave
+  requests, month-wise leave, accruals, the attendance register and month,
+  the task monitor) are listed in the hub for a viewer holding their
+  authority; they keep their own filters and checks.
+
+### Contract
+
+- **Authority** is ALL of a report's capabilities for the whole School,
+  decided fresh by `HrReportAccess` on the hub, the page, its options and
+  every page of rows. A Campus grant of an adopted key never counts; platform,
+  elevation, Group, Network, `line_manager` and `team_task_manager` authority
+  open nothing. Unknown key = 404; governed keys are not rendered.
+- **Filters** come only from the closed `HrReportFilter` vocabulary;
+  entity ids that are foreign match nothing; choices are only the options the
+  owner offers; dates are School-local; a range above the report's
+  `maxRangeDays` is a 422, never a silent truncation. Search is literal (LIKE
+  wildcards escaped); sorts are closed keys mapped to fixed ORDER BYs with a
+  unique tie-breaker.
+- **Columns** are OPERATIONAL or RESTRICTED (absent, never blanked, without
+  `requires`). On `hr.staff_details` the viewer chooses among the columns
+  they may see; anything else is a 422. `HrReportColumn::PROHIBITED` refuses
+  personal, family, statutory, bank, pay, protected, health and free-text
+  fields. The controller strips every key outside the chosen columns.
+- **History:** as-of reports read effective-dated rows only
+  (`WorkforceAsOfReader::coveringQuery()` / `placementsOn()`,
+  `ReportingAsOfReader::managerEmployeesOn()` / `depthsOn()`); one row per
+  employment, so a date never counts a person twice. The movement register is
+  a projection of employment starts (joined / rejoined), named placement
+  changes and ended employments -- a Campus transfer is movement, never a
+  join; a rehire is a new employment.
+- **Leave balances as at a date** sum the one ledger by its own sign
+  convention (opening + credits − debits = balance per row; the year-end
+  as-at equals `LeaveStatementReader`'s closing). "As at" is the posting
+  clock: entries recorded by the end of the School-local day.
+- **Absentees** are recorded absent halves NOT covered by approved leave
+  (`LeaveCoverageReader::constrainHalfUncovered()`, the register's
+  precedence), filtered and paged in SQL with no cap. Unrecorded is never
+  absent; there is no clock, device or location fact (HRX-L2).
+- **Tasks:** occurrence counts by status reconcile (occurrences = the five
+  statuses); overdue is HR.13's definition; attribution is what was recorded
+  on the task. Never a remark, description, rate or score. Generation
+  coverage lists every day: a day without a run is "No run" (missed days are
+  never back-filled, R-HR13-3).
+- **Provenance:** each page shows its source, basis, School timezone and
+  generation time; every report is live (read when the page loads, no cache,
+  no snapshot, no materialization).
+
+### Not built (gated or deferred)
+
+Headcount, MIS movement totals, department headcount and leave analytics
+(ADR 0040: D20-07/08/09/25/35); task and attendance rates (ADR 0040, owner
+decision); birthdays (D20-05 not adopted); biometric, late/early, GPS, FR and
+roaming reports (HRX-L2 / OD-HR-14); staff children, Inventory custody, staff
+fees, substitution and salary logs (their owners, XDOM); exports, print and
+saved views (owner decision; D-11).
