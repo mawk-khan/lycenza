@@ -37,7 +37,8 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 [dashboard specification](dashboards.md),
 [WEBHOOK-FAILURES](WEBHOOK-FAILURES.md),
 [COMMUNICATION-FAILURES](COMMUNICATION-FAILURES.md),
-[FAILED-JOBS](FAILED-JOBS.md), [TELEMETRY-COLLECTION](TELEMETRY-COLLECTION.md).
+[FAILED-JOBS](FAILED-JOBS.md), [TELEMETRY-COLLECTION](TELEMETRY-COLLECTION.md),
+[HR-OPERATIONS](HR-OPERATIONS.md) (HR.16: HR deployment checks, staff attendance paging, task generation, separation access, statistics after bulk loads).
 **No observability backend is connected and no alert routing is active.**
 
 ## Status of operational evidence

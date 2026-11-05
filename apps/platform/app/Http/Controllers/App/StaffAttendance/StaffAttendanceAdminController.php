@@ -44,10 +44,12 @@ class StaffAttendanceAdminController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability(StaffAttendanceCapabilities::VIEW, $school);
         $today = CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
-        $date = $request->validate(['date' => ['sometimes', 'date_format:Y-m-d']])['date'] ?? $today;
+        $validated = $request->validate(['date' => ['sometimes', 'date_format:Y-m-d'], 'page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
+        $date = $validated['date'] ?? $today;
 
         return Inertia::render('App/StaffAttendance/Register', [
-            'register' => $reads->register($school, $date, $context->actor()),
+            // HR.16C: one server page of the whole register (no population cap).
+            'register' => $reads->register($school, $date, $context->actor(), (int) ($validated['page'] ?? 1)),
             'today' => $today,
             'reasons' => StaffAttendanceCorrection::REASONS,
             'canManage' => $capabilities->canInSchool($context->actor(), StaffAttendanceCapabilities::MANAGE, $school),
@@ -63,10 +65,11 @@ class StaffAttendanceAdminController extends Controller
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(StaffAttendanceCapabilities::VIEW, $school);
-        $month = $request->validate(['month' => ['sometimes', 'date_format:Y-m']])['month'] ?? substr(SchoolTimezone::today($school), 0, 7);
+        $validated = $request->validate(['month' => ['sometimes', 'date_format:Y-m'], 'page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
+        $month = $validated['month'] ?? substr(SchoolTimezone::today($school), 0, 7);
 
         try {
-            $summary = $reads->monthSummary($school, $month, $context->actor());
+            $summary = $reads->monthSummary($school, $month, $context->actor(), (int) ($validated['page'] ?? 1));
         } catch (StaffAttendanceException $e) {
             throw ValidationException::withMessages(['month' => $e->getMessage()]);
         }

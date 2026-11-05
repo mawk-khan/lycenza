@@ -228,7 +228,7 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | R-HR12-2 | MEDIUM | Library, Inventory and Finance record no staff obligation, so their clearance is NOT_INTEGRATED (never shown as clear, never blocking) | **DEFERRED by owner decision (HR.15, 2026-11-04)**: custody, staff borrowing and staff dues are not built; Schools use an administrative clearance item | Inventory / Library / Finance owners |
 | R-HR10-1 | LOW | a backdated end may leave monthly credits for months after the last day | **detected** on the separation case (Leave obligation, ATTENTION); still corrected by an ordinary adjustment that names the credit | Leave (manual) |
 | R-HR12-3 | LOW | a separated person keeps School staff access until someone off-boards them; completion of the case is blocked meanwhile | by owner decision (flag, never automatic); HR.15E shows kept access as RETAINED, never clear | Identity (rule 92) |
-| R-HR15-1 | LOW | Identity grants are not locked by HR: a School role granted in the same instant a case completes can be missed | recorded; completion re-reads Identity inside its transaction, the case and the grant stay visible | Identity / HR.16 |
+| R-HR15-1 | LOW | Identity grants are not locked by HR: a School role granted in the same instant a case completes can be missed | **CLOSED (HR.16B):** completion holds Identity's `SchoolAccessLock` first; two-process proof `SeparationAccessCertificationTest` | — |
 
 ## HR.13 residuals (2026-11-04)
 
@@ -242,8 +242,17 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 
 | Id | Severity | Finding | Disposition | Owner |
 |---|---|---|---|---|
-| R-HR14-1 | LOW | Leave "as at" uses the ledger's posting clock (when an entry was recorded), not an effective date; a back-dated adjustment counts from when it was posted | documented on the report; the ledger stores no other effective date for most kinds | Leave |
-| R-HR14-2 | LOW | Staff details shows the employment's status TODAY beside an as-of placement (status history is not recorded per date) | labelled "Status today" | HR |
+| R-HR14-1 | LOW | Leave "as at" uses the ledger's posting clock (when an entry was recorded), not an effective date; a back-dated adjustment counts from when it was posted | **CLOSED (HR.16A, owner decision 2026-11-05):** relabelled "Leave balances as posted" (`posted_by`, basis POSTED); boundary and backdated tests | — |
+| R-HR14-2 | LOW | Staff details shows the employment's status TODAY beside an as-of placement (status history is not recorded per date) | **CLOSED (HR.16A, owner decision 2026-11-05):** "Status on the date" from HR.12 evidence; "not recorded" where unknown; "Status today" separate | — |
 | R-HR14-3 | LOW | Reports are browser-only: no export or print | owner decision 2026-11-05; a D-11 HR extension is a later decision | HR |
-| R-HR14-4 | LOW | A bulk-loaded School has no planner statistics until autovacuum analyzes it, so the first report pages can be slow | operational (autovacuum); the large-population test sets a planner hint for the same reason | Operations |
+| R-HR14-4 | LOW | A bulk-loaded School has no planner statistics until autovacuum analyzes it, so the first report pages can be slow | **MEASURED (HR.16D):** 75 s → 49 ms (absentees) after ANALYZE; runbook `docs/operations/HR-OPERATIONS.md` §6; no index | Operations |
 | R-HR14-5 | INFO | Rates, headcount and MIS totals stay GATE (ADR 0040, owner decision) | recorded block, not progress | Analytics |
+
+## HR.16 residuals (2026-11-05)
+
+| Id | Severity | Finding | Disposition | Owner |
+|---|---|---|---|---|
+| R-HR16-1 | LOW | The Staff Attendance month view composes every employment for its totals: ~4.3 s at 5,000 staff (local) | measured; no target agreed (recommendation in `HR-16-READINESS.md` §3) | StaffAttendance |
+| R-HR16-2 | LOW | Write flows needing fresh MFA (leave approval, separation decisions, attendance correction, task review) were exercised by HTTP/service tests, not in a browser (demo personas have no MFA factor) | recorded | HR (UI) |
+| R-HR16-3 | LOW | No screen-reader pass; Chromium's native date input has a segment without its own focus ring | recorded; axe clean on 22 pages | HR (UI) |
+| R-HR16-4 | INFO | Legacy path-only HR documents: 0 on local DDEV; staging/production count unknown | pre-staging inventory | HR + Documents |

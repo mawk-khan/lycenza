@@ -13,6 +13,7 @@ contract.
 | OD-HR-1 Payroll checker visibility analysis; earlier pack-gate record | `HR-EXP-0R-REFERENCE-RECONCILIATION.md` | pack gate superseded by HR.0A; §6–§8 remain authoritative |
 | Implementation roadmap HR.1–HR.16 | `HR-EXPANSION-ROADMAP.md` | HR.0A; supersedes the HR.EXP waves |
 | Test strategy | `HR-TEST-STRATEGY.md` | HR.0A |
+| HR.16 remediation matrix, measurements, browser and axe evidence, readiness determination | `HR-16-READINESS.md` | HR.16, 2026-11-05 |
 | HR.R1 final cross-ERP closure contract | `HR-R1-CLOSURE-CONTRACT.md` | reserved |
 | Demo plan | `HR-DEMO-PLAN.md` | draft |
 | HR.1A workforce foundation (implemented contract) | `docs/modules/HR.md` "Workforce foundation (HR.1A)" + ADR 0028 HR.1A amendment + CLAUDE.md rule 130 | implemented 2026-11-03 |

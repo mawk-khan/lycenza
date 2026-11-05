@@ -416,3 +416,16 @@ configuration is tenant-lifetime. Rollback refuses while tasks exist.
    or background job; a D-11 HR extension is a separate decision.
 6. **Anniversaries** count from the current employment's start (owner
    decision 2026-11-05); a rehire restarts. Birthdays stay not adopted.
+
+## HR.16 amendment (2026-11-05): integrity and readiness
+
+1. **Completion certifies School access under Identity's lock.**
+   `SeparationCaseService::complete()` first holds `SchoolAccessLock` (via
+   `StaffAccessState::holdForCertification()`), the lock every School
+   access change takes first; HR adds no access ledger and revokes nothing.
+2. **Report time semantics are explicit.** Every HR report declares CURRENT,
+   AS_OF (effective), PERIOD or POSTED (transaction time). Staff details'
+   status on a date comes only from HR.12 evidence, and says "not recorded"
+   where none exists; leave balances are as posted.
+3. **Staff Attendance pages its population** (`EmploymentRoster::paged()`);
+   the capped `on()`/`overlapping()` readers are removed.

@@ -103,6 +103,14 @@ class HrReportsTest extends TestCase
         return $this;
     }
 
+    /** HR.16F: a refused parameter is shown ON the report page (200, `errors`), with the report rendered from its defaults. */
+    private function assertReportError(string $key, string $url, User $as): void
+    {
+        $props = $this->as($as)->get($url)->assertOk()->viewData('page')['props'];
+        $this->assertArrayHasKey($key, $props['errors'], "{$url}: expected an error for {$key}");
+        $this->assertArrayHasKey('data', $props['rows'], 'the report still renders');
+    }
+
     /** @return array<string, mixed> the Inertia props of a report page */
     private function report(string $key, array $query = [], ?User $as = null, ?School $in = null): array
     {
@@ -187,13 +195,13 @@ class HrReportsTest extends TestCase
     public function filters_sorts_and_columns_are_closed_and_validated_on_the_server(): void
     {
         $this->staff('Asha Rao', 'S-001');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_details?sort=e.full_name;drop')->assertSessionHasErrors('sort');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_details?staff_type=admin')->assertSessionHasErrors('staff_type');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_details?department_id=not-a-uuid')->assertSessionHasErrors('department_id');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_details?columns[]=date_of_birth')->assertSessionHasErrors('columns.0');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_details?columns[]=salary')->assertSessionHasErrors('columns.0');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_movements?from=2025-01-01&to=2026-10-05')->assertSessionHasErrors('to');
-        $this->as($this->hr)->get('/app/hr/reports/hr.staff_movements?from=2026-10-05&to=2026-10-01')->assertSessionHasErrors('to');
+        $this->assertReportError('sort', '/app/hr/reports/hr.staff_details?sort=e.full_name;drop', $this->hr);
+        $this->assertReportError('staff_type', '/app/hr/reports/hr.staff_details?staff_type=admin', $this->hr);
+        $this->assertReportError('department_id', '/app/hr/reports/hr.staff_details?department_id=not-a-uuid', $this->hr);
+        $this->assertReportError('columns', '/app/hr/reports/hr.staff_details?columns[]=date_of_birth', $this->hr);
+        $this->assertReportError('columns', '/app/hr/reports/hr.staff_details?columns[]=salary', $this->hr);
+        $this->assertReportError('to', '/app/hr/reports/hr.staff_movements?from=2025-01-01&to=2026-10-05', $this->hr);
+        $this->assertReportError('to', '/app/hr/reports/hr.staff_movements?from=2026-10-05&to=2026-10-01', $this->hr);
 
         // Undeclared parameters are ignored (they never change the query).
         $rows = $this->rows('hr.staff_details', ['school_id' => (string) $this->createSchool()->id, 'raw' => '1=1']);
@@ -242,7 +250,7 @@ class HrReportsTest extends TestCase
         }
         $this->assertNotContains('department_id', array_column(array_filter($props['filters'], fn ($f) => $f['options'] !== []), 'key'));
         // Forging the column is refused, not silently honoured.
-        $this->as($viewer)->get('/app/hr/reports/hr.staff_details?columns[]=department')->assertSessionHasErrors('columns.0');
+        $this->assertReportError('columns', '/app/hr/reports/hr.staff_details?columns[]=department', $viewer);
         // Forging the filter cannot narrow by placement either.
         $this->assertCount(1, $this->rows('hr.staff_details', ['department_id' => $this->office->id], $viewer));
     }
@@ -347,16 +355,16 @@ class HrReportsTest extends TestCase
         app(LeaveRequestService::class)->approve($this->school, $request->id, $admin);
         app(LeaveLedgerService::class)->adjust($this->school, $employment->id, $type->id, $year->id, 'credit', 1, 'administrative_correction', $admin);
 
-        $row = $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'as_of' => '2026-10-05'])[0];
+        $row = $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'posted_by' => '2026-10-05'])[0];
         $statement = app(LeaveStatementReader::class)->statement($this->school, $employment->id, $type->id, $year->id, $this->hr);
         $this->assertSame(['0', '12.5', '2', '10.5'], [$row['opening'], $row['credits'], $row['debits'], $row['balance']]);
         $this->assertSame($statement['closing'] / 2, (float) $row['balance']);
         $this->assertSame((float) $row['opening'] + (float) $row['credits'] - (float) $row['debits'], (float) $row['balance']);
         // As at 2026-10-01 only the allocation had been recorded.
-        $this->assertSame('12', $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'as_of' => '2026-10-01'])[0]['balance']);
-        $this->assertSame([], $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'as_of' => '2026-09-30']));
+        $this->assertSame('12', $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'posted_by' => '2026-10-01'])[0]['balance']);
+        $this->assertSame([], $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'posted_by' => '2026-09-30']));
         // A date outside the Leave Year is refused, never guessed.
-        $this->as($this->hr)->get("/app/hr/reports/hr.leave_balances?leave_year_id={$year->id}&as_of=2027-04-01")->assertSessionHasErrors('as_of');
+        $this->assertReportError('posted_by', "/app/hr/reports/hr.leave_balances?leave_year_id={$year->id}&posted_by=2027-04-01", $this->hr);
         // Reading changed nothing.
         $this->assertSame($statement['lines'], app(LeaveStatementReader::class)->statement($this->school, $employment->id, $type->id, $year->id, $this->hr)['lines']);
     }
@@ -424,9 +432,9 @@ class HrReportsTest extends TestCase
         $this->assertStringNotContainsString($clerk->id, json_encode($props['filters']), 'the corrector filter carries an opaque token, never a User id');
         $token = collect($props['filters'])->firstWhere('key', 'corrected_by')['options'][0]['value'];
         $this->assertCount(1, $this->rows('hr.attendance_corrections', ['from' => '2026-10-01', 'to' => '2026-10-05', 'corrected_by' => $token]));
-        $this->as($this->hr)->get('/app/hr/reports/hr.attendance_corrections?corrected_by='.$clerk->id)->assertSessionHasErrors('corrected_by');
+        $this->assertReportError('corrected_by', '/app/hr/reports/hr.attendance_corrections?corrected_by='.$clerk->id, $this->hr);
         $this->assertSame([], $this->rows('hr.attendance_corrections', ['from' => '2026-10-01', 'to' => '2026-10-05', 'reason' => 'entered_in_error']));
-        $this->as($this->hr)->get('/app/hr/reports/hr.attendance_corrections?corrected_by='.$this->createUser()->id)->assertSessionHasErrors('corrected_by');
+        $this->assertReportError('corrected_by', '/app/hr/reports/hr.attendance_corrections?corrected_by='.$this->createUser()->id, $this->hr);
     }
 
     // -------------------------------------------------------------------- tasks

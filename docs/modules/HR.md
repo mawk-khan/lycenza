@@ -4824,7 +4824,7 @@ The contract is ADR 0065 §29. HR changes:
 | 3 | Highly Sensitive Documents API needs MFA-assured tokens | Identity + Documents | pre-staging API client note |
 | 4 | No automated axe audit (HR.2A profile; HR.9 / HR.10 Leave pages) | HR (UI) | pre-staging accessibility pass |
 | 5 | No logged-in browser walkthrough of HR.9 / HR.10 pages | HR (UI) | owner DDEV walkthrough |
-| 6 | `EmploymentRoster::on()` / `overlapping()` keep a 2,000-row cap for Staff Attendance registers | StaffAttendance | before a School above 2,000 staff (HR.5–HR.7) |
+| 6 | `EmploymentRoster::on()` / `overlapping()` keep a 2,000-row cap for Staff Attendance registers | StaffAttendance | **CLOSED (HR.16C):** server-paged register and month view, no cap |
 | — | OD-HR-15 (sandwich), OD-HR-16 (expiry order), OD-HR-17 (proration), OD-HR-5 (manager approval), OD-HR-14 (clock / biometric), HR-L8 | owner / legal | open |
 
 ## Line managers and leave decisions (HR.11, partial, 2026-11-04)
@@ -5179,3 +5179,31 @@ decision); birthdays (D20-05 not adopted); biometric, late/early, GPS, FR and
 roaming reports (HRX-L2 / OD-HR-14); staff children, Inventory custody, staff
 fees, substitution and salary logs (their owners, XDOM); exports, print and
 saved views (owner decision; D-11).
+
+## Security, integrity and readiness (HR.16, 2026-11-05)
+
+The evidence, the remediation matrix and the readiness determination are in
+`docs/hr/HR-16-READINESS.md`; operator steps are in
+`docs/operations/HR-OPERATIONS.md`.
+
+- **Status on a past date (R-HR14-2).** Staff details' "Status on the date"
+  comes from HR.12 evidence (`SeparationNoticeHistory`: approval starts a
+  notice period, cancellation ends it the day before); an employment ended
+  outside HR.12 shows "Employed (notice history not recorded)"; "Status
+  today" is separate.
+- **Leave balances as posted (R-HR14-1).** The report counts ledger entries
+  recorded by the end of the School-local day (`posted_by`, basis POSTED);
+  the ledger has no effective date for allocations or adjustments.
+- **Completion certifies access under Identity's lock (R-HR15-1).**
+  `SeparationCaseService::complete()` takes `SchoolAccessLock` first
+  (`StaffAccessState::holdForCertification()`), so no grant, revocation,
+  reactivation, invitation acceptance or off-boarding interleaves; a later
+  grant shows as OPEN on the completed case. Nothing is revoked
+  automatically.
+- **Staff Attendance is server-paged (no cap).** The register and the month
+  view page through `EmploymentRoster::paged()` (≤ 200 per page, the total
+  of the whole population); month totals count everyone in batches. The API
+  register accepts `page`/`per_page` and returns `data.page`.
+- **Report errors are shown, not redirected.** A refused filter, sort,
+  column or range renders the report with that parameter dropped and its
+  message on the page.

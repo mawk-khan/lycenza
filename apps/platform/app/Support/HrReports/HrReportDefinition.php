@@ -15,8 +15,9 @@ namespace App\Support\HrReports;
  *   filters, columns and authority checks, and the hub links to it only for
  *   a viewer holding `authority`).
  * - `basis`: what the rows mean in time -- CURRENT (today's state), AS_OF
- *   (the state on one chosen date, from effective-dated history) or PERIOD
- *   (events inside a date range).
+ *   (the state on one chosen date, from effective-dated history), PERIOD
+ *   (events inside a date range) or POSTED (what had been RECORDED by a date:
+ *   transaction time, HR.16A).
  * - `classification`: the data class the report reads
  *   (docs/security/DATA-CLASSIFICATION.md); every report here is at most
  *   HR-confidential, never sensitive-personal, pay or statutory data.
@@ -36,6 +37,9 @@ final readonly class HrReportDefinition
 
     public const string PERIOD = 'period';
 
+    /** HR.16A: facts RECORDED (posted) by a date -- a transaction-time view, never an effective-date one. */
+    public const string POSTED = 'posted';
+
     public const string INTERNAL_DIRECTORY = 'internal_directory';
 
     public const string EMPLOYMENT_OPERATIONS = 'employment_operations';
@@ -52,7 +56,7 @@ final readonly class HrReportDefinition
         'tasks' => 'Staff tasks',
     ];
 
-    public const array BASES = [self::CURRENT => 'Current state', self::AS_OF => 'As of a date', self::PERIOD => 'Events in a period'];
+    public const array BASES = [self::CURRENT => 'Current state', self::AS_OF => 'Effective on a date', self::PERIOD => 'Events in a period', self::POSTED => 'Recorded (posted) by a date'];
 
     public const array CLASSIFICATIONS = [
         self::INTERNAL_DIRECTORY => 'Internal staff directory',

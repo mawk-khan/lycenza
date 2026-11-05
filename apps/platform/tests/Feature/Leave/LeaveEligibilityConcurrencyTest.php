@@ -9,6 +9,8 @@ use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -29,6 +31,12 @@ use Tests\TestCase;
  *   committed replacement, never a half-changed rule set;
  * - a run against an employment end: the run's FOR SHARE read of the
  *   employment waits, then skips the ended employment.
+ *
+ * HR.16C: the child processes use the real clock, and the services judge
+ * every date against the SCHOOL-LOCAL today (SchoolTimezone::today), so the
+ * dates here are the School-local today too -- never the UTC date, which is
+ * the School's yesterday for part of every UTC day (the time-of-day failure
+ * this replaced).
  */
 class LeaveEligibilityConcurrencyTest extends TestCase
 {
@@ -98,7 +106,7 @@ class LeaveEligibilityConcurrencyTest extends TestCase
         $this->teachingVersion($w);
         $a = $this->teacher($w['school']);
         $b = $this->teacher($w['school']);
-        $run = $this->script('eligibility-run', $w['school']->id, $w['type']->id, now()->toDateString(), $w['admin']->id);
+        $run = $this->script('eligibility-run', $w['school']->id, $w['type']->id, SchoolTimezone::today($w['school']), $w['admin']->id);
 
         [$holder, $contender] = $this->raceWithHeldHolder($run, $run);
 
@@ -132,7 +140,7 @@ class LeaveEligibilityConcurrencyTest extends TestCase
 
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('version', $w['school']->id, $w['type']->id, 'teaching', $v1->id, $w['admin']->id),
-            $this->script('eligibility-run', $w['school']->id, $w['type']->id, now()->toDateString(), $w['admin']->id),
+            $this->script('eligibility-run', $w['school']->id, $w['type']->id, SchoolTimezone::today($w['school']), $w['admin']->id),
         );
 
         $this->assertSame('ok:active', $holder);
@@ -149,11 +157,11 @@ class LeaveEligibilityConcurrencyTest extends TestCase
         $this->teachingVersion($w);
         $leaving = $this->teacher($w['school']);
         $hr = $this->fullHrActor($w['school']);
-        $today = now()->toDateString();
+        $today = SchoolTimezone::today($w['school']);
 
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('end-employment', $w['school']->id, $leaving, $today, $hr->id),
-            $this->script('eligibility-run', $w['school']->id, $w['type']->id, now()->addDay()->toDateString(), $w['admin']->id),
+            $this->script('eligibility-run', $w['school']->id, $w['type']->id, CarbonImmutable::parse(SchoolTimezone::today($w['school']))->addDay()->toDateString(), $w['admin']->id),
         );
 
         $this->assertSame('ok:separated', $holder);

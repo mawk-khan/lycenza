@@ -11,6 +11,7 @@ use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,23 +51,46 @@ class HrReportController extends Controller
         $visibleKeys = array_map(fn (HrReportColumn $c) => $c->key, $visible);
 
         $options = $read->options($school, $viewer);
-        // Only the declared filters (and, on a customizable report, columns this viewer may see) are read.
-        $validated = $request->validate(HrReportFilter::rules($definition->filters, $options, array_keys($definition->sorts), $definition->customizable ? $visibleKeys : null));
         $defaults = $read->defaults($school, $options);
-        $filters = [];
-        foreach ($definition->filters as $key) {
-            $value = isset($validated[$key]) ? (string) $validated[$key] : '';
-            $filters[$key] = $value === '' ? ($defaults[$key] ?? '') : $value;
+        $rules = HrReportFilter::rules($definition->filters, $options, array_keys($definition->sorts), $definition->customizable ? $visibleKeys : null);
+
+        // HR.16F: a refused filter, sort, column or range is SHOWN on this page
+        // (never a redirect to whatever page came before): the offending
+        // parameters are dropped, the report renders with its defaults, and
+        // each message is passed as `errors`. Never more than a few passes.
+        $input = $request->query();
+        $errors = [];
+        for ($attempt = 0; ; $attempt++) {
+            $validator = Validator::make($input, $rules);
+            if ($validator->fails() && $attempt < 3) {
+                $input = $this->without($input, $validator->errors()->toArray(), $errors);
+
+                continue;
+            }
+            $validated = $validator->fails() ? [] : $validator->validated();
+            $filters = [];
+            foreach ($definition->filters as $key) {
+                $value = isset($validated[$key]) ? (string) $validated[$key] : '';
+                $filters[$key] = $value === '' ? ($defaults[$key] ?? '') : $value;
+            }
+            $sort = $validated['sort'] ?? $definition->defaultSort();
+            $chosen = $definition->customizable && isset($validated['columns'])
+                ? array_values(array_intersect($visibleKeys, $validated['columns']))
+                : array_values(array_map(fn (HrReportColumn $c) => $c->key, array_filter($visible, fn (HrReportColumn $c) => ! $definition->customizable || $c->default)));
+            try {
+                $this->assertRange($definition, $filters);
+                $rows = $read->page($school, $viewer, $filters, $sort, (int) ($validated['page'] ?? 1), $chosen)->withQueryString();
+
+                break;
+            } catch (ValidationException $e) {
+                if ($attempt >= 3) {
+                    throw $e;
+                }
+                $range = array_intersect(array_keys($e->errors()), ['from', 'to']) !== [] ? ['from' => [], 'to' => []] : [];
+                $input = $this->without($input, [...$range, ...$e->errors()], $errors);
+            }
         }
-        $this->assertRange($definition, $filters);
-        $sort = $validated['sort'] ?? $definition->defaultSort();
-
-        $chosen = $definition->customizable && isset($validated['columns'])
-            ? array_values(array_intersect($visibleKeys, $validated['columns']))
-            : array_values(array_map(fn (HrReportColumn $c) => $c->key, array_filter($visible, fn (HrReportColumn $c) => ! $definition->customizable || $c->default)));
         $allowed = array_flip([...$chosen, 'key']);
-
-        $rows = $read->page($school, $viewer, $filters, $sort, (int) ($validated['page'] ?? 1), $chosen)->withQueryString();
         // Defence in depth: nothing outside the chosen, visible columns leaves the server.
         $rows->setCollection($rows->getCollection()->map(fn (array $row) => array_intersect_key($row, $allowed)));
         $filtered = array_filter(array_diff_assoc($filters, $defaults), fn (string $v) => $v !== '') !== [];
@@ -82,6 +106,7 @@ class HrReportController extends Controller
             'sorts' => array_map(fn (string $k, string $l) => ['value' => $k, 'label' => $l], array_keys($definition->sorts), $definition->sorts),
             'rows' => $rows,
             'hasAny' => $filtered ? $read->hasAny($school, $viewer) : $rows->total() > 0,
+            'errors' => $errors,
             'provenance' => [
                 'source' => $definition->owner,
                 'basis' => HrReportDefinition::BASES[$definition->basis],
@@ -105,5 +130,27 @@ class HrReportController extends Controller
         if ($days > $definition->maxRangeDays) {
             throw ValidationException::withMessages(['to' => "Choose a range of at most {$definition->maxRangeDays} days."]);
         }
+    }
+
+    /**
+     * $input without every parameter named in $failures (by root key), and
+     * each failure's first message added to $errors under its root key.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, list<string>>  $failures
+     * @param  array<string, string>  $errors
+     * @return array<string, mixed>
+     */
+    private function without(array $input, array $failures, array &$errors): array
+    {
+        foreach ($failures as $key => $messages) {
+            $root = explode('.', (string) $key)[0];
+            if ($messages !== []) {
+                $errors[$root] ??= (string) $messages[0];
+            }
+            unset($input[$root]);
+        }
+
+        return $input;
     }
 }

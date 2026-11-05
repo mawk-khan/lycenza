@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * HR.14 (D20-23): Leave balances AS AT a date inside one Leave Year, read
+ * HR.14 (D20-23): Leave balances AS POSTED by a date inside one Leave Year, read
  * from the ONE ledger -- never a second accounting engine, never a stored
  * balance. Per account (employment x leave type x year):
  *
@@ -30,10 +30,12 @@ use Illuminate\Validation\ValidationException;
  *
  * by the ledger's one sign convention (LeaveLedgerEntry::CREDIT_KINDS /
  * signedUnitsSql()), so the identity holds per row and a year-end as-at
- * equals LeaveStatementReader's closing. "As at" is the POSTING clock: an
- * entry counts once it was recorded on or before the end of the chosen
- * School-local day (the ledger stores no other effective date for most
- * kinds). Units are half-days, shown as days. Whole-School `hr.leave.view`.
+ * equals LeaveStatementReader's closing. HR.16A (R-HR14-1, owner decision
+ * 2026-11-05): the date is the POSTING clock -- an entry counts once it was
+ * recorded on or before the end of the chosen School-local day
+ * (SchoolTimezone::startOfNextDayUtc, exclusive). The ledger stores no
+ * effective date for allocations or adjustments, so an effective-date
+ * balance is not offered; a backdated adjustment counts from its posting. Units are half-days, shown as days. Whole-School `hr.leave.view`.
  * The Leave Year is the School's configured one, never an academic or
  * Payroll year.
  */
@@ -49,16 +51,16 @@ final class LeaveBalanceReport implements HrReport
     {
         return new D(
             key: self::KEY,
-            title: 'Leave balances as at a date',
-            description: 'Each leave account\'s opening, credits, debits and balance in one Leave Year, counting ledger entries recorded by the end of the chosen date.',
+            title: 'Leave balances as posted',
+            description: 'Each leave account\'s opening, credits, debits and balance in one Leave Year, counting the ledger entries POSTED by the end of the chosen School-local day. A backdated adjustment counts from the day it was posted.',
             category: 'leave',
             owner: 'Leave',
             authority: ['hr.leave.view'],
             route: D::RENDERED,
-            basis: D::AS_OF,
+            basis: D::POSTED,
             classification: D::EMPLOYMENT_OPERATIONS,
             reference: ['D20-23', 'D20-24', 'D11-16'],
-            filters: ['leave_year_id', 'as_of', 'leave_type_id', 'q'],
+            filters: ['leave_year_id', 'posted_by', 'leave_type_id', 'q'],
             columns: [
                 new C('employee', 'Staff member', 'employee'),
                 new C('leave_type', 'Leave type'),
@@ -89,7 +91,7 @@ final class LeaveBalanceReport implements HrReport
             ->where('starts_on', '<=', $today)->where('ends_on', '>=', $today)->first()
             ?? LeaveYear::query()->where('school_id', $school->id)->orderByDesc('starts_on')->first());
 
-        return $year === null ? [] : ['leave_year_id' => $year->id, 'as_of' => min($today, $year->ends_on->toDateString())];
+        return $year === null ? [] : ['leave_year_id' => $year->id, 'posted_by' => min($today, $year->ends_on->toDateString())];
     }
 
     public function page(School $school, HrReportViewer $viewer, array $filters, string $sort, int $page, array $columns): LengthAwarePaginator
@@ -99,9 +101,9 @@ final class LeaveBalanceReport implements HrReport
             if ($year === null) {
                 return new LengthAwarePaginator([], 0, 25, $page);
             }
-            $asOf = $filters['as_of'] ?? '';
+            $asOf = $filters['posted_by'] ?? '';
             if ($asOf === '' || $asOf < $year->starts_on->toDateString() || $asOf > $year->ends_on->toDateString()) {
-                throw ValidationException::withMessages(['as_of' => 'Choose a date inside the selected Leave Year.']);
+                throw ValidationException::withMessages(['posted_by' => 'Choose a date inside the selected Leave Year.']);
             }
             // Recorded by the end of the School-local day.
             $bound = SchoolTimezone::startOfNextDayUtc($school, $asOf);

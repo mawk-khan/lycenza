@@ -63,10 +63,18 @@ const props = defineProps<{
     errors?: Record<string, string>;
 }>();
 
+// A refused column choice (`columns` or `columns.N`) or sort is shown, never silently dropped.
+const columnsError = computed(
+    () =>
+        props.errors?.columns ??
+        Object.entries(props.errors ?? {}).find(([k]) => k.startsWith('columns.'))?.[1] ??
+        null,
+);
+
 const form = ref<Record<string, string>>({ ...props.values });
 const picked = ref<string[]>([...props.chosen]);
 const processing = ref(false);
-const columnsOpen = ref(false);
+const columnsOpen = ref(columnsError.value !== null);
 
 watch(
     () => props.values,
@@ -200,11 +208,21 @@ function text(value: unknown): string {
             </div>
             <div v-if="sorts.length > 1">
                 <label class="block text-sm text-ink-muted" for="hf-sort">Sort by</label>
-                <select id="hf-sort" v-model="form.sort" class="input mt-1" @change="apply">
+                <select
+                    id="hf-sort"
+                    v-model="form.sort"
+                    class="input mt-1"
+                    :aria-invalid="!!errors?.sort"
+                    :aria-describedby="errors?.sort ? 'hf-sort-error' : undefined"
+                    @change="apply"
+                >
                     <option v-for="(s, i) in sorts" :key="s.value" :value="i === 0 ? '' : s.value">
                         {{ s.label }}
                     </option>
                 </select>
+                <p v-if="errors?.sort" id="hf-sort-error" class="mt-1 text-sm text-danger">
+                    {{ errors.sort }}
+                </p>
             </div>
             <div class="flex items-end gap-3">
                 <button type="submit" class="btn btn-primary" :disabled="processing">
@@ -232,7 +250,14 @@ function text(value: unknown): string {
                 class="mt-3 rounded-xs border border-line p-3"
             >
                 <legend class="px-1 text-sm font-medium">Columns to show</legend>
-                <p v-if="errors?.columns" class="text-sm text-danger">{{ errors.columns }}</p>
+                <p
+                    v-if="columnsError"
+                    id="hr-report-columns-error"
+                    class="text-sm text-danger"
+                    role="alert"
+                >
+                    {{ columnsError }}
+                </p>
                 <div class="grid gap-2 sm:grid-cols-3">
                     <label
                         v-for="c in selectable"

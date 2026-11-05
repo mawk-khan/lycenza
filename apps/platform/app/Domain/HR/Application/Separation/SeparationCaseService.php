@@ -11,6 +11,7 @@ use App\Domain\HR\Infrastructure\EmploymentSeparationCase;
 use App\Domain\HR\Infrastructure\EmploymentSeparationEvent;
 use App\Domain\HR\Infrastructure\SeparationClearanceItem;
 use App\Domain\HR\Infrastructure\SeparationClearanceRequirement;
+use App\Domain\Identity\Application\Staff\StaffAccessState;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Approval\ApprovalDecisionAuthority;
@@ -61,6 +62,7 @@ final class SeparationCaseService
         private readonly ApprovalDecisionAuthority $authority,
         private readonly MakerCheckerPolicy $makerChecker,
         private readonly SeparationObligations $obligations,
+        private readonly StaffAccessState $staffAccess,
     ) {}
 
     /** The material participants of a case: whoever recorded it never decides it. */
@@ -331,6 +333,10 @@ final class SeparationCaseService
         $this->access->requireWholeSchool($actor, SeparationCapabilities::MANAGE, $school);
 
         return $this->inSchool($school, function () use ($school, $caseId, $expectedVersion, $actor): EmploymentSeparationCase {
+            // HR.16B (R-HR15-1): School access is CERTIFIED here, so no grant,
+            // revocation or off-boarding may interleave: Identity's School access
+            // lock first (its own rule), then the case locks.
+            $this->staffAccess->holdForCertification($school);
             [$case] = $this->lockCase($school, $caseId, $expectedVersion, $actor, 'separation.complete', ['finalized']);
 
             // The items are locked so a concurrent clear either committed (and is seen) or waits.

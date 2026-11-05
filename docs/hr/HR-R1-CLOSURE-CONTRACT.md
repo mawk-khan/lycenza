@@ -55,6 +55,8 @@ the ADR 0040 rows stay GATE. Integrations authoritative today: HR ↔ Leave
 still blocked: HR ↔ SIS (staff children), Inventory, Finance, Payroll salary logs,
 Timetable substitution, Analytics (headcount, rates).
 
+**Evidence recorded (HR.16, 2026-11-05):** `HR-16-READINESS.md` -- R-HR15-1 closed (two-process proof), Staff Attendance paging (2,100), temporal semantics of every HR report, browser walkthrough (53 steps) and axe (22 pages, 0 violations), measured report performance, readiness by dimension. Still open for HR.R1: OD-HR-1/2, HRX-L2/OD-HR-14, ADR 0040 cohort size, D-11, HR.11B-D, HR.15B-D, staging evidence.
+
 ## 4. Output
 
 - An HR.R1 record in `docs/hr/` with a verdict of **PASS**, **PASS WITH

@@ -2,6 +2,7 @@
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
+import RosterPager from '../../../Components/StaffAttendance/RosterPager.vue';
 import {
     employmentName,
     halfLabel,
@@ -33,6 +34,7 @@ interface Props {
         calendarConfigured: boolean;
         calendar: { firstHalf: string; secondHalf: string } | null;
         rows: Row[];
+        page: { page: number; perPage: number; total: number; lastPage: number };
     };
     today: string;
     reasons: string[];
@@ -184,69 +186,80 @@ const attendanceError = useAttendanceError();
             title="No employments on this date"
             description="Nobody in this School was employed on the chosen date."
         />
-        <table v-else class="mt-6 w-full border-collapse text-sm">
-            <thead>
-                <tr class="border-b border-line text-left text-ink-muted">
-                    <th class="py-2">Employee</th>
-                    <th class="py-2">First half</th>
-                    <th class="py-2">Second half</th>
-                    <th class="py-2">Day</th>
-                    <th class="py-2"></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr
-                    v-for="row in register.rows"
-                    :key="row.employment.employmentRecordId"
-                    class="border-b border-line align-top"
-                >
-                    <td class="py-2">
-                        <a
-                            class="underline"
-                            :href="`/app/staff-attendance/history?employment_record_id=${row.employment.employmentRecordId}&to=${register.date}`"
-                            >{{ employmentName(row.employment) }}</a
-                        >
-                    </td>
-                    <td
-                        v-for="(half, index) in [row.day.firstHalf, row.day.secondHalf]"
-                        :key="index"
-                        class="py-2"
+        <!-- HR.16F: the table scrolls inside its own region on narrow screens; the page never does. -->
+        <div v-else class="relative mt-6 overflow-x-auto">
+            <table class="w-full min-w-[40rem] border-collapse text-sm">
+                <thead>
+                    <tr class="border-b border-line text-left text-ink-muted">
+                        <th class="py-2">Employee</th>
+                        <th class="py-2">First half</th>
+                        <th class="py-2">Second half</th>
+                        <th class="py-2">Day</th>
+                        <th class="py-2"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr
+                        v-for="row in register.rows"
+                        :key="row.employment.employmentRecordId"
+                        class="border-b border-line align-top"
                     >
-                        <select
-                            v-if="recordable(row) && halfOpen(half)"
-                            v-model="marks[row.employment.employmentRecordId]![index]"
-                            class="input w-auto"
-                            :aria-label="`${employmentName(row.employment)} ${index === 0 ? 'first' : 'second'} half`"
+                        <td class="py-2">
+                            <a
+                                class="underline"
+                                :href="`/app/staff-attendance/history?employment_record_id=${row.employment.employmentRecordId}&to=${register.date}`"
+                                >{{ employmentName(row.employment) }}</a
+                            >
+                        </td>
+                        <td
+                            v-for="(half, index) in [row.day.firstHalf, row.day.secondHalf]"
+                            :key="index"
+                            class="py-2"
                         >
-                            <option :value="null">Not recorded</option>
-                            <option value="present">Present</option>
-                            <option value="absent">Absent</option>
-                        </select>
-                        <span v-else>{{ halfLabel(half) }}</span>
-                    </td>
-                    <td class="py-2">{{ summaryLabels[row.day.summary] ?? row.day.summary }}</td>
-                    <td class="space-x-3 py-2 text-right">
-                        <button
-                            v-if="recordable(row)"
-                            type="button"
-                            class="underline"
-                            :disabled="saving"
-                            @click="saveOne(row)"
-                        >
-                            Save
-                        </button>
-                        <button
-                            v-if="canManage && row.day.record"
-                            type="button"
-                            class="underline"
-                            @click="startCorrection(row)"
-                        >
-                            Correct
-                        </button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                            <select
+                                v-if="recordable(row) && halfOpen(half)"
+                                v-model="marks[row.employment.employmentRecordId]![index]"
+                                class="input w-auto"
+                                :aria-label="`${employmentName(row.employment)} ${index === 0 ? 'first' : 'second'} half`"
+                            >
+                                <option :value="null">Not recorded</option>
+                                <option value="present">Present</option>
+                                <option value="absent">Absent</option>
+                            </select>
+                            <span v-else>{{ halfLabel(half) }}</span>
+                        </td>
+                        <td class="py-2">
+                            {{ summaryLabels[row.day.summary] ?? row.day.summary }}
+                        </td>
+                        <td class="space-x-3 py-2 text-right">
+                            <button
+                                v-if="recordable(row)"
+                                type="button"
+                                class="underline"
+                                :disabled="saving"
+                                @click="saveOne(row)"
+                            >
+                                Save
+                            </button>
+                            <button
+                                v-if="canManage && row.day.record"
+                                type="button"
+                                class="underline"
+                                @click="startCorrection(row)"
+                            >
+                                Correct
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <RosterPager
+            v-if="register.page.total > 0"
+            :page="register.page"
+            url="/app/staff-attendance"
+            :params="{ date: register.date }"
+        />
 
         <div v-if="canManage && register.rows.length > 0" class="mt-4 flex items-center gap-3">
             <button

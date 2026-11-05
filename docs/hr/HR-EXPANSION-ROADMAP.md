@@ -595,6 +595,10 @@ reservation.
 
 ### HR.16 — Security / performance / closure
 
+> **Status (2026-11-05): PUBLISHED** — see `HR-16-READINESS.md` (remediation
+> matrix, measurements, browser and axe evidence; local GO, staging
+> CONDITIONAL, production NO-GO). HR.R1 stays open.
+
 1. **Prerequisites:** HR.1–HR.15 (or recorded deferrals).
 2. **Scope:**
    - independent security review;

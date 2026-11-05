@@ -2,6 +2,7 @@
 
 namespace App\Domain\StaffAttendance\Http\Controllers;
 
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceCorrection;
@@ -31,9 +32,14 @@ class StaffAttendanceController extends Controller
 {
     public function register(Request $request, School $school, StaffAttendanceReadService $reads): JsonResponse
     {
-        $validated = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+        $validated = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'],
+            // HR.16C: the register is server-paged (no population cap); `data.page` carries the total.
+            'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.EmploymentRoster::MAX_PAGE],
+        ]);
 
-        return response()->json(['data' => $reads->register($school, $validated['date'], $request->user())]);
+        return response()->json(['data' => $reads->register($school, $validated['date'], $request->user(), (int) ($validated['page'] ?? 1), (int) ($validated['per_page'] ?? StaffAttendanceReadService::REGISTER_PER_PAGE))]);
     }
 
     public function history(Request $request, School $school, StaffAttendanceReadService $reads): JsonResponse

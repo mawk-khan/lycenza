@@ -6,6 +6,7 @@
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
+import RosterPager from '../../../Components/StaffAttendance/RosterPager.vue';
 
 type State = 'present' | 'absent' | 'leave' | 'holiday' | 'off_day' | 'unrecorded';
 
@@ -25,6 +26,7 @@ interface Props {
             halfDays: Record<State, number>;
         }[];
         totals: Record<State, number>;
+        page: { page: number; perPage: number; total: number; lastPage: number };
     };
     currentMonth: string;
 }
@@ -130,6 +132,11 @@ function apply(): void {
                     </tr>
                 </tfoot>
             </table>
+            <RosterPager
+                :page="summary.page"
+                url="/app/staff-attendance/monthly"
+                :params="{ month: summary.month }"
+            />
         </div>
     </main>
 </template>

@@ -99,23 +99,30 @@ class StaffAttendanceReadService
         return ['from' => $from, 'to' => $to, 'calendarConfigured' => $calendar !== [], 'days' => $days];
     }
 
+    /** HR.16C: the register's page size (a response bound; the population is never capped). */
+    public const REGISTER_PER_PAGE = 100;
+
     /**
      * The School's daily register: every employment spanning the date, plus
-     * any employment holding a record on it, with its composed day.
+     * any employment holding a record on it, with its composed day -- ONE
+     * PAGE of the whole population (HR.16C: server-paged, ordered by name,
+     * number and id; `page` carries the total, so nothing is ever silently
+     * omitted).
      *
-     * @return array{date: string, calendarConfigured: bool, calendar: ?array{firstHalf: string, secondHalf: string}, rows: list<array<string, mixed>>}
+     * @return array{date: string, calendarConfigured: bool, calendar: ?array{firstHalf: string, secondHalf: string}, rows: list<array<string, mixed>>, page: array{page: int, perPage: int, total: int, lastPage: int}}
      */
-    public function register(School $school, string $date, User $actor): array
+    public function register(School $school, string $date, User $actor, int $page = 1, int $perPage = self::REGISTER_PER_PAGE): array
     {
         $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
         self::requireDate($date);
 
-        $roster = collect($this->roster->on($school, $date))->keyBy('employmentRecordId');
-        $records = $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
-            ->where('attendance_date', $date)->get()->keyBy('employment_record_id'));
-        $missing = array_values(array_diff($records->keys()->all(), $roster->keys()->all()));
-        $labels = $roster->merge(collect($this->roster->labels($school, $missing))->keyBy('employmentRecordId'))
-            ->sortBy(fn (array $row) => [$row['fullName'] ?? '', $row['employmentRecordId']]);
+        $roster = $this->roster->paged($school, fn ($q) => $q->where(fn ($w) => $w
+            ->where(fn ($c) => EmploymentRoster::covering($c, $date))
+            ->orWhereIn('employment_records.id', fn ($r) => $r->select('employment_record_id')->from('staff_attendance_records')
+                ->where('school_id', $school->id)->where('attendance_date', $date))), $page, $perPage);
+        $labels = collect($roster['rows'])->keyBy('employmentRecordId');
+        $records = $labels->isEmpty() ? collect() : $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
+            ->where('attendance_date', $date)->whereIn('employment_record_id', $labels->keys()->all())->get()->keyBy('employment_record_id'));
         $calendar = $this->calendarHalves($school, $date, $date)[$date] ?? null;
         $coverage = $this->leave->approvedCoverage($school, $labels->keys()->all(), $date, $date);
         $detail = $this->leaveDetail($school, $actor);
@@ -128,6 +135,7 @@ class StaffAttendanceReadService
                 'employment' => self::label($label),
                 'day' => self::day($date, $records[$label['employmentRecordId']] ?? null, $calendar, $coverage[$label['employmentRecordId']][$date] ?? [], $detail),
             ])->values()->all(),
+            'page' => ['page' => $roster['page'], 'perPage' => $roster['perPage'], 'total' => $roster['total'], 'lastPage' => $roster['lastPage']],
         ];
     }
 
@@ -143,11 +151,14 @@ class StaffAttendanceReadService
      *   Staff Attendance stores no clock times (HRX-L2), and leave is not split
      *   into paid and unpaid here (HRX-L4 belongs to Payroll's evidence).
      * - Whole-School (`hr.staff_attendance.view`).
+     * - HR.16C: `rows` is ONE PAGE (ordered by name); `totals` count the
+     *   WHOLE population, composed in bounded id-ordered batches, so neither
+     *   is truncated.
      *
      * @param  string  $month  Y-m, not after the School's current month
-     * @return array{month: string, from: string, to: string, calendarConfigured: bool, rows: list<array<string, mixed>>, totals: array<string, int>}
+     * @return array{month: string, from: string, to: string, calendarConfigured: bool, rows: list<array<string, mixed>>, totals: array<string, int>, page: array{page: int, perPage: int, total: int, lastPage: int}}
      */
-    public function monthSummary(School $school, string $month, User $actor): array
+    public function monthSummary(School $school, string $month, User $actor, int $page = 1, int $perPage = self::REGISTER_PER_PAGE): array
     {
         $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
         $start = CarbonImmutable::createFromFormat('!Y-m', $month);
@@ -157,22 +168,58 @@ class StaffAttendanceReadService
         }
         $from = $start->toDateString();
         $to = min($start->endOfMonth()->toDateString(), $today);
+        $calendar = $this->calendarHalves($school, $from, $to);
 
-        $labels = collect($this->roster->overlapping($school, $from, $to))->keyBy('employmentRecordId');
+        $roster = $this->roster->paged($school, fn ($q) => EmploymentRoster::overlappingRange($q, $from, $to), $page, $perPage);
+        $rows = [];
+        foreach ($this->monthCounts($school, $roster['rows'], $from, $to, $calendar) as $id => [$label, $counts]) {
+            $rows[] = ['employment' => self::label($label), 'halfDays' => $counts];
+        }
+
+        $totals = array_fill_keys(self::MONTH_STATES, 0);
+        for ($after = null; ($batch = $this->roster->pageOverlapping($school, $from, $to, $after, 500)) !== []; $after = $batch[array_key_last($batch)]['employmentRecordId']) {
+            foreach ($this->monthCounts($school, $batch, $from, $to, $calendar) as [, $counts]) {
+                foreach ($counts as $state => $n) {
+                    $totals[$state] += $n;
+                }
+            }
+            if (count($batch) < 500) {
+                break;
+            }
+        }
+
+        return [
+            'month' => $month, 'from' => $from, 'to' => $to, 'calendarConfigured' => $calendar !== [], 'rows' => $rows, 'totals' => $totals,
+            'page' => ['page' => $roster['page'], 'perPage' => $roster['perPage'], 'total' => $roster['total'], 'lastPage' => $roster['lastPage']],
+        ];
+    }
+
+    private const MONTH_STATES = ['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded'];
+
+    /**
+     * Half-day counts per employment of $labels over [from, to] (inside each employment's dates).
+     *
+     * @param  list<array<string, mixed>>  $labels
+     * @param  array<string, array{1: string, 2: string}>  $calendar
+     * @return array<string, array{0: array<string, mixed>, 1: array<string, int>}>
+     */
+    private function monthCounts(School $school, array $labels, string $from, string $to, array $calendar): array
+    {
+        $labels = collect($labels)->keyBy('employmentRecordId');
         $ids = $labels->keys()->all();
+        if ($ids === []) {
+            return [];
+        }
         $spans = $this->roster->spans($school, $ids);
-        $records = $ids === [] ? collect() : $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
+        $records = $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
             ->whereIn('employment_record_id', $ids)->whereBetween('attendance_date', [$from, $to])->get()
             ->groupBy('employment_record_id')
             ->map(fn ($rows) => $rows->keyBy(fn (StaffAttendanceRecord $r) => $r->attendance_date->toDateString())));
-        $calendar = $this->calendarHalves($school, $from, $to);
         $coverage = $this->leave->approvedCoverage($school, $ids, $from, $to);
 
-        $states = ['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded'];
-        $totals = array_fill_keys($states, 0);
-        $rows = [];
+        $out = [];
         foreach ($labels as $id => $label) {
-            $counts = array_fill_keys($states, 0);
+            $counts = array_fill_keys(self::MONTH_STATES, 0);
             $first = max($from, $spans[$id]['startsOn'] ?? $from);
             $last = min($to, $spans[$id]['endsOn'] ?? $to);
             for ($d = CarbonImmutable::createFromFormat('!Y-m-d', $first); $d->toDateString() <= $last; $d = $d->addDay()) {
@@ -180,13 +227,12 @@ class StaffAttendanceReadService
                 $day = self::day($date, $records[$id][$date] ?? null, $calendar[$date] ?? null, $coverage[$id][$date] ?? [], false);
                 foreach (['firstHalf', 'secondHalf'] as $half) {
                     $counts[$day[$half]['state']]++;
-                    $totals[$day[$half]['state']]++;
                 }
             }
-            $rows[] = ['employment' => self::label($label), 'halfDays' => $counts];
+            $out[(string) $id] = [$label, $counts];
         }
 
-        return ['month' => $month, 'from' => $from, 'to' => $to, 'calendarConfigured' => $calendar !== [], 'rows' => $rows, 'totals' => $totals];
+        return $out;
     }
 
     /**

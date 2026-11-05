@@ -596,6 +596,8 @@ come from the status column of §4, read mechanically: one row per
 | NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
 | **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
 
+HR.16 (2026-11-05) changed no row's status: it corrected reporting semantics (status on a date, as-posted leave), closed R-HR15-1 and the Staff Attendance cap, and added browser, axe and performance evidence (`HR-16-READINESS.md`).
+
 HR.14 (2026-11-05, owner decisions: browser-only, current-employment
 anniversaries, task rates gated, corrector display name) closed D20-02, D20-10,
 D20-23, D20-33, D4-04, D8-15, D9-15 and D19-25 (PART → IMP) and D20-06

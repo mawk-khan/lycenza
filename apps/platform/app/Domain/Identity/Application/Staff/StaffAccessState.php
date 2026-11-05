@@ -2,6 +2,7 @@
 
 namespace App\Domain\Identity\Application\Staff;
 
+use App\Domain\Identity\Application\SchoolAccessLock;
 use App\Models\School;
 use Illuminate\Support\Facades\DB;
 
@@ -23,5 +24,21 @@ final class StaffAccessState
             ->where('m.school_id', $school->id)->where('m.user_id', $userId)->where('m.status', 'active')
             ->whereNull('a.revoked_at')->where('r.scope', 'school')
             ->count();
+    }
+
+    /**
+     * HR.16B (R-HR15-1): for a caller that CERTIFIES this answer inside its
+     * transaction (separation completion), hold the School's access lock --
+     * the one every grant, revocation, reactivation, invitation acceptance
+     * and off-boarding takes FIRST (SchoolAccessLock). A concurrent change
+     * then either committed before (and is seen by the next read) or waits
+     * until the certifying transaction commits; a brand-new grant on a
+     * membership that held none is covered too, because the lock is the
+     * School's, never a role row's. Call it BEFORE any other row lock.
+     * It reads and changes nothing.
+     */
+    public function holdForCertification(School $school): void
+    {
+        SchoolAccessLock::hold($school->id);
     }
 }

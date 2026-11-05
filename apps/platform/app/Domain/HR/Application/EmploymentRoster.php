@@ -22,32 +22,63 @@ class EmploymentRoster
 {
     private const LIMIT = 2000;
 
+    /** HR.16C: the largest page paged() serves (a response bound, never a population cap). */
+    public const MAX_PAGE = 200;
+
     public function __construct(private readonly TenantContext $context) {}
 
     /**
-     * Employments (any status but `draft`) whose dates contain the date.
+     * HR.16C: ONE PAGE (server-side, offset) of the employments of the School
+     * that $constrain selects -- ordered by the Employee's name, number and
+     * the employment id (stable), with the total of the WHOLE population. No
+     * cap: a page is bounded (1..MAX_PAGE), the population never is. The
+     * caller adds its own predicate (a register date, a month) and may union
+     * its own facts in, e.g. employments holding a record on the date.
      *
-     * @param  string  $date  School-local Y-m-d
-     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
+     * @param  callable(Builder<EmploymentRecord>): mixed  $constrain
+     * @return array{rows: list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>, page: int, perPage: int, total: int, lastPage: int}
      */
-    public function on(School $school, string $date): array
+    public function paged(School $school, callable $constrain, int $page, int $perPage): array
     {
-        return $this->rows($school, fn ($q) => $q->where('status', '<>', 'draft')->where('starts_on', '<=', $date)
-            ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $date)));
+        $perPage = max(1, min($perPage, self::MAX_PAGE));
+        $page = max(1, $page);
+
+        return $this->context->withSchool($school, function () use ($school, $constrain, $page, $perPage): array {
+            $query = EmploymentRecord::query()->where('employment_records.school_id', $school->id);
+            $constrain($query);
+            $total = (clone $query)->count();
+            $rows = $query->join('employees as pe', fn ($j) => $j->on('pe.id', '=', 'employment_records.employee_id')->on('pe.school_id', '=', 'employment_records.school_id'))
+                ->orderBy('pe.full_name')->orderBy('pe.employee_number')->orderBy('employment_records.id')
+                ->select('employment_records.*')->offset(($page - 1) * $perPage)->limit($perPage)
+                ->with('employee:id,employee_number,full_name,record_status')->get()
+                ->map(fn (EmploymentRecord $r) => self::row($r))->values()->all();
+
+            return ['rows' => $rows, 'page' => $page, 'perPage' => $perPage, 'total' => $total, 'lastPage' => max(1, (int) ceil($total / $perPage))];
+        });
     }
 
     /**
-     * ORG.9C-1 (ADR 0076 §69): employments (any status but `draft`) whose
-     * dates overlap [from, to] -- a monthly register's population.
+     * HR.16C: the predicate "employments (any status but `draft`) whose dates
+     * contain $date", for paged() / pageOverlapping-style callers.
      *
-     * @param  string  $from  School-local Y-m-d
-     * @param  string  $to  School-local Y-m-d
-     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
+     * @param  Builder<EmploymentRecord>  $query
      */
-    public function overlapping(School $school, string $from, string $to): array
+    public static function covering(Builder $query, string $date): void
     {
-        return $this->rows($school, fn ($q) => $q->where('status', '<>', 'draft')->where('starts_on', '<=', $to)
-            ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $from)));
+        $query->where('employment_records.status', '<>', 'draft')->where('employment_records.starts_on', '<=', $date)
+            ->where(fn ($q) => $q->whereNull('employment_records.ends_on')->orWhere('employment_records.ends_on', '>=', $date));
+    }
+
+    /**
+     * HR.16C: the predicate "employments (any status but `draft`) whose dates
+     * overlap [from, to]" -- a monthly register's population.
+     *
+     * @param  Builder<EmploymentRecord>  $query
+     */
+    public static function overlappingRange(Builder $query, string $from, string $to): void
+    {
+        $query->where('employment_records.status', '<>', 'draft')->where('employment_records.starts_on', '<=', $to)
+            ->where(fn ($q) => $q->whereNull('employment_records.ends_on')->orWhere('employment_records.ends_on', '>=', $from));
     }
 
     /**
@@ -70,8 +101,7 @@ class EmploymentRoster
     /**
      * HR.10 (ADR 0065 §29.6): ONE PAGE of a COMPLETE traversal -- the
      * employments (any status but `draft`) whose dates overlap [from, to],
-     * ordered by id, strictly after $afterId. Unlike on()/overlapping()
-     * there is no population cap: a caller pages until a page is shorter than
+     * ordered by id, strictly after $afterId. There is no population cap: a caller pages until a page is shorter than
      * $limit, so no employment is ever silently omitted. Labels only.
      *
      * @param  string  $from  School-local Y-m-d

@@ -1,0 +1,110 @@
+# HR operations runbook
+
+This page covers the HR checks an operator needs after a deployment and
+when HR background work fails. It sits beside `FAILED-JOBS.md`,
+`BACKUP-AND-RESTORE.md` and `MAINTENANCE-WINDOW-RELEASE.md`.
+
+## 1. After a deployment
+
+1. Run `php artisan platform:verify-database`. Expect `failed=0`. These
+   checks must PASS:
+   - `hr_workforce_invariants`, `hr_profile_invariants`,
+     `hr_reporting_invariants`;
+   - `hr_task_invariants`, `hr_separation_invariants`;
+   - `leave_policy_invariants`, `tenant_tables_force_rls`.
+2. Confirm the scheduler and a queue worker are running, then check that the
+   scheduled-task heartbeats are fresh (`platform:operations-status`):
+   - `workforce-tasks-generate` runs every minute;
+   - the leave accrual and eligibility runs.
+3. Sign in as an HR administrator and check:
+   - **HR reports** opens;
+   - **Staff attendance** shows "Showing 1–N of TOTAL staff", and TOTAL
+     equals the number of current employments.
+
+## 2. Staff attendance at large Schools
+
+The register and the month view are server-paged: 100 staff per page, up to
+200 through the API (`page`, `per_page`), and `data.page.total` gives the
+whole population. Nothing is capped.
+
+- The month view's totals compose every employment's month. Measured at
+  5,000 staff: about 4.3 s on one local machine.
+- If it is slow, look at the database first. Never add a cap.
+
+## 3. Recurring staff tasks
+
+`workforce-tasks:generate` creates **today's** occurrences only, every
+minute, for each active School.
+
+**A missed day** is never generated later. That is an owner decision
+(R-HR13-3).
+
+**Detecting a missed day:**
+- the `workforce-tasks-generate` heartbeat alert, or
+- **HR reports → Recurring task generation**, which lists every day and shows
+  "No run" for a day without a run. A "No run" day never counts as
+  completed, missed or overdue.
+
+**Recovery:**
+- Fix the scheduler and confirm today's run is "Completed".
+- An administrator may also use "Generate now" on the catalogue, which
+  generates today only.
+- Earlier days stay without occurrences. Re-creating them needs a business
+  decision about eligibility, versions and due dates.
+
+**Recurrence ignores holidays** (R-HR13-2) until WorkSchedule exists.
+
+## 4. Leave accrual and eligibility runs
+
+Runs resume from their cursor and never post twice. A failed batch rolls back
+on its own.
+- Re-run the same month from the accrual workspace.
+- Never edit `leave_ledger_entries`. A correction is a new adjustment.
+
+Leave balances in **HR reports** are **as posted**: an entry counts from the
+School-local day it was recorded.
+
+## 5. Separation completion and School access
+
+Completion takes Identity's School access lock before it reads the
+subject's access (R-HR15-1). While a grant, revocation, invitation
+acceptance or off-boarding is running in the same School, completion waits
+for it. The reverse also holds.
+
+A case that refuses with `SEPARATION_OBLIGATIONS_OPEN` because of School
+access needs one of two actions:
+- off-board the account under **Settings → Staff accounts**, or
+- record that the access is kept (RETAINED).
+
+Completion never revokes anything. A grant made after completion shows as
+OPEN on the completed case.
+
+## 6. Database statistics after a bulk load
+
+A School loaded in bulk (an import, a migration or the demo) has no planner
+statistics until autovacuum analyzes its tables. Report pages can be very
+slow in that window: one absentee page took 75 s before `ANALYZE` and 49 ms
+after.
+
+**Normal case:** autovacuum fixes this by itself within minutes.
+
+**To fix it immediately after a large import, in an authorized maintenance
+action:**
+- Connect as the table owner (the admin or migration role; the runtime role
+  cannot ANALYZE) and run:
+
+  ```sql
+  ANALYZE employees, employment_records, employee_assignments, staff_attendance_records, workforce_tasks, leave_ledger_entries;
+  ```
+
+**Never** disable autovacuum, run `VACUUM FULL` as a fix, or add indexes for
+this.
+
+## 7. Rolling back an HR release
+
+- **HR.14 and HR.16** are code-only (no migration). Revert the deployment.
+- **Migrations with HR evidence** (HR.1A to HR.13): never roll back once real
+  evidence exists. Fix forward, or restore from backup as in
+  `BACKUP-AND-RESTORE.md`. HR.2A's rollback can lose archive and
+  reference-code evidence. Each migration's `down()` refuses when evidence
+  would be destroyed.

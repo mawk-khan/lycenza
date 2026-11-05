@@ -236,6 +236,14 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 | `tests/Feature/Leave/LeaveDecisionSeparationConcurrencyTest` | two real processes, contender observed blocked: approval versus the requester's separation (refused, nothing consumed); approval versus the manager's separation (private 404, still pending) |
 | catalogue pins (`StaffRoleCatalogueSnapshotTest`, `ProductionStaffRolesTest`, `StaffRoleGrantAuthorityTest`, `StaffRoleCatalogueHardeningTest`) | 18 roles; `line_manager` = add-on; granted by School Admin through the real SR.2 rule without a grant right |
 
+## 2g. Implemented suites (HR.14, HR.16)
+
+- `HrReportsTest`, `HrReportsLargePopulationTest` (2,100), `HrReportTemporalSemanticsTest` (status on a date, as-posted leave, exact School-local boundaries ahead of and behind UTC).
+- `SeparationAccessCertificationTest`: two real processes, contender observed blocked (`ForcesConcurrentOverlap`); fails without the lock.
+- `StaffAttendanceRegisterPagingTest` (2,100, no cap).
+- Browser and axe evidence: ephemeral Playwright + `@axe-core/playwright` outside the repository (owner decision 2026-11-05), recorded in `HR-16-READINESS.md` §4; no browser tooling is a repository dependency.
+- Concurrency tests whose child processes use the real clock take dates from `SchoolTimezone::today()`, never the UTC date.
+
 ## 3. Regression cadence
 
 - **Per phase:**

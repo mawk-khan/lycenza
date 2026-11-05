@@ -4557,10 +4557,12 @@ paths:
     get:
       operationId: getStaffAttendanceRegister
       summary: >
-        HRX.3: the School's daily staff attendance register for one date -- every employment spanning the date, each half's derived state (present, absent, leave, holiday, off_day, unrecorded) beside its recorded evidence and today's calendar, plus a derived daily summary. Leave identifiers appear only for readers also holding hr.leave.view. Requires hr.staff_attendance.view.
+        HRX.3: the School's daily staff attendance register for one date, server-paged (HR.16C) -- every employment spanning the date, each half's derived state (present, absent, leave, holiday, off_day, unrecorded) beside its recorded evidence and today's calendar, plus a derived daily summary. Leave identifiers appear only for readers also holding hr.leave.view. Requires hr.staff_attendance.view.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: page, in: query, required: false, description: "HR.16C: the page (default 1).", schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, required: false, description: "HR.16C: rows per page (default 100, at most 200).", schema: { type: integer, minimum: 1, maximum: 200 } }
       responses:
         "200":
           description: OK
@@ -18142,7 +18144,7 @@ components:
         recordable: { type: boolean }
     StaffAttendanceRegister:
       type: object
-      required: [date, calendarConfigured, calendar, rows]
+      required: [date, calendarConfigured, calendar, rows, page]
       properties:
         date: { type: string, format: date }
         calendarConfigured: { type: boolean }
@@ -18161,6 +18163,15 @@ components:
             properties:
               employment: { $ref: "#/components/schemas/StaffAttendanceEmployment" }
               day: { $ref: "#/components/schemas/StaffAttendanceDay" }
+        page:
+          description: HR.16C -- the register is server-paged (ordered by name, staff number, employment id); `total` is the whole population, so no employment is ever silently omitted.
+          type: object
+          required: [page, perPage, total, lastPage]
+          properties:
+            page: { type: integer, minimum: 1 }
+            perPage: { type: integer, minimum: 1, maximum: 200 }
+            total: { type: integer, minimum: 0 }
+            lastPage: { type: integer, minimum: 1 }
     StaffAttendanceHistory:
       type: object
       required: [employment, from, to, calendarConfigured, days]

@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Application\Reports;
 
 use App\Domain\HR\Application\Reporting\ReportingAsOfReader;
+use App\Domain\HR\Application\Separation\SeparationNoticeHistory;
 use App\Domain\HR\Application\Workforce\EmploymentType;
 use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Application\Workforce\WorkforceAsOfReader;
@@ -22,7 +23,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
  * HR.14 (D20-02): the customizable Staff details report -- every employment
  * covering ONE date (default: the School-local today), with the terms and
  * primary placement effective THAT day (WorkforceAsOfReader), never today's
- * values shown as history. One row per employment; the database forbids two
+ * values shown as history (HR.16A: the status column is the status ON that
+ * date, SeparationNoticeHistory; "Status today" is separate). One row per employment; the database forbids two
  * employments of one Employee sharing a day, so no person appears twice.
  *
  * Columns are server-decided: only the HR.1A/HR.2A directory-tier facts
@@ -42,6 +44,7 @@ final class StaffDetailsReport implements HrReport
         private readonly WorkforceAsOfReader $asOf,
         private readonly ReportingAsOfReader $lines,
         private readonly HrReportLabels $labels,
+        private readonly SeparationNoticeHistory $notices,
     ) {}
 
     public function definition(): D
@@ -70,9 +73,11 @@ final class StaffDetailsReport implements HrReport
                 $placement('department', 'Department'),
                 $placement('position', 'Designation'),
                 $placement('manager', 'Reports to', false),
-                new C('current_status', 'Status today'),
-                new C('work_email', 'Work email', 'text', C::OPERATIONAL, [], false),
-                new C('work_phone', 'Work phone', 'text', C::OPERATIONAL, [], false),
+                // HR.16A (R-HR14-2): the status ON the chosen date, from evidence; today's status is separate and labelled.
+                new C('status_on_date', 'Status on the date'),
+                new C('current_status', 'Status today', 'text', C::OPERATIONAL, [], false),
+                new C('work_email', 'Work email (today)', 'text', C::OPERATIONAL, [], false),
+                new C('work_phone', 'Work phone (today)', 'text', C::OPERATIONAL, [], false),
             ],
             sorts: ['name' => 'Name', 'number' => 'Staff number', 'joined' => 'Employment start'],
             perPage: 25,
@@ -121,6 +126,7 @@ final class StaffDetailsReport implements HrReport
 
             /** @var list<EmploymentRecord> $records */
             $records = $paginator->getCollection()->all();
+            $statusesOn = $this->notices->statusesOn($school, collect($records)->mapWithKeys(fn (EmploymentRecord $r) => [(string) $r->id => (string) $r->status])->all(), $date);
             $employees = Employee::query()->where('school_id', $school->id)->whereIn('id', array_map(fn ($r) => $r->employee_id, $records))
                 ->get(['id', 'employee_number', 'full_name', 'work_email', 'work_phone'])->keyBy(fn ($e) => strtolower($e->id));
             $placements = $this->asOf->placementsOn($school, array_map(fn ($r) => $r->employee_id, $records), $date);
@@ -133,7 +139,7 @@ final class StaffDetailsReport implements HrReport
             $campuses = $this->labels->campuses($school, array_map(fn ($p) => $p->campusId, $placements));
             $categories = $this->labels->categories($school, array_map(fn ($p) => $p->employeeCategoryId, $placements));
 
-            return HrReportRows::map($paginator, function (EmploymentRecord $r) use ($employees, $placements, $managers, $managerNames, $departments, $positions, $campuses, $categories, $wants) {
+            return HrReportRows::map($paginator, function (EmploymentRecord $r) use ($employees, $placements, $managers, $managerNames, $departments, $positions, $campuses, $categories, $wants, $statusesOn) {
                 $employee = $employees[strtolower($r->employee_id)] ?? null;
                 $p = $placements[strtolower($r->employee_id)] ?? null;
                 $manager = isset($managers[strtolower($r->id)]) ? ($managerNames[strtolower($managers[strtolower($r->id)])] ?? null) : null;
@@ -147,6 +153,7 @@ final class StaffDetailsReport implements HrReport
                     'department' => $p?->departmentId === null ? null : ($departments[$p->departmentId] ?? null),
                     'position' => $p?->positionId === null ? null : ($positions[$p->positionId] ?? null),
                     'manager' => $manager === null ? null : trim($manager->full_name.' ('.$manager->employee_number.')'),
+                    'status_on_date' => $statusesOn[strtolower($r->id)] ?? null,
                     'current_status' => HrReportLabels::STATUS_LABELS[$r->status] ?? $r->status,
                     'work_email' => $employee?->work_email,
                     'work_phone' => $employee?->work_phone,

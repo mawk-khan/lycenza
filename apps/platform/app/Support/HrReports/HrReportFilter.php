@@ -34,7 +34,9 @@ final class HrReportFilter
     /** key => [label, kind] -- the key is also the query-string parameter. */
     public const array FILTERS = [
         'q' => ['Name or staff number', self::SEARCH],
-        'as_of' => ['As of', self::DATE],
+        'as_of' => ['Effective on', self::DATE],
+        // HR.16A: a transaction-time date (entries recorded by the end of this School-local day).
+        'posted_by' => ['Posted by', self::DATE],
         'from' => ['From', self::DATE],
         'to' => ['To', self::DATE],
         'month' => ['Month', self::MONTH],

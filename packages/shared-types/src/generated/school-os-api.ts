@@ -2003,7 +2003,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** HRX.3: the School's daily staff attendance register for one date -- every employment spanning the date, each half's derived state (present, absent, leave, holiday, off_day, unrecorded) beside its recorded evidence and today's calendar, plus a derived daily summary. Leave identifiers appear only for readers also holding hr.leave.view. Requires hr.staff_attendance.view. */
+        /** HRX.3: the School's daily staff attendance register for one date, server-paged (HR.16C) -- every employment spanning the date, each half's derived state (present, absent, leave, holiday, off_day, unrecorded) beside its recorded evidence and today's calendar, plus a derived daily summary. Leave identifiers appear only for readers also holding hr.leave.view. Requires hr.staff_attendance.view. */
         get: operations["getStaffAttendanceRegister"];
         put?: never;
         /** HRX.3: the bulk daily register -- several employments on one date, all or nothing. Any invalid or duplicate item, or an employment already recorded that day, refuses the whole register (never an implicit correction). Requires hr.staff_attendance.manage (not .view). Idempotency-Key required. */
@@ -9429,6 +9429,13 @@ export interface components {
                 employment: components["schemas"]["StaffAttendanceEmployment"];
                 day: components["schemas"]["StaffAttendanceDay"];
             }[];
+            /** @description HR.16C -- the register is server-paged (ordered by name, staff number, employment id); `total` is the whole population, so no employment is ever silently omitted. */
+            page: {
+                page: number;
+                perPage: number;
+                total: number;
+                lastPage: number;
+            };
         };
         StaffAttendanceHistory: {
             employment: components["schemas"]["StaffAttendanceEmployment"];
@@ -18608,6 +18615,10 @@ export interface operations {
         parameters: {
             query: {
                 date: string;
+                /** @description HR.16C: the page (default 1). */
+                page?: number;
+                /** @description HR.16C: rows per page (default 100, at most 200). */
+                per_page?: number;
             };
             header?: never;
             path: {
