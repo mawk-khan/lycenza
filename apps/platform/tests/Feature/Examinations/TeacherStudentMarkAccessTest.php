@@ -14,11 +14,14 @@ use App\Domain\Examinations\Application\Exceptions\TeacherStudentMarksUnavailabl
 use App\Domain\Examinations\Application\Marks\TeacherStudentMarkReadService;
 use App\Domain\Examinations\Infrastructure\ExaminationPaper;
 use App\Domain\Examinations\Infrastructure\StudentMark;
+use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
+use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Models\Role;
 use App\Models\SchoolAuditEvent;
+use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
@@ -178,8 +181,10 @@ class TeacherStudentMarkAccessTest extends TestCase
         $this->teacherRecord($w, $cover, [$this->entry($student, 'present', '31', 1)]);
 
         // Owned on the paper's date but no longer employed today: refused (ActingEmployee is judged today).
-        [$leaver, $leaverEmployee] = $this->markTeacher($w, employment: ['ends_on' => '2026-09-30']);
+        // HR.R1-C2 (HRC-1): the last day is written by ending the employment (end() keeps the ownership within it).
+        [$leaver, $leaverEmployee] = $this->markTeacher($w);
         $this->ownSection($w, $leaverEmployee, 'a1', '2026-06-01', '2026-09-30');
+        app(EmploymentService::class)->end(app(TenantContext::class)->withSchool($w['school'], fn () => EmploymentRecord::query()->where('employee_id', $leaverEmployee->id)->sole()), '2026-09-30', $this->fullHrActor($w['school']));
         $this->assertThrows(fn () => $this->teacherRead($w, $leaver), ActingEmployeeUnavailableException::class);
         $this->assertThrows(fn () => $this->teacherRecord($w, $leaver, [$this->entry($student, 'present', '32', 2)]), ActingEmployeeUnavailableException::class);
         $this->assertSame(['31.00', 2], [(string) $this->markOf($w, $student)->value, $this->markOf($w, $student)->version]);
