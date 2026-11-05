@@ -4842,6 +4842,65 @@ The contract is ADR 0065 §30 and ADR 0071 §30. HR's part:
   comp-off is blocked (OD-HR-18). Changing it is a Staff Attendance
   amendment, not an HR change.
 
+## Employment lifecycle integrity (HR.R1-C2, 2026-11-05)
+
+HR.R1-0 found, and HR.R1-C2 reproduced against `852fb06a`, five lifecycle
+defects. Four are closed for development, and HRC-12 is partial:
+
+- **HRC-1, an employment begins open.** `employment_records.ends_on` is the
+  ACTUAL last day. Writing it ends the record: the eligibility guard stamps
+  `ended_recorded_at` and freezes the end and status. An employment created
+  with a "planned end" was therefore a dead end: never separable, never
+  retention-eligible. Now no creation path accepts `ends_on`
+  (`EmploymentService::createRecord()` refuses `ends_on_on_create`; API
+  create and rehire answer 422 on the field), and the database refuses, for
+  the runtime role, an open-status employment inserted with an end
+  (`retention_guard_end_record`). A fixed-term contract is ended through
+  `end()` or an approved separation on its last day.
+  - **No planned end is stored.** There is no contract-end field. A fixed-term
+    employment stays open until it is ended, and a planned re-hire cannot be
+    recorded while the current employment is open (HR.1A refuses overlap).
+    Recording a contract's planned end, separate from the actual last day, is
+    an owner decision and is not built.
+  - **`end()` takes effect at once.** It writes the terminal status
+    immediately, even for a last day still ahead, so coverage and the acting
+    Employee end when the end is recorded. HR.12 finalizes a case on or after
+    its approved last day, so the normal path is unaffected.
+- **HRC-2, ending disposes of every placement.** Under the placement lock,
+  `EmploymentService::end()` clips each placement that applies on (or would
+  run past) the last day to that day. Each placement planned to START after
+  the last day (a future transfer or promotion) is recorded as never
+  effective: the empty interval `ends_on = starts_on - 1`, the convention
+  HR.3A already uses for a cancelled reporting line and ADR 0078 for a
+  cancelled Student placement. It covers no day in any reader. The movement
+  report omits its placement change. The Staff Profile shows "planned from
+  ...; never took effect". The audit lists `cancelledAssignmentIds`. Nothing
+  is deleted, and an already-ended placement is untouched. A one-day
+  placement (starting on the last day) is ordinary. Rehire never revives
+  either.
+- **HRC-12, rehire admission (partial).**
+  - **Deceased:** an Employee whose employment ended in death never receives
+    another, through either create or rehire. Correcting an erroneous death
+    record has no path; that is a separate, undecided matter.
+  - **Archived, still OPEN (owner decision):** rehire stays independent of
+    `record_status` (Phase 8A.13, `HrEmployeeRehireTest`), although coverage
+    treats an archived Employee's employment as inert.
+- **XRP-1/XRP-2, Timetable.** Reactivating a weekly entry re-checks the
+  teacher's current employment on the School-local today
+  (`EmploymentCoverage::hold()`), exactly like create and update. A refused
+  entry stays as it was.
+- **LVA-2, credits at separation.** The Leave obligation flags every monthly
+  credit for a month that does not END within the employment. That includes
+  the month holding a mid-month last day, not only months starting after it.
+  Credits already named by a correcting adjustment are excluded. Nothing is
+  reversed or prorated (OD-HR-17). The broader R-HR10-1 reconciliation
+  stays manual.
+
+Concurrency (two real sessions): an end held open refuses the waiting
+future transfer and the waiting Timetable reactivation, and a future
+transfer held open is disposed of by the waiting end
+(`WorkforceLifecycleConcurrencyTest`).
+
 ## Separation cases, notice and offboarding (HR.12, 2026-11-04)
 
 Owner decisions (HR-061 and five follow-ups, 2026-11-04; ADR 0028 HR.12

@@ -104,10 +104,12 @@ class CurrentEmployeeAssignmentsTest extends TestCase
             $this->assertSame([], $this->campuses($person, '2026-10-20'), "{$status}: a date-open assignment under it confers nothing");
         }
 
-        [$notice, $record] = $this->employed(['status' => 'notice_period', 'ends_on' => '2026-11-30']);
+        // HR.R1-C2 (HRC-1): a notice period has no end yet -- the last day is written only when the employment is
+        // ended, together with a terminal status (the loop above), so it stays operational until then.
+        [$notice, $record] = $this->employed(['status' => 'notice_period', 'ends_on' => null]);
         $this->assign($record, $this->a);
         $this->assertSame([$this->a->id], $this->campuses($notice, '2026-10-20'), 'notice period is still operational');
-        $this->assertSame([], $this->campuses($notice, '2026-12-01'), 'until the employment ends');
+        $this->assertSame([$this->a->id], $this->campuses($notice, '2026-12-01'), 'until the employment is ended');
 
         [$later, $record] = $this->employed(['starts_on' => '2026-11-01']);
         $this->assign($record, $this->a, ['starts_on' => '2026-11-01']);

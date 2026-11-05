@@ -244,7 +244,7 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
         $workspace = $this->build($school, $employee->id);
 
         $this->assertCount(2, $workspace->assignments, 'Profile Workspace must show ALL Assignments, including secondary ones -- unlike Directory.');
-        $this->assertSame(['id', 'employment_record_id', 'is_primary', 'starts_on', 'ends_on', 'is_current', 'position_id', 'position_name', 'department_id', 'department_name', 'campus_id', 'campus_name'], array_keys($workspace->assignments[0]->toArray()));
+        $this->assertSame(['id', 'employment_record_id', 'is_primary', 'starts_on', 'ends_on', 'is_current', 'position_id', 'position_name', 'department_id', 'department_name', 'campus_id', 'campus_name', 'never_effective'], array_keys($workspace->assignments[0]->toArray()));
 
         $primaryEntry = collect($workspace->assignments)->first(fn ($a) => $a->isPrimary);
         $this->assertSame($primaryPosition->id, $primaryEntry->positionId);

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payroll\Hrx;
 
+use App\Domain\HR\Application\EmploymentService;
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Leave\Application\StaffCalendarService;
@@ -79,9 +80,11 @@ class PayrollAbsenceEvidenceReaderTest extends TestCase
         $this->assertSame(self::SEPTEMBER_WORKING_HALVES - 2, $this->evidence($w)->requiredWorkingHalfUnits, 'a holiday is not required working time');
         $this->assertSame('holiday', collect($this->evidence($w)->halves)->first(fn ($h) => $h['date'] === '2026-09-14')['class']);
 
-        // Joined on 16 Sep, leaving on 25 Sep (notice period): only 16..25 counts.
-        $partial = $this->createEmploymentRecord($this->createEmployee($w['school']), ['status' => 'notice_period', 'starts_on' => '2026-09-16', 'ends_on' => '2026-09-25']);
+        // Joined on 16 Sep, leaving on 25 Sep (notice period): only 16..25 counts. HR.R1-C2 (HRC-1): attendance is
+        // recorded while the notice period runs (no end yet); the last day is written by ending the employment.
+        $partial = $this->createEmploymentRecord($this->createEmployee($w['school']), ['status' => 'notice_period', 'starts_on' => '2026-09-16', 'ends_on' => null]);
         $this->recordAttendance($w, '2026-09-17', 'absent', 'absent', $partial);
+        $partial = app(EmploymentService::class)->end($partial, '2026-09-25', $this->fullHrActor($w['school']));
         $e = $this->evidence($w, $partial);
         $this->assertSame(['2026-09-16', '2026-09-25'], [$e->coveredFrom, $e->coveredTo]);
         $this->assertSame(20, count($e->halves));

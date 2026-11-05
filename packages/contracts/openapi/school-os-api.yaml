@@ -18492,6 +18492,7 @@ components:
         department_name: { type: string, nullable: true }
         campus_id: { type: string, format: uuid, nullable: true }
         campus_name: { type: string, nullable: true }
+        never_effective: { type: boolean, description: "HR.R1-C2: planned to start after its employment ended; recorded as the empty interval (ends_on = starts_on - 1) and never in effect." }
 
     EmployeeProfileQualification:
       type: object

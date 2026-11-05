@@ -609,8 +609,22 @@ class DatabaseRoleVerifier
             && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
         $results[] = $this->payrollApprovalProvenanceCheck();
+        $results[] = $this->employmentLifecycleAdmissionCheck();
 
         return $results;
+    }
+
+    /**
+     * HR.R1-C2 (HRC-1, HRC-2): an employment never begins with a planned end
+     * (the eligibility guard's INSERT branch), and only an employment end
+     * records a placement as never effective (the empty-interval trigger).
+     */
+    private function employmentLifecycleAdmissionCheck(): CheckResult
+    {
+        $guard = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'retention_guard_end_record' and p.pronamespace = 'public'::regnamespace");
+        $trigger = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname = 'trg_employee_assignments_never_effective'")->c;
+
+        return CheckResult::of('employment_lifecycle_admission_guarded', $guard !== null && str_contains($guard->src, 'never begins with a planned end') && $trigger === 1);
     }
 
     /**

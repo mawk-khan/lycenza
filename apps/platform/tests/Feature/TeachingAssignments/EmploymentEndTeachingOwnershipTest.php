@@ -10,7 +10,6 @@ use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
-use App\Domain\TeachingAssignments\Application\Exceptions\AssignmentBeyondEmploymentException;
 use App\Domain\TeachingAssignments\Application\Exceptions\EmployeeNotAssignableException;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentReadService;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
@@ -184,18 +183,11 @@ class EmploymentEndTeachingOwnershipTest extends TestCase
         $this->assertThrows(fn () => $this->endEmployment($w, $employee, $stranger), AuthorizationException::class);
         $this->assertTrue($this->ownsRequired($w, $employee, '2026-10-05'), 'nothing ended');
 
-        // An employment with a known last day (a fixed-term record): covered on the start date, but no assignment
-        // may outlast it -- open-ended or past its end.
-        [, $fixedTerm] = $this->markTeacher($w, employment: ['ends_on' => self::END]);
-        $this->assertThrows(fn () => $this->ownSection($w, $fixedTerm, 'a2', '2026-09-01'), AssignmentBeyondEmploymentException::class);
-        $this->assertThrows(fn () => $this->ownSection($w, $fixedTerm, 'a2', '2026-09-01', '2026-09-30'), AssignmentBeyondEmploymentException::class);
-        $this->assertThrows(fn () => $this->ownElective($w, $fixedTerm, null, '2026-09-01'), AssignmentBeyondEmploymentException::class);
-        $this->assertThrows(fn () => $this->ownElective($w, $fixedTerm, null, '2026-09-01', '2026-09-21'), AssignmentBeyondEmploymentException::class);
-        $this->ownSection($w, $fixedTerm, 'a2', '2026-09-01', self::END); // within the employment: fine
-        $this->ownElective($w, $fixedTerm, null, '2026-09-01', self::END);
-        $this->assertTrue($this->ownsRequired($w, $fixedTerm, self::END, 'a2'));
-        $this->assertFalse($this->ownsRequired($w, $fixedTerm, '2026-09-21', 'a2'));
-
+        // HR.R1-C2 (HRC-1): an employment carries a last day only once it is ENDED (end() writes it with its
+        // terminal status) -- the old "fixed-term record with a known last day, still covered" shape cannot be
+        // written by the runtime role any more. S7's "never past the employment" check stays as a backstop for
+        // owner-written history (its order is pinned by EmploymentEndArchitectureGuardTest); the runtime case is
+        // the ended employment below, which plans nothing at all.
         // After an end, the ended employment plans nothing more (TCH.2, unchanged).
         $this->endEmployment($w, $employee);
         $this->assertThrows(fn () => $this->ownSection($w, $employee, 'a2', '2026-09-01', self::END), EmployeeNotAssignableException::class);

@@ -75,6 +75,8 @@ class OperatorVerificationCommandsTest extends TestCase
             'role_grantor_coverage_enforced', 'role_lifecycle_columns', 'local_fixture_seam_absent_outside_development',
             // HR.R1-C1 (PAY-2/3/4/5)
             'payroll_approval_provenance_guarded',
+            // HR.R1-C2 (HRC-1, HRC-2)
+            'employment_lifecycle_admission_guarded',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

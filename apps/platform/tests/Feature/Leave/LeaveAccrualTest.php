@@ -177,8 +177,10 @@ class LeaveAccrualTest extends TestCase
         $this->assign($full, $policy);
         $joiner = $this->employment('2026-09-15');
         $this->assign($joiner, $policy, '2026-09-15');
-        $leaver = $this->employment('2024-01-01', '2026-09-20', 'notice_period');
+        // HR.R1-C2 (HRC-1): the leaver's last day is written when the employment is ended (the rehire case below).
+        $leaver = $this->employment('2024-01-01', null, 'notice_period');
         $this->assign($leaver, $policy, '2026-04-01', '2026-09-20');
+        $this->inSchool($this->school, fn () => DB::table('employment_records')->where('id', $leaver->id)->update(['status' => 'separated', 'ends_on' => '2026-09-20']));
         $midAssigned = $this->employment();
         $this->assign($midAssigned, $policy, '2026-09-10');
         $unassigned = $this->employment();

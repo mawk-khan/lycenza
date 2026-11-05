@@ -229,8 +229,10 @@ class ActingEmployeeResolverTest extends TestCase
         [$startsToday] = $this->staff($school, ['starts_on' => self::AS_OF]);
         $this->resolver()->resolve($startsToday, $school, self::AS_OF);
 
-        [$endsToday] = $this->staff($school, ['starts_on' => '2026-01-01', 'ends_on' => self::AS_OF, 'status' => 'notice_period']);
-        $this->resolver()->resolve($endsToday, $school, self::AS_OF);
+        // HR.R1-C2 (HRC-1): a notice period has no end until the employment is ended (end() writes the last day
+        // with its terminal status), so a person serving notice still acts.
+        [$serving] = $this->staff($school, ['starts_on' => '2026-01-01', 'ends_on' => null, 'status' => 'notice_period']);
+        $this->resolver()->resolve($serving, $school, self::AS_OF);
 
         [$startsTomorrow] = $this->staff($school, ['starts_on' => '2026-09-16']);
         $this->assertDenied(ActingEmployeeUnavailableException::NO_ELIGIBLE_EMPLOYMENT, $startsTomorrow, $school);

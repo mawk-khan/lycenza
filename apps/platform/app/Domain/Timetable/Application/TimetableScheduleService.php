@@ -287,8 +287,15 @@ class TimetableScheduleService
 
             $this->assertParentsSchedulable($subjectOffering, $section, $teacher, $room);
 
-            return $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $entry, $period, $actor, $scope) {
+            return $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $entry, $period, $actor, $scope, $teacher) {
                 $this->holdInScope($scope, $entry);
+                // HR.R1-C2 (XRP-1): reactivating puts the duty back into service, so it needs the teacher's
+                // current employment TODAY exactly like create() and update() (HR's EmploymentCoverage, FOR
+                // SHARE, so a concurrent employment end is ordered before or after this), never the identity
+                // flag alone. The historical entry itself is left untouched when refused.
+                if (app(EmploymentCoverage::class)->hold($school, $teacher->id, SchoolTimezone::today($school)) !== EmploymentCoverage::COVERED) {
+                    throw new TeacherNotAvailableException;
+                }
                 $this->assertPeriodSchedulable($period);
                 $this->assertCampusSchedulable($school, $entry->campus_id);
 

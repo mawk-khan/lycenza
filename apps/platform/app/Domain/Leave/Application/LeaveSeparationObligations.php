@@ -32,11 +32,18 @@ final class LeaveSeparationObligations implements SeparationObligationSource
             ->where('employment_record_id', $subject->employmentRecordId)->where('status', 'approved')
             ->where('ends_on', '>', $subject->lastDay)->count();
 
-        // A monthly credit is for a whole month the employment must span (HR.10):
-        // a credited month starting after the last day was not earned.
-        $creditsAfter = DB::table('leave_ledger_entries')->where('school_id', $school->id)
-            ->where('employment_record_id', $subject->employmentRecordId)->where('kind', 'accrual')
-            ->where('accrual_period', '>', $subject->lastDay)->count();
+        // A monthly credit is for a WHOLE month the employment must span (HR.10, ADR 0065 §29; no proration,
+        // OD-HR-17). HR.R1-C2 (LVA-2): a credited month is unearned when the month does not END within the
+        // employment -- the month containing a mid-month last day included, not only months starting after it.
+        // The posting time never decides (an accrual is identified by its month); a credit that a correcting
+        // adjustment already names (`source_id`, the R-HR10-1 correction) is no longer outstanding.
+        $creditsAfter = DB::table('leave_ledger_entries as l')->where('l.school_id', $school->id)
+            ->where('l.employment_record_id', $subject->employmentRecordId)->where('l.kind', 'accrual')
+            ->whereRaw("(l.accrual_period + interval '1 month' - interval '1 day')::date > ?::date", [$subject->lastDay])
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('leave_ledger_entries as c')
+                ->whereColumn('c.school_id', 'l.school_id')->whereColumn('c.employment_record_id', 'l.employment_record_id')
+                ->where('c.kind', 'adjustment')->whereColumn('c.source_id', 'l.id'))
+            ->count();
 
         return [
             new SeparationObligation('leave_pending_requests', 'Leave', 'Leave requests awaiting a decision',
@@ -45,9 +52,9 @@ final class LeaveSeparationObligations implements SeparationObligationSource
             new SeparationObligation('leave_approved_after_last_day', 'Leave', 'Approved leave after the last day',
                 $approvedAfter > 0 ? SeparationObligation::ATTENTION : SeparationObligation::CLEAR, $approvedAfter,
                 $approvedAfter > 0 ? 'Approved leave runs past the last day. Review it through Leave; it is never cancelled automatically.' : null),
-            new SeparationObligation('leave_accrual_after_last_day', 'Leave', 'Monthly leave credited after the last day',
+            new SeparationObligation('leave_accrual_after_last_day', 'Leave', 'Monthly leave credited for a month not fully worked',
                 $creditsAfter > 0 ? SeparationObligation::ATTENTION : SeparationObligation::CLEAR, $creditsAfter,
-                $creditsAfter > 0 ? 'Monthly credits exist for months after the last day (R-HR10-1). Correct each with a leave adjustment that names it; nothing is reversed automatically.' : null),
+                $creditsAfter > 0 ? 'Monthly credits exist for months the employment did not fully span (R-HR10-1). Correct each with a leave adjustment that names it; nothing is reversed automatically.' : null),
         ];
     }
 }

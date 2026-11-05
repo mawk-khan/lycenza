@@ -258,7 +258,7 @@ final class WorkforceAsOfReader
      */
     public static function primaryOnSql(string $employmentAlias, string $dateSql): string
     {
-        return "(SELECT pa.id FROM employee_assignments pa WHERE pa.school_id = {$employmentAlias}.school_id AND pa.employment_record_id = {$employmentAlias}.id AND pa.is_primary AND pa.starts_on <= {$dateSql} ORDER BY pa.starts_on DESC, pa.id LIMIT 1)";
+        return "(SELECT pa.id FROM employee_assignments pa WHERE pa.school_id = {$employmentAlias}.school_id AND pa.employment_record_id = {$employmentAlias}.id AND pa.is_primary AND pa.starts_on <= {$dateSql} AND (pa.ends_on IS NULL OR pa.ends_on >= pa.starts_on) ORDER BY pa.starts_on DESC, pa.id LIMIT 1)";
     }
 
     /** @param  array<string, string>  $placement */

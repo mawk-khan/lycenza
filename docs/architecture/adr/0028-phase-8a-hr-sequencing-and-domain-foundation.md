@@ -429,3 +429,47 @@ configuration is tenant-lifetime. Rollback refuses while tasks exist.
    where none exists; leave balances are as posted.
 3. **Staff Attendance pages its population** (`EmploymentRoster::paged()`);
    the capped `on()`/`overlapping()` readers are removed.
+
+## HR.R1-C2 amendment (2026-11-05): employment lifecycle integrity
+
+HR.R1-0 findings HRC-1, HRC-2, HRC-12, XRP-1 and LVA-2, each reproduced
+against `852fb06a` before it was corrected:
+
+1. **An employment begins open (HRC-1).** `ends_on` is the ACTUAL last day:
+   writing it ends the record (`ended_recorded_at`, frozen end and status).
+   No creation path -- service, API create, API rehire, onboarding, import --
+   accepts it (`EmploymentService::createRecord()`, `ends_on_on_create`; the
+   API answers 422 on `ends_on`), and `retention_guard_end_record` refuses,
+   for the runtime role, an INSERT of an open-status employment with an end
+   (the same rule its UPDATE branch already had). A coherent ended record
+   (terminal status + end) stays insertable for governed historical import
+   by the schema owner. Nothing existing is rewritten.
+2. **Ending an employment disposes of every placement (HRC-2).** Under the
+   placement lock, `EmploymentService::end()` clips each placement that
+   applies on (or would run past) the last day to that day, and records each
+   placement planned to START after it as never effective: the empty
+   interval `ends_on = starts_on - 1` (the HR.3A / ADR 0078 convention). The
+   `employee_assignments_date_range_check` admits exactly that extra shape;
+   readers never resolve it (`starts_on <= d AND (ends_on IS NULL OR
+   ends_on >= d)`; `WorkforceAsOfReader::primaryOnSql` excludes it); the
+   movement report never lists its placement change; the profile shows it as
+   "never took effect". Planned dates and the placement-change record stay as
+   history; nothing is deleted; the audit lists `cancelledAssignmentIds`.
+3. **Rehire admission (HRC-12, partial).** An Employee whose employment
+   ended in death never receives another one, on every create and rehire
+   path. A new employment would not correct the death record, and correcting
+   an erroneous death record has no path (a separate, undecided matter). The
+   archived half of HRC-12 stays OPEN as an owner decision. Phase 8A.13 keeps
+   the Employee identity record and the employment lifecycle independent: a
+   rehire never reads `record_status` (`HrEmployeeRehireTest`), and
+   `archive()` never checks employment. Coverage, however, treats an archived
+   Employee's employment as inert. Whether an archived identity should gate a
+   new employment, or archiving should gate a current one, is a lifecycle
+   policy this correction does not invent.
+4. **Timetable reactivation re-checks employment (XRP-1).**
+   `TimetableScheduleService::activate()` holds `EmploymentCoverage` on the
+   School-local today, like `create()` and `update()`.
+5. **Monthly credits at separation (LVA-2).** The Leave obligation flags
+   every credited month that does not END within the employment (the month
+   of a mid-month last day included), excluding credits a correcting
+   adjustment already names. Nothing is reversed or prorated (OD-HR-17).

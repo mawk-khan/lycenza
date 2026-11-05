@@ -43,7 +43,8 @@ class EmploymentController extends Controller
             'staff_type' => ['sometimes', 'nullable', 'string', Rule::in(StaffType::values())],
             'employee_category_id' => ['sometimes', 'nullable', 'uuid'],
             'starts_on' => ['required', 'date'],
-            'ends_on' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_on'],
+            // HR.R1-C2 (HRC-1): an employment begins open; it ends only through /end or an approved separation.
+            'ends_on' => ['prohibited'],
             'probation_ends_on' => ['sometimes', 'nullable', 'date'],
             'status' => ['sometimes', 'string', Rule::in(EmploymentRecord::STATUSES)],
         ]);

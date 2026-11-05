@@ -9741,6 +9741,8 @@ export interface components {
             /** Format: uuid */
             campus_id: string | null;
             campus_name: string | null;
+            /** @description HR.R1-C2: planned to start after its employment ended; recorded as the empty interval (ends_on = starts_on - 1) and never in effect. */
+            never_effective?: boolean;
         };
         EmployeeProfileQualification: {
             /** Format: uuid */

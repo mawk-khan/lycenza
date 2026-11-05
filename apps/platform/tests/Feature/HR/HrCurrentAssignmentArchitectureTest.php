@@ -35,6 +35,7 @@ class HrCurrentAssignmentArchitectureTest extends TestCase
     /** Declared readers with a different question than "operationally current". */
     private const DECLARED_READERS = [
         'app/Domain/HR/Application/CurrentEmployeeAssignments.php' => 'THE canonical operational-current definition',
+        'app/Domain/HR/Application/EmploymentService.php' => 'HR.R1-C2 employment end: disposes of every placement against the LAST DAY (clip those applying on it, record those starting after it as never effective) -- a lifecycle write under the placement lock, never a currency answer',
         'app/Domain/HR/Application/EmployeeDirectoryService.php' => 'display summary (current primary placement) and its Department/Position filters; the Campus filter delegates to the canonical resolver',
         'app/Domain/HR/Application/EmployeeProfileWorkspaceService.php' => 'display summary of the current primary placement on the School-local date',
         'app/Domain/HR/Application/EmployeePickerReadService.php' => 'reporting-manager candidates (ORG.7E-1 will scope them)',

@@ -816,6 +816,13 @@ trait CreatesTenancyFixtures
 
     protected function createEmploymentRecord(Employee $employee, array $attributes = []): EmploymentRecord
     {
+        // HR.R1-C2 (HRC-1): `ends_on` is the ACTUAL last day -- an employment with an end is an ended one. An
+        // open status with an end (the old "planned end" fixture shape) is refused by the database, so such a
+        // fixture is recorded as what it models: an employment that ended on that day.
+        if (($attributes['ends_on'] ?? null) !== null && ! in_array($attributes['status'] ?? 'active', ['separated', 'terminated', 'retired', 'deceased'], true)) {
+            $attributes['status'] = 'separated';
+        }
+
         return app(TenantContext::class)->withSchool(
             $employee->school,
             fn () => EmploymentRecord::factory()->create(array_merge([

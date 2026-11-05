@@ -127,7 +127,7 @@ both mean HRX-L2.
 | D1-04 | Biometric identity | none (guards) | GATE | H106, H233, H373 | an attendance identity in StaffAttendance; never on Employee | StaffAttendance | HR.8 | H | HRX-L2 (L2b) |
 | D1-05 | Active / inactive state | `record_status` + employment status | IMP | H124, H127 → `EmployeeLifecycleService` | — | HR | — | — | — |
 | D1-06 | Joining date | `employment_records.starts_on` | IMP | H117, H323 | — | HR | — | — | — |
-| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) | PART | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | — |
+| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) ; HR.R1-C2: an employment begins open -- no creation path accepts `ends_on` (service, API, DB), HRC-1 closed | PART | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | — |
 | D1-08 | Campus / School assignment | `employee_assignments.campus_id` (composite FK) | IMP | H174 → `CurrentEmployeeAssignments` | — | HR | — | — | — |
 | D1-09 | Department assignment | `employee_assignments.department_id` | IMP | H134 | — | HR | — | — | — |
 | D1-10 | Designation | `positions` via assignment | IMP | H134, H191 | — | HR | — | — | — |
@@ -161,7 +161,7 @@ both mean HRX-L2.
 
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
-| D2-01 | School / Campus transfer | `PlacementChangeService` transfer: source closed the day before, new primary opened, named record (HR.1A) | IMP | H174–H178, H300 | — | HR | — | M | — |
+| D2-01 | School / Campus transfer | `PlacementChangeService` transfer: source closed the day before, new primary opened, named record (HR.1A) ; a transfer planned past an employment end never takes effect (HR.R1-C2) | IMP | H174–H178, H300 | — | HR | — | M | — |
 | D2-02 | Department transfer | `PlacementChangeService` department change (HR.1A) | IMP | H225 | — | HR | — | M | — |
 | D2-03 | Designation change | `PlacementChangeService` designation change (HR.1A) | IMP | H225 (reference edits in place) | — | HR | — | M | — |
 | D2-04 | Promotion | `PlacementChangeService` promotion (HR.1A) | IMP | — | — | HR | — | L | — |
@@ -494,11 +494,11 @@ both mean HRX-L2.
 | D18-11 | Resignation request | `employment_separation_cases` recorded by HR (`SeparationCaseService::record`, HR.12); no employee self-service (not authorized) | IMP | H483–H487 | self-service would need an OD-HR-4 decision | HR | — | M | — |
 | D18-12 | Resignation reason | closed `SeparationReason`: resignation, retirement, contract end, mutual agreement (HR.12) | IMP | H351 | no dismissal (OD-HR-8) or health (HRX-L1) reason | HR | — | M | HRX-L1 for health |
 | D18-13 | Notice / served date | `notified_on`, planned / final last working day; approved case → `notice_period` (HR.12) | IMP | H483 | no notice-length calculation (no approved contract) | HR | — | L | — |
-| D18-14 | Relieving date | `ends_on` | IMP | H483 | — | HR | — | — | — |
+| D18-14 | Relieving date | `ends_on` (the ACTUAL last day; written only by `end()` / an approved separation, never at creation, HR.R1-C2) | IMP | H483 | — | HR | — | — | — |
 | D18-15 | Department-wise clearance | School-configured administrative items (closed responsibility, snapshot at approval) + owners' read-only answers (Leave, Timetable, Transport, Identity) (HR.12) | PART | H352–H353, H485 | Library, Inventory and Finance record no staff obligation: NOT_INTEGRATED (R-HR12-2, HR.15 / owners) | HR + owners | HR.15 | M | rule 105 |
 | D18-16 | Final approval | another person decides (`hr.separations.approve`, shared approval foundation, fresh MFA) (HR.12, HR-061) | IMP | H486 | single stage (ADR 0065 §6 spirit; no delegation) | HR | — | M | — |
-| D18-17 | Offboarding | case finalization through `end()`; completion gated on mandatory clearance and open owner obligations; School access flagged, off-boarded under Staff accounts (HR.12) | PART | H351 | domain-evidence clearance for Library / Inventory / Finance; relieving / NOC documents (Documents review) | HR + Identity | HR.15 | H | — |
-| D18-18 | Rehire | new employment, same Employee and number | IMP | H129 (reactivate) | — | HR | — | — | — |
+| D18-17 | Offboarding | case finalization through `end()`; completion gated on mandatory clearance and open owner obligations; School access flagged, off-boarded under Staff accounts (HR.12) ; HR.R1-C2: `end()` clips placements to the last day and records later-starting ones as never effective (HRC-2 closed) | PART | H351 | domain-evidence clearance for Library / Inventory / Finance; relieving / NOC documents (Documents review) | HR + Identity | HR.15 | H | — |
+| D18-18 | Rehire | new employment, same Employee and number ; HR.R1-C2: refused for an Employee recorded deceased (HRC-12, partial; the archived case is an open owner decision, rehire stays independent of `record_status`) | IMP | H129 (reactivate) | — | HR | — | — | — |
 | D18-19 | Deactivation preserves history | no runtime DELETE; append-only evidence | IMP | — | — | HR | — | H | — |
 | D18-20 | Contract staff register | `employment_type` + `ends_on` | ALT | H124, H246 | contract amounts are Payroll; documents via HR documents | HR | HR.12 | L | — |
 | D18-21 | Superannuation / retirement date | none | DEF | H125–H126 | owner decision HR-084 (derived from DOB, no new field) | HR | HR.12 | L | — |

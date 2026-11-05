@@ -72,6 +72,7 @@ interface Assignment {
     starts_on: string;
     ends_on: string | null;
     is_current: boolean;
+    never_effective: boolean;
     position_name: string | null;
     department_name: string | null;
     campus_name: string | null;
@@ -1871,7 +1872,13 @@ function submitNote(): void {
                                                 .filter(Boolean)
                                                 .join(' · ')
                                         }}
-                                        · {{ a.starts_on }} – {{ a.ends_on ?? 'present' }}
+                                        <template v-if="a.never_effective">
+                                            · planned from {{ a.starts_on }}; never took effect (the
+                                            employment ended first)
+                                        </template>
+                                        <template v-else>
+                                            · {{ a.starts_on }} – {{ a.ends_on ?? 'present' }}
+                                        </template>
                                     </p>
                                 </div>
                                 <div

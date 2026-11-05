@@ -30,6 +30,8 @@ final class EmployeeProfileAssignmentEntry
         public readonly ?string $departmentName,
         public readonly ?string $campusId,
         public readonly ?string $campusName,
+        // HR.R1-C2 (HRC-2): planned to start after its employment ended -- recorded as the empty interval, never in effect.
+        public readonly bool $neverEffective = false,
     ) {}
 
     /** @return array<string, mixed> */
@@ -48,6 +50,7 @@ final class EmployeeProfileAssignmentEntry
             'department_name' => $this->departmentName,
             'campus_id' => $this->campusId,
             'campus_name' => $this->campusName,
+            'never_effective' => $this->neverEffective,
         ];
     }
 }

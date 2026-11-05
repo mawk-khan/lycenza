@@ -62,7 +62,7 @@ class HrEmployeeAssignmentController extends Controller
 
         $validated = $request->validate([
             'starts_on' => ['required', 'date'],
-            'ends_on' => ['sometimes', 'nullable', 'date'],
+            'ends_on' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_on'],
             'position_id' => ['required', 'uuid'],
             'campus_id' => ['sometimes', 'nullable', 'uuid'],
             'department_id' => ['sometimes', 'nullable', 'uuid'],

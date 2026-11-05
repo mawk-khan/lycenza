@@ -235,11 +235,12 @@ class EmploymentRecordTest extends TestCase
         $service = app(EmploymentService::class);
         $actor = $this->fullHrActor($school);
 
-        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01', 'ends_on' => '2025-03-31'], $actor);
+        // HR.R1-C2 (HRC-1): an employment begins open and is given its last day by ending it.
+        $service->end($service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01'], $actor), '2025-03-31', $actor);
 
         $this->expectException(EmploymentOverlapException::class);
 
-        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01', 'ends_on' => '2026-01-01'], $actor);
+        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'], $actor);
     }
 
     #[Test]
@@ -265,7 +266,7 @@ class EmploymentRecordTest extends TestCase
         $service = app(EmploymentService::class);
         $actor = $this->fullHrActor($school);
 
-        $first = $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01', 'ends_on' => '2025-03-31'], $actor);
+        $first = $service->end($service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01'], $actor), '2025-03-31', $actor);
         $second = $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2025-04-01'], $actor);
 
         $this->assertNotSame($first->id, $second->id);

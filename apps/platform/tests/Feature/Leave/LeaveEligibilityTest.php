@@ -312,7 +312,10 @@ class LeaveEligibilityTest extends TestCase
         $teaching = $this->version('Teaching', [self::rule(StaffType::TEACHING)]);
         $rule = $this->inSchool($this->school, fn () => LeaveEligibilityRule::query()->where('leave_policy_id', $teaching->id)->sole());
         $open = $this->employment('teaching');
-        $leaving = $this->employment('teaching', endsOn: '2027-01-31', status: 'notice_period');
+        // HR.R1-C2 (HRC-1): a notice period has no last day until the employment is ended, so its assignment is
+        // open like any other; an employment already ENDED (here with a last day after the run date) gets nothing.
+        $leaving = $this->employment('teaching', status: 'notice_period');
+        $ended = $this->employment('teaching', endsOn: '2027-01-31', status: 'separated');
         $later = $this->employment('teaching');
         $manualPolicy = $this->version('Manual', []);
         app(LeavePolicyAssignmentService::class)->assign($this->school, $later->id, $manualPolicy->id, '2026-12-01', null, $this->admin);
@@ -321,12 +324,13 @@ class LeaveEligibilityTest extends TestCase
 
         $run = app(LeaveEligibilityService::class)->executeRun($this->school, $this->type->id, '2026-10-05', $this->admin);
         $this->assertSame(3, $run->assigned_count);
-        $this->assertSame(2, $run->skipped_count, 'unmatched + own');
+        $this->assertSame(3, $run->skipped_count, 'unmatched + own + the ended employment');
 
         $assignment = fn (EmploymentRecord $e) => $this->inSchool($this->school, fn () => LeavePolicyAssignment::query()->where('employment_record_id', $e->id)->orderBy('effective_from')->get());
         $first = $assignment($open)->sole();
         $this->assertSame(['2026-10-05', null, $teaching->id, $run->id, $rule->id], [$first->effective_from->toDateString(), $first->effective_to, $first->leave_policy_id, $first->eligibility_run_id, $first->eligibility_rule_id]);
-        $this->assertSame('2027-01-31', $assignment($leaving)->sole()->effective_to->toDateString(), 'never beyond the employment');
+        $this->assertNull($assignment($leaving)->sole()->effective_to, 'a notice period is still open');
+        $this->assertCount(0, $assignment($ended), 'an ended employment is never assigned, whatever its last day');
         $this->assertSame(['2026-11-30', '2026-12-01'], [$assignment($later)[0]->effective_to->toDateString(), $assignment($later)[1]->effective_from->toDateString()], 'up to the day before a later assignment');
         $this->assertCount(0, $assignment($unmatched));
         $this->assertCount(0, $assignment($mine), 'never the actor\'s own employment');

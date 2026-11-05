@@ -166,6 +166,10 @@ final class StaffMovementReport implements HrReport
             ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'pc.employment_record_id')->on('er.school_id', '=', 'pc.school_id'))
             ->where('pc.school_id', $school->id)->whereIn('pc.change_kind', PlacementChangeKind::values())
             ->whereBetween('pc.effective_on', [$from, $to])
+            // HR.R1-C2 (HRC-2): a change whose new placement never took effect (the employment ended first)
+            // is a cancelled plan, not a movement.
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('employee_assignments as ta')
+                ->whereColumn('ta.id', 'pc.to_assignment_id')->whereColumn('ta.school_id', 'pc.school_id')->whereColumn('ta.ends_on', '<', 'ta.starts_on'))
             ->selectRaw('pc.employment_record_id, er.employee_id, pc.effective_on AS on_date, pc.change_kind AS movement, pc.from_assignment_id, pc.to_assignment_id, pc.reason_code::varchar AS detail, pc.id AS source_id');
 
         $ends = DB::table('employment_records as er')->where('er.school_id', $school->id)->whereIn('er.status', self::ENDED)

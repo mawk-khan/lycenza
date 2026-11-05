@@ -348,6 +348,7 @@ class EmployeeProfileWorkspaceService
                     departmentName: $department?->name,
                     campusId: $campus?->id,
                     campusName: $campus?->name,
+                    neverEffective: $a->ends_on !== null && $a->ends_on->lt($a->starts_on),
                 );
             })->all(),
             qualifications: $qualifications->map(fn (EmployeeQualification $q) => new EmployeeProfileQualificationEntry(

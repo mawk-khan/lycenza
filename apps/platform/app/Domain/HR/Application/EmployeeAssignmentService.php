@@ -185,6 +185,13 @@ class EmployeeAssignmentService
                 }
                 $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.end');
 
+                // HR.R1-C2 (second security review): an assignment ends on or after its own start and within its
+                // employment -- never the never-effective empty interval, which only EmploymentService::end()
+                // records for a placement planned past the employment's end (database-backed:
+                // trg_employee_assignments_never_effective).
+                $locked = $this->lockAssignment($assignment->id);
+                $this->assertWithinEmploymentRange($assignment->employmentRecord()->firstOrFail(), $locked->starts_on->toDateString(), $endsOn);
+
                 // HR.3A: reporting lines join employments, so ending one
                 // assignment (a transfer's source, a secondary role) never
                 // touches them.
@@ -418,9 +425,10 @@ class EmployeeAssignmentService
         $startsWithinRange = $startsOn >= $employmentStartsOn
             && ($employmentEndsOn === null || $startsOn <= $employmentEndsOn);
 
+        // HR.R1-C2: never a reversed range (the empty interval belongs to EmploymentService::end() alone).
         $endsWithinRange = $endsOn === null
             ? $employmentEndsOn === null
-            : ($endsOn >= $employmentStartsOn && ($employmentEndsOn === null || $endsOn <= $employmentEndsOn));
+            : ($endsOn >= $startsOn && $endsOn >= $employmentStartsOn && ($employmentEndsOn === null || $endsOn <= $employmentEndsOn));
 
         if (! $startsWithinRange || ! $endsWithinRange) {
             throw new AssignmentOutsideEmploymentRangeException($employment->id, $startsOn, $endsOn);

@@ -15,6 +15,7 @@ use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Events\EmploymentEnded;
 use App\Domain\HR\Events\EmploymentStarted;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\School;
 use App\Models\User;
@@ -129,6 +130,12 @@ class EmploymentService
         if (! in_array($status, EmploymentRecord::STATUSES, true)) {
             throw new InvalidEmploymentStatusException($status);
         }
+        // HR.R1-C2 (HRC-1): an employment begins open. `ends_on` is the ACTUAL last day -- writing it ends the
+        // record -- so a planned end on creation was a dead end (never separable, never retention-eligible).
+        // It ends only through end() / an approved separation (the database refuses it for the runtime role too).
+        if ($endsOn !== null) {
+            throw new InvalidEmploymentTermsException('ends_on_on_create', 'A new employment begins open; it ends only by ending it (or through an approved separation).');
+        }
         // HR.1A (S-8): a new employment starts, it never begins ended or in notice.
         if (! in_array($status, self::CREATE_STATUSES, true)) {
             throw new InvalidEmploymentTermsException('status_not_a_start', 'A new employment starts as draft, pre-joining or active; it is ended only by ending it.');
@@ -152,6 +159,15 @@ class EmploymentService
         // Mirrors EmployeeNumberAllocator/AcademicYearService's lock-then-
         // check-then-write pattern.
         Employee::query()->where('id', $employee->id)->lockForUpdate()->firstOrFail();
+
+        // HR.R1-C2 (HRC-12, partial): an Employee whose employment ended in death never receives another one --
+        // no contract permits it, and a new employment would not correct the death record (correcting an
+        // erroneous death record is a separate, undecided matter). The Employee's `record_status` is NOT
+        // consulted: Phase 8A.13 keeps the identity record and the employment lifecycle independent
+        // (HrEmployeeRehireTest); whether an archived identity should gate a new employment is an owner decision.
+        if (EmploymentRecord::query()->where('school_id', $school->id)->where('employee_id', $employee->id)->where('status', 'deceased')->exists()) {
+            throw new InvalidEmploymentTermsException('employee_deceased', 'A death is recorded for this Employee; a new employment cannot be recorded.');
+        }
 
         // SR.4 (ADR 0071 §26.2): never your own employment.
         $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'employment.create');
@@ -305,11 +321,29 @@ class EmploymentService
 
                 $locked->update(['ends_on' => $endsOn, 'status' => $status]);
 
+                // HR.R1-C2 (HRC-2): every placement ends within the employment (the placement lock is held,
+                // so no transfer or correction can add one meanwhile).
+                // - one that applies on the last day (or after it, open or with a later planned end) is clipped
+                //   to the last day;
+                // - one that would only START after the last day (a future transfer / promotion) never took
+                //   effect: it becomes the empty interval `ends_on = starts_on - 1` (the HR.3A / ADR 0078
+                //   convention) -- it covers no day, its planned dates and its placement change stay as history.
+                // Placements already ended on or before the last day are untouched.
                 $closedAssignmentIds = $locked->assignments()
-                    ->whereNull('ends_on')
-                    ->pluck('id');
+                    ->where('starts_on', '<=', $endsOn)
+                    ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>', $endsOn))
+                    ->lockForUpdate()->orderBy('id')->pluck('id');
+                $cancelledAssignmentIds = $locked->assignments()
+                    ->where('starts_on', '>', $endsOn)
+                    ->where(fn ($q) => $q->whereNull('ends_on')->orWhereColumn('ends_on', '>=', 'starts_on'))
+                    ->lockForUpdate()->orderBy('id')->pluck('id');
 
-                $locked->assignments()->whereNull('ends_on')->update(['ends_on' => $endsOn]);
+                if ($closedAssignmentIds->isNotEmpty()) {
+                    EmployeeAssignment::query()->whereIn('id', $closedAssignmentIds)->update(['ends_on' => $endsOn]);
+                }
+                if ($cancelledAssignmentIds->isNotEmpty()) {
+                    EmployeeAssignment::query()->whereIn('id', $cancelledAssignmentIds)->update(['ends_on' => DB::raw('starts_on - 1')]);
+                }
 
                 // S7 (ADR 0063 §47): authority the employment granted ends with it, in this transaction.
                 foreach ($this->endParticipants as $participant) {
@@ -321,6 +355,8 @@ class EmploymentService
                     'endsOn' => $endsOn,
                     'status' => $status,
                     'closedAssignmentIds' => $closedAssignmentIds->all(),
+                    // HR.R1-C2: placements planned to start after the last day, recorded as never effective.
+                    'cancelledAssignmentIds' => $cancelledAssignmentIds->all(),
                 ]);
 
                 event(new EmploymentEnded($school->id, $locked->employee_id, $locked->id, $status));

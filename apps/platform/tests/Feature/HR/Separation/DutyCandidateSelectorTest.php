@@ -65,7 +65,9 @@ class DutyCandidateSelectorTest extends TestCase
             'active' => $this->person('Duty Active', ['starts_on' => '2020-01-01', 'status' => 'active']),
             'notice' => $this->person('Duty Notice', ['starts_on' => '2020-01-01', 'status' => 'notice_period']),
             'separated' => $this->person('Duty Separated', ['starts_on' => '2020-01-01', 'ends_on' => '2026-06-14', 'status' => 'separated']),
-            'endsToday' => $this->person('Duty Ends Today', ['starts_on' => '2020-01-01', 'ends_on' => '2026-06-15', 'status' => 'active']),
+            // HR.R1-C2 (HRC-1): an employment whose last day is today has been ENDED (end() writes the last day and a
+            // terminal status together) -- an `active` row with an end can no longer exist. No new duty is offered.
+            'lastDayToday' => $this->person('Duty Last Day Today', ['starts_on' => '2020-01-01', 'ends_on' => '2026-06-15', 'status' => 'separated']),
             'future' => $this->person('Duty Future Joiner', ['starts_on' => '2026-07-01', 'status' => 'pre_joining']),
             'identityOnly' => $this->person('Duty Identity Only', null),
             'draft' => $this->person('Duty Draft', ['starts_on' => '2020-01-01', 'status' => 'draft']),
@@ -92,8 +94,8 @@ class DutyCandidateSelectorTest extends TestCase
 
         $rows = app(DutyCandidateReader::class)->search($this->school, 'Duty', 25);
 
-        $this->assertSame(['Duty Active', 'Duty Ends Today', 'Duty Notice', 'Duty Rehired'], $this->names($rows),
-            'separated, a future joiner, identity-only, draft, archived and another School are never offered; notice period is (HR.12); a rehire resolves its new employment');
+        $this->assertSame(['Duty Active', 'Duty Notice', 'Duty Rehired'], $this->names($rows),
+            'separated (last day past or today), a future joiner, identity-only, draft, archived and another School are never offered; notice period is (HR.12); a rehire resolves its new employment');
         foreach ($rows as $row) {
             $this->assertSame(['id', 'fullName', 'employeeNumber'], array_keys($row), 'directory fields only');
         }
@@ -145,7 +147,7 @@ class DutyCandidateSelectorTest extends TestCase
         $scheduler = $this->createUserWithCapabilities($this->school, ['timetable.schedule.manage']);
         $names = array_column($this->withHeader('Authorization', 'Bearer '.$scheduler->createToken('test-device')->plainTextToken)->getJson("/api/v1/schools/{$this->school->id}/timetable-entries/search/teachers?q=Duty")->assertOk()->json('data'), 'fullName');
         sort($names);
-        $this->assertSame(['Duty Active', 'Duty Ends Today', 'Duty Notice', 'Duty Rehired'], $names);
+        $this->assertSame(['Duty Active', 'Duty Notice', 'Duty Rehired'], $names);
 
         $this->flushHeaders();
         $this->app['auth']->forgetGuards();

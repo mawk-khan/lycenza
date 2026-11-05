@@ -63,6 +63,8 @@ Timetable substitution, Analytics (headcount, rates).
 
 **Evidence recorded (HR.R1-C1, 2026-11-05):** PAY-2 CLOSED for development (reproduced against `3254e1a0`; calculation compensation provenance, freshness and first-paid author exclusion in the service AND `payroll_runs_approval_evidence_guard`; two-process races); S-5 and S-13 CLOSED for development (service-level fresh-MFA proof; posting core re-reads current capability); PAY-1, PAY-3, PAY-4, PAY-5, PAY-6, PAY-7, PAY-9, PAY-11 closed; PAY-12 measured (`docs/modules/PAYROLL.md`). For R1-12 this removes S-5 and S-13; S-4, S-7 (partial) and HRC-3 remain. HRC-1, HRC-2, XRP-1 and every other HR.R1-0 finding stay open. HR.R1 remains OPEN.
 
+**Evidence recorded (HR.R1-C2, 2026-11-05):** HRC-1, HRC-2, XRP-1, XRP-2 and LVA-2 CLOSED for development, HRC-12 PARTIAL (deceased closed; archived open as an owner decision), each reproduced against `852fb06a` (`WorkforceLifecycleIntegrityTest`, `TimetableEmploymentEligibilityTest`, `LeaveSeparationCreditBoundaryTest`, `WorkforceLifecycleConcurrencyTest`; ADR 0028 HR.R1-C2 amendment). R1-07 (lifecycle) loses its two verified defects; R1-09 keeps the owner-deferred Library/Inventory/Finance clearance. Still open: HRC-12 (archived identity), HRC-3, HRC-4 to HRC-11 (except HRC-9's empty-interval case), LVA-1, LVA-3 to LVA-9, XRP-3 to XRP-7, the HR.4-HR.8 deferral record, R1-02, S-4, S-7. HR.R1 remains OPEN.
+
 ## 4. Output
 
 - An HR.R1 record in `docs/hr/` with a verdict of **PASS**, **PASS WITH
