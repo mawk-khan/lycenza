@@ -670,10 +670,11 @@ const reversalPosting = computed(
                     The evidence behind this approval changed
                 </h3>
                 <p class="mt-1">
-                    A payroll run this approval relied on was reversed. The person who approved this
-                    run recorded, or is the Employee of, compensation changes that no standing
-                    independent approval now covers. The approval stays on record. It cannot be
-                    withdrawn, and this is not a new approval.
+                    The person who approved this run recorded, or is the Employee of, compensation
+                    changes that no standing independent approval now covers. Usually a run this
+                    approval relied on was reversed; an account link can also show this. The
+                    approval stays on record. It cannot be withdrawn, and this is not a new
+                    approval.
                 </p>
                 <p
                     v-if="independence.blockedReason === 'not_independent'"
@@ -829,8 +830,8 @@ const reversalPosting = computed(
         >
             <h2 id="posted-independence" class="font-medium text-ink">Approval independence</h2>
             <p v-if="independence.phase === 'attested'" class="mt-1">
-                Posted with an independent attestation, because a run this approval relied on was
-                reversed first.
+                Posted with an independent attestation, because the evidence behind this approval
+                changed first.
             </p>
             <p v-else class="notice-attention mt-1">
                 The evidence behind this approval changed after this run was posted or attested, so

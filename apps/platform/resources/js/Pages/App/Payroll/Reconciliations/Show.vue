@@ -34,6 +34,7 @@ interface Props {
             approvedBy: string | null;
             reversedBy: string | null;
             employeesWithoutAccount: number;
+            changesRecorded: number;
             changes: {
                 total: number;
                 page: number;
@@ -129,8 +130,9 @@ function review(): void {
                 This run has itself been reversed since.
             </p>
             <p v-if="!reconciliation.exceptionStillApplies" class="notice-attention mt-2">
-                A later independent approval now covers these changes. This reconciliation stays
-                open until someone reviews it.
+                These changes no longer form an exception on the run as it stands, for example
+                because a later independent approval covers them. This reconciliation stays open
+                until someone reviews it.
             </p>
             <p>
                 <Link
@@ -146,6 +148,14 @@ function review(): void {
             <h2 id="evidence" class="font-medium">Evidence</h2>
             <p class="mt-2">Approved by {{ reconciliation.details.approvedBy ?? '—' }}.</p>
             <p>Reversed by {{ reconciliation.details.reversedBy ?? '—' }}.</p>
+            <p
+                v-if="reconciliation.details.changesRecorded > reconciliation.details.changes.total"
+                class="notice-attention mt-2"
+            >
+                {{ reconciliation.details.changesRecorded }} changes were recorded when this opened.
+                {{ reconciliation.details.changes.total }} are still held: retention removed the
+                rest.
+            </p>
             <p
                 v-if="reconciliation.details.employeesWithoutAccount > 0"
                 class="notice-attention mt-2"

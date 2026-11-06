@@ -388,6 +388,65 @@ class PayrollSelfBeneficiaryTest extends TestCase
     }
 
     #[Test]
+    public function two_runs_the_employee_approved_never_discharge_the_change_for_each_other(): void
+    {
+        [$october, $november] = $this->novemberApprovedByItsEmployee();
+        $this->postRun($november);
+        $december = $this->calculatedRun('2015-12-01');
+        $this->assertSame('approved', $this->approve($december, $this->reviewer)->status, 'allowed: October stands');
+        $this->postRun($december);
+
+        $this->reverseRun($october);
+
+        $this->assertSame([1, 1], [$this->obligations($november), $this->obligations($december)], 'each is flagged, exactly as for an author');
+    }
+
+    #[Test]
+    public function after_the_reversal_the_employee_cannot_approve_the_next_run_and_clear_their_own_exception(): void
+    {
+        [$october, $november] = $this->novemberApprovedByItsEmployee();
+        $december = $this->calculatedRun('2015-12-01');
+        $this->reverseRun($october);
+
+        try {
+            $this->approve($december, $this->reviewer);
+            $this->fail('they approved their own change and cleared the exception on November');
+        } catch (SelfBeneficiaryConflictException) {
+            $this->assertSame('calculated', $this->runRow($december)['status']);
+        }
+        $this->assertNotSame('', (string) $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->version($november->fresh())), 'November still needs its attestation');
+    }
+
+    #[Test]
+    public function a_link_alone_needs_the_attestation_before_posting_and_opens_no_obligation_after(): void
+    {
+        $this->travelTo(Carbon::parse('2015-09-28 06:00:00'));
+        $this->raise('2015-10-01', '55000.00');
+        $october = $this->calculatedRun('2015-10-01');
+        $this->approve($october, $this->reviewer);
+
+        $this->link($this->reviewer);
+
+        $version = (string) $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->version($october->fresh()));
+        $this->assertNotSame('', $version, 'the safe direction: it does not post on a decision now known to be conflicted');
+        $this->assertSame([], $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($october->fresh(), $this->poster, true))['details']['reversedRuns'], 'and no reversal is claimed');
+        $this->inSchool($this->school, fn () => app(PayrollPostingService::class)->post($october->fresh(), $this->poster, $this->freshMfaProofFor($this->poster), null, new PostingAttestation($version, true)));
+        $this->assertSame([0, 'posted'], [$this->obligations(), $this->runRow($october)['status']], 'a registered limit: an obligation needs a reversal');
+    }
+
+    #[Test]
+    public function an_implicated_reader_is_not_told_who_attested(): void
+    {
+        $november = $this->awaitingAttestation();
+        $version = (string) $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->version($november->fresh()));
+        $this->inSchool($this->school, fn () => app(PayrollPostingService::class)->post($november->fresh(), $this->poster, $this->freshMfaProofFor($this->poster), null, new PostingAttestation($version, true)));
+        $this->link($this->reviewer);
+
+        $this->assertNull($this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->reviewer, true))['attestation']);
+        $this->assertNotNull($this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->checker, true))['attestation']);
+    }
+
+    #[Test]
     public function an_attestor_is_shown_the_employees_the_check_could_not_see(): void
     {
         $november = $this->awaitingAttestation();

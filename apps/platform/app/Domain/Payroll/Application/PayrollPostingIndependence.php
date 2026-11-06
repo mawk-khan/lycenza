@@ -237,7 +237,8 @@ final class PayrollPostingIndependence
                 $attested !== null && ($version === null || hash_equals($attested->evidence_version, $version)) => 'attested',
                 default => 'after_posting',
             },
-            'attestation' => ! $maySeeDetails || $attested === null ? null : [
+            // Nobody implicated learns who attested to the evidence of their own change.
+            'attestation' => ! $maySeeDetails || $attested === null || $beneficiary?->conflicted === true ? null : [
                 'attestedBy' => User::query()->whereKey($attested->attested_by_user_id)->value('name'),
                 'attestedAt' => $attested->created_at->toIso8601String(),
                 'statementCode' => $attested->statement_code,

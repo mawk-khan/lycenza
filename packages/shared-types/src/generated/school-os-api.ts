@@ -9580,7 +9580,7 @@ export interface components {
             reversedRun: {
                 [key: string]: unknown;
             };
-            /** @description FALSE when a later independent approval covers the changes. The obligation stays open. */
+            /** @description FALSE when these changes no longer form an exception on the run as it stands, for example under a later independent approval. The obligation stays open. */
             exceptionStillApplies: boolean;
             /** @enum {string|null} */
             blockedReason: "already_reviewed" | "not_independent" | "self_beneficiary" | "cannot_review" | "needs_mfa" | null;

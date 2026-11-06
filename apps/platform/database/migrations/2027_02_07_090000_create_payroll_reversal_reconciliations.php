@@ -33,7 +33,10 @@ use Illuminate\Support\Facades\Schema;
  * some unrelated open exception is not affected (PAY-20). A run already reversed
  * has no live effect left, so it is not affected either. The exception itself now
  * also covers an approver who has become the Employee of a first-paid change, not
- * only its author (owner decision 2026-11-06): a reversal can do either.
+ * only its author (owner decision 2026-11-06): a reversal can do either. That needs
+ * the first-paid rule to say the same: only an approval independent of the author
+ * AND of the Employee discharges a change, or two runs the Employee approved would
+ * discharge it for each other.
  *
  * `payroll_run_postings_reconciliation_required` is deferred to commit, so a
  * reversal cannot commit with an affected posted run left without its obligation,
@@ -125,6 +128,34 @@ return new class extends Migration
                   JOIN public.employees e ON e.school_id = p_school AND e.id = er.employee_id
             $$;
 
+            CREATE OR REPLACE FUNCTION public.payroll_run_first_paid_compensation(p_school uuid, p_run uuid, p_calc uuid)
+                RETURNS TABLE (compensation_assignment_id uuid, employment_record_id uuid, assigned_by_user_id uuid, basis text)
+                LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+                SELECT s.compensation_assignment_id, s.employment_record_id, a.assigned_by_user_id, s.basis::text
+                  FROM public.payroll_run_calculation_sources s
+                  JOIN public.employee_compensation_assignments a ON a.id = s.compensation_assignment_id AND a.school_id = s.school_id
+                  LEFT JOIN public.employment_records er ON er.school_id = s.school_id AND er.id = s.employment_record_id
+                  LEFT JOIN public.employees e ON e.school_id = er.school_id AND e.id = er.employee_id
+                 WHERE s.school_id = p_school AND s.payroll_run_id = p_run AND s.payroll_run_calculation_id = p_calc
+                   AND NOT EXISTS (
+                       SELECT 1 FROM public.payroll_runs o
+                         JOIN public.payroll_run_calculation_sources os
+                           ON os.school_id = o.school_id AND os.payroll_run_id = o.id AND os.payroll_run_calculation_id = o.approved_calculation_id
+                        WHERE o.school_id = p_school AND o.id <> p_run AND o.run_kind = 'regular' AND o.status IN ('approved', 'posted')
+                          -- Paid means PRICED from the assignment: a run whose period a manual override priced never
+                          -- had the assignment's own values approved (security review 2026-11-05).
+                          AND os.basis = 'structure'
+                          AND os.compensation_assignment_id = s.compensation_assignment_id
+                          -- HR.R1-C3: a reversed run no longer stands (its status never changes; ADR 0034).
+                          AND NOT EXISTS (SELECT 1 FROM public.payroll_run_postings rp
+                                           WHERE rp.school_id = o.school_id AND rp.payroll_run_id = o.id AND rp.posting_kind = 'reversal')
+                          -- HR.R1-C3: only an approval independent of the author discharges the attribution.
+                          AND o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id
+                          -- HR.R1-C6: nor is an approval by the change's own Employee. Without this, two runs the Employee
+                          -- approved discharge the change for each other, and reversing the real approval flags nothing.
+                          AND o.approved_by_user_id IS DISTINCT FROM e.user_id)
+            $$;
+
             -- Owner decision 2026-11-06: an approver who has become the Employee of a first-paid change has lost
             -- independence exactly like one who has become its author.
             CREATE OR REPLACE FUNCTION public.payroll_run_independence_exception(p_school uuid, p_run uuid)
@@ -157,7 +188,7 @@ return new class extends Migration
                         ON a.school_id = s.school_id AND a.id = s.compensation_assignment_id AND r.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id
                       JOIN public.employment_records er ON er.school_id = s.school_id AND er.id = s.employment_record_id
                       JOIN public.employees e ON e.school_id = er.school_id AND e.id = er.employee_id
-                     WHERE rp.school_id = p_school AND rp.id = p_reversal AND rp.posting_kind = 'reversal'
+                     WHERE r.approved_by_user_id IS DISTINCT FROM e.user_id AND rp.school_id = p_school AND rp.id = p_reversal AND rp.posting_kind = 'reversal'
                 ), candidates AS MATERIALIZED (
                     SELECT DISTINCT o.id, o.status::text AS status
                       FROM discharged d
@@ -410,6 +441,28 @@ return new class extends Migration
                  CROSS JOIN LATERAL public.payroll_run_first_paid_compensation(r.school_id, r.id, r.approved_calculation_id) f
                  WHERE r.school_id = p_school AND r.id = p_run AND r.run_kind = 'regular' AND r.status IN ('approved', 'posted')
                    AND r.approved_calculation_id IS NOT NULL AND f.assigned_by_user_id = r.approved_by_user_id
+            $$;
+            CREATE OR REPLACE FUNCTION public.payroll_run_first_paid_compensation(p_school uuid, p_run uuid, p_calc uuid)
+                RETURNS TABLE (compensation_assignment_id uuid, employment_record_id uuid, assigned_by_user_id uuid, basis text)
+                LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+                SELECT s.compensation_assignment_id, s.employment_record_id, a.assigned_by_user_id, s.basis::text
+                  FROM public.payroll_run_calculation_sources s
+                  JOIN public.employee_compensation_assignments a ON a.id = s.compensation_assignment_id AND a.school_id = s.school_id
+                 WHERE s.school_id = p_school AND s.payroll_run_id = p_run AND s.payroll_run_calculation_id = p_calc
+                   AND NOT EXISTS (
+                       SELECT 1 FROM public.payroll_runs o
+                         JOIN public.payroll_run_calculation_sources os
+                           ON os.school_id = o.school_id AND os.payroll_run_id = o.id AND os.payroll_run_calculation_id = o.approved_calculation_id
+                        WHERE o.school_id = p_school AND o.id <> p_run AND o.run_kind = 'regular' AND o.status IN ('approved', 'posted')
+                          -- Paid means PRICED from the assignment: a run whose period a manual override priced never
+                          -- had the assignment's own values approved (security review 2026-11-05).
+                          AND os.basis = 'structure'
+                          AND os.compensation_assignment_id = s.compensation_assignment_id
+                          -- HR.R1-C3: a reversed run no longer stands (its status never changes; ADR 0034).
+                          AND NOT EXISTS (SELECT 1 FROM public.payroll_run_postings rp
+                                           WHERE rp.school_id = o.school_id AND rp.payroll_run_id = o.id AND rp.posting_kind = 'reversal')
+                          -- HR.R1-C3: only an approval independent of the author discharges the attribution.
+                          AND o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id)
             $$;
             DROP FUNCTION public.payroll_run_first_paid_beneficiaries(uuid, uuid, uuid);
             SQL);

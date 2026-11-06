@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  *   did: another regular run, approved or posted, whose approved calculation
  *   priced it, that has not been reversed (HR.R1-C3; the run's status never
  *   shows this, ADR 0034) and that someone other than the change's author
- *   approved. The author of a change the run pays first is one of the run's
+ *   and its Employee approved (HR.R1-C6). The author of a change the run pays first is one of the run's
  *   makers -- whenever the change was recorded and whenever it took effect. A
  *   run that pays a change another independent checker already approved, and
  *   whose approval still stands, does not re-attribute it.

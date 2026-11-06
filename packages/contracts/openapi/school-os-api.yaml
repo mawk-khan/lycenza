@@ -18414,7 +18414,7 @@ components:
         openedAt: { type: string, format: date-time }
         affectedRun: { type: object, additionalProperties: true }
         reversedRun: { type: object, additionalProperties: true }
-        exceptionStillApplies: { type: boolean, description: "FALSE when a later independent approval covers the changes. The obligation stays open." }
+        exceptionStillApplies: { type: boolean, description: "FALSE when these changes no longer form an exception on the run as it stands, for example under a later independent approval. The obligation stays open." }
         blockedReason: { type: string, nullable: true, enum: [already_reviewed, not_independent, self_beneficiary, cannot_review, needs_mfa, null] }
         reviewVersion: { type: string, nullable: true, description: "Present only when this actor may review now." }
         details: { type: object, nullable: true, additionalProperties: true, description: "Never an amount, bank, statutory or profile field. `employeesWithoutAccount` counts Employees the conflict check could not see; zero is not proof of no conflict." }

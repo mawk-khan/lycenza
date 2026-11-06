@@ -154,7 +154,7 @@ when a request is drafted.
 | 7 | Actors | The reverser, the reviewer, and anyone with `payroll.runs.view`, who sees that an obligation exists |
 | 8 | Capabilities | Existing keys only: `payroll.runs.approve` and current `payroll.compensation.sensitive.view`, re-read under the run lock. No new capability, no new grant |
 | 9 | MFA | The reviewer's own fresh code, in the service. Evidence needs current MFA assurance |
-| 10 | Sensitive data | The C4 evidence, from the snapshot: who approved and reversed, which runs, employee numbers, names, structures and dates. Never an amount, bank, statutory or profile field. Nobody implicated reads it |
+| 10 | Sensitive data | The C4 evidence, from the snapshot: who approved and reversed, which runs, employee numbers, names, structures and dates. Never an amount, bank, statutory or profile field. Nobody implicated reads this evidence. The run page's own evidence follows the live set, so someone implicated only by the snapshot is not shut out of what the run shows now |
 | 11 | Independence | Never the affected run's approver, creator, calculators, adjustment authors, whoever executed the reversal, or the author or Employee of a change the run paid first when the obligation opened or pays first now. The poster and the approver of the reversed run are not excluded |
 | 12 | Event timing | Only a reversal after the affected run posted. Earlier orders stay with HR.R1-C3 and C4 |
 | 13 | Audit | `payroll.run.reconciliation_opened`, `payroll.run.reconciliation_reviewed`, `payroll.run.independence_reviewed` for every evidence read, `payroll.run.reversal_impact_unknown` when a reversed run has no recorded provenance. Ids and closed codes only |
@@ -176,13 +176,13 @@ when a request is drafted.
 | 1 | Decision | OD-HR-24, Option C, **first-paid changes**. Selected by the owner in the HR.R1-C6 gate, 2026-11-06, with three follow-ups: unknown identity proceeds and is recorded, first assignments count, and an approver who becomes the Employee of a first-paid change through a reversal loses independence like one who becomes its author. An engineering and product direction, not a legal or security determination |
 | 2 | Problem | PAY-19. A person whose own pay is implicated could approve or attest if they made no part of the run |
 | 3 | Behaviour before | Only makers were excluded |
-| 4 | Selected | Refused at approval, the C4 attestation and the C6 review if the run pays first ANY compensation change of the Employee linked to that User, whoever authored it, whether pay rose, fell or stayed equal. If a reversal later makes an approver such an Employee, the run needs the C4 attestation or, once posted, gets an obligation |
+| 4 | Selected | Refused at approval, the C4 attestation and the C6 review if the run pays first ANY compensation change of the Employee linked to that User, whoever authored it, whether pay rose, fell or stayed equal. If a reversal later makes an approver such an Employee, the run needs the C4 attestation or, once posted, gets an obligation. Only an approval independent of both the author and the Employee discharges a change. A link change alone can also create the exception: before posting the attestation applies, and after posting the run shows a notice and no obligation opens, a recorded limit |
 | 5 | Rejected | Accept the risk. Attestation only (a person could approve a run paying their own change). Exception changes only (leaves the approval half open). Exempting first assignments. A threshold for School-wide events (a policy invented here) |
 | 6 | Payroll states | `calculated` to `approved`, the attestation at `approved` to `posted`, and the review of a `posted` run. Correction runs pay no compensation change and are out of scope; rule 95 already refuses one's own deltas |
 | 7 | Actors | The approver, the attesting poster, the reconciliation reviewer. Other holders of the same keys are unaffected |
 | 8 | Capabilities | None added |
 | 9 | MFA | Unchanged |
-| 10 | Sensitive data | A closed reason to the actor about their own conflict, never whose change or what amount. A conflicted actor sees no evidence, whatever the run's status |
+| 10 | Sensitive data | A closed reason to the actor about their own conflict, never whose change or what amount. An actor conflicted on the current set sees neither the evidence nor who attested, whatever the run's status |
 | 11 | Definition | `payroll_run_first_paid_beneficiaries`, through `employees.user_id` only. Never a name, email, code or phone. The Employee row survives a rehire. An ordinary salary recipient is not a beneficiary |
 | 12 | Event timing | At each decision, under the shared compensation lock. Link writers take it exclusively BEFORE the Employee row, so a link change is ordered against every decision and cannot invert against a calculation |
 | 13 | Audit | `employeesWithoutAccount` on `payroll.run.approved` and `payroll.run.independence_attested`, and a column on the review |

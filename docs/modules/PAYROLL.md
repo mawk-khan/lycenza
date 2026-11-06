@@ -1271,12 +1271,12 @@ review lists what changed, never the unchanged register.
     per size, two dependent posted runs, every entry implicated).** Query counts are
     constant by size. No target is approved.
 
-  | Entries | Discovery (1 q) | Record and open (18 q) | Evidence (23 q) | Review (36 q) |
+  | Entries | Discovery (1 q) | Record and open (18 q) | Evidence (24 q) | Review (36 q) |
   |---:|---:|---:|---:|---:|
-  | 500 | 19 ms | 110 ms | 69 ms | 70 ms |
-  | 2,000 | 59 ms | 227 ms | 104 ms | 117 ms |
-  | 5,000 | 89 ms | 589 ms | 166 ms | 247 ms |
-  | 10,000 | 167 ms | 1,241 ms | 448 ms | 577 ms |
+  | 500 | 12 ms | 93 ms | 65 ms | 49 ms |
+  | 2,000 | 25 ms | 159 ms | 68 ms | 85 ms |
+  | 5,000 | 52 ms | 360 ms | 136 ms | 172 ms |
+  | 10,000 | 117 ms | 829 ms | 301 ms | 363 ms |
 
   The first form of discovery asked each run's exception once per source row: 1.5 s
   at 500 and 116 s at 5,000, under the exclusive compensation lock.
@@ -1294,7 +1294,10 @@ review lists what changed, never the unchanged register.
     block. The count is shown and recorded, and is never evidence of no conflict.
   - **After approval.** A reversal can make an approver such an Employee. That is the
     same loss of independence as becoming the author: `payroll_run_independence_exception`
-    covers both, so the attestation or the obligation follows.
+    covers both, so the attestation or the obligation follows, and only an approval
+    independent of both the author and the Employee discharges a change. A link change
+    alone can create the exception too: the attestation applies before posting, and a
+    posted run shows a notice, with no obligation.
   - **Order.** Link writers take the compensation lock before the Employee row
     (`SchoolCompensationLock`), with `trg_employees_user_link_payroll_lock` as the
     backstop, so a link change is ordered against every decision. Row first would
