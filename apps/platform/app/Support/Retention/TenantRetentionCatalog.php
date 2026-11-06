@@ -191,6 +191,8 @@ final class TenantRetentionCatalog
             // HR.2A (D1-03): external reference codes go with their Employee (cascade).
             'employee_reference_codes',
             'employee_compensation_assignments', 'compensation_assignment_values', 'employee_statutory_identifiers',
+            // HR.R1-C7 (OD-HR-25): account link history is evidence of the Employee and leaves with them (FK cascade).
+            'employee_account_links',
             'employee_tax_profile', 'employee_pf_status', 'employee_esi_coverage',
             // HR.1A: the employment's terms history and named placement changes; they go with
             // their employment and assignments (cascade), removed by the evidence purge.

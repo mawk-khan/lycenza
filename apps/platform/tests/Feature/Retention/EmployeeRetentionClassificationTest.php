@@ -47,6 +47,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'staff_attendance_records' => 'D9 evidence (8 y): Staff Attendance, purged by Staff Attendance first (HRX.6, ADR 0065 §27)',
             // HR.2A (D1-03): external reference codes go with their Employee (FK cascade).
             'employee_reference_codes' => 'D9 evidence (8 y): identity references, go with the Employee (cascade)',
+            // HR.R1-C7 (OD-HR-25): the history of the account link goes with its Employee.
+            'employee_account_links' => 'D9 evidence (8 y): account link history, goes with the Employee (cascade)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',

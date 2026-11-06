@@ -92,8 +92,8 @@ final class PayrollPostingIndependence
             'approvedByUserId' => $run->approved_by_user_id,
             'evidenceVersion' => $version,
             'statementCode' => PayrollPostingAttestation::STATEMENT_INDEPENDENCE_CHANGED,
-            // OD-HR-24: Employees this attestation's conflict check could not see, recorded on the decision.
-            'employeesWithoutAccount' => $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id)->unlinkedEmployees,
+            // OD-HR-24, OD-HR-25: what this attestation's conflict check could not see, recorded on the decision.
+            ...$this->identityEvidence($run, $actor),
         ]);
 
         return $attestation;
@@ -188,6 +188,14 @@ final class PayrollPostingIndependence
         }
 
         return count($affected);
+    }
+
+    /** @return array{employeesWithoutAccount: int, employeesWithCorrectedLink: int} */
+    private function identityEvidence(PayrollRun $run, User $actor): array
+    {
+        $finding = $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id);
+
+        return ['employeesWithoutAccount' => $finding->unlinkedEmployees, 'employeesWithCorrectedLink' => $finding->correctedEmployees];
     }
 
     private function hasProvenance(PayrollRun $run): bool

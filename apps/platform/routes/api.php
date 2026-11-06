@@ -634,6 +634,15 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/employees/{employee}/unlink-user', [EmployeeController::class, 'unlinkUser'])
                 ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.unlink-user');
+            // HR.R1-C7 (OD-HR-25): the history of the link, and correcting a link that was never true.
+            Route::get('/employees/{employee}/account-links', [EmployeeController::class, 'accountLinks'])
+                ->whereUuid('employee')
+                ->middleware(['capability:hr.employees.manage', 'private-no-store'])
+                ->name('schools.employees.account-links.index');
+            Route::post('/employees/{employee}/account-links/{accountLink}/correct', [EmployeeController::class, 'correctAccountLink'])
+                ->whereUuid(['employee', 'accountLink'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.account-links.correct');
 
             Route::put('/employees/{employee}/personal-detail', [EmployeePersonalDetailController::class, 'update'])
                 ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])

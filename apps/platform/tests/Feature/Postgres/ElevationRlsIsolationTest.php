@@ -122,8 +122,9 @@ class ElevationRlsIsolationTest extends TestCase
         // + leave_accrual_runs and leave_accrual_run_items (HR.10);
         // + payroll_run_calculation_sources (HR.R1-C1);
         // + payroll_posting_attestations (HR.R1-C4);
-        // + payroll_reversal_reconciliations and payroll_reversal_reconciliation_reviews (HR.R1-C6).
-        $this->assertSame(250, (int) DB::connection('pgsql_admin')->selectOne(
+        // + payroll_reversal_reconciliations and payroll_reversal_reconciliation_reviews (HR.R1-C6);
+        // + employee_account_links (HR.R1-C7).
+        $this->assertSame(251, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

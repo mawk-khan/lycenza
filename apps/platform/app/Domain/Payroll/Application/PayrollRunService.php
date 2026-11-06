@@ -594,8 +594,9 @@ class PayrollRunService
                     'preparedByUserId' => $run->prepared_by_user_id,
                     'approvedCalculationId' => $latest,
                     'attributionVersion' => $attribution,
-                    // OD-HR-24: Employees this decision's conflict check could not see, recorded on the decision.
+                    // OD-HR-24, OD-HR-25: what this decision's conflict check could not see, recorded on the decision.
                     'employeesWithoutAccount' => $beneficiary->unlinkedEmployees,
+                    'employeesWithCorrectedLink' => $beneficiary->correctedEmployees,
                     ...ApprovalProvenance::metadata($participants, ApprovalProvenance::APPROVED, $approver, 'school', $mfa),
                 ]);
 

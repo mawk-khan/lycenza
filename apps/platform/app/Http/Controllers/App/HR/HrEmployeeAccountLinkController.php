@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\App\HR;
 
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService;
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeePickerReadService;
 use App\Domain\HR\Application\EmployeeService;
+use App\Domain\HR\Application\Exceptions\EmployeeAccountLinkAlreadyCorrectedException;
 use App\Domain\HR\Application\Exceptions\EmployeeAlreadyLinkedException;
 use App\Domain\HR\Application\Exceptions\EmployeeNotActiveException;
 use App\Domain\HR\Application\Exceptions\EmployeeNotLinkedException;
@@ -11,12 +14,14 @@ use App\Domain\HR\Application\Exceptions\UnrelatedUserLinkageException;
 use App\Domain\HR\Application\Exceptions\UserAlreadyLinkedException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -82,6 +87,22 @@ class HrEmployeeAccountLinkController extends Controller
         }
 
         return redirect("/app/hr/employees/{$model->id}")->with('flash', 'Account link removed.');
+    }
+
+    /** HR.R1-C7 (OD-HR-25): the route's floor, then a fresh code; the service re-reads authority under its lock. */
+    public function correct(Request $request, TenantContext $context, EmployeeAccountLinkCorrectionService $corrections, FreshMfaRequirement $mfa, string $employee, string $accountLink): RedirectResponse
+    {
+        $context->requireSchool();
+        $model = $this->employee($employee);
+        $validated = $request->validate(['reason' => ['required', Rule::enum(EmployeeAccountLinkVoidReason::class)], 'confirm' => ['accepted']]);
+        $proof = $mfa->requireForAction($request, $context->actor());
+        try {
+            $corrections->correct($model, $accountLink, EmployeeAccountLinkVoidReason::from($validated['reason']), $context->actor(), $proof);
+        } catch (EmployeeAccountLinkAlreadyCorrectedException $e) {
+            throw ValidationException::withMessages(['account' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/hr/employees/{$model->id}")->with('flash', 'Account link corrected.');
     }
 
     private function employee(string $employee): Employee

@@ -140,6 +140,7 @@ when a request is drafted.
 | OD-HR-22 | An approval that loses its independent predecessor before it is posted (PAY-16) | **Decided, see below.** | Was: A accept, B acknowledge, C refuse |
 | OD-HR-23 | A reversal that takes independence from a run ALREADY posted (PAY-18) | **Decided, see below.** | Was: A record only, B acknowledge at reversal, C refuse the reversal. The owner chose a fourth form: the reversal completes and an OPEN obligation is required |
 | OD-HR-24 | Beneficiary conflict in payroll decisions (PAY-19) | **Decided, see below.** | Was: A accept, B refuse for attestation only, C refuse for approval and attestation |
+| OD-HR-25 | Historical User-Employee links for Payroll integrity (the C6 live-link limit) | **Decided for development, see below.** Not legal approval. | Was: Option A accept the live-link limit, Option B preserve link history. Selected: B, any uncorrected link counts, HR correction with fresh MFA, retention `hr_evidence`, a late link stays a notice | Owner, HR.R1-C7 gate, 2026-11-06 |
 
 ### OD-HR-23 decision record
 
@@ -197,7 +198,45 @@ when a request is drafted.
 | 22 | Date | 2026-11-06 |
 | 23 | Re-review | If `employees.user_id` gains history, or before any School uses Payroll for real |
 
+**Superseded in one respect by OD-HR-25 (HR.R1-C7).** Row 11 said `employees.user_id` only. The re-review trigger above fired: identity now comes from `employee_account_links`. The live-link limit below stays as it was written, because that is what was true when C6 published.
+
 **Unknown identity.** `employees.user_id` is optional and holds only the current link. An implicated Employee with no linked account does not block: the approver, attestor or reviewer is shown the count, and it is recorded on the decision. That count is never evidence that no conflict exists, and the system never claims one. **The link is read live, in both directions, and that is a recorded limit, not a closed one.** There is no link history. An unlink at any time removes the person from every first-paid reading: a pending attestation can clear, and if two runs that person approved were to discharge the change for each other, a reversal would open no obligation. It needs someone holding `hr.employees.manage` to act, and the change is audited (`employee.user_unlinked`). A link does the reverse and reclassifies history: every past run the person approved stops discharging that Employee's changes, so those runs can show a notice, which is the safe direction. Closing this needs link history, which is a re-review trigger for this decision. This limit is an engineering disposition: **the owner has not yet accepted it.**
+
+### OD-HR-25 decision record
+
+Linked to OD-HR-24, which it amends in one respect only: the definition of who the Employee is (OD-HR-24 row 11). The first-paid scope, the actors, the refusal and the unknown-identity rule are unchanged. OD-HR-24 as decided is kept above. **The owner selected these options for development in the HR.R1-C7 gate. This is an engineering decision. It is not legal, privacy or DPO approval, and it authorizes nothing outside development.**
+
+| # | Field | Record |
+|---|---|---|
+| 1 | Problem statement | The C6 MEDIUM: an authorized unlink removed the only record that a User was an Employee, so a person refused at approval could be unlinked and then approve, attest to or review their own pay change, and a run they approved could discharge that change. All reproduced 5/5 at `d23a210d` (HR.R1-C7) |
+| 2 | Affected identity relationship | User to Employee. Never User to Employment or to a Payroll Run. `User ≠ Employee ≠ Employment ≠ Payroll Run` stays |
+| 3 | Controlling domain | HR owns the history (`employee_account_links`, ADR 0063 §6). Payroll reads it, through its SQL functions. Identity owns the User |
+| 4 | Permitted processing purpose | Payroll independence: deciding whether a person is the Employee of a change a run pays first, and explaining that later. No other purpose. No other domain reads it |
+| 5 | Historical data necessity | Ids and times only. An unlink cannot change who a person is, so the fact survives it. No name, email, phone, DOB, bank, address, government id or provider data is stored |
+| 6 | Temporal interpretation | **At each decision, every link not corrected as erroneous counts, whenever it began or ended.** Not bounded by the compensation effective date, the Payroll period or the link's interval: a person who was this Employee is still this person. Scope comes from the run: only a run paying THAT Employee's change first. `linked_at` is both recorded and effective, because a link cannot be backdated. `ended_at` ended it, `voided_at` corrected it. These are never read as the decision time, the period or the effective date |
+| 7 | Link and unlink semantics | `employees.user_id` stays the one current link, and link and unlink work as before. A trigger on that column writes the history, in the same transaction, for every writer |
+| 8 | Rehire behaviour | The Employee row survives a rehire, so the person does. A rehire writes no link and moves no decision |
+| 9 | Correction of erroneous links | A link that was never true is marked, never removed: who, when and a closed reason (`wrong_person`, `setup_error`). It then stops counting, and a current link is unlinked in the same transaction. A correction is final. Decisions already recorded keep what they recorded |
+| 10 | Authoritative actors | Link and unlink: `hr.employees.manage`, as before. Correction: whole-School `hr.employees.manage`, read fresh under the lock, a fresh MFA code, never one's own link. The database also requires the named actor to hold that authority |
+| 11 | Privacy classification | Internal operational identity reference. Ids and timestamps. Readers see a display name, through the User row, which minimization replaces |
+| 12 | Approved readers | Whole-School `hr.employees.manage` (web and API history), and Payroll's SQL functions, which return ids to the decision only. Nobody implicated is told whose link it is |
+| 13 | Approved writers | The trigger and `employee_account_link_void()` only. `school_os_app` has SELECT, and no INSERT, UPDATE or DELETE |
+| 14 | Retention | Unit `hr_evidence`, leaving with the Employee (FK cascade). Not a new period. See row 15 |
+| 15 | Purge behaviour | A retained run keeps its compensation assignments, so its Employee, so their links, until the run's own evidence expires. Then everything goes. `payroll_run_calculation_sources_assignment_fk` is RESTRICT so the database agrees. A current link keeps an Employee, as before. User minimization keeps the reference as a stable id and blocks nothing |
+| 16 | Audit | `employee.user_linked`, `employee.user_unlinked` and `employee.user_link_corrected` on the School ledger, naming the history row. Approval and attestation record `employeesWithoutAccount` and, of those, `employeesWithCorrectedLink`: a correction says who an Employee is not, never who they are, so they stay unknown. Who decided is never rewritten |
+| 17 | Concurrency | A link writer takes the compensation lock exclusively, then the Employee row. A decision or calculation holds the run row, then the lock shared. Link writers never touch a run, so no cycle exists. Proven in two processes in both orders |
+| 18 | Payroll effects | Approval, the C4 attestation and the C6 review, each with its database guard, read the same links. An approval by someone with an uncorrected link to the Employee no longer discharges that Employee's change. **A link made after a decision is prospective:** the old decision stands, untouched, later decisions read the link, before posting it needs the attestation, after posting it is a notice and opens no obligation |
+| 19 | Legacy-data limitations | Links are known only from cutover. A cutover row says the link existed then, and nothing about earlier. An Employee with no row is unknown, never clear, and is counted so. Nothing is mined from names, emails, codes, amounts or audit text. An unlink before cutover left no row, and cannot be recovered |
+| 20 | Development authorization | Live, with synthetic data only |
+| 21 | Staging authorization | None |
+| 22 | Production authorization | None: NO-GO |
+| 23 | Approving authority | The owner, in the HR.R1-C7 gate, for engineering direction only. No legal or DPO determination was made |
+| 24 | Determination date | 2026-11-06 |
+| 25 | Re-review trigger | Before any School uses Payroll for real, or if the correction reasons, the purpose or the retention period change. Legal/DPO review of retaining link history is required before production |
+
+**How a past decision is explained.** The history can answer what a decision saw: the links with `linked_at` before it and no `voided_at` before it. Together with the decision's audit counts, that needs no snapshot per decision, and a later change cannot rewrite it.
+
+**Known limits, recorded.** The actor on a raw write is an application boundary: the row is always recorded, but `linked_by_user_id` is NULL outside the service, and a raw call of the correction function can name any actor who holds the authority (rule 102). A retained run keeps its Employee past that Employee's own eight years, until the run expires: a dependency, as designed since HR.R1-C1, and now enforced by the database.
 
 ### OD-HR-22 decision record
 

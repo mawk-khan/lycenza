@@ -209,6 +209,12 @@ final class ApprovalWorkflowRegistry
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
             'evidence' => 'payroll_run_postings (append-only) + payroll_posting_attestations when a reversal took the approval\'s independence (HR.R1-C4) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
         ],
+        // HR.R1-C7 (OD-HR-25): saying a link was never true. Direct, audited, one person with a fresh code.
+        'App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService' => [
+            'capability' => 'hr.employees.manage', 'action' => 'Correction of an erroneous account link',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'EmployeeAccountLinkVoidReason (closed)',
+            'evidence' => 'employee_account_links (marked, never removed) + school_audit_events employee.user_link_corrected', 'relationshipConflict' => null,
+        ],
         // HR.R1-C6 (PAY-18, OD-HR-23): closing an OPEN obligation is a direct review, never a second approval.
         'App\Domain\Payroll\Application\PayrollReversalReconciliationService' => [
             'capability' => 'payroll.runs.approve', 'action' => 'Independent review of a post-posting reversal (with current payroll.compensation.sensitive.view)',

@@ -89,6 +89,8 @@ class DatabaseRoleVerifier
         'payroll_posting_attestations',
         // HR.R1-C6: reconciliation evidence leaves with its run.
         'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
+        // HR.R1-C7: account link history leaves with its Employee (FK cascade).
+        'employee_account_links',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
@@ -124,6 +126,8 @@ class DatabaseRoleVerifier
         'payroll_posting_attestations',
         // HR.R1-C6: an obligation and its review never change; there is no status to update.
         'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
+        // HR.R1-C7: written only by the trigger on employees.user_id and the correction function.
+        'employee_account_links',
         // ORG.8E (ADR 0076 §63): evidence rows are never rewritten.
         'student_lifecycle_events', 'attendance_record_corrections',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
@@ -624,6 +628,7 @@ class DatabaseRoleVerifier
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
         $results[] = $this->payrollApprovalProvenanceCheck();
         $results[] = $this->payrollReconciliationCheck();
+        $results[] = $this->employeeAccountLinkCheck();
         $results[] = $this->employmentLifecycleAdmissionCheck();
 
         return $results;
@@ -653,6 +658,18 @@ class DatabaseRoleVerifier
      * results and lines are never rewritten.
      */
     /**
+     * HR.R1-C7 (OD-HR-25): no link change without history, and the runtime role reads it only.
+     */
+    private function employeeAccountLinkCheck(): CheckResult
+    {
+        $triggers = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in ('trg_employees_record_account_link_insert', 'trg_employees_record_account_link_update')")->c;
+        $definer = (int) DB::selectOne("select count(*) as c from pg_proc where pronamespace = 'public'::regnamespace and proname in ('employees_record_account_link', 'employee_account_link_void') and prosecdef and proconfig is not null")->c;
+        $writes = (bool) DB::selectOne("select has_table_privilege('school_os_app', 'employee_account_links', 'INSERT') or has_table_privilege('school_os_app', 'employee_account_links', 'UPDATE') or has_table_privilege('school_os_app', 'employee_account_links', 'DELETE') as w")->w;
+
+        return CheckResult::of('employee_account_links_guarded', $triggers === 2 && $definer === 2 && ! $writes);
+    }
+
+    /**
      * HR.R1-C6 (PAY-18, PAY-19): a reversal cannot commit without its obligation, a review
      * stays independent, nobody decides on their own first-paid change, and a link change is
      * ordered against every decision. Every trigger enabled, and the deferred one still deferred.
@@ -680,7 +697,7 @@ class DatabaseRoleVerifier
             && str_contains($guard->src, 'pg_advisory_xact_lock_shared');
         // HR.R1-C3 (PAY-13): a reversed run, or one its author approved, never discharges the attribution.
         $firstPaid = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'payroll_run_first_paid_compensation' and p.pronamespace = 'public'::regnamespace");
-        $guarded = $guarded && $firstPaid !== null && str_contains($firstPaid->src, "posting_kind = 'reversal'") && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id') && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM e.user_id');
+        $guarded = $guarded && $firstPaid !== null && str_contains($firstPaid->src, "posting_kind = 'reversal'") && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id') && str_contains($firstPaid->src, 'employee_account_links');
         $enabled = (int) DB::selectOne(
             "select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in
              ('payroll_runs_approval_evidence_guard', 'trg_payroll_runs_posting_independence', 'trg_payroll_posting_attestations_guard', 'trg_payroll_runs_identity', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",

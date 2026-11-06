@@ -374,6 +374,9 @@ author approving the next run, which first paid the change. Amended:
     into looking closed. Each obligation snapshots the moment it opened, because the
     first-paid set moves. A review is not an approval and changes no run. It blocks
     nothing else, has no deadline and never clears on its own.
+18. **HR.R1-C7 (OD-HR-25).** Item 17's identity is `employee_account_links`, every
+    link not corrected as erroneous, read at each decision. `employees.user_id` is
+    still the only current link. See `docs/hr/HR-LEGAL-SECURITY-GATE-REGISTER.md`.
 17. **HR.R1-C6 (PAY-19, OD-HR-24).** Nobody approves, attests or reviews a run that
     pays first a compensation change of the Employee linked to them
     (`employees.user_id`), whoever authored it. Receiving a salary is not a conflict.

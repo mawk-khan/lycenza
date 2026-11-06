@@ -46,6 +46,8 @@ $retention?->beginTransaction();
 try {
     echo HeldTransaction::run(function () use ($app, $operation, $args, $context): string {
         return match ($operation) {
+            // HR.R1-C7: a User case locks the User on the runtime session, so that is the one a race observes.
+            'execute-user' => 'outcome:'.implode(',', array_map(fn ($c) => $c->category.'='.$c->outcome, $app->make(ErasureCaseService::class)->execute($args[0], false))),
             'execute' => 'outcome:'.implode(',', array_map(fn ($c) => $c->category.'='.$c->outcome, $app->make(ErasureCaseService::class)->execute($args[0], false))),
             're-enroll' => $context->withSchool(School::query()->findOrFail($args[0]), function () use ($args): string {
                 $section = DB::table('sections')->where('id', $args[2])->first();

@@ -1281,6 +1281,17 @@ review lists what changed, never the unchanged register.
   The first form of discovery asked each run's exception once per source row: 1.5 s
   at 500 and 116 s at 5,000, under the exclusive compensation lock.
   `PayrollReconciliationLargePopulationTest` pins the bounds.
+- **Historical links (HR.R1-C7, OD-HR-25).** Identity for every rule below is
+  `employee_account_links`, not `employees.user_id`: each link not corrected as
+  erroneous counts at each decision, whenever it ended. Scope stays the run: only
+  that Employee's change, only while the run pays it first. A link made after a
+  decision is prospective, and no decision is rewritten. A corrected link stops
+  counting; that Employee is unknown again, because a correction says who they are
+  not, and the decision records both counts (`employeesWithoutAccount`,
+  `employeesWithCorrectedLink`). An approval by someone with such a link never
+  discharges that Employee's change, linked or not. A calculation reads
+  compensation, never identity. An assignment a calculation read outlives its run
+  (`payroll_run_calculation_sources_assignment_fk`, RESTRICT).
 - **Self-beneficiary conflict (HR.R1-C6, PAY-19, OD-HR-24).** `PayrollSelfBeneficiaries`
   is the one answer, at approval, at the C4 attestation and at the C6 review, each
   backed by a database guard.

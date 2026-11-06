@@ -155,6 +155,12 @@ recorded compensation provenance. Fix forward.
   waits. An independent approval of the same change on another run also clears it.
 - **A posted run says it was affected after posting.** That reversal came too late
   for any control. It is recorded; reconcile it by your normal correction route.
+- **Unlinking does not clear a Payroll conflict (HR.R1-C7).** An Employee's account
+  link can be removed as before, and the person is still that Employee for Payroll.
+  If a link was simply wrong, use **Correct** in the Employee's Link history: it needs
+  your code, a reason and `hr.employees.manage`, cannot be used on your own link, and
+  is final. Never use it to free someone who really was that Employee. It is audited,
+  and the row stays.
 - **"This run pays a compensation change of your own" (HR.R1-C6).** You are the
   Employee of a change this run pays for the first time. Someone whose pay it does
   not change must approve, attest or review. There is no override.

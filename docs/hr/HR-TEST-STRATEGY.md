@@ -244,6 +244,14 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 - Browser and axe evidence: ephemeral Playwright + `@axe-core/playwright` outside the repository (owner decision 2026-11-05), recorded in `HR-16-READINESS.md` §4; no browser tooling is a repository dependency.
 - Concurrency tests whose child processes use the real clock take dates from `SchoolTimezone::today()`, never the UTC date.
 
+## 2h. Implemented suites (HR.R1-C7)
+
+- `Tests\Feature\HR\EmployeeAccountLinkHistoryTest`: the link, unlink, relink and correction contract on web and API.
+- `Tests\Feature\Postgres\EmployeeAccountLinkRawRoleTest`: as the real runtime role, committed, with positive controls.
+- `Tests\Feature\Payroll\PayrollHistoricalLinkTest`: the Payroll conflict matrix, asserting database state.
+- `Tests\Feature\Payroll\PayrollAccountLinkConcurrencyTest`: two real processes with the contender observed blocked, in both orders, including link against calculation.
+- `Tests\Feature\Retention\PayrollAccountLinkRetentionTest`: through `platform:payroll-retention-prune`, `platform:employee-retention-prune` and a real User erasure case.
+
 ## 3. Regression cadence
 
 - **Per phase:**

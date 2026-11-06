@@ -16,8 +16,10 @@ use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -92,7 +94,8 @@ class EmployeeUserLinkGovernanceTest extends TestCase
         $this->assertSame('employee.user_linked', $audit->event_type);
         $this->assertSame($actor->id, $audit->actor_user_id);
         $this->assertSame($school->id, $audit->school_id);
-        $this->assertEquals(['employeeId' => $employee->id, 'previousUserId' => null, 'newUserId' => $target->id], $audit->metadata);
+        $this->assertEquals(['employeeId' => $employee->id, 'previousUserId' => null, 'newUserId' => $target->id], Arr::except($audit->metadata, 'linkId'));
+        $this->assertTrue(Str::isUuid($audit->metadata['linkId']), 'HR.R1-C7: the resulting history row');
         $this->assertStringNotContainsString($target->email, json_encode($audit->metadata));
         Event::assertDispatched(EmployeeUpdated::class, fn (EmployeeUpdated $e) => $e->employeeId === $employee->id);
     }
@@ -230,8 +233,8 @@ class EmployeeUserLinkGovernanceTest extends TestCase
         $this->assertSame($b->id, $relinked->user_id);
         $audits = $this->linkAudits($school, $employee);
         $this->assertSame(['employee.user_linked', 'employee.user_unlinked', 'employee.user_linked'], array_map(fn ($x) => $x->event_type, $audits));
-        $this->assertEquals(['employeeId' => $employee->id, 'previousUserId' => $a->id, 'newUserId' => null], $audits[1]->metadata);
-        $this->assertEquals(['employeeId' => $employee->id, 'previousUserId' => null, 'newUserId' => $b->id], $audits[2]->metadata);
+        $this->assertEquals(['employeeId' => $employee->id, 'previousUserId' => $a->id, 'newUserId' => null], Arr::except($audits[1]->metadata, 'linkId'));
+        $this->assertEquals(['employeeId' => $employee->id, 'previousUserId' => null, 'newUserId' => $b->id], Arr::except($audits[2]->metadata, 'linkId'));
     }
 
     #[Test]

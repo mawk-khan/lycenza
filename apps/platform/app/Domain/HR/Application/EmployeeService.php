@@ -329,12 +329,14 @@ class EmployeeService
                 $this->selfAdministration->refuseSelfLink($actor, $locked->user_id, 'unlink');
 
                 $previousUserId = $locked->user_id;
+                DB::select("SELECT set_config('app.link_actor_user_id', ?, true)", [$actor->id]); // who ended it, in the history
                 $locked->update(['user_id' => null]);
 
                 $this->audit->school($school, 'employee.user_unlinked', actor: $actor, subject: $locked, metadata: [
                     'employeeId' => $locked->id,
                     'previousUserId' => $previousUserId,
                     'newUserId' => null,
+                    'linkId' => DB::table('employee_account_links')->where('school_id', $school->id)->where('employee_id', $locked->id)->orderByDesc('linked_at')->value('id'),
                 ]);
 
                 event(new EmployeeUpdated($school->id, $locked->id, ['user_id']));
@@ -393,12 +395,14 @@ class EmployeeService
             throw new EmployeeAlreadyLinkedException($locked->id);
         }
 
+        DB::select("SELECT set_config('app.link_actor_user_id', ?, true)", [$actor->id]); // who made it, in the history
         $locked->update(['user_id' => $userId]);
 
         $this->audit->school($school, 'employee.user_linked', actor: $actor, subject: $locked, metadata: [
             'employeeId' => $locked->id,
             'previousUserId' => null,
             'newUserId' => $userId,
+            'linkId' => DB::table('employee_account_links')->where('school_id', $school->id)->where('employee_id', $locked->id)->whereNull('ended_at')->value('id'),
         ]);
     }
 

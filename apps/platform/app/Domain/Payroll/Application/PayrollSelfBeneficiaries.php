@@ -14,8 +14,10 @@ use Illuminate\Support\Facades\DB;
  * FIRST counts, whoever authored it and whatever it did to the amount. An
  * Employee's first assignment counts too, so a School's first payroll and a
  * School-wide revision need a decider not paid by them (owner decision
- * 2026-11-06). Identity is `employees.user_id` only: never a name, email or code.
- * The Employee row survives a rehire, so a new employment changes nothing here.
+ * 2026-11-06). Identity is `employee_account_links` only: every link not corrected as
+ * erroneous, current or ended (OD-HR-25), never a name, email or code. An unlink does
+ * not change who a person is. The Employee row survives a rehire, so a new employment
+ * changes nothing here.
  *
  * Under the shared compensation lock, which a link change takes exclusively, so
  * no link can change between this answer and the decision's commit.
@@ -25,12 +27,13 @@ final class PayrollSelfBeneficiaries
     public function of(PayrollRun $run, string $calculationId, string $userId): SelfBeneficiaryFinding
     {
         $row = DB::selectOne(
-            'SELECT COALESCE(bool_or(b.user_id = ?), false) AS conflicted, count(*) FILTER (WHERE b.user_id IS NULL) AS unlinked
+            'SELECT COALESCE(bool_or(b.user_id = ?), false) AS conflicted, count(*) FILTER (WHERE b.user_id IS NULL) AS unlinked,
+                    count(*) FILTER (WHERE b.user_id IS NULL AND EXISTS (SELECT 1 FROM employee_account_links l WHERE l.school_id = ? AND l.employee_id = b.employee_id)) AS corrected
                FROM payroll_run_first_paid_beneficiaries(?, ?, ?) b',
-            [$userId, $run->school_id, $run->id, $calculationId],
+            [$userId, $run->school_id, $run->school_id, $run->id, $calculationId],
         );
 
-        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked);
+        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked, correctedEmployees: (int) $row->corrected);
     }
 
     /**

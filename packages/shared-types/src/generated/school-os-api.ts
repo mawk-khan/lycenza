@@ -1068,6 +1068,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/employees/{employeeId}/account-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The history of an Employee's account links, current, ended and corrected (HR.R1-C7, OD-HR-25). `evidence` says whether a link was recorded as it happened or only known at cutover, which says nothing about before. Requires whole-School hr.employees.manage. */
+        get: operations["listEmployeeAccountLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}/account-links/{accountLinkId}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records that a link was never true (HR.R1-C7, OD-HR-25). The row stays, marked, and Payroll stops treating that person as this Employee; a decision already recorded keeps what it recorded. An ordinary unlink is not this. Requires whole-School hr.employees.manage, a fresh MFA code and a closed reason, and is refused for one's own link. Final, so it is not retried: a second attempt is a 409. */
+        post: operations["correctEmployeeAccountLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/employees/{employeeId}/unlink-user": {
         parameters: {
             query?: never;
@@ -6412,6 +6446,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        EmployeeAccountLinkList: {
+            data: {
+                /** Format: uuid */
+                id: string;
+                account: string | null;
+                /** @enum {string} */
+                state: "current" | "ended" | "corrected";
+                /** @enum {string} */
+                evidence: "recorded" | "cutover";
+                /** Format: date-time */
+                linkedAt: string;
+                /** Format: date-time */
+                endedAt: string | null;
+                /** Format: date-time */
+                correctedAt: string | null;
+                correctionReason: string | null;
+                mayCorrect: boolean;
+            }[];
+        };
         ResponseMeta: {
             /** @example v1 */
             apiVersion: string;
@@ -14846,6 +14899,132 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listEmployeeAccountLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The history, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAccountLinkList"];
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking whole-School hr.employees.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Employee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    correctEmployeeAccountLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+                /** @description The link's id, from the history. */
+                accountLinkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    reason: "wrong_person" | "setup_error";
+                    mfa_code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Corrected. The history as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAccountLinkList"];
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking whole-School hr.employees.manage, a fresh MFA code, or it is one's own link. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Employee or link in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description HR_ACCOUNT_LINK_ALREADY_CORRECTED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     unlinkEmployeeUser: {

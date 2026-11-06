@@ -1792,6 +1792,7 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // UAT-C6 (UAT-STF-05): the governed Employee <-> account link in the browser.
         Route::get('/employees/{employee}/account-link/search', [HrEmployeeAccountLinkController::class, 'search'])->middleware('capability:hr.employees.manage')->name('employees.account-link.search');
         Route::post('/employees/{employee}/account-link', [HrEmployeeAccountLinkController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.account-link.store');
+        Route::post('/employees/{employee}/account-link/{accountLink}/correct', [HrEmployeeAccountLinkController::class, 'correct'])->middleware('capability:hr.employees.manage')->name('employees.account-link.correct');
         Route::post('/employees/{employee}/account-link/remove', [HrEmployeeAccountLinkController::class, 'destroy'])->middleware('capability:hr.employees.manage')->name('employees.account-link.destroy');
 
         Route::post('/employees/{employee}/qualifications', [HrEmployeeQualificationController::class, 'store'])->name('employees.qualifications.store');

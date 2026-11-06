@@ -249,7 +249,21 @@ interface Props {
     };
     hasMfaFactor: boolean;
     linkedAccountName: string | null;
+    accountLinkHistory: AccountLinkEntry[];
+    accountLinkReasons: { value: string; label: string }[];
     staffProfile: StaffProfile;
+}
+
+interface AccountLinkEntry {
+    id: string;
+    account: string | null;
+    state: 'current' | 'ended' | 'corrected';
+    evidence: 'recorded' | 'cutover';
+    linkedAt: string;
+    endedAt: string | null;
+    correctedAt: string | null;
+    correctionReason: string | null;
+    mayCorrect: boolean;
 }
 
 interface AccountCandidate {
@@ -636,6 +650,27 @@ function removeAccountLink(): void {
     router.post(`${base}/account-link/remove`, {}, { preserveScroll: true });
 }
 
+// HR.R1-C7 (OD-HR-25): saying a link was never true. An ordinary unlink is not this.
+const correctingLinkId = ref<string | null>(null);
+const linkCorrectionForm = useForm({ reason: '', confirm: false, mfa_code: '' });
+function submitLinkCorrection(): void {
+    linkCorrectionForm.post(`${base}/account-link/${correctingLinkId.value}/correct`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            linkCorrectionForm.reset();
+            correctingLinkId.value = null;
+        },
+    });
+}
+const accountLinkStates: Record<AccountLinkEntry['state'], string> = {
+    current: 'Current',
+    ended: 'Ended',
+    corrected: 'Corrected as an error',
+};
+function linkDate(value: string | null): string {
+    return value === null ? '—' : value.slice(0, 10);
+}
+
 // --- Qualifications ----------------------------------------------------------
 
 const showQualificationForm = ref(false);
@@ -968,6 +1003,142 @@ function submitNote(): void {
                 <p v-else class="mt-1 text-ink-muted">
                     An archived Employee cannot be linked to an account.
                 </p>
+
+                <!-- HR.R1-C7 (OD-HR-25): the history of the link. An ended link still counts for Payroll conflicts. -->
+                <div v-if="accountLinkHistory.length > 0" class="mt-4 border-t border-line pt-3">
+                    <h4 class="font-medium text-ink">Link history</h4>
+                    <p class="mt-1 text-ink-muted">
+                        Removing a link does not change who this person is: an ended link still
+                        counts when Payroll checks for a conflict over this Employee's pay. Use
+                        Correct only if the link was never true.
+                    </p>
+                    <div
+                        class="mt-2 overflow-x-auto"
+                        tabindex="0"
+                        role="region"
+                        aria-label="Account link history"
+                    >
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Account</th>
+                                    <th scope="col">State</th>
+                                    <th scope="col">From</th>
+                                    <th scope="col">To</th>
+                                    <th scope="col">Recorded</th>
+                                    <th scope="col"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="link in accountLinkHistory" :key="link.id">
+                                    <td>{{ link.account ?? 'Account removed' }}</td>
+                                    <td>
+                                        {{ accountLinkStates[link.state] }}
+                                        <span v-if="link.correctionReason" class="text-ink-muted"
+                                            >: {{ link.correctionReason }}</span
+                                        >
+                                    </td>
+                                    <td>
+                                        {{ link.evidence === 'cutover' ? 'Before' : '' }}
+                                        {{ linkDate(link.linkedAt) }}
+                                    </td>
+                                    <td>{{ linkDate(link.endedAt) }}</td>
+                                    <td>
+                                        {{
+                                            link.evidence === 'cutover'
+                                                ? 'Known at cutover'
+                                                : 'As it happened'
+                                        }}
+                                    </td>
+                                    <td>
+                                        <button
+                                            v-if="link.mayCorrect"
+                                            type="button"
+                                            class="underline"
+                                            :aria-label="`Correct the link to ${link.account ?? 'this account'}`"
+                                            @click="correctingLinkId = link.id"
+                                        >
+                                            Correct
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <form
+                        v-if="correctingLinkId !== null"
+                        class="mt-3 space-y-3 border-t border-line pt-3"
+                        @submit.prevent="submitLinkCorrection"
+                    >
+                        <div>
+                            <label class="field-label" for="account-link-reason"
+                                >Why was this link never true?</label
+                            >
+                            <select
+                                id="account-link-reason"
+                                v-model="linkCorrectionForm.reason"
+                                required
+                                class="input mt-1 w-auto"
+                            >
+                                <option value="" disabled>Choose a reason</option>
+                                <option
+                                    v-for="reason in accountLinkReasons"
+                                    :key="reason.value"
+                                    :value="reason.value"
+                                >
+                                    {{ reason.label }}
+                                </option>
+                            </select>
+                            <p
+                                v-if="linkCorrectionForm.errors.reason"
+                                class="mt-1 text-danger"
+                                role="alert"
+                            >
+                                {{ linkCorrectionForm.errors.reason }}
+                            </p>
+                        </div>
+                        <MfaCodeField
+                            id="account-link-correction-mfa"
+                            v-model="linkCorrectionForm.mfa_code"
+                            :has-mfa-factor="hasMfaFactor"
+                            action="Correcting an account link"
+                            :error="linkCorrectionForm.errors.mfa_code"
+                        />
+                        <label class="flex items-start gap-2">
+                            <input
+                                v-model="linkCorrectionForm.confirm"
+                                type="checkbox"
+                                class="mt-1"
+                            />
+                            <span
+                                >I confirm this account never belonged to this Employee. Payroll
+                                stops treating that person as this Employee, and any decision
+                                already made keeps what it recorded. This is final.</span
+                            >
+                        </label>
+                        <div class="flex gap-3">
+                            <button
+                                type="submit"
+                                :disabled="
+                                    linkCorrectionForm.processing ||
+                                    !linkCorrectionForm.confirm ||
+                                    linkCorrectionForm.reason === '' ||
+                                    !hasMfaFactor
+                                "
+                                class="btn btn-danger"
+                            >
+                                Correct link
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-secondary"
+                                @click="correctingLinkId = null"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </section>
 

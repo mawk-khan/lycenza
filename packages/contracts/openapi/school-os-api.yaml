@@ -2279,6 +2279,92 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/employees/{employeeId}/account-links:
+    get:
+      operationId: listEmployeeAccountLinks
+      summary: >
+        The history of an Employee's account links, current, ended and
+        corrected (HR.R1-C7, OD-HR-25). `evidence` says whether a link was
+        recorded as it happened or only known at cutover, which says nothing
+        about before. Requires whole-School hr.employees.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+      responses:
+        "200":
+          description: The history, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeAccountLinkList" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking whole-School hr.employees.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Employee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/employees/{employeeId}/account-links/{accountLinkId}/correct:
+    post:
+      operationId: correctEmployeeAccountLink
+      summary: >
+        Records that a link was never true (HR.R1-C7, OD-HR-25). The row stays,
+        marked, and Payroll stops treating that person as this Employee; a
+        decision already recorded keeps what it recorded. An ordinary unlink is
+        not this. Requires whole-School hr.employees.manage, a fresh MFA code
+        and a closed reason, and is refused for one's own link. Final, so it is
+        not retried: a second attempt is a 409.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - name: accountLinkId
+          in: path
+          required: true
+          description: The link's id, from the history.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, mfa_code]
+              additionalProperties: false
+              properties:
+                reason: { type: string, enum: [wrong_person, setup_error] }
+                mfa_code: { type: string }
+      responses:
+        "200":
+          description: Corrected. The history as it now stands.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeAccountLinkList" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking whole-School hr.employees.manage, a fresh MFA code, or it is one's own link.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Employee or link in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: HR_ACCOUNT_LINK_ALREADY_CORRECTED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /schools/{schoolId}/employees/{employeeId}/unlink-user:
     post:
       operationId: unlinkEmployeeUser
@@ -15412,6 +15498,25 @@ components:
       schema: { type: integer }
 
   schemas:
+    EmployeeAccountLinkList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [id, account, state, evidence, linkedAt, endedAt, correctedAt, correctionReason, mayCorrect]
+            properties:
+              id: { type: string, format: uuid }
+              account: { type: string, nullable: true }
+              state: { type: string, enum: [current, ended, corrected] }
+              evidence: { type: string, enum: [recorded, cutover] }
+              linkedAt: { type: string, format: date-time }
+              endedAt: { type: string, format: date-time, nullable: true }
+              correctedAt: { type: string, format: date-time, nullable: true }
+              correctionReason: { type: string, nullable: true }
+              mayCorrect: { type: boolean }
     ResponseMeta:
       type: object
       required: [apiVersion, requestId]

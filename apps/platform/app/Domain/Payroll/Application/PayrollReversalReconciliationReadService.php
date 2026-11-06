@@ -159,7 +159,7 @@ final class PayrollReversalReconciliationReadService
                     'reversedBy' => User::query()->whereKey($obligation->reversed_by_user_id)->value('name'),
                     'employeesWithoutAccount' => $this->beneficiaries->ofObligation($school->id, $obligation->id, $actor->id)->unlinkedEmployees,
                     'changes' => $this->independence->changesPage($school->id, DB::table(DB::raw('unnest(?::uuid[]) AS e(compensation_assignment_id)'))->addBinding([$obligation->implicated_assignments], 'from'), $page),
-                    // Retention can remove an assignment while this run stays: say so, never let the table shrink silently.
+                    // An assignment a run read outlives the run (HR.R1-C7), so this is a check on the snapshot, never a shrinking table.
                     'changesRecorded' => (int) DB::selectOne('SELECT cardinality(?::uuid[]) AS n', [$obligation->implicated_assignments])->n,
                 ] : null,
                 'review' => $review === null ? null : [

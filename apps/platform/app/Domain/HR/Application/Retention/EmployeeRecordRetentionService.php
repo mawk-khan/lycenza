@@ -54,7 +54,7 @@ final class EmployeeRecordRetentionService
     ];
 
     /** HR evidence rows the evidence purge removes itself (ancillary ones included: their period is shorter). */
-    private const EVIDENCE_HANDLED = ['employment_records', 'employee_personal_details', 'employee_documents', 'documents', 'employee_reference_codes', ...self::ANCILLARY_TABLES];
+    private const EVIDENCE_HANDLED = ['employment_records', 'employee_personal_details', 'employee_documents', 'documents', 'employee_reference_codes', 'employee_account_links', ...self::ANCILLARY_TABLES];
 
     public function __construct(
         private readonly EmployeeRetentionEligibility $employees,

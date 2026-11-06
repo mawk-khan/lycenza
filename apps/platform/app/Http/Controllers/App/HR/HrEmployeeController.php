@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\App\HR;
 
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkHistory;
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeeDirectoryEntry;
 use App\Domain\HR\Application\EmployeeDirectoryQuery;
 use App\Domain\HR\Application\EmployeeDirectoryService;
@@ -261,6 +263,11 @@ class HrEmployeeController extends Controller
             // SR.4 (ADR 0071 §26.7): registering a highly sensitive record needs a fresh code.
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
             // UAT-C6 (UAT-STF-05): the linked sign-in account, for an HR manager only.
+            // HR.R1-C7 (OD-HR-25): what links this Employee has had, for a whole-School HR manager only.
+            'accountLinkHistory' => $canManageEmployees
+                ? app(EmployeeAccountLinkHistory::class)->forEmployee($access->employee($school, $access->scopeOf($actor, 'hr.employees.manage', $school), $employee), $actor)
+                : [],
+            'accountLinkReasons' => array_map(fn (EmployeeAccountLinkVoidReason $r) => ['value' => $r->value, 'label' => $r->label()], EmployeeAccountLinkVoidReason::cases()),
             'linkedAccountName' => $canManageEmployees
                 ? app(EmployeePickerReadService::class)->linkedAccountName($school, $access->employee($school, $access->scopeOf($actor, 'hr.employees.manage', $school), $employee), $actor)
                 : null,

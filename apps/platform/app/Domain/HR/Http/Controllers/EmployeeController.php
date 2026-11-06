@@ -2,6 +2,9 @@
 
 namespace App\Domain\HR\Http\Controllers;
 
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService;
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkHistory;
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Application\Profile\EmployeeProfileVersion;
@@ -9,10 +12,12 @@ use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Phase 8A closure correction (item 3) -- the sole HTTP mutation
@@ -100,6 +105,23 @@ class EmployeeController extends Controller
         $linked = $service->linkUser($model, $validated['user_id'], $request->user());
 
         return response()->json(['data' => $this->present($linked)]);
+    }
+
+    public function accountLinks(Request $request, School $school, string $employee, EmployeeAccountLinkHistory $history, HrEmployeeAccess $access): JsonResponse
+    {
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
+
+        return response()->json(['data' => $history->forEmployee($model, $request->user())]);
+    }
+
+    public function correctAccountLink(Request $request, School $school, string $employee, string $accountLink, EmployeeAccountLinkCorrectionService $corrections, EmployeeAccountLinkHistory $history, HrEmployeeAccess $access, FreshMfaRequirement $mfa): JsonResponse
+    {
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
+        $validated = $request->validate(['reason' => ['required', Rule::enum(EmployeeAccountLinkVoidReason::class)]]);
+        $proof = $mfa->requireForAction($request, $request->user());
+        $corrections->correct($model, $accountLink, EmployeeAccountLinkVoidReason::from($validated['reason']), $request->user(), $proof);
+
+        return response()->json(['data' => $history->forEmployee($model, $request->user())]);
     }
 
     public function unlinkUser(Request $request, School $school, string $employee, EmployeeService $service, HrEmployeeAccess $access): JsonResponse
