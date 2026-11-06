@@ -148,9 +148,13 @@ recorded compensation provenance. Fix forward.
 - **After a reversal, the next run's approver may change.** The author of a
   compensation change the reversed run paid cannot approve the next run that
   pays it, so name another checker (section 8) before the run is due.
-- **Before posting after a reversal.** Nothing warns you yet (PAY-16). If a run
-  was approved before an earlier run was reversed, check who approved it against
-  the compensation changes it pays.
+- **"The evidence behind this approval changed" (HR.R1-C4).** A reversal took this
+  run's approval independence. Post it as someone who took no part in the run and
+  holds `payroll.runs.post` and `payroll.compensation.sensitive.view`: read the
+  evidence, tick the statement and enter a fresh code. If nobody qualifies, the run
+  waits. An independent approval of the same change on another run also clears it.
+- **A posted run says it was affected after posting.** That reversal came too late
+  for any control. It is recorded; reconcile it by your normal correction route.
 - **A reversal is brief but School-wide.** Approvals and calculations of that
   School wait for it to commit.
 - **Before any migration rollback** on a role without `BYPASSRLS`, read PAY-15 in

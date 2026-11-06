@@ -355,8 +355,16 @@ author approving the next run, which first paid the change. Amended:
     start are database-frozen for the runtime role, as are a run's kind,
     correction target, period and creator. A run is never created decided, and a
     decided run always has an approver.
-14. **HR.R1-C3, open.** Attribution is enforced at approval. An approval taken
-    while a predecessor stood stays valid, and can be posted after that
-    predecessor is reversed (PAY-16). Refusing at posting is not adopted: no
+14. **HR.R1-C3, HR.R1-C4.** Attribution is enforced at approval. An approval taken
+    while a predecessor stood stays valid. Refusing at posting is not adopted: no
     approval can be withdrawn and a period has one regular run, so it would
-    strand the period. The decision is OD-HR-22.
+    strand the period.
+15. **HR.R1-C4 (OD-HR-22).** When a reversal makes the approver an author of what
+    the run now pays first, posting needs an independent poster's attestation to
+    the current evidence, in the posting transaction and backed by the database.
+    It is a compensating control, not a new approval, and the four run states do
+    not change. Rejected: a warning (it can be ignored); a universal second stage
+    (every run would pay for a rare case); a stored flag (it could drift from the
+    one first-paid function).
+16. **HR.R1-C4, open (PAY-18, OD-HR-23).** A reversal after posting is recorded,
+    never blocked and never acknowledged.

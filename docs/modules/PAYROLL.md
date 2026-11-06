@@ -1188,11 +1188,55 @@ review lists what changed, never the unchanged register.
     approver counts for it because no author can be compared. A decision taken
     before a later reversal is not re-opened or flagged: an author's approval of
     November stays valid history even after October is reversed.
-  - **Open (PAY-16, OD-HR-22).** That approval can still be POSTED after the
-    reversal, so a change can be paid with no standing independent approval,
-    with no warning. Attribution is enforced at approval only. An approval cannot
-    be withdrawn and a period has one regular run, so refusing at posting would
-    strand the period; the choice is the owner's.
+  - **Posting is the next boundary (HR.R1-C4, PAY-16).** See below.
+- **A posting never silently relies on lost independence (HR.R1-C4, PAY-16,
+  OD-HR-22).** A run approved while an independent run stood keeps its approval.
+  If that run is reversed before posting, the approver becomes the author of a
+  change the run now pays first.
+  - **Detection is derived, never stored:** `payroll_run_independence_exception`,
+    over the one first-paid function. Ordinary runs are untouched.
+  - **The attestation** is the poster's own statement, made in the posting
+    transaction: they are independent, they reviewed the changed evidence and they
+    accept it. It never says the approver was independent, and it never changes
+    the approval, calculation or any history.
+  - **Who:** `payroll.runs.post` plus current `payroll.compensation.sensitive.view`,
+    and nobody who made the run in any way. A poster without sight of pay is
+    refused and shown nothing identifying. With no suitable person the run stays
+    `approved`: the control never becomes a warning.
+  - **Binding:** `evidenceVersion` hashes the approved calculation, the approver,
+    the implicated assignments and the reversals behind them, so it never carries
+    to another run or survives a further reversal. A mismatch is
+    `PAYROLL_POSTING_EVIDENCE_STALE`, and the page then shows the current evidence.
+  - **Database:** `trg_payroll_runs_posting_independence` refuses approved to posted
+    without a matching attestation, for every role, and
+    `trg_payroll_posting_attestations_guard` checks the run, calculation, evidence,
+    posting and actor. Rows are append-only. Whether a person read the evidence is
+    the service's explicit acceptance, which no database can certify.
+  - **It can clear itself.** A later independent approval of the same change on
+    another run gives it a standing independent approval again, so the exception
+    ends. An attestation is then not needed.
+  - **Not an exception:** an approver who was never an author. If a reversal adds a
+    change their packet omitted, their independence did not change, so nothing
+    fires. The reviewed set at approval is in the audit (`attributionVersion`).
+  - **Legacy:** a run with no recorded approved calculation cannot be evaluated and
+    posts as before. An authorless change can never match an approver.
+  - **After posting (PAY-18, open, OD-HR-23).** A check at posting cannot stop a
+    later reversal. The reversal is never blocked, the run is never reopened, and
+    `payroll.run.independence_changed` plus a notice on the run record it for
+    reconciliation. Nobody is required to acknowledge it, so PAY-16 is closed only
+    for the orders up to posting.
+- **Performance of the posting check (measured 2026-11-06, local DDEV, one
+  machine, 5 rolled-back postings per size; every entry implicated in the exception
+  case).** An ordinary posting adds 2 queries. Both counts are constant by size.
+
+  | Entries | Ordinary: queries, p50 | Exception: queries, p50 | Evidence version | Review read |
+  |---:|---:|---:|---:|---:|
+  | 500 | 42, 50 ms | 59, 59 ms | 3 ms | 22 ms |
+  | 2,000 | 42, 112 ms | 59, 160 ms | 14 ms | 78 ms |
+  | 5,000 | 42, 232 ms | 59, 345 ms | 30 ms | 151 ms |
+  | 10,000 | 42, 512 ms | 59, 801 ms | 60 ms | 348 ms |
+
+  No target is approved. The script was a scratch test (not committed).
 - **Compensation identity is frozen (PAY-14).** `trg_employee_compensation_assignments_identity`
   refuses the runtime role a change to an assignment's author, structure,
   employment or start. Closing it (`effective_to`) stays the ordinary write. Who

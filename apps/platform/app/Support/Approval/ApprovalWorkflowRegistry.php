@@ -207,7 +207,7 @@ final class ApprovalWorkflowRegistry
         'App\Domain\Payroll\Application\PayrollPostingService' => [
             'capability' => 'payroll.runs.post', 'action' => 'Payroll run posting (and its reversal, payroll.runs.reverse)',
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
-            'evidence' => 'payroll_run_postings (append-only) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
+            'evidence' => 'payroll_run_postings (append-only) + payroll_posting_attestations when a reversal took the approval\'s independence (HR.R1-C4) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
         ],
         // ORG.12C (ADR 0080 §8): legal name, registration and affiliation references.
         'App\Domain\Schools\Application\SchoolIdentityService' => [

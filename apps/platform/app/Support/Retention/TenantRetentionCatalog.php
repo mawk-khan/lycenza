@@ -94,6 +94,8 @@ final class TenantRetentionCatalog
             'payroll_run_calculations',
             // HR.R1-C1: the compensation each calculation rested on leaves with its calculation (FK cascade).
             'payroll_run_calculation_sources',
+            // HR.R1-C4: a posting attestation is evidence of the posting; it leaves with it.
+            'payroll_posting_attestations',
         ]],
         'payroll_calendar' => [self::TENANT_LIFETIME, 'E21.3F: monthly payroll period headers (dates and status; no personal data, no amount), School payroll configuration kept with the School', ['payroll_periods']],
         'finance_configuration' => [self::TENANT_LIFETIME, 'interprets the retained ledger', [

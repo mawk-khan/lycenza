@@ -1958,6 +1958,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['private-no-store', 'capability:payroll.runs.prepare', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.hrx-inputs.difference-checks');
 
+            // HR.R1-C4 (PAY-16): the evidence a poster must attest to before an affected run can post.
+            Route::get('/payroll-runs/{payrollRun}/posting-independence', [PayrollRunPostingController::class, 'independence'])
+                ->middleware('capability:payroll.runs.post')
+                ->name('schools.payroll-runs.posting-independence');
             Route::post('/payroll-runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])
                 ->middleware(['capability:payroll.runs.post', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.post');

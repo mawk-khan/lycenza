@@ -477,25 +477,6 @@ class PayrollReversalAttributionTest extends TestCase
         }
     }
 
-    /**
-     * PAY-16, OPEN (OD-HR-22): an approval taken while the independent run stood
-     * stays valid, so it can still be posted after that run is reversed. There is
-     * no way to withdraw an approval and a period has one regular run, so refusing
-     * here would strand the period. This pins today's behaviour until the owner
-     * decides; change this test with the decision.
-     */
-    #[Test]
-    public function pay_16_an_authors_standing_approval_can_still_be_posted_after_the_reversal(): void
-    {
-        $october = $this->postedOctoberPayingTheRaise();
-        $november = $this->calculatedRun('2015-11-01');
-        $this->approve($november, $this->x);
-        $this->reverseRun($october);
-
-        $this->postRun($november);
-        $this->assertSame('posted', $this->row($november)['status']);
-    }
-
     #[Test]
     public function another_schools_reversal_never_changes_this_schools_attribution(): void
     {

@@ -84,6 +84,8 @@ class DatabaseRoleVerifier
         'payroll_run_calculations',
         // HR.R1-C1: the compensation a calculation rested on is approval provenance; it leaves only with its calculation.
         'payroll_run_calculation_sources',
+        // HR.R1-C4: a posting attestation is approval and posting evidence; it leaves with its posting.
+        'payroll_posting_attestations',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
@@ -115,6 +117,8 @@ class DatabaseRoleVerifier
         'payroll_run_calculations',
         // HR.R1-C1: recorded compensation provenance never changes.
         'payroll_run_calculation_sources',
+        // HR.R1-C4: a recorded attestation never changes.
+        'payroll_posting_attestations',
         // ORG.8E (ADR 0076 §63): evidence rows are never rewritten.
         'student_lifecycle_events', 'attendance_record_corrections',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
@@ -651,12 +655,12 @@ class DatabaseRoleVerifier
         $guarded = $guarded && $firstPaid !== null && str_contains($firstPaid->src, "posting_kind = 'reversal'") && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id');
         $enabled = (int) DB::selectOne(
             "select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in
-             ('payroll_runs_approval_evidence_guard', 'trg_payroll_runs_identity', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
+             ('payroll_runs_approval_evidence_guard', 'trg_payroll_runs_posting_independence', 'trg_payroll_posting_attestations_guard', 'trg_payroll_runs_identity', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
         )->c;
 
         $decided = (int) DB::selectOne("select count(*) as c from pg_constraint where conname = 'payroll_runs_decided_has_approver' and convalidated")->c;
 
-        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 8 && $decided === 1);
+        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 10 && $decided === 1);
     }
 
     /**

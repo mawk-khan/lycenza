@@ -102,6 +102,7 @@ class PayrollPostingService
         private readonly IdempotencyGuard $idempotency,
         private readonly ApprovalDecisionAuthority $authority,
         private readonly PayrollCompensationProvenance $provenance,
+        private readonly PayrollPostingIndependence $independence,
     ) {}
 
     /**
@@ -144,7 +145,7 @@ class PayrollPostingService
      * retains transaction ownership throughout; no controller-owned
      * transaction was introduced to achieve this.
      */
-    public function post(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
+    public function post(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?ApiIdempotencyKey $idempotencyRecord = null, ?PostingAttestation $attestation = null): PayrollRunPosting
     {
         $school = $run->school;
         // HR.R1-C1 (S-5): the poster's own fresh-MFA proof is required here, not only at the route.
@@ -152,14 +153,22 @@ class PayrollPostingService
             throw new LogicException('The fresh MFA proof belongs to another User.');
         }
 
-        return $this->context->withSchool($school, function () use ($school, $run, $actor, $idempotencyRecord) {
-            return DB::transaction(function () use ($school, $run, $actor, $idempotencyRecord) {
+        return $this->context->withSchool($school, function () use ($school, $run, $actor, $idempotencyRecord, $attestation) {
+            return DB::transaction(function () use ($school, $run, $actor, $idempotencyRecord, $attestation) {
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                 // HR.R1-C1 (S-13): this core itself refuses an actor without CURRENT payroll.runs.post (a fresh
                 // read under the run lock) -- no caller, the demo included, posts without the key.
                 $this->authority->requireCurrent($actor, 'payroll.runs.post', $school);
                 if ($locked->status !== 'approved') {
                     throw new InvalidRunTransitionException($locked->status, 'posted');
+                }
+                // HR.R1-C4 (PAY-16): shared, after the run row, so a reversal is ordered wholly before or after this
+                // posting. If one took the approval's independence, the poster must independently attest to the
+                // current evidence (database-backed: trg_payroll_runs_posting_independence).
+                $this->provenance->lock($school->id, shared: true);
+                $independenceVersion = $this->independence->version($locked);
+                if ($independenceVersion !== null) {
+                    $this->independence->assertMayAttest($locked, $actor, $independenceVersion, $attestation);
                 }
 
                 $config = $this->accountingConfig->resolveValidated($school);
@@ -179,6 +188,10 @@ class PayrollPostingService
                     'posting_kind' => 'original',
                     'actor_user_id' => $actor->id,
                 ]);
+
+                if ($independenceVersion !== null) {
+                    $this->independence->record($locked, $posting, $actor, $independenceVersion);
+                }
 
                 DB::table('payroll_runs')->where('id', $run->id)->update([
                     'status' => 'posted',
@@ -274,6 +287,9 @@ class PayrollPostingService
                     'originalPostingId' => $original->id,
                     'reversalJournalEntryId' => $reversalEntry->journalEntryId,
                 ]);
+
+                // HR.R1-C4: durable evidence of any run this reversal took independence from; it never blocks.
+                $this->independence->recordAffectedBy($locked, $actor);
 
                 event(new PayrollRunReversed($school->id, $run->id, $original->id, $reversalEntry->journalEntryId, $actor->id));
 

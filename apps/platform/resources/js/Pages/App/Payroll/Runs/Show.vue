@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
+import { formatDateTime } from '../../../../datetime';
 import { formatMoney } from '../../../../money';
 import { idempotencyKey, clearIdempotencyKey } from '../../../../idempotency';
 
@@ -87,6 +88,28 @@ interface Props {
     canPost: boolean;
     accountingReadiness: AccountingReadiness | null;
     canReverse: boolean;
+    postingIndependence: {
+        phase: 'before_posting' | 'after_posting' | 'attested';
+        blockedReason: 'not_independent' | 'cannot_review' | 'needs_mfa' | null;
+        evidenceVersion: string | null;
+        attestation: { attestedBy: string | null; attestedAt: string | null } | null;
+        details: {
+            approvedBy: string | null;
+            reversedRuns: { id: string; periodMonth: string; reversedAt: string }[];
+            changes: {
+                total: number;
+                page: number;
+                lastPage: number;
+                data: {
+                    key: string;
+                    employeeNumber: string;
+                    employee: string;
+                    effectiveFrom: string;
+                    structure: string;
+                }[];
+            };
+        } | null;
+    } | null;
     hrxInputs: HrxInputs | null;
 }
 
@@ -218,18 +241,47 @@ function mfaOptions(scope: string) {
 // -- Post -------------------------------------------------------------------
 
 const posting = ref(false);
+// HR.R1-C4 (PAY-16): never ticked for the user, and never implied by pressing Post.
+const attestationAccepted = ref(false);
+const postRefusal = ref<string | null>(null);
+const independence = computed(() => props.postingIndependence);
+const needsAttestation = computed(() => independence.value?.phase === 'before_posting');
+const mayPost = computed(
+    () =>
+        !needsAttestation.value ||
+        (independence.value?.blockedReason === null && attestationAccepted.value),
+);
 function post(): void {
     if (!window.confirm('Post this payroll run to Finance? This creates a real journal entry.'))
         return;
 
     posting.value = true;
-    const key = idempotencyKey(`payroll-post-${props.run.id}`);
+    postRefusal.value = null;
+    const scope = `payroll-post-${props.run.id}`;
+    const key = idempotencyKey(scope);
+    const options = mfaOptions(scope);
     router.post(
         `/app/payroll/runs/${props.run.id}/post`,
-        { mfa_code: mfaCode.value },
+        {
+            mfa_code: mfaCode.value,
+            ...(needsAttestation.value && independence.value?.evidenceVersion
+                ? {
+                      attestation_version: independence.value.evidenceVersion,
+                      attestation_accepted: attestationAccepted.value,
+                  }
+                : {}),
+        },
         {
             headers: { 'Idempotency-Key': key },
-            ...mfaOptions(`payroll-post-${props.run.id}`),
+            ...options,
+            onError: (errors: Record<string, string>) => {
+                options.onError(errors);
+                postRefusal.value = errors.payroll ?? null;
+                clearIdempotencyKey(scope);
+                attestationAccepted.value = false;
+                // A refusal may mean the evidence changed: show the current evidence, never the old.
+                router.reload({ only: ['postingIndependence'] });
+            },
             onFinish: () => (posting.value = false),
         },
     );
@@ -606,6 +658,106 @@ const reversalPosting = computed(
             class="mt-6 border-t border-line pt-4"
         >
             <h2 class="text-sm font-medium text-ink">Posting</h2>
+            <section
+                v-if="needsAttestation && independence"
+                class="notice-attention mt-2 text-sm"
+                aria-labelledby="posting-independence"
+            >
+                <h3 id="posting-independence" class="font-semibold">
+                    The evidence behind this approval changed
+                </h3>
+                <p class="mt-1">
+                    A payroll run this approval relied on was reversed. The person who approved this
+                    run also recorded compensation changes that no standing independent approval now
+                    covers. The approval stays on record. It cannot be withdrawn, and this is not a
+                    new approval.
+                </p>
+                <p
+                    v-if="independence.blockedReason === 'not_independent'"
+                    class="mt-2"
+                    role="alert"
+                >
+                    You took part in this run, so you cannot attest to it. An independent person
+                    with payroll.runs.post must post it.
+                </p>
+                <p
+                    v-else-if="independence.blockedReason === 'cannot_review'"
+                    class="mt-2"
+                    role="alert"
+                >
+                    Attesting needs sight of the compensation evidence. An independent person who
+                    holds payroll.compensation.sensitive.view must post this run.
+                </p>
+                <p v-else-if="independence.blockedReason === 'needs_mfa'" class="mt-2" role="alert">
+                    Verify your identity to review this evidence before you can attest.
+                </p>
+                <template v-if="independence.details">
+                    <p class="mt-2">Approved by {{ independence.details.approvedBy ?? '—' }}.</p>
+                    <ul class="mt-1 list-disc pl-5">
+                        <li v-for="r in independence.details.reversedRuns" :key="r.id">
+                            Run for {{ r.periodMonth }} was reversed on
+                            {{ formatDateTime(r.reversedAt) }}.
+                        </li>
+                    </ul>
+                    <div
+                        class="relative mt-2 overflow-x-auto"
+                        tabindex="0"
+                        role="region"
+                        aria-label="Compensation changes affected (scrolls sideways on small screens)"
+                    >
+                        <table class="data-table w-full min-w-[32rem] text-sm">
+                            <caption class="sr-only">
+                                Compensation changes this approval no longer independently covers
+                            </caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Employee</th>
+                                    <th scope="col">Structure</th>
+                                    <th scope="col">Effective from</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="c in independence.details.changes.data" :key="c.key">
+                                    <td>{{ c.employeeNumber }} · {{ c.employee }}</td>
+                                    <td>{{ c.structure }}</td>
+                                    <td>{{ c.effectiveFrom }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="mt-1 text-xs text-ink-muted">
+                        Page {{ independence.details.changes.page }} of
+                        {{ independence.details.changes.lastPage }} ·
+                        {{ independence.details.changes.total }} changes
+                        <a
+                            v-if="independence.details.changes.page > 1"
+                            class="underline"
+                            :href="`?independence_page=${independence.details.changes.page - 1}`"
+                            >Previous</a
+                        >
+                        <a
+                            v-if="
+                                independence.details.changes.page <
+                                independence.details.changes.lastPage
+                            "
+                            class="underline"
+                            :href="`?independence_page=${independence.details.changes.page + 1}`"
+                            >Next</a
+                        >
+                    </p>
+                </template>
+                <label v-if="independence.evidenceVersion" class="mt-3 flex items-start gap-2">
+                    <input v-model="attestationAccepted" type="checkbox" class="mt-1" />
+                    <span>
+                        I am independent of this run. I have reviewed this changed evidence and I
+                        accept it before posting. I am not saying the original approver was
+                        independent.
+                    </span>
+                </label>
+            </section>
+            <p v-if="postRefusal" class="mt-2 text-sm text-danger" role="alert">
+                {{ postRefusal }}
+            </p>
             <div
                 v-if="canPost && accountingReadiness"
                 class="mt-2 rounded-xs border border-line p-4 text-sm"
@@ -636,7 +788,9 @@ const reversalPosting = computed(
                 </div>
                 <button
                     type="button"
-                    :disabled="posting || !accountingReadiness.readyToPost || !hasMfaFactor"
+                    :disabled="
+                        posting || !accountingReadiness.readyToPost || !hasMfaFactor || !mayPost
+                    "
                     class="btn btn-primary mt-3"
                     @click="post"
                 >
@@ -649,6 +803,26 @@ const reversalPosting = computed(
             </div>
             <p v-else-if="!canPost" class="mt-1 text-sm text-ink-muted">
                 You don't hold payroll.runs.post -- you cannot post this run.
+            </p>
+        </section>
+
+        <section
+            v-if="independence && independence.phase !== 'before_posting'"
+            class="mt-6 border-t border-line pt-4 text-sm"
+            aria-labelledby="posted-independence"
+        >
+            <h2 id="posted-independence" class="font-medium text-ink">Approval independence</h2>
+            <p v-if="independence.phase === 'attested'" class="mt-1">
+                Posted with an independent attestation, because a run this approval relied on was
+                reversed first.
+                <template v-if="independence.attestation">
+                    Attested by {{ independence.attestation.attestedBy ?? '—' }} on
+                    {{ formatDateTime(independence.attestation.attestedAt) }}.
+                </template>
+            </p>
+            <p v-else class="notice-attention mt-1">
+                A run this approval relied on was reversed after this run was posted. Nobody
+                attested to the change. It is recorded for reconciliation.
             </p>
         </section>
 

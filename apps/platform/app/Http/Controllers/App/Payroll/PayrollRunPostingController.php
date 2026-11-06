@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\App\Payroll;
 
+use App\Domain\Payroll\Application\Exceptions\PayrollException;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
+use App\Domain\Payroll\Application\PostingAttestation;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Http\Controllers\Controller;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
@@ -10,6 +12,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Phase 9.9 -- session-authenticated Inertia actions for posting and
@@ -34,8 +37,16 @@ class PayrollRunPostingController extends Controller
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // SR.4 (ADR 0071 §26.7): capability first, then a fresh code, outside the posting transaction.
         $this->authorizeCapability('payroll.runs.post', $school);
+        // HR.R1-C4 (PAY-16): only ever what the poster explicitly accepted, re-checked in the posting transaction.
+        $validated = $request->validate(['attestation_version' => ['sometimes', 'string', 'size:64'], 'attestation_accepted' => ['required_with:attestation_version', 'boolean']]);
+        $attestation = isset($validated['attestation_version']) ? new PostingAttestation($validated['attestation_version'], (bool) $validated['attestation_accepted']) : null;
         $proof = $mfa->requireForAction($request, $context->actor());
-        $service->post($run, $context->actor(), $proof);
+        try {
+            $service->post($run, $context->actor(), $proof, null, $attestation);
+        } catch (PayrollException $e) {
+            // A refusal at posting is shown beside the attestation by its fixed message; the run stays approved.
+            throw ValidationException::withMessages(['payroll' => $e->getMessage()]);
+        }
 
         return redirect("/app/payroll/runs/{$run->id}");
     }

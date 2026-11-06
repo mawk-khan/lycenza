@@ -168,6 +168,8 @@ final class UserReferenceCatalog
         'payment_correction_requests' => ['decided_by_user_id' => self::RETAIN_REFERENCE, 'requested_by_user_id' => self::RETAIN_REFERENCE, 'withdrawn_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_adjustments' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'payroll_run_postings' => ['actor_user_id' => self::RETAIN_REFERENCE],
+        // HR.R1-C4: who attested at posting is the evidence itself.
+        'payroll_posting_attestations' => ['attested_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_runs' => ['approved_by_user_id' => self::RETAIN_REFERENCE, 'posted_by_user_id' => self::RETAIN_REFERENCE, 'prepared_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_statutory_run_postings' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'platform_audit_events' => ['actor_user_id' => self::RETAIN_REFERENCE],

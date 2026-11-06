@@ -3,14 +3,18 @@
 namespace App\Domain\Payroll\Http\Controllers;
 
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
+use App\Domain\Payroll\Application\PayrollPostingIndependence;
 use App\Domain\Payroll\Application\PayrollRunPostingSummary;
 use App\Domain\Payroll\Application\PayrollRunResultDetail;
 use App\Domain\Payroll\Application\PayrollRunResultLineDetail;
 use App\Domain\Payroll\Application\PayrollRunResultReadService;
+use App\Domain\Payroll\Application\PostingAttestation;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
+use App\Support\Authorization\CapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -53,12 +57,24 @@ class PayrollRunPostingController extends Controller
     public function post(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        // HR.R1-C4 (PAY-16): only ever what the poster explicitly accepted, re-checked in the posting transaction.
+        $validated = $request->validate(['attestation_version' => ['sometimes', 'string', 'size:64'], 'attestation_accepted' => ['required_with:attestation_version', 'boolean']]);
+        $attestation = isset($validated['attestation_version']) ? new PostingAttestation($validated['attestation_version'], (bool) $validated['attestation_accepted']) : null;
         // SR.4 (ADR 0071 §26.7): a fresh code, before the posting transaction.
         $proof = $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
-        $posting = $service->post($run, $request->user(), $proof, $record);
+        $posting = $service->post($run, $request->user(), $proof, $record, $attestation);
 
         return response()->json(['data' => PayrollRunPostingSummary::fromModel($posting)->toArray()], 201);
+    }
+
+    /** HR.R1-C4: whether this run needs an attestation, and the evidence this actor may read. */
+    public function independence(Request $request, School $school, string $payrollRun, PayrollPostingIndependence $independence, CapabilityResolver $capabilities, SensitiveReadAssurance $assurance): JsonResponse
+    {
+        $run = PayrollRun::query()->findOrFail($payrollRun);
+        $maySeeDetails = $capabilities->canInSchool($request->user(), PayrollPostingIndependence::SENSITIVE_VIEW, $school) && $assurance->holds($request);
+
+        return response()->json(['data' => $independence->review($run, $request->user(), $maySeeDetails, (int) $request->query('independence_page', '1'))]);
     }
 
     public function reverse(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse

@@ -45,11 +45,11 @@ class PayrollPostingAdministrationService
      * double-check every Administration service already performs
      * regardless of idempotency, not the primary guarantee.
      */
-    public function post(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
+    public function post(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?ApiIdempotencyKey $idempotencyRecord = null, ?PostingAttestation $attestation = null): PayrollRunPosting
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.post', $run->school);
 
-        return $this->posting->post($run, $actor, $mfa, $idempotencyRecord);
+        return $this->posting->post($run, $actor, $mfa, $idempotencyRecord, $attestation);
     }
 
     public function reverse(PayrollRun $run, User $actor, FreshMfaProof $mfa, ?string $reason = null, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting

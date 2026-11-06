@@ -161,9 +161,9 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 
 ## 7. HR.R1-C3 update (2026-11-06)
 
-PAY-14 is closed for development. PAY-13 is corrected at approval but stays
-PARTIAL: an approval taken before a reversal can still be posted after it (PAY-16,
-owner decision OD-HR-22). PAY-15 stays open with its
+PAY-14 is closed for development. PAY-13 is corrected at approval. PAY-16 is closed
+for every order up to posting (HR.R1-C4, OD-HR-22); a reversal after posting is
+recorded, never acknowledged (PAY-18, OD-HR-23). PAY-15 stays open with its
 condition confirmed for the documented migration role
 (`docs/hr/HR-R1-CLOSURE-CONTRACT.md`): resolve it before any rollback on a role
 without `BYPASSRLS`. This changes no readiness determination: staging stays paused

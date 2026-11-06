@@ -4468,6 +4468,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/posting-independence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.R1-C4 (PAY-16, OD-HR-22): whether a reversal took this run's approval independence, and the evidence this actor may read. `data` is null when no exception applies. Identification needs payroll.compensation.sensitive.view and current MFA assurance. Requires payroll.runs.post. */
+        get: operations["getPayrollPostingIndependence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/payroll-runs/{payrollRunId}/post": {
         parameters: {
             query?: never;
@@ -9456,6 +9473,27 @@ export interface components {
             per_page: number;
             total: number;
         };
+        PayrollPostRunRequest: components["schemas"]["StepUpMfaCode"] & {
+            /** @description HR.R1-C4: the evidenceVersion the poster reviewed. Required when the run has an independence exception. */
+            attestation_version?: string;
+            /** @description HR.R1-C4: the poster's explicit acceptance. Required, and true, with attestation_version. */
+            attestation_accepted?: boolean;
+        };
+        PayrollPostingIndependence: {
+            /** @enum {string} */
+            phase: "before_posting" | "after_posting" | "attested";
+            /** @enum {string|null} */
+            blockedReason: "not_independent" | "cannot_review" | "needs_mfa" | null;
+            /** @description Present only when this actor may attest. */
+            evidenceVersion: string | null;
+            attestation: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Never an amount, bank, statutory or profile field. */
+            details: {
+                [key: string]: unknown;
+            } | null;
+        } | null;
         PayrollRunApprovalReview: {
             run: {
                 [key: string]: unknown;
@@ -27724,6 +27762,50 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    getPayrollPostingIndependence: {
+        parameters: {
+            query?: {
+                independence_page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
+                payrollRunId: components["parameters"]["PayrollRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PayrollPostingIndependence"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.runs.post in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postPayrollRun: {
         parameters: {
             query?: never;
@@ -27740,7 +27822,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StepUpMfaCode"];
+                "application/json": components["schemas"]["PayrollPostRunRequest"];
             };
         };
         responses: {
@@ -27777,6 +27859,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description HR.R1-C4 (PAY-16): PAYROLL_POSTING_ATTESTATION_REQUIRED, PAYROLL_POSTING_ATTESTOR_NOT_INDEPENDENT or PAYROLL_POSTING_EVIDENCE_STALE. The run stays approved. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description PAYROLL_INVALID_RUN_TRANSITION (not approved), PAYROLL_ACCOUNTING_NOT_CONFIGURED, PAYROLL_ACCOUNTING_ACCOUNT_INVALID, or PAYROLL_DEDUCTION_MISSING_LEDGER_MAPPING. */
             422: {

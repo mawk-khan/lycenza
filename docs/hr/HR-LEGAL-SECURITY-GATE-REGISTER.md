@@ -137,7 +137,27 @@ when a request is drafted.
 
 | Id | Subject | Current behaviour | Options |
 |---|---|---|---|
-| OD-HR-22 | An approval that loses its independent predecessor before it is posted (PAY-16) | The approval stays valid and the run posts with no warning. Attribution is enforced at approval only. | **A. Accept and record:** an approval valid when taken stands. **B. Warn (recommended):** posting needs an explicit acknowledgement from the poster, and the event is audited, so someone independent sees it. **C. Refuse at posting:** needs a way to withdraw an approval first; today an approval is final and a period has one regular run, so refusal would strand the period |
+| OD-HR-22 | An approval that loses its independent predecessor before it is posted (PAY-16) | **Decided, see below.** | Was: A accept, B acknowledge, C refuse |
+| OD-HR-23 | A reversal that takes independence from a run ALREADY posted (PAY-18) | **Open.** The reversal is not blocked. It writes a durable `payroll.run.independence_changed` event, and the run page shows it. Nobody is required to acknowledge it. | **A. Keep the record only.** **B. Require an independent acknowledgement at reversal (recommended if a control is wanted):** it adds a condition to a financial correction. **C. Refuse the reversal:** a legitimate correction could be blocked, so not recommended |
+
+### OD-HR-22 decision record
+
+| Field | Record |
+|---|---|
+| Decision | **Option B, mandatory independent attestation at posting.** Selected by the owner in the HR.R1-C4 brief, 2026-11-06. It is an engineering and product direction: it is not a legal or security sign-off, and production stays gated |
+| Finding | PAY-16 |
+| Affected runs | Regular runs in `approved`, with a recorded approved calculation, whose approver is now an author in `payroll_run_first_paid_compensation` for that calculation. No other run changes |
+| Actor independence | The poster attests. They may not be the approver, the creator, a calculator, an adjustment author or any first-paid author of the run |
+| Authority | Existing keys only: `payroll.runs.post` and current `payroll.compensation.sensitive.view`. No new capability and no new grant |
+| Evidence reviewed | The approved calculation, who approved, which runs were reversed and when, and the affected employee numbers, names, structures and effective dates. Never an amount, bank, statutory or profile field |
+| MFA | The poster's own fresh code, as for every posting; the evidence needs current MFA assurance |
+| Audit | One append-only `payroll_posting_attestations` row per run, and `payroll.run.independence_attested` |
+| Stale evidence | Bound to `evidenceVersion` and re-checked under the run and compensation locks; a mismatch is `PAYROLL_POSTING_EVIDENCE_STALE` |
+| Concurrency | Posting holds the compensation lock shared and a reversal exclusive, so each is ordered wholly before or after the other |
+| No independent actor | Posting is refused with a controlled reason and the run stays `approved`. The control never downgrades to a warning. An independent approval of the same change on another run also clears the exception |
+| Reversal after posting | Not prevented. Recorded durably and shown on the run (PAY-18, OD-HR-23) |
+| Effect | Development: live. Staging: none, paused and blocked. Production: none, NO-GO |
+| Re-review | If an approval-withdrawal path is ever added, or OD-HR-23 is decided |
 
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 

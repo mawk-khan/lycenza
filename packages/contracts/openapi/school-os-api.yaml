@@ -9961,6 +9961,31 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/posting-independence:
+    get:
+      operationId: getPayrollPostingIndependence
+      summary: >
+        HR.R1-C4 (PAY-16, OD-HR-22): whether a reversal took this run's approval
+        independence, and the evidence this actor may read. `data` is null when no
+        exception applies. Identification needs payroll.compensation.sensitive.view
+        and current MFA assurance. Requires payroll.runs.post.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+        - { name: independence_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollPostingIndependence" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.post in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /schools/{schoolId}/payroll-runs/{payrollRunId}/post:
     post:
       operationId: postPayrollRun
@@ -9982,7 +10007,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
+            schema: { $ref: "#/components/schemas/PayrollPostRunRequest" }
       responses:
         "201":
           description: Created.
@@ -9991,6 +10016,13 @@ paths:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRunPosting" } } }
         "401":
           description: Missing/invalid bearer token.
+        "409":
+          description: >
+            HR.R1-C4 (PAY-16): PAYROLL_POSTING_ATTESTATION_REQUIRED,
+            PAYROLL_POSTING_ATTESTOR_NOT_INDEPENDENT or PAYROLL_POSTING_EVIDENCE_STALE. The run stays approved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Authenticated but lacking payroll.runs.post in this School.
           content:
@@ -18208,6 +18240,23 @@ components:
         last_page: { type: integer }
         per_page: { type: integer }
         total: { type: integer }
+    PayrollPostRunRequest:
+      allOf:
+        - { $ref: "#/components/schemas/StepUpMfaCode" }
+        - type: object
+          properties:
+            attestation_version: { type: string, minLength: 64, maxLength: 64, description: "HR.R1-C4: the evidenceVersion the poster reviewed. Required when the run has an independence exception." }
+            attestation_accepted: { type: boolean, description: "HR.R1-C4: the poster's explicit acceptance. Required, and true, with attestation_version." }
+    PayrollPostingIndependence:
+      type: object
+      nullable: true
+      required: [phase, blockedReason, evidenceVersion, attestation, details]
+      properties:
+        phase: { type: string, enum: [before_posting, after_posting, attested] }
+        blockedReason: { type: string, nullable: true, enum: [not_independent, cannot_review, needs_mfa, null] }
+        evidenceVersion: { type: string, nullable: true, description: "Present only when this actor may attest." }
+        attestation: { type: object, nullable: true, additionalProperties: true }
+        details: { type: object, nullable: true, additionalProperties: true, description: "Never an amount, bank, statutory or profile field." }
     PayrollRunApprovalReview:
       type: object
       required: [run, calculation, previousRun, totals, previousTotals, components, approvable, blocking, warnings, changes, adjustments, compensation]
