@@ -416,6 +416,8 @@ class PayrollPostingIndependenceTest extends TestCase
         $this->reverseRun($january);
 
         $this->assertCount(1, $this->audit('payroll.run.independence_changed', $november), 'one event, naming October');
+        $review = $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->poster, true));
+        $this->assertSame('attested', $review['phase'], 'reversing a run that discharged nothing changes no evidence');
     }
 
     #[Test]

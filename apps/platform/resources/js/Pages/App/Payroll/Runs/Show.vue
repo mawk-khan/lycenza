@@ -817,8 +817,9 @@ const reversalPosting = computed(
                 reversed first.
             </p>
             <p v-else class="notice-attention mt-1">
-                A run this approval relied on was reversed after this run was posted, or after its
-                attestation. Nobody attested to that change. It is recorded for reconciliation.
+                The evidence behind this approval changed after this run was posted or attested, so
+                nobody has attested to the current evidence. Any reversal behind it is recorded for
+                reconciliation.
             </p>
             <p v-if="independence.attestation" class="mt-1">
                 Attested by {{ independence.attestation.attestedBy ?? '—' }} on

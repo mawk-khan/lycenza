@@ -105,7 +105,8 @@ final class PayrollPostingIndependence
         try {
             return $write();
         } catch (QueryException $e) {
-            if (str_contains($e->getMessage(), 'payroll_posting_attestations_guard') || str_contains($e->getMessage(), 'payroll_runs_posting_independence_guard')) {
+            // The guards' own RAISE only: never a deadlock, or a permission error, that merely passed through them.
+            if ($e->getCode() === '23514' && (str_contains($e->getMessage(), 'payroll_posting_attestations_guard:') || str_contains($e->getMessage(), 'payroll_runs_posting_independence_guard:'))) {
                 throw new PostingEvidenceStaleException($run->id);
             }
             throw $e;
@@ -224,8 +225,9 @@ final class PayrollPostingIndependence
             <<<'SQL'
             SELECT DISTINCT o.id, pp.period_month, rp.created_at
               FROM payroll_run_independence_exception(?, ?) e
-              JOIN payroll_run_calculation_sources os ON os.school_id = ? AND os.compensation_assignment_id = e.compensation_assignment_id AND os.payroll_run_id <> ?
-              JOIN payroll_runs o ON o.school_id = os.school_id AND o.id = os.payroll_run_id AND o.approved_calculation_id = os.payroll_run_calculation_id
+              JOIN payroll_run_calculation_sources os ON os.school_id = ? AND os.compensation_assignment_id = e.compensation_assignment_id AND os.payroll_run_id <> ? AND os.basis = 'structure'
+              JOIN payroll_runs o ON o.school_id = os.school_id AND o.id = os.payroll_run_id AND o.approved_calculation_id = os.payroll_run_calculation_id AND o.run_kind = 'regular'
+              JOIN employee_compensation_assignments a ON a.school_id = os.school_id AND a.id = os.compensation_assignment_id AND o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id
               JOIN payroll_run_postings rp ON rp.school_id = o.school_id AND rp.payroll_run_id = o.id AND rp.posting_kind = 'reversal'
               JOIN payroll_periods pp ON pp.school_id = o.school_id AND pp.id = o.payroll_period_id
              ORDER BY rp.created_at

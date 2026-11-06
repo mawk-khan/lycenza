@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
  * arisen afterwards. `payroll_run_independence_exception()` answers it, and
  * `payroll_run_independence_version()` is the evidence an attestation binds: the
  * approved calculation, the approver, the implicated assignments and the reversals
- * of the runs that had priced them. NULL means no exception.
+ * of the runs that had discharged them. NULL means no exception.
  *
  * `payroll_posting_attestations` is one append-only row per run, written in the
  * posting transaction by PayrollPostingService. It is a separate statement by the
@@ -89,9 +89,11 @@ return new class extends Migration
                     SELECT DISTINCT rp.id
                       FROM implicated i
                       JOIN public.payroll_run_calculation_sources os
-                        ON os.school_id = p_school AND os.compensation_assignment_id = i.compensation_assignment_id AND os.payroll_run_id <> p_run
+                        ON os.school_id = p_school AND os.compensation_assignment_id = i.compensation_assignment_id AND os.payroll_run_id <> p_run AND os.basis = 'structure'
                       JOIN public.payroll_runs o
-                        ON o.school_id = os.school_id AND o.id = os.payroll_run_id AND o.approved_calculation_id = os.payroll_run_calculation_id
+                        ON o.school_id = os.school_id AND o.id = os.payroll_run_id AND o.approved_calculation_id = os.payroll_run_calculation_id AND o.run_kind = 'regular'
+                      JOIN public.employee_compensation_assignments a
+                        ON a.school_id = os.school_id AND a.id = os.compensation_assignment_id AND o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id
                       JOIN public.payroll_run_postings rp
                         ON rp.school_id = o.school_id AND rp.payroll_run_id = o.id AND rp.posting_kind = 'reversal'
                 )
