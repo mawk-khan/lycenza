@@ -352,4 +352,10 @@ author approving the next run, which first paid the change. Amended:
     approval-time participant check alone (it never tells an eligible checker
     that their packet omitted a change).
 13. **HR.R1-C3 (PAY-14).** An assignment's author, structure, employment and
-    start are database-frozen for the runtime role.
+    start are database-frozen for the runtime role, as are a run's kind,
+    correction target and period; a decided run always has an approver.
+14. **HR.R1-C3, open.** Attribution is enforced at approval. An approval taken
+    while a predecessor stood stays valid, and can be posted after that
+    predecessor is reversed (PAY-16). Refusing at posting is not adopted: no
+    approval can be withdrawn and a period has one regular run, so it would
+    strand the period. The decision is OD-HR-22.

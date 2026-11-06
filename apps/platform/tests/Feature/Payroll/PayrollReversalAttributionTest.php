@@ -441,6 +441,50 @@ class PayrollReversalAttributionTest extends TestCase
     }
 
     #[Test]
+    public function the_runtime_role_cannot_reclassify_a_run_or_decide_one_with_no_approver(): void
+    {
+        $october = $this->postedOctoberPayingTheRaise();
+        $november = $this->calculatedRun('2015-11-01');
+        $write = fn (array $values) => DB::transaction(fn () => $this->inSchool($this->school, fn () => DB::table('payroll_runs')->where('id', $november->id)->update($values)));
+
+        foreach ([['run_kind' => 'correction', 'corrects_payroll_run_id' => $october->id], ['payroll_period_id' => $october->payroll_period_id]] as $values) {
+            try {
+                $write($values);
+                $this->fail('the runtime role reclassified a run');
+            } catch (QueryException $e) {
+                $this->assertStringContainsString('payroll_runs_identity_guard', $e->getMessage());
+            }
+        }
+        $calculation = $this->inSchool($this->school, fn () => app(PayrollRunService::class)->latestCalculationId($november));
+        try {
+            $write(['status' => 'approved', 'approved_by_user_id' => null, 'approved_at' => now(), 'approved_calculation_id' => $calculation]);
+            $this->fail('a run was approved by nobody');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('payroll_runs_decided_has_approver', $e->getMessage());
+        }
+        $this->assertSame('calculated', $this->row($november)['status']);
+    }
+
+    /**
+     * PAY-16, OPEN (OD-HR-22): an approval taken while the independent run stood
+     * stays valid, so it can still be posted after that run is reversed. There is
+     * no way to withdraw an approval and a period has one regular run, so refusing
+     * here would strand the period. This pins today's behaviour until the owner
+     * decides; change this test with the decision.
+     */
+    #[Test]
+    public function pay_16_an_authors_standing_approval_can_still_be_posted_after_the_reversal(): void
+    {
+        $october = $this->postedOctoberPayingTheRaise();
+        $november = $this->calculatedRun('2015-11-01');
+        $this->approve($november, $this->x);
+        $this->reverseRun($october);
+
+        $this->postRun($november);
+        $this->assertSame('posted', $this->row($november)['status']);
+    }
+
+    #[Test]
     public function another_schools_reversal_never_changes_this_schools_attribution(): void
     {
         $october = $this->postedOctoberPayingTheRaise();

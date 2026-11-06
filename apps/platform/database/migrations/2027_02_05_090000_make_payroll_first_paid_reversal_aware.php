@@ -33,6 +33,13 @@ use Illuminate\Support\Facades\DB;
  * assignment (`effective_to`), so no application path changes these columns.
  * The schema owner stays exempt, as in `retention_guard_end_record`.
  *
+ * Two raw-SQL routes around the rule are closed too (independent review of this
+ * change): `trg_payroll_runs_identity` freezes a run's kind, correction target
+ * and period, because the approval guard skips freshness and author checks for a
+ * non-regular run; `payroll_runs_decided_has_approver` refuses an approved or
+ * posted run with no approver, which would otherwise count as independent of
+ * every author.
+ *
  * Rollback restores the previous definitions and touches no row.
  */
 return new class extends Migration
@@ -75,12 +82,39 @@ return new class extends Migration
                 FOR EACH ROW EXECUTE FUNCTION public.payroll_compensation_assignment_identity_guard();
 
             REVOKE ALL ON FUNCTION public.payroll_compensation_assignment_identity_guard() FROM PUBLIC;
+
+            CREATE FUNCTION public.payroll_runs_identity_guard() RETURNS trigger
+                LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
+            BEGIN
+                IF pg_catalog.pg_has_role(current_user, (SELECT relowner FROM pg_catalog.pg_class WHERE oid = TG_RELID), 'MEMBER') THEN
+                    RETURN NEW;
+                END IF;
+                IF NEW.run_kind IS DISTINCT FROM OLD.run_kind OR NEW.corrects_payroll_run_id IS DISTINCT FROM OLD.corrects_payroll_run_id
+                   OR NEW.payroll_period_id IS DISTINCT FROM OLD.payroll_period_id THEN
+                    RAISE EXCEPTION 'payroll_runs: a run''s kind, correction target and period are fixed (payroll_runs_identity_guard)'
+                        USING ERRCODE = 'check_violation';
+                END IF;
+                RETURN NEW;
+            END;
+            $$;
+
+            CREATE TRIGGER trg_payroll_runs_identity
+                BEFORE UPDATE ON payroll_runs
+                FOR EACH ROW EXECUTE FUNCTION public.payroll_runs_identity_guard();
+
+            REVOKE ALL ON FUNCTION public.payroll_runs_identity_guard() FROM PUBLIC;
+
+            ALTER TABLE payroll_runs ADD CONSTRAINT payroll_runs_decided_has_approver
+                CHECK (status NOT IN ('approved', 'posted') OR approved_by_user_id IS NOT NULL);
             SQL);
     }
 
     public function down(): void
     {
         DB::unprepared(<<<'SQL'
+            ALTER TABLE payroll_runs DROP CONSTRAINT payroll_runs_decided_has_approver;
+            DROP TRIGGER trg_payroll_runs_identity ON payroll_runs;
+            DROP FUNCTION public.payroll_runs_identity_guard();
             DROP TRIGGER trg_employee_compensation_assignments_identity ON employee_compensation_assignments;
             DROP FUNCTION public.payroll_compensation_assignment_identity_guard();
             DROP TRIGGER trg_payroll_run_postings_reversal_lock ON payroll_run_postings;

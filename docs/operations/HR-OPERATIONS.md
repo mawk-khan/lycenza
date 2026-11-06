@@ -148,6 +148,9 @@ recorded compensation provenance. Fix forward.
 - **After a reversal, the next run's approver may change.** The author of a
   compensation change the reversed run paid cannot approve the next run that
   pays it, so name another checker (section 8) before the run is due.
+- **Before posting after a reversal.** Nothing warns you yet (PAY-16). If a run
+  was approved before an earlier run was reversed, check who approved it against
+  the compensation changes it pays.
 - **A reversal is brief but School-wide.** Approvals and calculations of that
   School wait for it to commit.
 - **Before any migration rollback** on a role without `BYPASSRLS`, read PAY-15 in

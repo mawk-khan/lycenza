@@ -1188,10 +1188,18 @@ review lists what changed, never the unchanged register.
     approver counts for it because no author can be compared. A decision taken
     before a later reversal is not re-opened or flagged: an author's approval of
     November stays valid history even after October is reversed.
+  - **Open (PAY-16, OD-HR-22).** That approval can still be POSTED after the
+    reversal, so a change can be paid with no standing independent approval,
+    with no warning. Attribution is enforced at approval only. An approval cannot
+    be withdrawn and a period has one regular run, so refusing at posting would
+    strand the period; the choice is the owner's.
 - **Compensation identity is frozen (PAY-14).** `trg_employee_compensation_assignments_identity`
   refuses the runtime role a change to an assignment's author, structure,
   employment or start. Closing it (`effective_to`) stays the ordinary write. Who
   is recorded as author on INSERT remains the application boundary (rule 102).
+  `trg_payroll_runs_identity` likewise freezes a run's kind, correction target and
+  period (the guard skips author and freshness checks for a non-regular run), and
+  `payroll_runs_decided_has_approver` refuses a decided run with no approver.
 - **Service-level assurance (S-5, S-13).** Approve, post, reverse and
   compensation assignment require the acting User's own `FreshMfaProof` in
   the service itself (not only the route), and posting and reversal re-read

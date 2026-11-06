@@ -133,6 +133,12 @@ when a request is drafted.
 |---|---|---|---|
 | OD-HR-21 | A back-dated employment end over a placement that had already started on the record | The placement is disposed of as not in effect, and the audit keeps its replaced end. A wrong last day cannot be undone, and a death is a single-actor path. | Decide whether such an end stays as is, needs a second person, or needs a placement correction path first. Refusing it outright would restore the HRC-2 dead end, because no path corrects such a placement |
 
+## 2e. Owner decision raised by HR.R1-C3 (2026-11-06)
+
+| Id | Subject | Current behaviour | Options |
+|---|---|---|---|
+| OD-HR-22 | An approval that loses its independent predecessor before it is posted (PAY-16) | The approval stays valid and the run posts with no warning. Attribution is enforced at approval only. | **A. Accept and record:** an approval valid when taken stands. **B. Warn (recommended):** posting needs an explicit acknowledgement from the poster, and the event is audited, so someone independent sees it. **C. Refuse at posting:** needs a way to withdraw an approval first; today an approval is final and a period has one regular run, so refusal would strand the period |
+
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 
 **Problem.** HRX-L2 currently bundles two very different data classes:

@@ -651,10 +651,10 @@ class DatabaseRoleVerifier
         $guarded = $guarded && $firstPaid !== null && str_contains($firstPaid->src, "posting_kind = 'reversal'") && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id');
         $enabled = (int) DB::selectOne(
             "select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in
-             ('payroll_runs_approval_evidence_guard', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
+             ('payroll_runs_approval_evidence_guard', 'trg_payroll_runs_identity', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
         )->c;
 
-        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 7);
+        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 8);
     }
 
     /**

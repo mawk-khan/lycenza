@@ -69,7 +69,7 @@ Timetable substitution, Analytics (headcount, rates).
 
 | Id | Severity | Finding | Status |
 |---|---|---|---|
-| PAY-13 | MEDIUM | (corrected by HR.R1-C3, see below) A reversed posted run still counts as having paid a compensation change: `reverse()` leaves the run `posted`, so `payroll_run_first_paid_compensation` excludes the change from the next run and its author may approve that run. The review packet does not list it. No test covers reversal. | CLOSED for development (HR.R1-C3) |
+| PAY-13 | MEDIUM | (corrected by HR.R1-C3, see below) A reversed posted run still counts as having paid a compensation change: `reverse()` leaves the run `posted`, so `payroll_run_first_paid_compensation` excludes the change from the next run and its author may approve that run. The review packet does not list it. No test covers reversal. | PARTIAL (HR.R1-C3): closed at approval, residual PAY-16 |
 | PAY-14 | LOW | The runtime role can change `assigned_by_user_id` or `salary_structure_id` on a compensation assignment: no trigger freezes them, so raw SQL could defeat author exclusion or reprice unseen. No application path. | CLOSED for development (HR.R1-C3: `trg_employee_compensation_assignments_identity`) |
 | PAY-15 | LOW, conditional | The HR.R1-C1 `down()` guard reads FORCE-RLS tables with no tenant context. If a production migration role lacks BYPASSRLS, it could see no rows and drop provenance. Not exercised. | OPEN, condition confirmed by HR.R1-C3 (see below) |
 
@@ -81,7 +81,14 @@ Timetable substitution, Analytics (headcount, rates).
   - any BLOCKER or MAJOR finding means **not closed**;
   - corrections are their own published units, then HR.R1 is re-run.
 
-**Evidence recorded (HR.R1-C3, 2026-11-06):** PAY-13 reproduced against `a5370575` (after the paying run's reversal the next run's author set was empty, so the author approved it) and CLOSED for development: `payroll_run_first_paid_compensation` no longer counts a reversed run or one its author approved, a reversal takes the compensation lock exclusively, and an approval names the reviewed attribution (ADR 0034 items 11-13, `docs/modules/PAYROLL.md`). PAY-14 CLOSED for development. PAY-15 stays OPEN. HR.R1 remains OPEN.
+**Evidence recorded (HR.R1-C3, 2026-11-06):** PAY-13 reproduced against `a5370575` (after the paying run's reversal the next run's author set was empty, so the author approved it) and corrected at approval: `payroll_run_first_paid_compensation` no longer counts a reversed run or one its author approved, a reversal takes the compensation lock exclusively, and an approval names the reviewed attribution (ADR 0034 items 11-14, `docs/modules/PAYROLL.md`). PAY-13 is PARTIAL, not closed: the final-candidate review found PAY-16 below. PAY-14 CLOSED for development. PAY-15 stays OPEN. HR.R1 remains OPEN.
+
+| Id | Severity | Finding | Status |
+|---|---|---|---|
+| PAY-16 | MEDIUM | Approve-then-reverse-then-post. Y approves and posts October, paying X's change. X approves November, which is allowed because October stands. October is reversed. `post()` on November still succeeds, so the change is paid with no standing independent approval, with no warning or audit marker. Related: an approval whose packet omitted a change (a predecessor discharged it) later discharges that change once the predecessor is reversed. | OPEN, owner decision OD-HR-22; behaviour pinned by `pay_16_an_authors_standing_approval_can_still_be_posted_after_the_reversal` |
+| PAY-17 | LOW | Corrections on a reversed run: the target check in `createCorrectionRun()` is unlocked and outside the transaction, the database trigger checks status only, and a correction can be approved and posted after its target is reversed. Pre-existing; not an attribution defect. | OPEN |
+
+The same review found two raw-SQL routes around the corrected rule, both fixed in HR.R1-C3: a run could be reclassified to skip the guard's author and freshness checks (`trg_payroll_runs_identity`), and a decided run could have no approver, counting as independent of every author (`payroll_runs_decided_has_approver`).
 
 **PAY-15 evidence (2026-11-06).** The condition holds: `infrastructure/postgres/production-bootstrap.sql` creates the migration role `NOSUPERUSER NOBYPASSRLS`, and these tables use FORCE ROW LEVEL SECURITY, so a `down()` guard with no tenant context reads no rows on that role and would let the rollback proceed. It is safe locally only because DDEV's and Docker's migration role is a superuser. Reasoned from the bootstrap and the policies, not executed on such a role. The pattern is not confined to HR.R1-C1: 32 migrations carry a "refusing to roll back" guard (30 `exists()` calls, not individually assessed). No staging or production database exists, so nothing is exposed today, but this must be resolved before any rollback on such a role.
 
