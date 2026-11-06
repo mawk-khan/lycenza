@@ -21,6 +21,7 @@ use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
@@ -447,7 +448,7 @@ class PayrollReversalAttributionTest extends TestCase
         $november = $this->calculatedRun('2015-11-01');
         $write = fn (array $values) => DB::transaction(fn () => $this->inSchool($this->school, fn () => DB::table('payroll_runs')->where('id', $november->id)->update($values)));
 
-        foreach ([['run_kind' => 'correction', 'corrects_payroll_run_id' => $october->id], ['payroll_period_id' => $october->payroll_period_id]] as $values) {
+        foreach ([['run_kind' => 'correction', 'corrects_payroll_run_id' => $october->id], ['payroll_period_id' => $october->payroll_period_id], ['prepared_by_user_id' => $this->checker->id]] as $values) {
             try {
                 $write($values);
                 $this->fail('the runtime role reclassified a run');
@@ -463,6 +464,17 @@ class PayrollReversalAttributionTest extends TestCase
             $this->assertStringContainsString('payroll_runs_decided_has_approver', $e->getMessage());
         }
         $this->assertSame('calculated', $this->row($november)['status']);
+
+        // Every approval guard fires on UPDATE, so a run may never begin decided.
+        foreach (['approved', 'posted'] as $status) {
+            try {
+                DB::transaction(fn () => $this->inSchool($this->school, fn () => DB::table('payroll_runs')->insert(['id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'payroll_period_id' => $this->inSchool($this->school, fn () => app(PayrollPeriodService::class)->createPeriod($this->school, Carbon::parse('2016-03-01'), null, $this->preparer)->id),
+                    'run_kind' => 'regular', 'status' => $status, 'prepared_by_user_id' => $this->preparer->id, 'approved_by_user_id' => $this->x->id, 'approved_at' => now(), 'created_at' => now(), 'updated_at' => now()])));
+                $this->fail("a run was created {$status}");
+            } catch (QueryException $e) {
+                $this->assertStringContainsString('payroll_runs_identity_guard', $e->getMessage());
+            }
+        }
     }
 
     /**

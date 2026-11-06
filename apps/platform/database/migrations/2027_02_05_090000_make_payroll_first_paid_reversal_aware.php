@@ -34,10 +34,12 @@ use Illuminate\Support\Facades\DB;
  * The schema owner stays exempt, as in `retention_guard_end_record`.
  *
  * Two raw-SQL routes around the rule are closed too (independent review of this
- * change): `trg_payroll_runs_identity` freezes a run's kind, correction target
- * and period, because the approval guard skips freshness and author checks for a
- * non-regular run; `payroll_runs_decided_has_approver` refuses an approved or
- * posted run with no approver, which would otherwise count as independent of
+ * change): `trg_payroll_runs_identity` freezes a run's kind, correction target,
+ * period and creator, because the approval guard skips freshness and author
+ * checks for a non-regular run and the creator is a maker; it also refuses a run
+ * INSERTed already decided, because every approval guard fires on UPDATE and
+ * posting reads the status alone. `payroll_runs_decided_has_approver` refuses a
+ * decided run with no approver, which would otherwise count as independent of
  * every author.
  *
  * Rollback restores the previous definitions and touches no row.
@@ -89,9 +91,16 @@ return new class extends Migration
                 IF pg_catalog.pg_has_role(current_user, (SELECT relowner FROM pg_catalog.pg_class WHERE oid = TG_RELID), 'MEMBER') THEN
                     RETURN NEW;
                 END IF;
+                IF TG_OP = 'INSERT' THEN
+                    IF NEW.status IN ('approved', 'posted') THEN
+                        RAISE EXCEPTION 'payroll_runs: a run is decided only by its approval, never created decided (payroll_runs_identity_guard)'
+                            USING ERRCODE = 'check_violation';
+                    END IF;
+                    RETURN NEW;
+                END IF;
                 IF NEW.run_kind IS DISTINCT FROM OLD.run_kind OR NEW.corrects_payroll_run_id IS DISTINCT FROM OLD.corrects_payroll_run_id
-                   OR NEW.payroll_period_id IS DISTINCT FROM OLD.payroll_period_id THEN
-                    RAISE EXCEPTION 'payroll_runs: a run''s kind, correction target and period are fixed (payroll_runs_identity_guard)'
+                   OR NEW.payroll_period_id IS DISTINCT FROM OLD.payroll_period_id OR NEW.prepared_by_user_id IS DISTINCT FROM OLD.prepared_by_user_id THEN
+                    RAISE EXCEPTION 'payroll_runs: a run''s kind, correction target, period and creator are fixed (payroll_runs_identity_guard)'
                         USING ERRCODE = 'check_violation';
                 END IF;
                 RETURN NEW;
@@ -99,7 +108,7 @@ return new class extends Migration
             $$;
 
             CREATE TRIGGER trg_payroll_runs_identity
-                BEFORE UPDATE ON payroll_runs
+                BEFORE INSERT OR UPDATE ON payroll_runs
                 FOR EACH ROW EXECUTE FUNCTION public.payroll_runs_identity_guard();
 
             REVOKE ALL ON FUNCTION public.payroll_runs_identity_guard() FROM PUBLIC;

@@ -1197,9 +1197,11 @@ review lists what changed, never the unchanged register.
   refuses the runtime role a change to an assignment's author, structure,
   employment or start. Closing it (`effective_to`) stays the ordinary write. Who
   is recorded as author on INSERT remains the application boundary (rule 102).
-  `trg_payroll_runs_identity` likewise freezes a run's kind, correction target and
-  period (the guard skips author and freshness checks for a non-regular run), and
-  `payroll_runs_decided_has_approver` refuses a decided run with no approver.
+  `trg_payroll_runs_identity` likewise freezes a run's kind, correction target,
+  period and creator, and refuses a run INSERTed already approved or posted (the
+  guard skips author and freshness checks for a non-regular run, and every approval
+  guard fires on UPDATE). `payroll_runs_decided_has_approver` refuses a decided run
+  with no approver.
 - **Service-level assurance (S-5, S-13).** Approve, post, reverse and
   compensation assignment require the acting User's own `FreshMfaProof` in
   the service itself (not only the route), and posting and reversal re-read

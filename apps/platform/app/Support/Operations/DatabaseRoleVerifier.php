@@ -654,7 +654,9 @@ class DatabaseRoleVerifier
              ('payroll_runs_approval_evidence_guard', 'trg_payroll_runs_identity', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
         )->c;
 
-        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 8);
+        $decided = (int) DB::selectOne("select count(*) as c from pg_constraint where conname = 'payroll_runs_decided_has_approver' and convalidated")->c;
+
+        return CheckResult::of('payroll_approval_provenance_guarded', $guarded && $enabled === 8 && $decided === 1);
     }
 
     /**
