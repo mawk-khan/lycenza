@@ -65,7 +65,7 @@ class PayrollServiceAssuranceTest extends TestCase
         $run = $this->calculated();
         $checker = $this->createUser();
 
-        return $this->inSchool($this->school, fn () => app(PayrollRunService::class)->approve($run, $checker, $this->freshMfaProofFor($checker), app(PayrollRunService::class)->latestCalculationId($run)));
+        return $this->inSchool($this->school, fn () => app(PayrollRunService::class)->approve($run, $checker, $this->freshMfaProofFor($checker), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     private function runStatus(PayrollRun $run): string
@@ -80,7 +80,7 @@ class PayrollServiceAssuranceTest extends TestCase
         [$checker, $someoneElse] = [$this->createUser(), $this->createUser()];
 
         $this->expectException(LogicException::class);
-        $this->inSchool($this->school, fn () => app(PayrollRunService::class)->approve($run, $checker, $this->freshMfaProofFor($someoneElse), app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->inSchool($this->school, fn () => app(PayrollRunService::class)->approve($run, $checker, $this->freshMfaProofFor($someoneElse), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     #[Test]

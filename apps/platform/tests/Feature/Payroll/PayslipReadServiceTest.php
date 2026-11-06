@@ -105,7 +105,7 @@ class PayslipReadServiceTest extends TestCase
 
         $this->context()->withSchool($f['school'], function () use ($f, $approver) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
-            app(PayrollRunAdministrationService::class)->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
+            app(PayrollRunAdministrationService::class)->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run));
         });
 
         return $f;
@@ -201,7 +201,7 @@ class PayslipReadServiceTest extends TestCase
             // calculate() mutates the row in the database, not this
             // in-memory $correction instance -- refresh before the
             // status-sensitive approve() call.
-            $runService->approve($correction->refresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($correction->refresh()));
+            $runService->approve($correction->refresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($correction->refresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->refresh()));
 
             return $correction->id;
         });

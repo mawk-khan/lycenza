@@ -158,3 +158,12 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 - **Readiness:** local GO for the Payroll review. Staging stays CONDITIONAL
   (prerequisites in §5 unchanged; E16 through 2026-11-28 only). Production
   stays NO-GO: HRX-L4, E45, statutory gates, D-11 and HR.R1 remain open.
+
+## 7. HR.R1-C3 update (2026-11-06)
+
+PAY-13 and PAY-14 are closed for development, so a reversal no longer undermines
+first-paid attribution (`docs/modules/PAYROLL.md`). PAY-15 stays open with its
+condition confirmed for the documented migration role
+(`docs/hr/HR-R1-CLOSURE-CONTRACT.md`): resolve it before any rollback on a role
+without `BYPASSRLS`. This changes no readiness determination: staging stays paused
+and infrastructure-blocked, and production stays NO-GO.

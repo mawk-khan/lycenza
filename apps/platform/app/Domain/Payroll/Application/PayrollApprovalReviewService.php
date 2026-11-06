@@ -106,6 +106,8 @@ final class PayrollApprovalReviewService
                 ],
                 'calculation' => $latest === null ? null : [
                     'id' => $latest->id,
+                    // HR.R1-C3: what the approval names, so a reversal since this review is detected.
+                    'attributionVersion' => $this->provenance->attributionVersion($run, $latest->id),
                     'ordinal' => $latest->ordinal,
                     'calculatedAt' => $latest->created_at->toIso8601String(),
                     'calculatedBy' => $names[$latest->calculated_by_user_id] ?? null,
@@ -226,6 +228,10 @@ final class PayrollApprovalReviewService
         if ($latest !== null && $latest->compensation_sources_recorded && $run->run_kind === 'regular'
             && $this->provenance->firstPaid($run, $latest->id)->whereNull('f.assigned_by_user_id')->exists()) {
             $warnings[] = ['code' => 'PAYROLL_COMPENSATION_AUTHOR_NOT_RECORDED', 'message' => 'Some compensation changes were recorded before authors were recorded; their author is not known.'];
+        }
+        if ($previous !== null && DB::table('payroll_run_postings')->where('school_id', $school->id)->where('payroll_run_id', $previous->id)->where('posting_kind', 'reversal')->exists()) {
+            // HR.R1-C3: PAY-1's baseline stays the previous approved run; the checker is told it no longer stands.
+            $warnings[] = ['code' => 'PAYROLL_PREVIOUS_RUN_REVERSED', 'message' => 'The run compared with here was reversed, so these differences are measured against figures that no longer stand.'];
         }
         if ($previous === null) {
             $warnings[] = ['code' => 'PAYROLL_NO_PREVIOUS_RUN', 'message' => 'There is no earlier approved run to compare with, so every entry is listed as new.'];

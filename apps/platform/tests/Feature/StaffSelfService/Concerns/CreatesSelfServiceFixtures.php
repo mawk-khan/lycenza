@@ -91,7 +91,7 @@ trait CreatesSelfServiceFixtures
             }
             $runs->calculate($run, $runManager);
             if (in_array($finalStatus, ['approved', 'posted'], true)) {
-                $runs->approve($run->refresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->refresh()));
+                $runs->approve($run->refresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->refresh()), app(PayrollRunService::class)->latestAttributionVersion($run->refresh()));
             }
             if ($finalStatus === 'posted') {
                 app(PayrollPostingAdministrationService::class)->post($run->refresh(), $poster, $this->freshMfaProofFor($poster));

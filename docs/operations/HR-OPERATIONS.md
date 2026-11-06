@@ -136,3 +136,20 @@ names a checker, every calculated run waits.
 
 **Rolling back HR.R1-C1:** its migration refuses once any calculation has
 recorded compensation provenance. Fix forward.
+
+## 9. Payroll reversal and approval (HR.R1-C3)
+
+- **"This payroll run changed after you reviewed it."** A reversal or another
+  run's approval changed which compensation this run pays first. The figures
+  have not changed, so do not recalculate. Open the review again, read the
+  compensation changes it now lists, and approve from there.
+- **The run compared with here was reversed.** The review still compares with
+  the previous approved run, and the warning says those figures no longer stand.
+- **After a reversal, the next run's approver may change.** The author of a
+  compensation change the reversed run paid cannot approve the next run that
+  pays it, so name another checker (section 8) before the run is due.
+- **A reversal is brief but School-wide.** Approvals and calculations of that
+  School wait for it to commit.
+- **Before any migration rollback** on a role without `BYPASSRLS`, read PAY-15 in
+  `docs/hr/HR-R1-CLOSURE-CONTRACT.md`: a rollback guard may not see the rows it
+  protects there.

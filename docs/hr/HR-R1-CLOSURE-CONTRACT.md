@@ -69,9 +69,9 @@ Timetable substitution, Analytics (headcount, rates).
 
 | Id | Severity | Finding | Status |
 |---|---|---|---|
-| PAY-13 | MEDIUM | A reversed posted run still counts as having paid a compensation change: `reverse()` leaves the run `posted`, so `payroll_run_first_paid_compensation` excludes the change from the next run and its author may approve that run. The review packet does not list it. No test covers reversal. | OPEN |
-| PAY-14 | LOW | The runtime role can change `assigned_by_user_id` or `salary_structure_id` on a compensation assignment: no trigger freezes them, so raw SQL could defeat author exclusion or reprice unseen. No application path. | OPEN |
-| PAY-15 | LOW, conditional | The HR.R1-C1 `down()` guard reads FORCE-RLS tables with no tenant context. If a production migration role lacks BYPASSRLS, it could see no rows and drop provenance. Not exercised. | OPEN |
+| PAY-13 | MEDIUM | (corrected by HR.R1-C3, see below) A reversed posted run still counts as having paid a compensation change: `reverse()` leaves the run `posted`, so `payroll_run_first_paid_compensation` excludes the change from the next run and its author may approve that run. The review packet does not list it. No test covers reversal. | CLOSED for development (HR.R1-C3) |
+| PAY-14 | LOW | The runtime role can change `assigned_by_user_id` or `salary_structure_id` on a compensation assignment: no trigger freezes them, so raw SQL could defeat author exclusion or reprice unseen. No application path. | CLOSED for development (HR.R1-C3: `trg_employee_compensation_assignments_identity`) |
+| PAY-15 | LOW, conditional | The HR.R1-C1 `down()` guard reads FORCE-RLS tables with no tenant context. If a production migration role lacks BYPASSRLS, it could see no rows and drop provenance. Not exercised. | OPEN, condition confirmed by HR.R1-C3 (see below) |
 
 ## 4. Output
 
@@ -80,3 +80,17 @@ Timetable substitution, Analytics (headcount, rates).
 - Rule for the verdict:
   - any BLOCKER or MAJOR finding means **not closed**;
   - corrections are their own published units, then HR.R1 is re-run.
+
+**Evidence recorded (HR.R1-C3, 2026-11-06):** PAY-13 reproduced against `a5370575` (after the paying run's reversal the next run's author set was empty, so the author approved it) and CLOSED for development: `payroll_run_first_paid_compensation` no longer counts a reversed run or one its author approved, a reversal takes the compensation lock exclusively, and an approval names the reviewed attribution (ADR 0034 items 11-13, `docs/modules/PAYROLL.md`). PAY-14 CLOSED for development. PAY-15 stays OPEN. HR.R1 remains OPEN.
+
+**PAY-15 evidence (2026-11-06).** The condition holds: `infrastructure/postgres/production-bootstrap.sql` creates the migration role `NOSUPERUSER NOBYPASSRLS`, and these tables use FORCE ROW LEVEL SECURITY, so a `down()` guard with no tenant context reads no rows on that role and would let the rollback proceed. It is safe locally only because DDEV's and Docker's migration role is a superuser. Reasoned from the bootstrap and the policies, not executed on such a role. The pattern is not confined to HR.R1-C1: 32 migrations carry a "refusing to roll back" guard (30 `exists()` calls, not individually assessed). No staging or production database exists, so nothing is exposed today, but this must be resolved before any rollback on such a role.
+
+### Findings registered from the HR.R1-C2 review (2026-11-06)
+
+Registered, not implemented. Severity is the reviewer's.
+
+| Finding | Evidence and confidence | Severity | Domain, owner | Reproduction needed | Recommended checkpoint | Acceptance | HR.R1 impact |
+|---|---|---|---|---|---|---|---|
+| Placement guard scope | Static review of `a5370575`, confirmed by reading: `trg_employee_assignments_never_effective` does not fire on `employment_record_id`, and `is_primary` on a never-effective placement is refused only in the service. High confidence. | LOW | HR workforce, HR architecture owner | A runtime-role UPDATE of each column on a never-effective or open placement | A lifecycle hardening slice | Both refused by the database for the runtime role; `DatabaseRoleVerifier` column pin updated | Open backstop gap; no application path |
+| Leave credit netting | Static review, confirmed by reading: `LeaveSeparationObligations` sums debit adjustments only, so a later credit naming the same accrual still reads clear. High confidence. | LOW | Leave, Leave owner | A debit then a credit naming the same accrual | With LVA or R-HR10-1 work | The obligation nets through the one sign convention (`LeaveLedgerEntry::signedUnitsSql()`, rule 134) | Misleads a reviewer; the state never blocks completion |
+| Possible reporting-line deadlock | Reviewer's static trace only: `ReportingLine::resolve()` locks the line, then the manager's employment, while `end()` holds that employment and waits on the line in `closeForEmploymentEnd()`. NOT reproduced and NOT confirmed. `TaskAuthority` has the same shape. Low to medium confidence. | LOW, unverified | HR reporting, HR architecture owner | A two-process race of a non-manager leave decision against the manager's employment end | Reproduction first, in a lifecycle slice | Reproduced and ordered, or recorded as not reachable | None until reproduced |

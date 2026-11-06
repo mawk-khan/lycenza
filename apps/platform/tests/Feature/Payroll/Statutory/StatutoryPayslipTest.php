@@ -124,7 +124,7 @@ class StatutoryPayslipTest extends TestCase
         app(StatutoryPayrollCalculationService::class)->calculateForRun($run, $preparer);
 
         $approver = $this->createUser();
-        $run = $runService->approve($run->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+        $run = $runService->approve($run->fresh(), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run->fresh()), app(PayrollRunService::class)->latestAttributionVersion($run->fresh()));
 
         return ['run' => $run, 'employmentRecordId' => $employmentRecord->id, 'actor' => $preparer];
     }

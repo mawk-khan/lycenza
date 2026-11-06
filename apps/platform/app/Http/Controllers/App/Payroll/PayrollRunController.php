@@ -185,10 +185,10 @@ class PayrollRunController extends Controller
         // OD-HR-1: approving also needs the sensitive view, and names the calculation that was reviewed.
         $this->authorizeCapability('payroll.runs.approve', $school);
         $this->authorizeCapability(PayrollApprovalReviewService::SENSITIVE_VIEW, $school);
-        $validated = $request->validate(['calculation_id' => ['required', 'uuid']]);
+        $validated = $request->validate(['calculation_id' => ['required', 'uuid'], 'attribution_version' => ['required', 'string', 'size:64']]);
         $proof = $mfa->requireForAction($request, $context->actor());
         try {
-            $service->approve($run, $context->actor(), $proof, $validated['calculation_id']);
+            $service->approve($run, $context->actor(), $proof, $validated['calculation_id'], $validated['attribution_version']);
         } catch (PayrollException $e) {
             // A domain refusal (stale review, participant, not approvable) is shown on the review, by its fixed message.
             throw ValidationException::withMessages(['payroll' => $e->getMessage()]);

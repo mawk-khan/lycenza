@@ -79,7 +79,7 @@ class PayrollRunApprovalTest extends TestCase
         [$run, $preparer] = $context->withSchool($school, fn () => $this->makeCalculatedRun($school));
         $approver = $this->createUser();
 
-        $approved = $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run)));
+        $approved = $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
 
         $this->assertSame('approved', $approved->status);
         $this->assertSame($approver->id, $approved->approved_by_user_id);
@@ -98,7 +98,7 @@ class PayrollRunApprovalTest extends TestCase
 
         $this->expectException(InvalidRunTransitionException::class);
 
-        $context->withSchool($school, fn () => $this->runService()->approve($run, $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run)));
+        $context->withSchool($school, fn () => $this->runService()->approve($run, $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     #[Test]
@@ -110,7 +110,7 @@ class PayrollRunApprovalTest extends TestCase
 
         $this->expectException(SelfApprovalNotAllowedException::class);
 
-        $context->withSchool($school, fn () => $this->runService()->approve($run, $preparer, $this->freshMfaProofFor($preparer), app(PayrollRunService::class)->latestCalculationId($run)));
+        $context->withSchool($school, fn () => $this->runService()->approve($run, $preparer, $this->freshMfaProofFor($preparer), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     #[Test]
@@ -121,11 +121,11 @@ class PayrollRunApprovalTest extends TestCase
         [$run] = $context->withSchool($school, fn () => $this->makeCalculatedRun($school));
         $approver = $this->createUser();
 
-        $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run)));
+        $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
 
         $this->expectException(InvalidRunTransitionException::class);
 
-        $context->withSchool($school, fn () => $this->runService()->approve($run->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run->fresh())));
+        $context->withSchool($school, fn () => $this->runService()->approve($run->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run->fresh()), app(PayrollRunService::class)->latestAttributionVersion($run->fresh())));
     }
 
     #[Test]
@@ -136,7 +136,7 @@ class PayrollRunApprovalTest extends TestCase
         [$run] = $context->withSchool($school, fn () => $this->makeCalculatedRun($school));
         $approver = $this->createUser();
 
-        $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run)));
+        $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
 
         $this->expectException(RunNotEditableException::class);
 
@@ -151,7 +151,7 @@ class PayrollRunApprovalTest extends TestCase
         [$run] = $context->withSchool($school, fn () => $this->makeCalculatedRun($school));
         $approver = $this->createUser();
 
-        $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run)));
+        $context->withSchool($school, fn () => $this->runService()->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
 
         $event = $context->withSchool(
             $school,

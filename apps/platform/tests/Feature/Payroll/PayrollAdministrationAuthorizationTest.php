@@ -240,7 +240,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
             $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
-            return $runService->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
+            return $runService->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run));
         });
 
         $this->assertSame('approved', $run->status);
@@ -271,7 +271,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer, $this->freshMfaProofFor($viewer), app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer, $this->freshMfaProofFor($viewer), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     /**
@@ -316,7 +316,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor, $this->freshMfaProofFor($prepareOnlyActor), app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor, $this->freshMfaProofFor($prepareOnlyActor), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     #[Test]
@@ -371,7 +371,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
         // this, since they themselves prepared this exact run.
         $this->expectException(SelfApprovalNotAllowedException::class);
 
-        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities, $this->freshMfaProofFor($bothCapabilities), app(PayrollRunService::class)->latestCalculationId($run)));
+        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities, $this->freshMfaProofFor($bothCapabilities), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run)));
     }
 
     /**
@@ -405,7 +405,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
 
             $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
-            return $runService->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run));
+            return $runService->approve($run, $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run));
         });
 
         $poster = $this->createUserWithCapabilities($f['school'], ['payroll.runs.post', 'payroll.runs.reverse']);

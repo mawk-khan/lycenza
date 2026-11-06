@@ -193,9 +193,9 @@ class SensitiveActionMfaTest extends TestCase
         $checker = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.runs.post', 'payroll.runs.reverse', 'payroll.compensation.sensitive.view', 'payroll.runs.view']);
         $checkerToken = $this->mfaToken($checker);
         // OD-HR-1: the approval names the calculation the checker reviewed (read from the review itself).
-        $reviewed = $this->bearer($checkerToken)->getJson("{$api}/payroll-runs/{$run}/review")->assertOk()->json('data.calculation.id');
+        $review = $this->bearer($checkerToken)->getJson("{$api}/payroll-runs/{$run}/review")->assertOk()->json('data.calculation');
         foreach (['approve' => 200, 'post' => 201, 'reverse' => 201] as $action => $status) {
-            $body = $action === 'approve' ? ['calculation_id' => $reviewed] : [];
+            $body = $action === 'approve' ? ['calculation_id' => $review['id'], 'attribution_version' => $review['attributionVersion']] : [];
             $this->bearer($checkerToken)->withHeader('Idempotency-Key', "sr4-{$action}-bare")->postJson("{$api}/payroll-runs/{$run}/{$action}", $body)
                 ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['mfa_code']]]);
             $this->bearer($checkerToken)->withHeader('Idempotency-Key', "sr4-checker-{$action}")->postJson("{$api}/payroll-runs/{$run}/{$action}", $body + $this->mfaBody($checkerToken))

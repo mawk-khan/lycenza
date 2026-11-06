@@ -109,7 +109,7 @@ class PayrollApprovalReviewTest extends TestCase
 
     private function approve(User $as, ?string $calculationId): PayrollRun
     {
-        return $this->inSchool($this->school, fn () => app(PayrollRunAdministrationService::class)->approve($this->run->fresh(), $as, $this->freshMfaProofFor($as), $calculationId));
+        return $this->inSchool($this->school, fn () => app(PayrollRunAdministrationService::class)->approve($this->run->fresh(), $as, $this->freshMfaProofFor($as), $calculationId, app(PayrollRunService::class)->latestAttributionVersion($this->run->fresh())));
     }
 
     #[Test]
@@ -129,7 +129,7 @@ class PayrollApprovalReviewTest extends TestCase
         // HR.R1-C1: September's calculation predates the change of its period -- stale until recalculated.
         $this->assertContains('PAYROLL_RUN_RECALCULATION_REQUIRED', array_column($this->packet()['blocking'], 'code'));
         try {
-            $this->approve($this->people['checker'], app(PayrollRunService::class)->latestCalculationId($this->run));
+            $this->approve($this->people['checker'], app(PayrollRunService::class)->latestCalculationId($this->run), app(PayrollRunService::class)->latestAttributionVersion($this->run));
             $this->fail('a calculation overtaken by a compensation change of its period was approved');
         } catch (RunRecalculationRequiredException) {
             $this->inSchool($this->school, fn () => app(PayrollRunService::class)->calculate($this->run->fresh(), $this->people['preparer']));
@@ -140,7 +140,7 @@ class PayrollApprovalReviewTest extends TestCase
         $this->assertSame(3, $this->packet()['compensation']->total(), 'the checker sees the change too');
         $this->assertContains('PAYROLL_SELF_APPROVAL', array_column($this->packet($early)['blocking'], 'code'));
         try {
-            $this->approve($early, app(PayrollRunService::class)->latestCalculationId($this->run));
+            $this->approve($early, app(PayrollRunService::class)->latestCalculationId($this->run), app(PayrollRunService::class)->latestAttributionVersion($this->run));
             $this->fail('a compensation author approved the run that pays the change');
         } catch (SelfApprovalNotAllowedException) {
             $this->assertSame('calculated', $this->inSchool($this->school, fn () => DB::table('payroll_runs')->where('id', $this->run->id)->value('status')));
@@ -293,7 +293,7 @@ class PayrollApprovalReviewTest extends TestCase
 
         $this->withToken($token)->withHeader('Idempotency-Key', 'odhr1-missing')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", $this->mfaBody($token))
             ->assertStatus(422)->assertJsonPath('error.errors.calculation_id.0', 'The calculation id field is required.');
-        $this->withToken($token)->withHeader('Idempotency-Key', 'odhr1-ok')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $review['calculation']['id']])
+        $this->withToken($token)->withHeader('Idempotency-Key', 'odhr1-ok')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $review['calculation']['id'], 'attribution_version' => $review['calculation']['attributionVersion']])
             ->assertOk()->assertJsonPath('data.status', 'approved');
     }
 
@@ -308,17 +308,17 @@ class PayrollApprovalReviewTest extends TestCase
 
         // Forged run id under the outsider's own School: the run is not found there.
         $this->withToken($token)->getJson("/api/v1/schools/{$other->id}/payroll-runs/{$this->run->id}/review")->assertNotFound();
-        $this->withToken($token)->withHeader('Idempotency-Key', 'pay11-own')->postJson("/api/v1/schools/{$other->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $calc])->assertNotFound();
+        $this->withToken($token)->withHeader('Idempotency-Key', 'pay11-own')->postJson("/api/v1/schools/{$other->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $calc, 'attribution_version' => str_repeat('a', 64)])->assertNotFound();
         // Forged School id: no membership there, so nothing is answered.
         // (the private not-found / forbidden contract: never the packet, never a decision)
         $this->assertContains($this->withToken($token)->getJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/review")->status(), [403, 404]);
-        $this->assertContains($this->withToken($token)->withHeader('Idempotency-Key', 'pay11-forged')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $calc])->status(), [403, 404]);
+        $this->assertContains($this->withToken($token)->withHeader('Idempotency-Key', 'pay11-forged')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($token), 'calculation_id' => $calc, 'attribution_version' => str_repeat('a', 64)])->status(), [403, 404]);
 
         // The School's own checker naming another run's calculation is a stale review, never an approval.
         $this->app['auth']->forgetGuards(); // the test client otherwise keeps the outsider's resolved token
         $checker = $this->people['checker'];
         $own = $this->mfaToken($checker);
-        $this->withToken($own)->withHeader('Idempotency-Key', 'pay11-wrong-calc')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($own), 'calculation_id' => (string) Str::uuid7()])
+        $this->withToken($own)->withHeader('Idempotency-Key', 'pay11-wrong-calc')->postJson("/api/v1/schools/{$this->school->id}/payroll-runs/{$this->run->id}/approve", [...$this->mfaBody($own), 'calculation_id' => (string) Str::uuid7(), 'attribution_version' => str_repeat('a', 64)])
             ->assertStatus(409)->assertJsonPath('error.code', 'PAYROLL_REVIEW_STALE');
         $this->assertSame(['calculated', null], $this->inSchool($this->school, fn () => array_values((array) DB::table('payroll_runs')->where('id', $this->run->id)->first(['status', 'approved_calculation_id']))));
     }

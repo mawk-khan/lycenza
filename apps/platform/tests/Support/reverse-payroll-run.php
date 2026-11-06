@@ -8,6 +8,7 @@ use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for PayrollPostingConcurrencyTest: run in
 // a GENUINELY separate OS process (via Symfony\Process::start(),
@@ -33,7 +34,8 @@ $context->set($school);
 try {
     $run = PayrollRun::query()->findOrFail($runId);
     $actor = User::query()->findOrFail($actorUserId);
-    $reversal = $app->make(PayrollPostingService::class)->reverse($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), 'concurrency test reversal');
+    // HR.R1-C3: HeldTransaction lets a race hold this reversal uncommitted (no-op otherwise).
+    $reversal = HeldTransaction::run(fn () => $app->make(PayrollPostingService::class)->reverse($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), 'concurrency test reversal'));
     echo 'reversed:'.$reversal->journal_entry_id;
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

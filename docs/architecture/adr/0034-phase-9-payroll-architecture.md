@@ -335,3 +335,21 @@ author approving the next run, which first paid the change. Amended:
    current capability under the run lock (S-5, S-13).
 10. A regular run is compared with the latest approved or posted REGULAR run
     of an earlier period (PAY-1); a correction run with the run it corrects.
+11. **HR.R1-C3 (PAY-13).** A qualifying first-paid predecessor is another
+    regular run, approved or posted, whose approved calculation priced the
+    assignment on `structure` basis, that has not been reversed (its `reversal`
+    posting, because status never changes) and that someone other than the
+    change's author approved. The rule stays in
+    `payroll_run_first_paid_compensation`. History is never rewritten and a
+    decision already taken stands. Comparison (item 10) is a separate question
+    and keeps its baseline, with a warning.
+12. **HR.R1-C3.** A reversal takes the School's compensation lock exclusively,
+    so approval and calculation (shared) are ordered wholly before or after it
+    with no run-to-run lock. An approval also names the reviewed first-paid
+    attribution (`attributionVersion`); a mismatch is `PAYROLL_REVIEW_STALE`.
+    Rejected: forcing a recalculation (the figures are unchanged, and it would
+    misreport the cause); locking the other run (a lock cycle); relying on the
+    approval-time participant check alone (it never tells an eligible checker
+    that their packet omitted a change).
+13. **HR.R1-C3 (PAY-14).** An assignment's author, structure, employment and
+    start are database-frozen for the runtime role.

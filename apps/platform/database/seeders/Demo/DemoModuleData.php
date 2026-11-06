@@ -651,7 +651,7 @@ final class DemoModuleData
         $runs->calculate($augustRun, $preparer);
         $augustFresh = $d->inSchool(fn () => $augustRun->fresh());
         // OD-HR-1: an approval names the calculation it reviewed.
-        $augustRun = $runs->approve($augustFresh, $d->admin, $this->demoAssurance($d->admin), (string) $runs->latestCalculationId($augustFresh));
+        $augustRun = $runs->approve($augustFresh, $d->admin, $this->demoAssurance($d->admin), (string) $runs->latestCalculationId($augustFresh), $runs->latestAttributionVersion($augustFresh));
         // HR.R1-C1 (S-13): posted by the School Admin, who holds payroll.runs.post (the posting core now checks it).
         app(PayrollPostingService::class)->post($augustRun, $d->admin, $this->demoAssurance($d->admin));
 

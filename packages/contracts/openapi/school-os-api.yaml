@@ -9776,7 +9776,10 @@ paths:
         required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
         OD-HR-1: also needs payroll.compensation.sensitive.view, and names the
         calculation reviewed (`calculation_id`, from the review); a run
-        recalculated since is refused PAYROLL_REVIEW_STALE (409).
+        recalculated since is refused PAYROLL_REVIEW_STALE (409). HR.R1-C3:
+        also names `attribution_version`, from the same review; a reversal or
+        another approval that changed what this run pays first since then is
+        refused PAYROLL_REVIEW_STALE (409).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
@@ -18185,9 +18188,10 @@ components:
       allOf:
         - { $ref: "#/components/schemas/StepUpMfaCode" }
         - type: object
-          required: [calculation_id]
+          required: [calculation_id, attribution_version]
           properties:
             calculation_id: { type: string, format: uuid, description: "OD-HR-1: the calculation the checker reviewed (review.calculation.id)." }
+            attribution_version: { type: string, minLength: 64, maxLength: 64, description: "HR.R1-C3: the first-paid attribution the checker reviewed (review.calculation.attributionVersion)." }
     PayrollReviewAmounts:
       type: object
       required: [gross, deductions, net]
@@ -18212,9 +18216,10 @@ components:
         calculation:
           type: object
           nullable: true
-          required: [id, ordinal, complete, adjustmentCount]
+          required: [id, attributionVersion, ordinal, complete, adjustmentCount]
           properties:
             id: { type: string, format: uuid }
+            attributionVersion: { type: string, description: "HR.R1-C3: the first-paid attribution of this calculation; an approval names it." }
             ordinal: { type: integer }
             calculatedAt: { type: string, format: date-time, nullable: true }
             calculatedBy: { type: string, nullable: true }

@@ -4392,7 +4392,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). OD-HR-1: also needs payroll.compensation.sensitive.view, and names the calculation reviewed (`calculation_id`, from the review); a run recalculated since is refused PAYROLL_REVIEW_STALE (409). */
+        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). OD-HR-1: also needs payroll.compensation.sensitive.view, and names the calculation reviewed (`calculation_id`, from the review); a run recalculated since is refused PAYROLL_REVIEW_STALE (409). HR.R1-C3: also names `attribution_version`, from the same review; a reversal or another approval that changed what this run pays first since then is refused PAYROLL_REVIEW_STALE (409). */
         post: operations["approvePayrollRun"];
         delete?: never;
         options?: never;
@@ -9438,6 +9438,8 @@ export interface components {
              * @description OD-HR-1: the calculation the checker reviewed (review.calculation.id).
              */
             calculation_id: string;
+            /** @description HR.R1-C3: the first-paid attribution the checker reviewed (review.calculation.attributionVersion). */
+            attribution_version: string;
         };
         PayrollReviewAmounts: {
             /** @description Decimal, 2 places. */
@@ -9461,6 +9463,8 @@ export interface components {
             calculation: {
                 /** Format: uuid */
                 id: string;
+                /** @description HR.R1-C3: the first-paid attribution of this calculation; an approval names it. */
+                attributionVersion: string;
                 ordinal: number;
                 /** Format: date-time */
                 calculatedAt?: string | null;

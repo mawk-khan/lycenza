@@ -20,11 +20,14 @@ use Illuminate\Support\Facades\DB;
  *   whole period, or every assignment of a period that changed, which a
  *   manual override prices).
  * - A run PAYS an assignment when its approved (or, before approval, latest)
- *   calculation recorded it. It pays it FIRST when no other approved or
- *   posted regular run's approved calculation recorded it. The author of a
- *   change the run pays first is one of the run's makers -- whenever the
- *   change was recorded and whenever it took effect. A run that pays a change
- *   another independent checker already approved does not re-attribute it.
+ *   calculation recorded it. It pays it FIRST when no QUALIFYING run already
+ *   did: another regular run, approved or posted, whose approved calculation
+ *   priced it, that has not been reversed (HR.R1-C3; the run's status never
+ *   shows this, ADR 0034) and that someone other than the change's author
+ *   approved. The author of a change the run pays first is one of the run's
+ *   makers -- whenever the change was recorded and whenever it took effect. A
+ *   run that pays a change another independent checker already approved, and
+ *   whose approval still stands, does not re-attribute it.
  * - A calculation is FRESH while the compensation overlapping its period is
  *   exactly what it recorded. A compensation change of the period recorded
  *   after the calculation (or a calculation that recorded nothing, i.e. made
@@ -37,8 +40,11 @@ use Illuminate\Support\Facades\DB;
  * backstop cannot drift apart.
  *
  * Serialization: `lock()` takes the School's compensation lock -- SHARED by a
- * calculation or an approval, EXCLUSIVE by a compensation write (also taken
- * by the assignment trigger). Taken after the run row lock, before any other.
+ * calculation or an approval, EXCLUSIVE by a compensation write or a reversal
+ * (also taken by their triggers). Taken after the run row lock, before any
+ * other. A reversal changes another run's first-paid set, and this one lock
+ * orders it against that run's approval with no run-to-run lock, so there is
+ * no lock cycle.
  */
 final class PayrollCompensationProvenance
 {
@@ -99,6 +105,26 @@ final class PayrollCompensationProvenance
         }
 
         return (bool) DB::selectOne('SELECT payroll_calculation_compensation_fresh(?, ?, ?) AS fresh', [$run->school_id, $run->id, $calculationId])->fresh;
+    }
+
+    /**
+     * HR.R1-C3: a deterministic version of the run's first-paid set. A reversal
+     * (or another run's approval) changes that set without a new calculation,
+     * so the calculation id alone cannot tell a checker their packet is out of
+     * date. The review shows this value and the approval names it. `$run` is
+     * regular or the set is empty.
+     */
+    public function attributionVersion(PayrollRun $run, string $calculationId): string
+    {
+        if ($run->run_kind !== 'regular') {
+            return hash('sha256', '');
+        }
+
+        return (string) DB::selectOne(
+            "SELECT encode(sha256(convert_to(COALESCE(string_agg(f.compensation_assignment_id::text || ':' || COALESCE(f.assigned_by_user_id::text, ''), ',' ORDER BY f.compensation_assignment_id), ''), 'UTF8')), 'hex') AS version
+               FROM payroll_run_first_paid_compensation(?, ?, ?) f",
+            [$run->school_id, $run->id, $calculationId],
+        )->version;
     }
 
     /** The compensation changes the run pays first (`compensation_assignment_id`, `employment_record_id`, `assigned_by_user_id`, `basis`). */

@@ -47,8 +47,8 @@ try {
 
                 return 'overridden';
             })(),
-            'approve' => $runs->approve($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), app(PayrollRunService::class)->latestCalculationId($run))->status,
-            'approve-entry' => $app->make(PayrollRunAdministrationService::class)->approve($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), app(PayrollRunService::class)->latestCalculationId($run))->status,
+            'approve' => $runs->approve($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run))->status,
+            'approve-entry' => $app->make(PayrollRunAdministrationService::class)->approve($run, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run))->status,
             default => throw new InvalidArgumentException("Unknown operation {$operation}"),
         };
     });

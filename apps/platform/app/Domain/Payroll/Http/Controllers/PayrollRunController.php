@@ -129,11 +129,11 @@ class PayrollRunController extends Controller
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // OD-HR-1: the approval names the calculation the checker reviewed (GET .../review).
-        $validated = $request->validate(['calculation_id' => ['required', 'uuid']]);
+        $validated = $request->validate(['calculation_id' => ['required', 'uuid'], 'attribution_version' => ['required', 'string', 'size:64']]);
         // SR.4 (ADR 0071 §26.7): `mfa_code` re-verified now; a refusal is a
         // deterministic 422 for this Idempotency-Key (retry with a new key).
         $proof = $mfa->requireForAction($request, $request->user());
-        $run = $service->approve($run, $request->user(), $proof, $validated['calculation_id']);
+        $run = $service->approve($run, $request->user(), $proof, $validated['calculation_id'], $validated['attribution_version']);
 
         return response()->json(['data' => $this->present(PayrollRunSummary::fromModel($run))]);
     }

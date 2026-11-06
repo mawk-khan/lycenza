@@ -530,7 +530,7 @@ class PayrollRunService
      * results refused. The conditional UPDATE stays. `$mfa` is the fresh
      * code the transport verified, recorded as approval provenance.
      */
-    public function approve(PayrollRun $run, User $approver, FreshMfaProof $mfa, ?string $reviewedCalculationId): PayrollRun
+    public function approve(PayrollRun $run, User $approver, FreshMfaProof $mfa, ?string $reviewedCalculationId, ?string $reviewedAttribution): PayrollRun
     {
         $school = $run->school;
 
@@ -542,8 +542,8 @@ class PayrollRunService
             throw new LogicException('The fresh MFA proof belongs to another User.');
         }
 
-        return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa, $reviewedCalculationId) {
-            return DB::transaction(function () use ($school, $run, $approver, $mfa, $reviewedCalculationId) {
+        return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa, $reviewedCalculationId, $reviewedAttribution) {
+            return DB::transaction(function () use ($school, $run, $approver, $mfa, $reviewedCalculationId, $reviewedAttribution) {
                 // ORG.8B: the run row is locked, so no calculation or adjustment (both lock it) can change
                 // the participants or the results between this decision and its commit.
                 $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
@@ -559,6 +559,12 @@ class PayrollRunService
                 // payroll_runs_approval_evidence_guard).
                 $latest = PayrollRunCalculation::query()->where('school_id', $locked->school_id)->where('payroll_run_id', $locked->id)->orderByDesc('ordinal')->value('id');
                 if ($latest === null || $reviewedCalculationId === null || strtolower((string) $latest) !== strtolower($reviewedCalculationId)) {
+                    throw new StaleRunReviewException($run->id);
+                }
+                // HR.R1-C3 (PAY-13): a reversal changes which compensation this run pays first without a new
+                // calculation. Under the shared compensation lock, so no reversal can pass between this and the commit.
+                $attribution = $this->provenance->attributionVersion($locked, (string) $latest);
+                if ($reviewedAttribution === null || ! hash_equals($attribution, $reviewedAttribution)) {
                     throw new StaleRunReviewException($run->id);
                 }
 
@@ -579,6 +585,7 @@ class PayrollRunService
                 $this->audit->school($school, 'payroll.run.approved', actor: $approver, subject: $run, metadata: [
                     'preparedByUserId' => $run->prepared_by_user_id,
                     'approvedCalculationId' => $latest,
+                    'attributionVersion' => $attribution,
                     ...ApprovalProvenance::metadata($participants, ApprovalProvenance::APPROVED, $approver, 'school', $mfa),
                 ]);
 
@@ -598,6 +605,16 @@ class PayrollRunService
     {
         return $this->context->withSchool($run->school, fn (): ?string => PayrollRunCalculation::query()->where('school_id', $run->school_id)
             ->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->value('id'));
+    }
+
+    /** HR.R1-C3: the version of the first-paid set of the run's latest calculation, which an approval names. */
+    public function latestAttributionVersion(PayrollRun $run): ?string
+    {
+        return $this->context->withSchool($run->school, function () use ($run): ?string {
+            $latest = $this->latestCalculationId($run);
+
+            return $latest === null ? null : $this->provenance->attributionVersion($run, $latest);
+        });
     }
 
     /**

@@ -101,6 +101,7 @@ class PayrollPostingService
         private readonly TenantContext $context,
         private readonly IdempotencyGuard $idempotency,
         private readonly ApprovalDecisionAuthority $authority,
+        private readonly PayrollCompensationProvenance $provenance,
     ) {}
 
     /**
@@ -235,6 +236,9 @@ class PayrollPostingService
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                 // HR.R1-C1 (S-13): CURRENT payroll.runs.reverse, read fresh under the run lock.
                 $this->authority->requireCurrent($actor, 'payroll.runs.reverse', $school);
+                // HR.R1-C3 (PAY-13): a reversal changes which changes OTHER runs pay first. Exclusive, so every
+                // approval and calculation (shared) is ordered wholly before or after it (trigger-backed).
+                $this->provenance->lock($school->id, shared: false);
                 if ($locked->status !== 'posted') {
                     throw new PayrollRunNotPostedException($run->id, $locked->status);
                 }

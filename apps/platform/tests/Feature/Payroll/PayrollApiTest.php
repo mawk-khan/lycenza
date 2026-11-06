@@ -3,6 +3,8 @@
 namespace Tests\Feature\Payroll;
 
 use App\Domain\Finance\Infrastructure\LedgerAccount;
+use App\Domain\Payroll\Application\PayrollRunService;
+use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
@@ -135,7 +137,7 @@ class PayrollApiTest extends TestCase
 
         $this->actingWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view'])
             ->withHeader('Idempotency-Key', 'approve-key-001')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", [...$this->mfaBody(), 'calculation_id' => $this->latestCalculation($f['runId'], $f['school'])])
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", [...$this->mfaBody(), 'calculation_id' => $this->latestCalculation($f['runId'], $f['school']), 'attribution_version' => $this->latestAttribution($f['runId'], $f['school'])])
             ->assertOk()
             ->assertJsonPath('data.status', 'approved');
     }
@@ -182,7 +184,7 @@ class PayrollApiTest extends TestCase
 
         $approverToken = $this->authToken($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
         $this->as($approverToken)->withHeader('Idempotency-Key', 'payslip-http-approve-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", [...$this->mfaBody($approverToken), 'calculation_id' => $this->latestCalculation($f['runId'], $f['school'])])
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", [...$this->mfaBody($approverToken), 'calculation_id' => $this->latestCalculation($f['runId'], $f['school']), 'attribution_version' => $this->latestAttribution($f['runId'], $f['school'])])
             ->assertOk();
 
         $this->actingWithCapabilities($f['school'], ['payroll.runs.view'])
@@ -278,7 +280,7 @@ class PayrollApiTest extends TestCase
 
         $approverToken = $this->authToken($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
         $this->as($approverToken)->withHeader('Idempotency-Key', 'approve-run-key')
-            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/approve", [...$this->mfaBody($approverToken), 'calculation_id' => $this->latestCalculation($run, $school)])
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/approve", [...$this->mfaBody($approverToken), 'calculation_id' => $this->latestCalculation($run, $school), 'attribution_version' => $this->latestAttribution($run, $school)])
             ->assertOk()->assertJsonPath('data.status', 'approved');
 
         $posterToken = $this->authToken($school, ['payroll.runs.post', 'payroll.runs.reverse', 'payroll.compensation.sensitive.view']);
@@ -375,6 +377,11 @@ class PayrollApiTest extends TestCase
     }
 
     /** OD-HR-1: an approval names the run's latest calculation (what the review packet shows). */
+    private function latestAttribution(string $runId, School $school): ?string
+    {
+        return app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($runId)));
+    }
+
     private function latestCalculation(string $runId, School $school): ?string
     {
         return app(TenantContext::class)->withSchool($school, fn () => DB::table('payroll_run_calculations')->where('payroll_run_id', $runId)->orderByDesc('ordinal')->value('id'));

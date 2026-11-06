@@ -64,6 +64,8 @@ class PayrollIdempotencyTest extends TestCase
             $schoolId = preg_match('#/schools/([0-9a-f-]{36})/#', $url, $s) === 1 ? $s[1] : null;
             $body['calculation_id'] = app(TenantContext::class)->withSchool(School::query()->findOrFail($schoolId),
                 fn () => DB::table('payroll_run_calculations')->where('payroll_run_id', $m[1])->orderByDesc('ordinal')->value('id'));
+            $body['attribution_version'] = app(TenantContext::class)->withSchool(School::query()->findOrFail($schoolId),
+                fn () => app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($m[1])));
         }
 
         return $body;
@@ -153,7 +155,7 @@ class PayrollIdempotencyTest extends TestCase
         app(TenantContext::class)->withSchool($f['school'], function () use ($f) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
             $throwawayApprover = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
-            app(PayrollRunAdministrationService::class)->approve($run, $throwawayApprover, $this->freshMfaProofFor($throwawayApprover), app(PayrollRunService::class)->latestCalculationId($run));
+            app(PayrollRunAdministrationService::class)->approve($run, $throwawayApprover, $this->freshMfaProofFor($throwawayApprover), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run));
         });
 
         return $f;

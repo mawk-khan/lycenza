@@ -56,6 +56,7 @@ const props = defineProps<{
         };
         calculation: {
             id: string;
+            attributionVersion: string;
             ordinal: number;
             calculatedAt: string | null;
             calculatedBy: string | null;
@@ -146,7 +147,11 @@ function approve(): void {
     const scope = `payroll-approve-${props.review.run.id}`;
     router.post(
         `/app/payroll/runs/${props.review.run.id}/approve`,
-        { mfa_code: mfaCode.value, calculation_id: props.review.calculation.id },
+        {
+            mfa_code: mfaCode.value,
+            calculation_id: props.review.calculation.id,
+            attribution_version: props.review.calculation.attributionVersion,
+        },
         {
             headers: { 'Idempotency-Key': idempotencyKey(scope) },
             onSuccess: () => {
@@ -155,7 +160,12 @@ function approve(): void {
             },
             onError: (errors: Record<string, string>) => {
                 mfaError.value = errors.mfa_code ?? null;
-                refusal.value = errors.payroll ?? errors.calculation_id ?? errors.message ?? null;
+                refusal.value =
+                    errors.payroll ??
+                    errors.calculation_id ??
+                    errors.attribution_version ??
+                    errors.message ??
+                    null;
                 mfaCode.value = '';
             },
             onFinish: () => (approving.value = false),
@@ -238,7 +248,12 @@ function approve(): void {
 
         <section class="mt-6" aria-labelledby="review-totals">
             <h2 id="review-totals" class="text-sm font-semibold">Totals</h2>
-            <div class="relative mt-2 overflow-x-auto">
+            <div
+                class="relative mt-2 overflow-x-auto"
+                tabindex="0"
+                role="region"
+                aria-label="Totals (scrolls sideways on small screens)"
+            >
                 <table class="data-table w-full min-w-[32rem] text-sm">
                     <caption class="sr-only">
                         Run totals beside the previous approved run
@@ -295,7 +310,13 @@ function approve(): void {
             <p v-if="review.changes.total === 0" class="mt-1 text-sm text-ink-muted">
                 Nothing changed.
             </p>
-            <div v-else class="relative mt-2 overflow-x-auto">
+            <div
+                v-else
+                class="relative mt-2 overflow-x-auto"
+                tabindex="0"
+                role="region"
+                aria-label="Changes since the previous run (scrolls sideways on small screens)"
+            >
                 <table class="data-table w-full min-w-[40rem] text-sm">
                     <caption class="sr-only">
                         Entries whose pay differs from the previous approved run, page
@@ -366,7 +387,13 @@ function approve(): void {
             <p v-if="review.adjustments.total === 0" class="mt-1 text-sm text-ink-muted">
                 None recorded.
             </p>
-            <div v-else class="relative mt-2 overflow-x-auto">
+            <div
+                v-else
+                class="relative mt-2 overflow-x-auto"
+                tabindex="0"
+                role="region"
+                aria-label="Overrides and corrections (scrolls sideways on small screens)"
+            >
                 <table class="data-table w-full min-w-[44rem] text-sm">
                     <caption class="sr-only">
                         Manual overrides and correction deltas of this run
@@ -440,7 +467,13 @@ function approve(): void {
             <p v-if="review.compensation.total === 0" class="mt-1 text-sm text-ink-muted">
                 None recorded.
             </p>
-            <div v-else class="relative mt-2 overflow-x-auto">
+            <div
+                v-else
+                class="relative mt-2 overflow-x-auto"
+                tabindex="0"
+                role="region"
+                aria-label="Compensation changes this run pays first (scrolls sideways on small screens)"
+            >
                 <table class="data-table w-full min-w-[40rem] text-sm">
                     <caption class="sr-only">
                         Compensation changes this run pays first

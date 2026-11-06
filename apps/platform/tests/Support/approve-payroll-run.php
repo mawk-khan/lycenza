@@ -27,7 +27,7 @@ $kernel->bootstrap();
 
 // OD-HR-1: an optional 4th argument names the calculation the approver REVIEWED; without it the
 // approver names the latest one at start-up.
-[, $schoolId, $runId, $approverUserId, $reviewed] = array_pad($argv, 5, null);
+[, $schoolId, $runId, $approverUserId, $reviewed, $attribution] = array_pad($argv, 6, null);
 
 $context = $app->make(TenantContext::class);
 $school = School::query()->findOrFail($schoolId);
@@ -37,7 +37,9 @@ try {
     $run = PayrollRun::query()->findOrFail($runId);
     $approver = User::query()->findOrFail($approverUserId);
     $reviewed ??= $app->make(PayrollRunService::class)->latestCalculationId($run);
-    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver, new FreshMfaProof($approver->id, CarbonImmutable::now()), $reviewed));
+    // HR.R1-C3: likewise the first-paid attribution, read here, before any lock (the packet the approver saw).
+    $attribution ??= $app->make(PayrollRunService::class)->latestAttributionVersion($run);
+    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver, new FreshMfaProof($approver->id, CarbonImmutable::now()), $reviewed, $attribution));
     echo 'approved';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

@@ -106,7 +106,7 @@ class PayrollCorrectionRunTest extends TestCase
             $period = $this->periodService()->open($this->periodService()->createPeriod($school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
             $run = $this->runService()->createRun($period, $preparer);
             $this->runService()->calculate($run, $preparer);
-            $run = $this->runService()->approve($run->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run->fresh()));
+            $run = $this->runService()->approve($run->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($run->fresh()), app(PayrollRunService::class)->latestAttributionVersion($run->fresh()));
             $postedRun = $this->postingService()->post($run, $poster, $this->freshMfaProofFor($poster));
             $run = $run->fresh();
 
@@ -173,7 +173,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'test correction', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
@@ -238,7 +238,7 @@ class PayrollCorrectionRunTest extends TestCase
             );
             $outcome = $this->runService()->calculate($correction, $f['preparer']);
             $this->assertTrue($outcome->transitionedToCalculated);
-            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
@@ -266,7 +266,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'basic pay was overpaid', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
@@ -294,7 +294,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'PF was underwithheld', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
@@ -322,7 +322,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'PF was overwithheld', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });
@@ -377,7 +377,7 @@ class PayrollCorrectionRunTest extends TestCase
                 'basic increased, PF adjusted accordingly', $f['preparer'],
             );
             $this->runService()->calculate($correction, $f['preparer']);
-            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()));
+            $correction = $this->runService()->approve($correction->fresh(), $mfaActor = $this->createUser(), $this->freshMfaProofFor($mfaActor), app(PayrollRunService::class)->latestCalculationId($correction->fresh()), app(PayrollRunService::class)->latestAttributionVersion($correction->fresh()));
 
             return $this->postingService()->post($correction, $f['poster'], $this->freshMfaProofFor($f['poster']));
         });

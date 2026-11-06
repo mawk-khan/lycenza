@@ -152,7 +152,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
         $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         app(TenantContext::class)->withSchool($f['school'], function () use ($f, $approver) {
-            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
+            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])), app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($f['runId'])));
         });
 
         return $f + ['approver' => $approver];
@@ -229,7 +229,7 @@ class PayrollDomainEventsRollbackTest extends TestCase
 
     private function actApprove(array $ctx): void
     {
-        app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['approver'], $this->freshMfaProofFor($ctx['approver']), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($ctx['runId'])));
+        app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($ctx['runId']), $ctx['approver'], $this->freshMfaProofFor($ctx['approver']), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($ctx['runId'])), app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($ctx['runId'])));
     }
 
     private function arrangePost(): array

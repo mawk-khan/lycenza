@@ -1143,6 +1143,55 @@ review lists what changed, never the unchanged register.
   assignment is now (`trg_payroll_run_calculation_sources_guard`), so "already
   paid" can never be forged onto an approved run. Only WHO acted remains an application
   boundary (rule 102); every structural rule above is in PostgreSQL.
+- **Reversal never undermines attribution (HR.R1-C3, PAY-13).** A run's status
+  stays `posted` forever (ADR 0034); reversal is its `reversal` posting. A
+  change counts as already paid only by a QUALIFYING run: another regular run,
+  approved or posted, whose approved calculation priced the assignment on
+  `structure` basis, that has **not been reversed** and that someone **other
+  than the change's author** approved. Otherwise the run pays it first and the
+  author is a maker of that run.
+  - **One resolver.** All of this is `payroll_run_first_paid_compensation`, the
+    function the review packet, `participants()` and the approval guard already
+    share, so they cannot disagree.
+  - **"Paid" here means priced by a standing approved calculation.** It is not
+    a bank settlement fact, and Payroll holds no disbursement record.
+  - **History is untouched.** A reversed run keeps its status, approval,
+    calculation, sources and postings; the rule only stops it counting for later
+    decisions. A decision already taken stands.
+  - **Why the independence test exists.** With October standing, its author may
+    approve November. If October is then reversed, November must not stand in
+    for the independent approval the change no longer has, so December first
+    pays it. A later independent approval ends the attribution, so nobody is
+    barred for ever.
+  - **Order.** A reversal takes the School's compensation lock exclusively (in
+    the service and through `trg_payroll_run_postings_reversal_lock`); approval
+    and calculation hold it shared, after their run row. Each is ordered wholly
+    before or after the reversal, and no run locks another, so no cycle exists.
+  - **A reversal never forces a recalculation.** The figures have not changed,
+    so freshness is unaffected.
+  - **The packet can go stale without a new calculation.** The review shows
+    `calculation.attributionVersion`, a SHA-256 of the first-paid set computed
+    in SQL, and the approval must name it. If a reversal or another approval
+    changed the set since, the decision is refused `PAYROLL_REVIEW_STALE`. An
+    author is refused as a participant first, whatever the packet said. The
+    database re-checks eligibility; matching the version is an application check,
+    because the database cannot know what a person read.
+  - **Comparison (PAY-1) is a separate question.** The baseline stays the
+    previous approved or posted regular run even when reversed, and the packet
+    warns `PAYROLL_PREVIOUS_RUN_REVERSED`.
+  - **Corrections are not predecessors.** They are priced by deltas, and their
+    reversal changes no attribution. An approved correction never stands in for
+    a reversed original.
+  - **Limits.** A legacy approved run with no recorded calculation never
+    qualifies, so its author is attributed (fail closed); an authorless
+    assignment adds nobody and is reported, never guessed, and any independent
+    approver counts for it because no author can be compared. A decision taken
+    before a later reversal is not re-opened or flagged: an author's approval of
+    November stays valid history even after October is reversed.
+- **Compensation identity is frozen (PAY-14).** `trg_employee_compensation_assignments_identity`
+  refuses the runtime role a change to an assignment's author, structure,
+  employment or start. Closing it (`effective_to`) stays the ordinary write. Who
+  is recorded as author on INSERT remains the application boundary (rule 102).
 - **Service-level assurance (S-5, S-13).** Approve, post, reverse and
   compensation assignment require the acting User's own `FreshMfaProof` in
   the service itself (not only the route), and posting and reversal re-read
@@ -1180,6 +1229,22 @@ review lists what changed, never the unchanged register.
   it once. No approved performance target exists; proposed for owner
   approval: packet p95 under 1 s and approval under 1 s at 10,000 entries.
   The measurement script was a scratch test (not committed).
+- **Performance after HR.R1-C3 (measured 2026-11-06, local DDEV, one machine).**
+  Worst case for attribution: a reversed predecessor, so every entry is first
+  paid; 10 % of entries changed; `ANALYZE` run; 10 packets and 5 rolled-back
+  approvals per size.
+
+  | Entries | First-paid found | Queries / packet | Packet p50 | Packet p95 | Attribution version | Approval p50 |
+  |---:|---:|---:|---:|---:|---:|---:|
+  | 500 | 500 | 44 | 39 ms | 62 ms | 2 ms | 19 ms |
+  | 2,000 | 2,000 | 44 | 69 ms | 79 ms | 3 ms | 32 ms |
+  | 5,000 | 5,000 | 44 | 139 ms | 154 ms | 7 ms | 60 ms |
+  | 10,000 | 10,000 | 44 | 270 ms | 287 ms | 15 ms | 119 ms |
+
+  An approval issues 22 queries at every size. This is not comparable with the
+  PAY-12 table: that fixture differed, so the lower figures are not an
+  improvement. No target is approved. The script was a scratch test (not
+  committed).
 - **Not changed:** the calculation formulas, the posting state machine, the
   HRX evidence freeze, statutory payroll (ADR 0036 gates), exports (D-11), and
   there is still no rejection state. Residuals: an unchanged-but-wrong salary

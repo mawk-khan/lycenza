@@ -124,7 +124,7 @@ class PayrollDomainEventsTest extends TestCase
         $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve', 'payroll.compensation.sensitive.view']);
 
         $this->context()->withSchool($f['school'], function () use ($f, $approver) {
-            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])));
+            app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($f['runId']), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($f['runId'])), app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($f['runId'])));
         });
 
         return $f + ['approver' => $approver];
@@ -235,7 +235,7 @@ class PayrollDomainEventsTest extends TestCase
         $this->context()->withSchool($f['school'], function () use ($runId, $bothCapabilities) {
             $run = PayrollRun::query()->findOrFail($runId);
             try {
-                app(PayrollRunAdministrationService::class)->approve($run, $bothCapabilities, $this->freshMfaProofFor($bothCapabilities), app(PayrollRunService::class)->latestCalculationId($run));
+                app(PayrollRunAdministrationService::class)->approve($run, $bothCapabilities, $this->freshMfaProofFor($bothCapabilities), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run));
                 $this->fail('Expected SelfApprovalNotAllowedException.');
             } catch (SelfApprovalNotAllowedException) {
                 // expected
@@ -254,7 +254,7 @@ class PayrollDomainEventsTest extends TestCase
         $this->context()->withSchool($f['school'], function () use ($f, $unauthorizedActor) {
             $run = PayrollRun::query()->findOrFail($f['runId']);
             try {
-                app(PayrollRunAdministrationService::class)->approve($run, $unauthorizedActor, $this->freshMfaProofFor($unauthorizedActor), app(PayrollRunService::class)->latestCalculationId($run));
+                app(PayrollRunAdministrationService::class)->approve($run, $unauthorizedActor, $this->freshMfaProofFor($unauthorizedActor), app(PayrollRunService::class)->latestCalculationId($run), app(PayrollRunService::class)->latestAttributionVersion($run));
                 $this->fail('Expected AuthorizationException.');
             } catch (AuthorizationException) {
                 // expected

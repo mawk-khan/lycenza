@@ -94,7 +94,7 @@ class PayrollCompensationIntegrityTest extends TestCase
             $runs = app(PayrollRunService::class);
             $fresh = $run->fresh();
 
-            return $runs->approve($fresh, $as, $this->freshMfaProofFor($as), $runs->latestCalculationId($fresh));
+            return $runs->approve($fresh, $as, $this->freshMfaProofFor($as), $runs->latestCalculationId($fresh), $runs->latestAttributionVersion($fresh));
         });
     }
 
