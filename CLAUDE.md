@@ -1961,3 +1961,4 @@ once several modules copy it.
      - **Published migrations are not rewritten** (ADR 0066 §15.1), so this protection lives in the runner.
      - **Everything but local and testing refuses** rollback, reset, refresh, fresh and wipe, judged on the real APP_ENV, never `--env` alone. A correction there is a forward migration or an approved restore.
      - **A guard that must be atomic with its DDL** lifts FORCE or locks first, as `2027_02_06_090000` does. Otherwise a concurrent write can land after the check. List every new guard in `docs/hr/PAY-15-ROLLBACK-GUARD-INVENTORY.md`.
+     - **A superuser run proves nothing about the real role.** `RollbackProductionShapeTest` installs, rolls back and reapplies the real schema as a non-superuser login role with `BYPASSRLS`. A migration that needs more than that role fails it; fix the migration, never the role.

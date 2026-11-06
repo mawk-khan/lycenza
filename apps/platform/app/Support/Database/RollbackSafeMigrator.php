@@ -62,7 +62,7 @@ class RollbackSafeMigrator extends Migrator
                 // No transaction would mean no SET LOCAL and no way back from a refusal.
                 throw new LogicException("{$name} rolls back outside a transaction: its safety cannot be established.");
             }
-            $role = $connection->selectOne('SELECT r.rolname AS name, r.rolsuper OR r.rolbypassrls AS sees_all FROM pg_roles r WHERE r.rolname = current_user');
+            $role = $connection->selectOne('SELECT r.rolsuper OR r.rolbypassrls AS sees_all FROM pg_roles r WHERE r.rolname = current_user');
             if ($role === null || ! $role->sees_all) {
                 $this->refuse($connection, $name, 'This role cannot see every row, because it has neither BYPASSRLS nor superuser.');
             }
@@ -84,7 +84,13 @@ class RollbackSafeMigrator extends Migrator
 
     private function refuse(Connection $connection, string $name, string $reason, ?\Throwable $previous = null): never
     {
-        Log::warning('migration.rollback_refused', ['migration' => $name, 'connection' => $connection->getName(), 'reason' => $reason]);
+        Log::warning('migration.rollback_refused', [
+            'migration' => $name,
+            'connection' => $connection->getName(),
+            'role' => $connection->getConfig('username'),
+            'environment' => app()->environment(),
+            'reason' => $reason,
+        ]);
 
         throw new RollbackRefusedException($name, $reason, $previous);
     }

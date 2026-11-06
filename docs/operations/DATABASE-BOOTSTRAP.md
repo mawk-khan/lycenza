@@ -119,8 +119,10 @@ Two migrations are deliberately irreversible, and their `down()` refuses:
 - `2026_12_01_090100_anchor_retention_eligibility_clocks`: the
   database-recorded retention anchors.
 
-`migrate:rollback` therefore stops at the fence. Rolling back past it would
-give the runtime role back the ability to manufacture retention eligibility.
+An ordinary `migrate:rollback` therefore stops at the fence. Rolling back past
+it would give the runtime role back the ability to manufacture retention
+eligibility. Only local and testing can run a rollback at all, and there
+`--path` with `--batch` runs one chosen `down()` without passing the fence.
 `migrate:fresh` on a disposable test or development database is unaffected
 (it drops tables and never runs `down()`).
 
@@ -177,8 +179,20 @@ To respond:
 4. Anywhere else, use a forward migration or an approved restore.
 
 A refusal says nothing about the data: the table may be empty. Its log line
-(`migration.rollback_refused`) carries the migration, connection and reason, never a
-row.
+(`migration.rollback_refused`) carries the migration, connection, role, environment and
+reason, never a row. The destructive DDL did not run, and the schema is as it was
+before that migration's `down()` started.
+
+**Which migrations roll back.** On a disposable database, as a role that sees every row:
+
+| Kind | Which | What happens |
+|---|---|---|
+| Rolls back | Any `down()` with no guard, or whose guard's condition is not met | Runs. A `down()` with no guard destroys what it drops: nothing consults the data |
+| Only when empty, or when no evidence exists | The guards in `docs/hr/PAY-15-ROLLBACK-GUARD-INVENTORY.md` | The guard decides for itself, with every row visible |
+| Never | `2026_12_01_090000`, `2026_12_01_090100` | Always refuses (Retention security fences) |
+
+Everywhere else there is no rollback: use a forward migration, or an approved restore
+for a true recovery event (`PRODUCTION-RELEASE.md`).
 
 **What this does not replace.** Rollback safety is not a backup. The restore drill
 (`BACKUP-AND-RESTORE.md`) is a separate prerequisite.

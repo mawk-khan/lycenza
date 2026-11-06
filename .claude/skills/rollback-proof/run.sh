@@ -61,9 +61,20 @@ echo "[rollback-proof] database current; the ${steps} migration(s) to prove (the
 printf '  %s\n' ${ran}
 
 dump >"${work}/before.sql"
-lyc_artisan "${root}" migrate:rollback --step="${steps}" --database=pgsql_admin --force | lyc_strip_ansi | grep -E 'DONE|FAIL|ERROR' || true
+# A refused rollback changes nothing, so its before and after dumps match: only the exit code tells it from a proof.
+if ! lyc_artisan "${root}" migrate:rollback --step="${steps}" --database=pgsql_admin --force >"${work}/rollback.log" 2>&1; then
+  lyc_strip_ansi <"${work}/rollback.log" | tail -5 >&2
+  echo "[rollback-proof] the rollback FAILED or was refused -- nothing is proven; see ${work}/rollback.log" >&2
+  exit 1
+fi
+lyc_strip_ansi <"${work}/rollback.log" | grep -E 'DONE|FAIL|ERROR' || true
 dump >"${work}/rolled-back.sql"
-lyc_artisan "${root}" migrate --database=pgsql_admin --force | lyc_strip_ansi | grep -E 'DONE|FAIL|ERROR' || true
+if ! lyc_artisan "${root}" migrate --database=pgsql_admin --force >"${work}/migrate.log" 2>&1; then
+  lyc_strip_ansi <"${work}/migrate.log" | tail -5 >&2
+  echo "[rollback-proof] the re-apply FAILED -- see ${work}/migrate.log" >&2
+  exit 1
+fi
+lyc_strip_ansi <"${work}/migrate.log" | grep -E 'DONE|FAIL|ERROR' || true
 dump >"${work}/after.sql"
 
 removed="$(diff "${work}/before.sql" "${work}/rolled-back.sql" | grep -c '^<' || true)"

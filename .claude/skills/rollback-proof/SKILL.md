@@ -46,5 +46,12 @@ slice's.** The script prints them; stop if they are not. A migration whose
 `down()` deliberately throws (an irreversible fence, e.g. E21-RH.7) cannot be
 proven this way; say so instead.
 
+**A failed or refused rollback fails the proof.** The script checks both exit
+codes, because a refusal changes nothing and its dumps would otherwise match.
+
+**This runs as the local superuser.** The proof as a production-shaped role, not a
+superuser, is `tests/Feature/Postgres/RollbackProductionShapeTest` (HR.R1-C5), which
+the full suite runs on every candidate.
+
 **Afterwards** the test database is migrated but no longer freshly seeded.
 `/full-regression` (or `bin/safe-test --reset-db`) resets it.

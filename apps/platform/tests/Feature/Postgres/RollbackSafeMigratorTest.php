@@ -75,10 +75,14 @@ class RollbackSafeMigratorTest extends TestCase
     {
         $admin = DB::connection('pgsql_admin');
         $admin->table('migrations')->where('migration', 'like', '2099_%')->delete();
+        $admin->statement('DROP FUNCTION IF EXISTS c5_visible()');
         $admin->statement('DROP TABLE IF EXISTS c5_guarded, c5_second');
-        if ($admin->selectOne('select 1 as x from pg_roles where rolname = ?', [self::ROLE]) !== null) {
-            $admin->statement('DROP OWNED BY '.self::ROLE);
-            $admin->statement('DROP ROLE '.self::ROLE);
+        // A killed run can leave the definer role of the security-definer test too.
+        foreach ([self::ROLE, 'c5_definer'] as $role) {
+            if ($admin->selectOne('select 1 as x from pg_roles where rolname = ?', [$role]) !== null) {
+                $admin->statement("DROP OWNED BY {$role}");
+                $admin->statement("DROP ROLE {$role}");
+            }
         }
     }
 
@@ -343,19 +347,36 @@ class RollbackSafeMigratorTest extends TestCase
     }
 
     #[Test]
-    public function the_setting_ends_with_the_migration_and_never_reaches_the_runtime_role(): void
+    public function the_setting_is_on_inside_the_down_and_never_outlives_it_on_that_connection(): void
     {
-        $this->sentinels('c5_guarded', (string) Str::uuid7());
-        $this->migration($this->guardedDrop());
-        try {
-            $this->rollback();
-        } catch (RollbackRefusedException) {
-        }
+        $this->grantBypass();
+        $connection = DB::connection(self::CONNECTION);
+        $this->migration("DB::statement(\"select set_config('c5.seen', current_setting('row_security'), false)\");");
 
-        $this->assertSame('on', DB::connection(self::CONNECTION)->selectOne('show row_security')->row_security);
+        $this->rollback();
+
+        $this->assertSame('off', $connection->selectOne("select current_setting('c5.seen') as seen")->seen, 'it really ran with the setting');
+        $this->assertSame('on', $connection->selectOne('show row_security')->row_security, 'the SAME connection is back to normal');
         $runtime = DB::selectOne("select rolsuper or rolbypassrls as sees_all from pg_roles where rolname = 'school_os_app'");
         $this->assertFalse((bool) $runtime->sees_all);
         $this->assertSame('on', DB::selectOne('show row_security')->row_security);
+    }
+
+    #[Test]
+    public function a_refused_down_leaves_that_connection_as_it_found_it(): void
+    {
+        $this->grantBypass();
+        $connection = DB::connection(self::CONNECTION);
+        $this->migration("throw new RuntimeException('Refusing to roll back: evidence exists.');");
+
+        try {
+            $this->rollback();
+            $this->fail('the refusal did not surface');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('evidence exists', $e->getMessage());
+        }
+
+        $this->assertSame('on', $connection->selectOne('show row_security')->row_security);
     }
 
     #[Test]
