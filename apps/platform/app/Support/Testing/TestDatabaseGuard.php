@@ -58,6 +58,16 @@ class TestDatabaseGuard
         $approved = config('database.testing_database');
 
         foreach (self::GUARDED_CONNECTIONS as $connection) {
+            // HR.R1-C5: a connection URL overrides host, port and database when it connects, so a matching
+            // database key proves nothing while one is set. Never name its value: a URL can carry a password.
+            if (filled(config("database.connections.{$connection}.url"))) {
+                throw new UnsafeTestDatabaseException(
+                    "Refusing to boot: APP_ENV=testing but connection '{$connection}' has a connection URL, which ".
+                    'overrides its database name, so the approved test database cannot be proven. Leave DB_URL, '.
+                    'DB_ADMIN_URL and DB_RETENTION_URL empty for testing. See CLAUDE.md.'
+                );
+            }
+
             $resolved = config("database.connections.{$connection}.database");
 
             if ($resolved !== $approved) {

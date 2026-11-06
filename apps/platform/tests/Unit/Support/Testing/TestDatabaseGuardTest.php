@@ -55,4 +55,26 @@ class TestDatabaseGuardTest extends TestCase
 
         (new TestDatabaseGuard)->assertSafe();
     }
+
+    #[Test]
+    public function a_connection_url_on_any_guarded_connection_is_refused_without_naming_it(): void
+    {
+        $url = 'postgres://someone:a-password@127.0.0.1:1/school_os';
+
+        foreach (['pgsql', 'pgsql_admin', 'pgsql_retention'] as $connection) {
+            Config::set("database.connections.{$connection}.url", $url);
+
+            try {
+                (new TestDatabaseGuard)->assertSafe();
+                $this->fail("{$connection}: a connection URL must be refused");
+            } catch (UnsafeTestDatabaseException $e) {
+                $this->assertStringContainsString("connection '{$connection}' has a connection URL", $e->getMessage());
+                $this->assertStringNotContainsString('a-password', $e->getMessage());
+            }
+
+            Config::set("database.connections.{$connection}.url", '');
+        }
+
+        (new TestDatabaseGuard)->assertSafe();
+    }
 }

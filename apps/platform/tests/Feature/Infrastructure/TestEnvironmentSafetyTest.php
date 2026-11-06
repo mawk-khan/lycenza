@@ -88,7 +88,7 @@ class TestEnvironmentSafetyTest extends TestCase
     {
         $process = $this->artisanSubprocess(
             ['platform:test-db-reset', '--force', '--env=testing'],
-            ['APP_ENV' => 'staging', 'DB_PORT' => '1'],
+            ['APP_ENV' => 'staging', 'DB_PORT' => '1', 'DB_URL' => '', 'DB_ADMIN_URL' => '', 'DB_RETENTION_URL' => ''],
         );
         $process->run();
 
@@ -98,6 +98,29 @@ class TestEnvironmentSafetyTest extends TestCase
         $this->assertStringContainsString('Testing database reset failed: db:wipe did not complete.', $output);
         $this->assertStringNotContainsString('SQLSTATE', $output, 'nothing may have tried the database');
         $this->assertStringNotContainsString('reset complete', $output);
+    }
+
+    /**
+     * HR.R1-C5: a connection URL overrides the database key the guard reads, so it would
+     * reset whatever it names. The URL and DB_PORT both point at port 1, so this reaches nothing either way.
+     */
+    #[Test]
+    public function platform_test_db_reset_refuses_a_connection_url_that_would_redirect_it(): void
+    {
+        foreach (['DB_URL', 'DB_ADMIN_URL', 'DB_RETENTION_URL'] as $variable) {
+            $process = $this->artisanSubprocess(
+                ['platform:test-db-reset', '--force'],
+                ['DB_PORT' => '1', 'DB_URL' => '', 'DB_ADMIN_URL' => '', 'DB_RETENTION_URL' => '', $variable => 'postgres://someone:a-password@127.0.0.1:1/school_os'],
+            );
+            $process->run();
+
+            $output = (string) preg_replace('/\s+/', '', $process->getErrorOutput().$process->getOutput());
+            $this->assertFalse($process->isSuccessful(), $variable);
+            $this->assertStringContainsString('Refusingtoboot', $output, $variable);
+            $this->assertStringContainsString('hasaconnectionURL', $output, $variable);
+            $this->assertStringNotContainsString('a-password', $output, $variable);
+            $this->assertStringNotContainsString('SQLSTATE', $output, $variable);
+        }
     }
 
     /**

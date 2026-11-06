@@ -167,6 +167,12 @@ ultimately does one of these -- all of them boot the full Laravel
 application, and `AppServiceProvider::register()` runs unconditionally
 on every boot.
 
+HR.R1-C5 (2026-11-06): a connection URL overrides host, port and database
+when Laravel connects, so a matching database name proves nothing while one
+is set. The guard refuses a non-empty `url` on every guarded connection,
+without printing it, and `phpunit.xml` and `bin/safe-test` clear `DB_URL`,
+`DB_ADMIN_URL` and `DB_RETENTION_URL`.
+
 New negative-test coverage added this checkpoint:
 `tests/Unit/Support/Testing/TestDatabaseGuardTest.php` (in-process,
 simulated resolved config) and

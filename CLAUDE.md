@@ -457,9 +457,10 @@ docs/roadmap             MASTER-ROADMAP.md
     `TestDatabaseGuard::assertSafe()` on every boot (web, artisan,
     tinker): whenever `app()->environment('testing')` is true, EVERY
     connection capable of a destructive operation (`pgsql`,
-    `pgsql_admin`) must resolve to exactly
+    `pgsql_admin`, `pgsql_retention`) must resolve to exactly
     `config('database.testing_database')` (an explicit config value,
-    never fragile substring/prefix matching) or the application refuses
+    never fragile substring/prefix matching) and carry no connection URL,
+    which would override that name, or the application refuses
     to boot at all. This also means `composer test`/`php artisan test`
     is not automatically safe if something upstream already exported a
     conflicting `DB_DATABASE` — PHPUnit's `<env>` block only fills in

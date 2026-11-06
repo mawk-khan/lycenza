@@ -113,6 +113,7 @@
         <env name="DB_RETENTION_PASSWORD" value="school_os_retention_local_only_password" force="true"/>
         <env name="DB_RETENTION_URL" value="" force="true"/>
         <env name="DB_URL" value="" force="true"/>
+        <env name="DB_ADMIN_URL" value="" force="true"/>
         <env name="INERTIA_SSR_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array" force="true"/>
         <!-- Phase 0O.9A (ADR 0055): the deterministic fake provider and fake
