@@ -106,6 +106,7 @@ Registered, not implemented. Severity is the reviewer's.
 
 | Id | Severity | Finding | Status |
 |---|---|---|---|
+| PAY-19 | LOW | A beneficiary can attest. A user who holds `payroll.runs.post` and sensitive view, made no part of the run, and whose own pay is in the implicated changes passes the service and database checks, then states they are independent. Approval has the same gap. A conflict-of-interest rule is new policy (rule 102 keeps no generic framework), so it needs an owner decision. | OPEN, owner decision OD-HR-24 |
 | PAY-18 | MEDIUM | Reverse-after-posting. The run is posted while independence stands; a later reversal removes it. No posting-time control can reach this. The reversal is not blocked; `payroll.run.independence_changed` and a notice on the run record it. Nobody is required to acknowledge it, and the record is not surfaced beyond the run page and the audit log. | OPEN, owner decision OD-HR-23 |
 
 **PAY-15 update.** Inventory of every rollback guard: `docs/hr/PAY-15-ROLLBACK-GUARD-INVENTORY.md`. The new migration does not repeat it, proven by `PayrollAttestationRollbackGuardTest` as an owner without `BYPASSRLS`. PAY-15 itself stays OPEN and remains a staging blocker. PAY-17 and the three HR.R1-C2 LOW findings are unchanged.

@@ -12,6 +12,7 @@ use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -66,7 +67,7 @@ final class PayrollPostingIndependence
 
     public function record(PayrollRun $run, PayrollRunPosting $posting, User $actor, string $version): PayrollPostingAttestation
     {
-        $attestation = PayrollPostingAttestation::query()->create([
+        $attestation = $this->withinGuards($run, fn () => PayrollPostingAttestation::query()->create([
             'school_id' => $run->school_id,
             'payroll_run_id' => $run->id,
             'payroll_run_calculation_id' => $run->approved_calculation_id,
@@ -74,7 +75,7 @@ final class PayrollPostingIndependence
             'evidence_version' => $version,
             'statement_code' => PayrollPostingAttestation::STATEMENT_INDEPENDENCE_CHANGED,
             'attested_by_user_id' => $actor->id,
-        ]);
+        ]));
 
         $this->audit->school($run->school, 'payroll.run.independence_attested', actor: $actor, subject: $run, metadata: [
             'attestationId' => $attestation->id,
@@ -86,6 +87,29 @@ final class PayrollPostingIndependence
         ]);
 
         return $attestation;
+    }
+
+    /**
+     * Another run's approval holds the compensation lock shared too, so it can
+     * narrow the evidence between the service's read and the database guards. That
+     * fails closed; this keeps it a controlled refusal, never a 500. The enclosing
+     * posting transaction rolls back, ledger entry included.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $write
+     * @return T
+     */
+    public function withinGuards(PayrollRun $run, callable $write): mixed
+    {
+        try {
+            return $write();
+        } catch (QueryException $e) {
+            if (str_contains($e->getMessage(), 'payroll_posting_attestations_guard') || str_contains($e->getMessage(), 'payroll_runs_posting_independence_guard')) {
+                throw new PostingEvidenceStaleException($run->id);
+            }
+            throw $e;
+        }
     }
 
     /**
@@ -110,9 +134,11 @@ final class PayrollPostingIndependence
               JOIN employee_compensation_assignments a
                 ON a.school_id = os.school_id AND a.id = os.compensation_assignment_id AND a.assigned_by_user_id = o.approved_by_user_id
              WHERE s.school_id = ? AND s.payroll_run_id = ? AND s.payroll_run_calculation_id = ?
+               -- Only what the reversed run actually discharged: priced from the assignment, approved independently of its author.
+               AND s.basis = 'structure' AND ?::uuid IS DISTINCT FROM a.assigned_by_user_id
                AND o.run_kind = 'regular' AND o.status IN ('approved', 'posted')
             SQL,
-            [$reversed->school_id, $reversed->id, $reversed->approved_calculation_id],
+            [$reversed->school_id, $reversed->id, $reversed->approved_calculation_id, $reversed->approved_by_user_id],
         );
 
         $recorded = 0;
@@ -143,10 +169,10 @@ final class PayrollPostingIndependence
     public function review(PayrollRun $run, User $actor, bool $maySeeDetails, int $page = 1): ?array
     {
         $version = $this->version($run);
-        if ($version === null) {
+        $attested = PayrollPostingAttestation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->first();
+        if ($version === null && $attested === null) {
             return null;
         }
-        $attested = PayrollPostingAttestation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->first();
 
         $independent = $this->isIndependent($run, $actor);
         $blocked = match (true) {
@@ -157,12 +183,18 @@ final class PayrollPostingIndependence
             ! $maySeeDetails => 'needs_mfa',
             default => null,
         };
-        $canAttest = $run->status === 'approved' && $blocked === null;
+        $canAttest = $run->status === 'approved' && $version !== null && $blocked === null;
+        $showDetails = $version !== null && $maySeeDetails && $blocked !== 'not_independent';
+        if ($showDetails) {
+            // Who was paid what structure, from when: reading it is audited, like every other sensitive payroll read.
+            $this->audit->school($run->school, 'payroll.run.independence_reviewed', actor: $actor, subject: $run, metadata: ['evidenceVersion' => $version, 'page' => max(1, $page)]);
+        }
 
         return [
+            // An attestation covers only the evidence it named: a later reversal is new, unattested exposure.
             'phase' => match (true) {
                 $run->status === 'approved' => 'before_posting',
-                $attested !== null => 'attested',
+                $attested !== null && ($version === null || hash_equals($attested->evidence_version, $version)) => 'attested',
                 default => 'after_posting',
             },
             'attestation' => ! $maySeeDetails || $attested === null ? null : [
@@ -172,7 +204,7 @@ final class PayrollPostingIndependence
             ],
             'blockedReason' => $blocked,
             'evidenceVersion' => $canAttest ? $version : null,
-            'details' => $maySeeDetails && $blocked !== 'not_independent' ? $this->details($run, $page) : null,
+            'details' => $showDetails ? $this->details($run, $page) : null,
         ];
     }
 

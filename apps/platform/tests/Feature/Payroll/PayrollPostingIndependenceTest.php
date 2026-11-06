@@ -365,6 +365,60 @@ class PayrollPostingIndependenceTest extends TestCase
     }
 
     #[Test]
+    public function reading_the_evidence_is_audited_and_a_refused_reader_leaves_no_read_event(): void
+    {
+        $november = $this->novemberApprovedByItsAuthorThenOctoberReversed();
+        $version = $this->evidence($november);
+
+        $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->finance, false));
+        $this->assertSame([], $this->audit('payroll.run.independence_reviewed', $november));
+
+        $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->poster, true, 2));
+        $audit = $this->audit('payroll.run.independence_reviewed', $november);
+        $this->assertSame([[$version, 2]], array_map(fn ($a) => [$a['evidenceVersion'], $a['page']], $audit));
+    }
+
+    #[Test]
+    public function an_attestation_covers_only_its_evidence_and_a_later_clearing_keeps_it_on_the_page(): void
+    {
+        $november = $this->novemberApprovedByItsAuthorThenOctoberReversed();
+        $this->attest($november, $this->poster);
+        $review = fn () => $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->poster, true));
+        $this->assertSame('attested', $review()['phase']);
+
+        // A later independent approval of the same change ends the exception, never the record of the attestation.
+        $december = $this->calculatedRun('2015-12-01');
+        $this->approve($december, $this->checker);
+        $this->assertSame('', $this->evidence($november));
+        $this->assertSame(['attested', true], [$review()['phase'], $review()['attestation'] !== null]);
+
+        // Reversing December reopens it, with new evidence the attestation never covered.
+        $this->postRun($december);
+        $this->reverseRun($december);
+        $this->assertNotSame('', $this->evidence($november));
+        $this->assertSame('after_posting', $review()['phase'], 'the exposure is shown, not hidden by the old attestation');
+        $this->assertNotNull($review()['attestation'], 'and the attestation stays on record');
+    }
+
+    #[Test]
+    public function a_reversal_that_discharged_nothing_is_never_named(): void
+    {
+        $november = $this->novemberApprovedByItsAuthorThenOctoberReversed();
+        $this->assertCount(1, $this->audit('payroll.run.independence_changed', $november));
+
+        // A run the author himself approved never discharged the change, so reversing it took nothing away.
+        $this->attest($november, $this->poster);
+        $december = $this->calculatedRun('2015-12-01');
+        $this->approve($december, $this->checker);
+        $january = $this->calculatedRun('2016-01-01');
+        $this->approve($january, $this->x);
+        $this->postRun($january);
+        $this->reverseRun($january);
+
+        $this->assertCount(1, $this->audit('payroll.run.independence_changed', $november), 'one event, naming October');
+    }
+
+    #[Test]
     public function a_reversal_before_posting_is_recorded_too_and_only_affected_runs_are(): void
     {
         $november = $this->novemberApprovedByItsAuthorThenOctoberReversed();
@@ -498,7 +552,8 @@ class PayrollPostingIndependenceTest extends TestCase
         $token = $this->mfaToken($this->poster);
         $api = "/api/v1/schools/{$this->school->id}/payroll-runs/{$november->id}";
 
-        $this->withToken($token)->getJson("{$api}/posting-independence")->assertOk()->assertJsonPath('data.phase', 'before_posting')->assertJsonPath('data.evidenceVersion', $version);
+        $this->withToken($token)->getJson("{$api}/posting-independence")->assertOk()->assertJsonPath('data.phase', 'before_posting')->assertJsonPath('data.evidenceVersion', $version)
+            ->assertHeader('Cache-Control', 'no-store, private');
 
         $body = fn () => ['mfa_code' => $this->freshMfaCode($this->poster)];
         $this->withToken($token)->withHeader('Idempotency-Key', 'hr-r1-c4-a')->postJson("{$api}/post", $body())->assertStatus(409)->assertJsonPath('error.code', 'PAYROLL_POSTING_ATTESTATION_REQUIRED');

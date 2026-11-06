@@ -1220,6 +1220,12 @@ review lists what changed, never the unchanged register.
     fires. The reviewed set at approval is in the audit (`attributionVersion`).
   - **Legacy:** a run with no recorded approved calculation cannot be evaluated and
     posts as before. An authorless change can never match an approver.
+  - **Reading the evidence** is audited (`payroll.run.independence_reviewed`) and
+    never cached. An attestation covers only the evidence it named: a later
+    reversal shows as new exposure, and the attestation stays on the run even if a
+    later independent approval ends the exception.
+  - **Not covered (PAY-19):** someone whose own pay is in the implicated changes can
+    attest if they made no part of the run. Approval has the same gap.
   - **After posting (PAY-18, open, OD-HR-23).** A check at posting cannot stop a
     later reversal. The reversal is never blocked, the run is never reopened, and
     `payroll.run.independence_changed` plus a notice on the run record it for

@@ -139,6 +139,7 @@ when a request is drafted.
 |---|---|---|---|
 | OD-HR-22 | An approval that loses its independent predecessor before it is posted (PAY-16) | **Decided, see below.** | Was: A accept, B acknowledge, C refuse |
 | OD-HR-23 | A reversal that takes independence from a run ALREADY posted (PAY-18) | **Open.** The reversal is not blocked. It writes a durable `payroll.run.independence_changed` event, and the run page shows it. Nobody is required to acknowledge it. | **A. Keep the record only.** **B. Require an independent acknowledgement at reversal (recommended if a control is wanted):** it adds a condition to a financial correction. **C. Refuse the reversal:** a legitimate correction could be blocked, so not recommended |
+| OD-HR-24 | Beneficiary conflict in payroll decisions (PAY-19) | **Open.** A person whose own pay is implicated can attest, and can approve, if they made no part of the run. | **A. Accept.** **B. Refuse them for the attestation only.** **C. Refuse them for approval and attestation (recommended):** consistent, but a small School may have fewer eligible people |
 
 ### OD-HR-22 decision record
 
@@ -151,7 +152,7 @@ when a request is drafted.
 | Authority | Existing keys only: `payroll.runs.post` and current `payroll.compensation.sensitive.view`. No new capability and no new grant |
 | Evidence reviewed | The approved calculation, who approved, which runs were reversed and when, and the affected employee numbers, names, structures and effective dates. Never an amount, bank, statutory or profile field |
 | MFA | The poster's own fresh code, as for every posting; the evidence needs current MFA assurance |
-| Audit | One append-only `payroll_posting_attestations` row per run, and `payroll.run.independence_attested` |
+| Audit | One append-only `payroll_posting_attestations` row per run, `payroll.run.independence_attested`, and `payroll.run.independence_reviewed` for every read of the evidence |
 | Stale evidence | Bound to `evidenceVersion` and re-checked under the run and compensation locks; a mismatch is `PAYROLL_POSTING_EVIDENCE_STALE` |
 | Concurrency | Posting holds the compensation lock shared and a reversal exclusive, so each is ordered wholly before or after the other |
 | No independent actor | Posting is refused with a controlled reason and the run stays `approved`. The control never downgrades to a warning. An independent approval of the same change on another run also clears the exception |

@@ -815,14 +815,14 @@ const reversalPosting = computed(
             <p v-if="independence.phase === 'attested'" class="mt-1">
                 Posted with an independent attestation, because a run this approval relied on was
                 reversed first.
-                <template v-if="independence.attestation">
-                    Attested by {{ independence.attestation.attestedBy ?? '—' }} on
-                    {{ formatDateTime(independence.attestation.attestedAt) }}.
-                </template>
             </p>
             <p v-else class="notice-attention mt-1">
-                A run this approval relied on was reversed after this run was posted. Nobody
-                attested to the change. It is recorded for reconciliation.
+                A run this approval relied on was reversed after this run was posted, or after its
+                attestation. Nobody attested to that change. It is recorded for reconciliation.
+            </p>
+            <p v-if="independence.attestation" class="mt-1">
+                Attested by {{ independence.attestation.attestedBy ?? '—' }} on
+                {{ formatDateTime(independence.attestation.attestedAt) }}.
             </p>
         </section>
 

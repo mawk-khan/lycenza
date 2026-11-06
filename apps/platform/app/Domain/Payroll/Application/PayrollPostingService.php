@@ -193,11 +193,11 @@ class PayrollPostingService
                     $this->independence->record($locked, $posting, $actor, $independenceVersion);
                 }
 
-                DB::table('payroll_runs')->where('id', $run->id)->update([
+                $this->independence->withinGuards($locked, fn () => DB::table('payroll_runs')->where('id', $run->id)->update([
                     'status' => 'posted',
                     'posted_by_user_id' => $actor->id,
                     'posted_at' => now(),
-                ]);
+                ]));
 
                 $this->audit->school($school, 'payroll.run.posted', actor: $actor, subject: $run, metadata: [
                     'journalEntryId' => $posted->journalEntryId,
