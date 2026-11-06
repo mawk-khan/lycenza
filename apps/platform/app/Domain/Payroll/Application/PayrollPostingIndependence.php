@@ -238,7 +238,7 @@ final class PayrollPostingIndependence
                 default => 'after_posting',
             },
             // Nobody implicated learns who attested to the evidence of their own change.
-            'attestation' => ! $maySeeDetails || $attested === null || $beneficiary?->conflicted === true ? null : [
+            'attestation' => ! $maySeeDetails || $attested === null || ! $independent || $beneficiary?->conflicted === true ? null : [
                 'attestedBy' => User::query()->whereKey($attested->attested_by_user_id)->value('name'),
                 'attestedAt' => $attested->created_at->toIso8601String(),
                 'statementCode' => $attested->statement_code,

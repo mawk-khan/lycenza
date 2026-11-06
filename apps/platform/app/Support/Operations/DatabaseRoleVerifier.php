@@ -680,7 +680,7 @@ class DatabaseRoleVerifier
             && str_contains($guard->src, 'pg_advisory_xact_lock_shared');
         // HR.R1-C3 (PAY-13): a reversed run, or one its author approved, never discharges the attribution.
         $firstPaid = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'payroll_run_first_paid_compensation' and p.pronamespace = 'public'::regnamespace");
-        $guarded = $guarded && $firstPaid !== null && str_contains($firstPaid->src, "posting_kind = 'reversal'") && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id');
+        $guarded = $guarded && $firstPaid !== null && str_contains($firstPaid->src, "posting_kind = 'reversal'") && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id') && str_contains($firstPaid->src, 'o.approved_by_user_id IS DISTINCT FROM e.user_id');
         $enabled = (int) DB::selectOne(
             "select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in
              ('payroll_runs_approval_evidence_guard', 'trg_payroll_runs_posting_independence', 'trg_payroll_posting_attestations_guard', 'trg_payroll_runs_identity', 'trg_payroll_run_postings_reversal_lock', 'trg_employee_compensation_assignments_identity', 'trg_employee_compensation_assignments_payroll_lock', 'trg_payroll_run_results_reject_rewrite', 'trg_payroll_run_result_lines_reject_rewrite', 'trg_payroll_run_calculation_sources_guard')",
