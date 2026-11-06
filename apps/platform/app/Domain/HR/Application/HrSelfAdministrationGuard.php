@@ -54,8 +54,7 @@ class HrSelfAdministrationGuard
     /**
      * HR.R1-C7 (OD-HR-25): whether $actor has a link, current or ended and not
      * corrected as erroneous, to this Employee. An unlink does not change who a
-     * person is, so this, not the current link, decides a person's own pay, and
-     * whether they may correct that Employee's links.
+     * person is, so this, not the current link, decides a person's own pay.
      */
     public function hasUncorrectedLink(User $actor, string $schoolId, string $employeeId): bool
     {

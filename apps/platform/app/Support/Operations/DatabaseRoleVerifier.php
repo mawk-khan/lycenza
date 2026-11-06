@@ -667,7 +667,7 @@ class DatabaseRoleVerifier
         $writes = (bool) DB::selectOne("select has_table_privilege('school_os_app', 'employee_account_links', 'INSERT') or has_table_privilege('school_os_app', 'employee_account_links', 'UPDATE') or has_table_privilege('school_os_app', 'employee_account_links', 'DELETE') as w")->w;
 
         $void = (string) DB::selectOne("select coalesce((select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_void'), '') as src")->src;
-        $pinned = str_contains($void, 'pg_advisory_xact_lock') && str_contains($void, 'nobody corrects a link') && str_contains($void, 'hr.employees.manage');
+        $pinned = str_contains($void, 'pg_advisory_xact_lock') && str_contains($void, 'l.user_id = p_actor) THEN') && str_contains($void, 'hr.employees.manage');
 
         return CheckResult::of('employee_account_links_guarded', $triggers === 2 && $definer === 2 && ! $writes && $pinned);
     }
