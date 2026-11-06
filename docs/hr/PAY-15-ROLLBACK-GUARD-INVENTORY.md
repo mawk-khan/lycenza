@@ -60,13 +60,15 @@ back at their true position and the 2 fences refuse.
   with hidden rows and with empty tables; bypass on the candidate; bypass with empty
   tables. Entries with no row condition have no sentinel runs. No run errored.
 - **Repeatable part.** `RollbackProductionShapeTest` repeats the full path and 15 real
-  guards on every candidate. The 65-way run itself was local and is not in CI.
+  guards on every candidate that runs the platform lane. The 65-way run itself was local
+  and is not in CI.
 
 **Limits.** A `down()` with no guard has nothing to consult: on a role with bypass it
 destroys what it drops, on a disposable database. A guard is not atomic with its DDL
 unless it lifts FORCE or holds a lock, so on local and testing a concurrent write can
-land after the check. Hardened environments refuse the commands, so neither is reachable
-there. `--path` with `--batch` can run a `down()` behind the fence, on local and testing
+land after the check. Hardened environments refuse the five commands, so neither is
+reachable through them. Arbitrary code run with the admin credentials, through `tinker`
+or `psql`, is outside this control. `--path` with `--batch` can run a `down()` behind the fence, on local and testing
 only, and the migrator still applies.
 
 **Keys.** Reach: "Fence" means the permanently refusing `2026_12_01_090000` and `090100`

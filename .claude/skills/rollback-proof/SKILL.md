@@ -51,7 +51,7 @@ codes, because a refusal changes nothing and its dumps would otherwise match.
 
 **This runs as the local superuser.** The proof as a production-shaped role, not a
 superuser, is `tests/Feature/Postgres/RollbackProductionShapeTest` (HR.R1-C5), which
-the full suite runs on every candidate.
+the full suite runs on every candidate in the platform lane.
 
 **Afterwards** the test database is migrated but no longer freshly seeded.
 `/full-regression` (or `bin/safe-test --reset-db`) resets it.
