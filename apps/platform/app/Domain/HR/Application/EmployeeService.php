@@ -22,6 +22,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Concurrency\SchoolCompensationLock;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -316,6 +317,8 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                // HR.R1-C6: before the row. A payroll decision read this link under the same lock.
+                SchoolCompensationLock::acquire($school->id, shared: false);
                 $locked = Employee::query()->where('school_id', $school->id)->whereKey($employee->id)->lockForUpdate()->firstOrFail();
 
                 if ($locked->user_id === null) {
@@ -357,6 +360,8 @@ class EmployeeService
     {
         // SR.4 (ADR 0071 §26.2): never link an Employee to yourself.
         $this->selfAdministration->refuseSelfLink($actor, $userId, 'link');
+        // HR.R1-C6: before the rows below. A payroll decision read this link under the same lock.
+        SchoolCompensationLock::acquire($school->id, shared: false);
 
         $membership = SchoolMembership::query()
             ->where('school_id', $school->id)

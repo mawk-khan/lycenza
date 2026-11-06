@@ -9,6 +9,7 @@ use App\Domain\Payroll\Application\Exceptions\ReconciliationAlreadyReviewedExcep
 use App\Domain\Payroll\Application\Exceptions\ReconciliationEvidenceStaleException;
 use App\Domain\Payroll\Application\Exceptions\ReconciliationReviewerNotIndependentException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
+use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
 use App\Domain\Payroll\Application\PayrollPostingIndependence;
 use App\Domain\Payroll\Application\PayrollPostingService;
 use App\Domain\Payroll\Application\PayrollReversalReconciliationReadService;
@@ -378,6 +379,31 @@ class PayrollReversalReconciliationTest extends TestCase
     }
 
     #[Test]
+    public function an_ordinary_later_approval_never_makes_the_affected_employee_independent_or_empties_the_evidence(): void
+    {
+        [, $november, $o] = $this->reversedAfterPosting();
+        $this->link($this->reviewer);
+
+        // December, independently approved, is an ordinary monthly step. It takes the change out of November's first-paid set.
+        $december = $this->calculatedRun('2015-12-01');
+        $this->approve($december, $this->checker);
+        $this->assertSame('', (string) $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->version($november->fresh())), 'the live set really is empty now');
+
+        $this->assertSame('self_beneficiary', $this->inSchool($this->school, fn () => $this->state($o, $this->reviewer))['blockedReason']);
+        try {
+            $this->inSchool($this->school, fn () => $this->reviewAs($o, $this->reviewer));
+            $this->fail('the Employee of the change reviewed it once a later approval covered it');
+        } catch (SelfBeneficiaryConflictException) {
+            $this->assertSame(0, $this->reviews());
+        }
+
+        $state = $this->inSchool($this->school, fn () => $this->state($o, $this->checker));
+        $this->assertFalse($state['exceptionStillApplies']);
+        $this->assertSame(1, $state['details']['changes']['total'], 'a reviewer never signs against an empty table');
+        $this->assertSame(0, $state['details']['employeesWithoutAccount'], 'the only Employee of the snapshot is linked');
+    }
+
+    #[Test]
     public function evidence_is_purpose_limited_audited_and_withheld_from_anyone_not_independent(): void
     {
         [, $november, $o] = $this->reversedAfterPosting();
@@ -407,14 +433,15 @@ class PayrollReversalReconciliationTest extends TestCase
         $this->assertStringNotContainsString('55000', (string) json_encode($events));
     }
 
-    private function assertRuntimeRefuses(callable $write, string $because): void
+    private function assertRuntimeRefuses(callable $write, string $because, string $reason): void
     {
         $this->assertSame('school_os_app', DB::selectOne('select current_user as u')->u);
         try {
             DB::transaction(fn () => $this->inSchool($this->school, $write));
             $this->fail('the runtime role was allowed to: '.$because);
         } catch (QueryException $e) {
-            $this->assertMatchesRegularExpression('/payroll_reversal_reconciliation|permission denied/', $e->getMessage(), $because);
+            // The cause only: the SQL text in the message would match a table name whatever went wrong.
+            $this->assertStringContainsString($reason, (string) $e->getPrevious()?->getMessage(), $because);
         }
     }
 
@@ -424,20 +451,29 @@ class PayrollReversalReconciliationTest extends TestCase
         [$october, $november, $o] = $this->reversedAfterPosting();
         $review = fn (array $over) => fn () => DB::table('payroll_reversal_reconciliation_reviews')->insert($over + ['id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'reconciliation_id' => $o->id,
             'evidence_version' => $this->reviewVersion($o), 'statement_code' => 'reversal_impact_reviewed_v1', 'unlinked_employee_count' => 1, 'reviewed_by_user_id' => $this->reviewer->id]);
+        $guard = 'payroll_reversal_reconciliation_reviews_guard:';
 
-        $this->assertRuntimeRefuses($review(['reviewed_by_user_id' => $this->x->id]), 'review as the approver');
-        $this->assertRuntimeRefuses($review(['reviewed_by_user_id' => $this->finance->id]), 'review as the reverser');
-        $this->assertRuntimeRefuses($review(['reviewed_by_user_id' => $this->preparer->id]), 'review as a maker');
-        $this->assertRuntimeRefuses($review(['evidence_version' => str_repeat('0', 64)]), 'review stale evidence');
-        $this->assertRuntimeRefuses($review(['unlinked_employee_count' => 0]), 'hide an Employee the check could not see');
-        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliations')->insert(['id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'payroll_run_id' => $october->id,
-            'payroll_run_calculation_id' => $this->runRow($october)['approved_calculation_id'], 'reversal_posting_id' => $o->reversal_posting_id, 'evidence_version' => $o->evidence_version]), 'open one for a run the reversal did not affect');
-        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliations')->where('id', $o->id)->update(['evidence_version' => str_repeat('1', 64)]), 'rewrite an obligation');
-        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliations')->where('id', $o->id)->delete(), 'delete an obligation');
+        $this->assertRuntimeRefuses($review(['reviewed_by_user_id' => $this->x->id]), 'review as the approver', $guard);
+        $this->assertRuntimeRefuses($review(['reviewed_by_user_id' => $this->finance->id]), 'review as the reverser', $guard);
+        $this->assertRuntimeRefuses($review(['reviewed_by_user_id' => $this->preparer->id]), 'review as a maker', $guard);
+        $this->assertRuntimeRefuses($review(['evidence_version' => str_repeat('0', 64)]), 'review stale evidence', $guard);
+        $this->assertRuntimeRefuses($review(['unlinked_employee_count' => 0]), 'hide an Employee the check could not see', $guard);
 
-        $this->inSchool($this->school, fn () => $this->reviewAs($o, $this->reviewer));
-        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliation_reviews')->update(['statement_code' => 'x']), 'rewrite a review');
-        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliation_reviews')->delete(), 'delete a review');
+        $forged = fn (array $over) => fn () => DB::table('payroll_reversal_reconciliations')->insert($over + [
+            'id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'payroll_run_id' => $o->payroll_run_id, 'payroll_run_calculation_id' => $o->payroll_run_calculation_id, 'reversal_posting_id' => $o->reversal_posting_id,
+            'reversed_payroll_run_id' => $o->reversed_payroll_run_id, 'reversed_period_month' => $o->reversed_period_month->toDateString(), 'reversed_at' => $o->reversed_at, 'reversed_by_user_id' => $o->reversed_by_user_id,
+            'evidence_version' => $o->evidence_version, 'first_paid_assignments' => $o->first_paid_assignments, 'implicated_assignments' => $o->implicated_assignments]);
+        $this->assertRuntimeRefuses($forged(['payroll_run_id' => $october->id, 'payroll_run_calculation_id' => $this->runRow($october)['approved_calculation_id']]), 'open one for a run the reversal did not affect', 'payroll_reversal_reconciliations_guard:');
+        $this->assertRuntimeRefuses($forged(['implicated_assignments' => '{}']), 'open one with an emptied snapshot', 'payroll_reversal_reconciliations_guard:');
+        $this->assertRuntimeRefuses($forged(['reversed_by_user_id' => $this->reviewer->id]), 'name someone else as the reverser', 'payroll_reversal_reconciliations_guard:');
+        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliations')->where('id', $o->id)->update(['evidence_version' => str_repeat('1', 64)]), 'rewrite an obligation', 'permission denied');
+        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliations')->where('id', $o->id)->delete(), 'delete an obligation', 'permission denied');
+
+        // The positive control: the same raw write by someone eligible is what the guard exists to let through.
+        $this->inSchool($this->school, $review([]));
+        $this->assertSame(1, $this->reviews());
+        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliation_reviews')->update(['statement_code' => 'x']), 'rewrite a review', 'permission denied');
+        $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliation_reviews')->delete(), 'delete a review', 'permission denied');
     }
 
     #[Test]
@@ -485,6 +521,7 @@ class PayrollReversalReconciliationTest extends TestCase
 
         $this->withToken($token)->getJson($api)->assertOk()->assertJsonPath('meta.total', 0);
         $this->withToken($token)->getJson("{$api}/{$o->id}")->assertNotFound();
+        $this->withToken($token)->getJson("{$api}/not-a-uuid")->assertNotFound();
         $this->withToken($token)->postJson("{$api}/{$o->id}/review", ['mfa_code' => $this->freshMfaCode($outsider), 'review_version' => str_repeat('a', 64), 'accepted' => true])->assertNotFound();
         $this->assertSame(0, $this->reviews());
     }

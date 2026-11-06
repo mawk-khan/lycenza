@@ -1215,9 +1215,9 @@ review lists what changed, never the unchanged register.
   - **It can clear itself.** A later independent approval of the same change on
     another run gives it a standing independent approval again, so the exception
     ends. An attestation is then not needed.
-  - **Not an exception:** an approver who was never an author. If a reversal adds a
-    change their packet omitted, their independence did not change, so nothing
-    fires. The reviewed set at approval is in the audit (`attributionVersion`).
+  - **Not an exception:** an approver who is neither the author nor the Employee of
+    the change. If a reversal adds a change their packet omitted, their independence
+    did not change, so nothing fires. The reviewed set at approval is in the audit (`attributionVersion`).
   - **Legacy:** a run with no recorded approved calculation cannot be evaluated and
     posts as before. An authorless change can never match an approver.
   - **Reading the evidence** is audited (`payroll.run.independence_reviewed`) and
@@ -1251,11 +1251,16 @@ review lists what changed, never the unchanged register.
     `payroll_reversal_reconciliation_reviews` are append-only, with no status column.
     It never clears on its own: a later independent approval, or reversing the
     affected run, leaves it open, and the reviewer is told.
+  - **It records a moment.** The first-paid set moves, so each obligation snapshots
+    the first-paid and implicated assignments and the reversal's facts, checked
+    against the truth at insert. Independence reads the snapshot AND the live set.
+    Evidence reads the snapshot. The reversed run's retention clears only the link.
   - **The review** needs `payroll.runs.approve` and sensitive view, re-read under the
     run lock, a fresh code and an explicit acceptance, and names `reviewVersion`,
     bound to that obligation and to the evidence now. Never the run's approver,
-    creator, calculators, adjustment authors or first-paid authors, the reverser, or
-    a self-beneficiary. It is final and has no correction path.
+    creator, calculators or adjustment authors, the reverser, or the author or
+    Employee of a change it paid first then or pays first now. It is final and has
+    no correction path.
   - **It is not an approval.** It changes no run, posting, calculation or Finance
     record, and certifies nothing about the original decision. It blocks no other
     Payroll action and has no deadline.
@@ -1266,12 +1271,12 @@ review lists what changed, never the unchanged register.
     per size, two dependent posted runs, every entry implicated).** Query counts are
     constant by size. No target is approved.
 
-  | Entries | Discovery | Record and open (13 q) | Evidence (28 q) | Eligibility (9 q) | Review (37 q) |
-  |---:|---:|---:|---:|---:|---:|
-  | 500 | 13 ms | 77 ms | 76 ms | 12 ms | 69 ms |
-  | 2,000 | 28 ms | 157 ms | 135 ms | 22 ms | 120 ms |
-  | 5,000 | 62 ms | 318 ms | 249 ms | 36 ms | 263 ms |
-  | 10,000 | 220 ms | 817 ms | 458 ms | 70 ms | 378 ms |
+  | Entries | Discovery (1 q) | Record and open (18 q) | Evidence (23 q) | Review (36 q) |
+  |---:|---:|---:|---:|---:|
+  | 500 | 19 ms | 110 ms | 69 ms | 70 ms |
+  | 2,000 | 59 ms | 227 ms | 104 ms | 117 ms |
+  | 5,000 | 89 ms | 589 ms | 166 ms | 247 ms |
+  | 10,000 | 167 ms | 1,241 ms | 448 ms | 577 ms |
 
   The first form of discovery asked each run's exception once per source row: 1.5 s
   at 500 and 116 s at 5,000, under the exclusive compensation lock.
@@ -1287,8 +1292,13 @@ review lists what changed, never the unchanged register.
     revision need a decider not paid by them. There is no override: the run waits.
   - **Unknown identity.** An implicated Employee with no linked account does not
     block. The count is shown and recorded, and is never evidence of no conflict.
-  - **Order.** A link change takes the compensation lock exclusively
-    (`trg_employees_user_link_payroll_lock`), so it is ordered against every decision.
+  - **After approval.** A reversal can make an approver such an Employee. That is the
+    same loss of independence as becoming the author: `payroll_run_independence_exception`
+    covers both, so the attestation or the obligation follows.
+  - **Order.** Link writers take the compensation lock before the Employee row
+    (`SchoolCompensationLock`), with `trg_employees_user_link_payroll_lock` as the
+    backstop, so a link change is ordered against every decision. Row first would
+    invert against a calculation, whose foreign-key checks need that row.
 - **Compensation identity is frozen (PAY-14).** `trg_employee_compensation_assignments_identity`
   refuses the runtime role a change to an assignment's author, structure,
   employment or start. Closing it (`effective_to`) stays the ordinary write. Who

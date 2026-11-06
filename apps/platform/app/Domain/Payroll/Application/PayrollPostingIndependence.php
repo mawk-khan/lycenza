@@ -14,6 +14,7 @@ use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -157,12 +158,25 @@ final class PayrollPostingIndependence
             if ($row->status !== 'posted') {
                 continue; // an approved run meets the attestation at posting
             }
+            $snapshot = DB::selectOne(
+                <<<'SQL'
+                SELECT (SELECT COALESCE(array_agg(f.compensation_assignment_id ORDER BY f.compensation_assignment_id), '{}') FROM payroll_run_first_paid_compensation(?, ?, ?) f)::text AS first_paid,
+                       (SELECT COALESCE(array_agg(e.compensation_assignment_id ORDER BY e.compensation_assignment_id), '{}') FROM payroll_run_independence_exception(?, ?) e)::text AS implicated
+                SQL,
+                [$run->school_id, $run->id, $run->approved_calculation_id, $run->school_id, $run->id],
+            );
             $obligation = PayrollReversalReconciliation::query()->create([
                 'school_id' => $reversed->school_id,
                 'payroll_run_id' => $run->id,
                 'payroll_run_calculation_id' => $run->approved_calculation_id,
                 'reversal_posting_id' => $reversal->id,
+                'reversed_payroll_run_id' => $reversed->id,
+                'reversed_period_month' => $reversed->period?->period_month,
+                'reversed_at' => DB::table('payroll_run_postings')->where('school_id', $reversed->school_id)->where('id', $reversal->id)->value('created_at'),
+                'reversed_by_user_id' => $reversal->actor_user_id,
                 'evidence_version' => $version,
+                'first_paid_assignments' => $snapshot->first_paid,
+                'implicated_assignments' => $snapshot->implicated,
             ]);
             $this->audit->school($reversed->school, 'payroll.run.reconciliation_opened', actor: $actor, subject: $run, metadata: [
                 'reconciliationId' => $obligation->id,
@@ -198,17 +212,19 @@ final class PayrollPostingIndependence
         }
 
         $independent = $this->isIndependent($run, $actor);
+        $beneficiary = $version === null ? null : $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id);
         $blocked = match (true) {
             $run->status !== 'approved' => null,
             ! $independent => 'not_independent',
-            $version !== null && $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id)->conflicted => 'self_beneficiary',
+            $beneficiary?->conflicted === true => 'self_beneficiary',
             // A read, outside any decision transaction; the decision re-reads this fresh in assertMayAttest().
             ! $this->capabilities->canInSchool($actor, self::SENSITIVE_VIEW, $run->school) => 'cannot_review',
             ! $maySeeDetails => 'needs_mfa',
             default => null,
         };
         $canAttest = $run->status === 'approved' && $version !== null && $blocked === null;
-        $showDetails = $version !== null && $maySeeDetails && ! in_array($blocked, ['not_independent', 'self_beneficiary'], true);
+        // Whatever the run's status: nobody implicated reads the evidence of their own change.
+        $showDetails = $version !== null && $maySeeDetails && $independent && $beneficiary?->conflicted === false;
         if ($showDetails) {
             // Who was paid what structure, from when: reading it is audited, like every other sensitive payroll read.
             $this->audit->school($run->school, 'payroll.run.independence_reviewed', actor: $actor, subject: $run, metadata: ['evidenceVersion' => $version, 'page' => max(1, $page)]);
@@ -228,7 +244,7 @@ final class PayrollPostingIndependence
             ],
             'blockedReason' => $blocked,
             'evidenceVersion' => $canAttest ? $version : null,
-            'details' => $showDetails ? $this->details($run, $page) : null,
+            'details' => $showDetails ? [...$this->details($run, $page), 'employeesWithoutAccount' => $beneficiary->unlinkedEmployees] : null,
         ];
     }
 
@@ -241,14 +257,7 @@ final class PayrollPostingIndependence
      */
     public function details(PayrollRun $run, int $page): array
     {
-        $changes = DB::table(DB::raw('payroll_run_independence_exception(?, ?) AS e'))
-            ->addBinding([$run->school_id, $run->id], 'from')
-            ->join('employee_compensation_assignments as a', fn ($j) => $j->on('a.id', '=', 'e.compensation_assignment_id')->where('a.school_id', '=', $run->school_id))
-            ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'e.employment_record_id')->where('er.school_id', '=', $run->school_id))
-            ->join('employees as emp', fn ($j) => $j->on('emp.id', '=', 'er.employee_id')->where('emp.school_id', '=', $run->school_id))
-            ->join('salary_structures as s', fn ($j) => $j->on('s.id', '=', 'a.salary_structure_id')->where('s.school_id', '=', $run->school_id))
-            ->orderBy('emp.employee_number')->orderBy('a.id')
-            ->paginate(25, ['a.id', 'emp.employee_number', 'emp.full_name', 'a.effective_from', 's.code', 's.version'], 'independence_page', max(1, $page));
+        $changes = DB::table(DB::raw('payroll_run_independence_exception(?, ?) AS e'))->addBinding([$run->school_id, $run->id], 'from');
 
         $reversals = DB::select(
             <<<'SQL'
@@ -269,18 +278,37 @@ final class PayrollPostingIndependence
             'approvedBy' => User::query()->whereKey($run->approved_by_user_id)->value('name'),
             'approvedAt' => $run->approved_at?->toIso8601String(),
             'reversedRuns' => array_map(fn ($r) => ['id' => $r->id, 'periodMonth' => substr((string) $r->period_month, 0, 7), 'reversedAt' => (string) $r->created_at], $reversals),
-            'changes' => [
-                'total' => $changes->total(),
-                'page' => $changes->currentPage(),
-                'lastPage' => $changes->lastPage(),
-                'data' => collect($changes->items())->map(fn ($c) => [
-                    'key' => $c->id,
-                    'employeeNumber' => $c->employee_number,
-                    'employee' => $c->full_name,
-                    'effectiveFrom' => (string) $c->effective_from,
-                    'structure' => "{$c->code} v{$c->version}",
-                ])->all(),
-            ],
+            'changes' => $this->changesPage($run->school_id, $changes, $page),
+        ];
+    }
+
+    /**
+     * One page of a set of changes, `e.compensation_assignment_id`: the employee
+     * number and name, the structure and the date. Never an amount.
+     *
+     * @return array<string, mixed>
+     */
+    public function changesPage(string $schoolId, Builder $set, int $page): array
+    {
+        $changes = $set
+            ->join('employee_compensation_assignments as a', fn ($j) => $j->on('a.id', '=', 'e.compensation_assignment_id')->where('a.school_id', '=', $schoolId))
+            ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'a.employment_record_id')->where('er.school_id', '=', $schoolId))
+            ->join('employees as emp', fn ($j) => $j->on('emp.id', '=', 'er.employee_id')->where('emp.school_id', '=', $schoolId))
+            ->join('salary_structures as s', fn ($j) => $j->on('s.id', '=', 'a.salary_structure_id')->where('s.school_id', '=', $schoolId))
+            ->orderBy('emp.employee_number')->orderBy('a.id')
+            ->paginate(25, ['a.id', 'emp.employee_number', 'emp.full_name', 'a.effective_from', 's.code', 's.version'], 'independence_page', max(1, $page));
+
+        return [
+            'total' => $changes->total(),
+            'page' => $changes->currentPage(),
+            'lastPage' => $changes->lastPage(),
+            'data' => collect($changes->items())->map(fn ($c) => [
+                'key' => $c->id,
+                'employeeNumber' => $c->employee_number,
+                'employee' => $c->full_name,
+                'effectiveFrom' => (string) $c->effective_from,
+                'structure' => "{$c->code} v{$c->version}",
+            ])->all(),
         ];
     }
 

@@ -1974,9 +1974,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware('capability:payroll.runs.view')
                 ->name('schools.payroll-reconciliations.index');
             Route::get('/payroll-reconciliations/{payrollReconciliation}', [PayrollReconciliationController::class, 'show'])
+                ->whereUuid('payrollReconciliation')
                 ->middleware(['capability:payroll.runs.view', 'private-no-store'])
                 ->name('schools.payroll-reconciliations.show');
             Route::post('/payroll-reconciliations/{payrollReconciliation}/review', [PayrollReconciliationController::class, 'review'])
+                ->whereUuid('payrollReconciliation')
                 ->middleware(['capability:payroll.runs.approve', 'capability:payroll.compensation.sensitive.view', 'throttle:school-api-mutations'])
                 ->name('schools.payroll-reconciliations.review');
 

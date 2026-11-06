@@ -172,6 +172,8 @@ final class UserReferenceCatalog
         'payroll_posting_attestations' => ['attested_by_user_id' => self::RETAIN_REFERENCE],
         // HR.R1-C6: who independently reviewed a post-posting reversal.
         'payroll_reversal_reconciliation_reviews' => ['reviewed_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.R1-C6: who executed the reversal, kept once that run's own retention takes the posting.
+        'payroll_reversal_reconciliations' => ['reversed_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_runs' => ['approved_by_user_id' => self::RETAIN_REFERENCE, 'posted_by_user_id' => self::RETAIN_REFERENCE, 'prepared_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_statutory_run_postings' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'platform_audit_events' => ['actor_user_id' => self::RETAIN_REFERENCE],

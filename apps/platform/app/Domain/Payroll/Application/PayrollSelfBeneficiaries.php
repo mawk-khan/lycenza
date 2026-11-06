@@ -32,4 +32,21 @@ final class PayrollSelfBeneficiaries
 
         return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked);
     }
+
+    /**
+     * For an obligation, the moment it opened AND now (`payroll_reversal_reconciliation_subjects`).
+     * The live set alone can empty: an ordinary later approval would turn the
+     * affected Employee into an "independent" reviewer of nothing.
+     */
+    public function ofObligation(string $schoolId, string $reconciliationId, string $userId): SelfBeneficiaryFinding
+    {
+        $row = DB::selectOne(
+            'SELECT COALESCE(bool_or(s.user_id = ?), false) AS conflicted, COALESCE(bool_or(s.assigned_by_user_id = ?), false) AS authored,
+                    count(DISTINCT s.employee_id) FILTER (WHERE s.user_id IS NULL) AS unlinked
+               FROM payroll_reversal_reconciliation_subjects(?, ?) s',
+            [$userId, $userId, $schoolId, $reconciliationId],
+        );
+
+        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked, (bool) $row->authored);
+    }
 }

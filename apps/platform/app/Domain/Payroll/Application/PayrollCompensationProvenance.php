@@ -6,6 +6,7 @@ use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunCalculationSource;
+use App\Support\Concurrency\SchoolCompensationLock;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -48,14 +49,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class PayrollCompensationProvenance
 {
-    public const LOCK_PREFIX = 'payroll.compensation:';
+    public const LOCK_PREFIX = SchoolCompensationLock::PREFIX;
 
     public function lock(string $schoolId, bool $shared): void
     {
-        DB::select(
-            $shared ? 'SELECT pg_advisory_xact_lock_shared(hashtextextended(?, 0))' : 'SELECT pg_advisory_xact_lock(hashtextextended(?, 0))',
-            [self::LOCK_PREFIX.$schoolId],
-        );
+        SchoolCompensationLock::acquire($schoolId, $shared);
     }
 
     /**

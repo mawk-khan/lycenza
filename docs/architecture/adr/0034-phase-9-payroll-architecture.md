@@ -371,11 +371,14 @@ author approving the next run, which first paid the change. Amended:
     affected posted run, in the reversal's own transaction, closed only by an
     independent review. Open means no review row: two append-only tables and no
     status column, so the four run states do not change and nothing can be updated
-    into looking closed. A review is not an approval and changes no run. It blocks
+    into looking closed. Each obligation snapshots the moment it opened, because the
+    first-paid set moves. A review is not an approval and changes no run. It blocks
     nothing else, has no deadline and never clears on its own.
 17. **HR.R1-C6 (PAY-19, OD-HR-24).** Nobody approves, attests or reviews a run that
     pays first a compensation change of the Employee linked to them
     (`employees.user_id`), whoever authored it. Receiving a salary is not a conflict.
     An unlinked Employee proceeds and is recorded, and is never evidence of no
     conflict. A School's first payroll and a School-wide revision need a decider not
-    paid by them, with no override: the owner's explicit choice, 2026-11-06.
+    paid by them, with no override: the owner's explicit choice, 2026-11-06. An
+    approver who becomes such an Employee through a reversal loses independence like
+    one who becomes an author.

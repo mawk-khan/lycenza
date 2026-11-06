@@ -19,15 +19,26 @@ use Illuminate\Support\Facades\Schema;
  * into looking closed. A review is never a new approval and never rewrites the
  * run: it records that someone independent read the real chronology.
  *
+ * An obligation is a record of a moment, so it snapshots what was true then. The
+ * first-paid set moves: an ordinary later independent approval empties it, which
+ * would otherwise let the affected Employee pass as independent and leave a
+ * reviewer signing against no evidence. The snapshot is two immutable id arrays,
+ * checked against the truth by the insert guard. The reversal's facts are copied
+ * too, because the reversal belongs to ANOTHER run: its retention must never take
+ * this run's open obligation with it (the key is SET NULL, the facts stay).
+ *
  * `payroll_reversal_affected_runs` is the one definition of "affected": a run
  * whose independence exception now contains a change the reversed run discharged.
  * That compares the reversal with the exception itself, so a run that merely has
  * some unrelated open exception is not affected (PAY-20). A run already reversed
- * has no live effect left, so it is not affected either.
+ * has no live effect left, so it is not affected either. The exception itself now
+ * also covers an approver who has become the Employee of a first-paid change, not
+ * only its author (owner decision 2026-11-06): a reversal can do either.
  *
  * `payroll_run_postings_reconciliation_required` is deferred to commit, so a
  * reversal cannot commit with an affected posted run left without its obligation,
- * whichever code wrote the reversal.
+ * whichever code wrote the reversal. It reads under RLS, so a commit that can no
+ * longer see the reversal it is checking is refused, never passed.
  *
  * PAY-19. `payroll_run_first_paid_beneficiaries` answers "whose compensation
  * changes does this run pay first", through `employees.user_id` only: never a
@@ -37,7 +48,9 @@ use Illuminate\Support\Facades\Schema;
  *
  * `employees.user_id` is the current link only. Changing it takes the
  * compensation lock exclusively, so it is ordered against every decision (shared)
- * that read it.
+ * that read it. Link writers take that lock BEFORE the Employee row
+ * (`SchoolCompensationLock`): this trigger is the backstop, and alone it would
+ * invert against a calculation, whose FK checks need the row while it holds the lock.
  *
  * Who acted stays an application boundary (rule 102): these guards check the
  * recorded actor. The database cannot know a human's identity.
@@ -51,7 +64,12 @@ return new class extends Migration
             $table->foreignUuid('school_id')->constrained('schools')->restrictOnDelete();
             $table->uuid('payroll_run_id');
             $table->uuid('payroll_run_calculation_id');
-            $table->uuid('reversal_posting_id');
+            // NULL once the reversed run's own retention has taken its posting; the facts below stay.
+            $table->uuid('reversal_posting_id')->nullable();
+            $table->uuid('reversed_payroll_run_id');
+            $table->date('reversed_period_month');
+            $table->timestamp('reversed_at');
+            $table->foreignUuid('reversed_by_user_id')->constrained('users')->restrictOnDelete();
             $table->char('evidence_version', 64);
             $table->timestamp('created_at')->useCurrent();
 
@@ -64,9 +82,13 @@ return new class extends Migration
 
             $table->foreign(['payroll_run_calculation_id', 'payroll_run_id', 'school_id'], 'payroll_reversal_reconciliations_calculation_fk')
                 ->references(['id', 'payroll_run_id', 'school_id'])->on('payroll_run_calculations')->cascadeOnDelete();
-            $table->foreign(['reversal_posting_id', 'school_id'], 'payroll_reversal_reconciliations_posting_fk')
-                ->references(['id', 'school_id'])->on('payroll_run_postings')->cascadeOnDelete();
         });
+        // The snapshot of the moment: what the run paid first, and which of that was implicated (never edited).
+        DB::statement('ALTER TABLE payroll_reversal_reconciliations ADD COLUMN first_paid_assignments uuid[] NOT NULL');
+        DB::statement('ALTER TABLE payroll_reversal_reconciliations ADD COLUMN implicated_assignments uuid[] NOT NULL');
+        // Rule 97: only the relationship column, never school_id.
+        DB::statement('ALTER TABLE payroll_reversal_reconciliations ADD CONSTRAINT payroll_reversal_reconciliations_posting_fk
+            FOREIGN KEY (reversal_posting_id, school_id) REFERENCES payroll_run_postings (id, school_id) ON DELETE SET NULL (reversal_posting_id)');
 
         Schema::create('payroll_reversal_reconciliation_reviews', function (Blueprint $table) {
             $table->uuid('id')->primary();
@@ -103,6 +125,22 @@ return new class extends Migration
                   JOIN public.employees e ON e.school_id = p_school AND e.id = er.employee_id
             $$;
 
+            -- Owner decision 2026-11-06: an approver who has become the Employee of a first-paid change has lost
+            -- independence exactly like one who has become its author.
+            CREATE OR REPLACE FUNCTION public.payroll_run_independence_exception(p_school uuid, p_run uuid)
+                RETURNS TABLE (compensation_assignment_id uuid, employment_record_id uuid)
+                LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
+                SELECT f.compensation_assignment_id, f.employment_record_id
+                  FROM public.payroll_runs r
+                 CROSS JOIN LATERAL public.payroll_run_first_paid_compensation(r.school_id, r.id, r.approved_calculation_id) f
+                 WHERE r.school_id = p_school AND r.id = p_run AND r.run_kind = 'regular' AND r.status IN ('approved', 'posted')
+                   AND r.approved_calculation_id IS NOT NULL
+                   AND (f.assigned_by_user_id = r.approved_by_user_id
+                        OR EXISTS (SELECT 1 FROM public.employment_records er
+                                     JOIN public.employees e ON e.school_id = er.school_id AND e.id = er.employee_id
+                                    WHERE er.school_id = p_school AND er.id = f.employment_record_id AND e.user_id = r.approved_by_user_id))
+            $$;
+
             CREATE FUNCTION public.payroll_reversal_affected_runs(p_school uuid, p_reversal uuid)
                 RETURNS TABLE (payroll_run_id uuid, status text)
                 LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
@@ -110,13 +148,15 @@ return new class extends Migration
                 -- for every source row is quadratic in the run's size, and this runs under the exclusive lock.
                 WITH discharged AS MATERIALIZED (
                     -- Only what the reversed run discharged: priced from the assignment, approved independently of its author.
-                    SELECT s.payroll_run_id AS reversed_run_id, s.compensation_assignment_id, a.assigned_by_user_id
+                    SELECT s.payroll_run_id AS reversed_run_id, s.compensation_assignment_id, a.assigned_by_user_id, e.user_id AS employee_user_id
                       FROM public.payroll_run_postings rp
                       JOIN public.payroll_runs r ON r.school_id = rp.school_id AND r.id = rp.payroll_run_id
                       JOIN public.payroll_run_calculation_sources s
                         ON s.school_id = r.school_id AND s.payroll_run_id = r.id AND s.payroll_run_calculation_id = r.approved_calculation_id AND s.basis = 'structure'
                       JOIN public.employee_compensation_assignments a
                         ON a.school_id = s.school_id AND a.id = s.compensation_assignment_id AND r.approved_by_user_id IS DISTINCT FROM a.assigned_by_user_id
+                      JOIN public.employment_records er ON er.school_id = s.school_id AND er.id = s.employment_record_id
+                      JOIN public.employees e ON e.school_id = er.school_id AND e.id = er.employee_id
                      WHERE rp.school_id = p_school AND rp.id = p_reversal AND rp.posting_kind = 'reversal'
                 ), candidates AS MATERIALIZED (
                     SELECT DISTINCT o.id, o.status::text AS status
@@ -125,7 +165,8 @@ return new class extends Migration
                         ON os.school_id = p_school AND os.compensation_assignment_id = d.compensation_assignment_id AND os.payroll_run_id <> d.reversed_run_id
                       JOIN public.payroll_runs o
                         ON o.school_id = os.school_id AND o.id = os.payroll_run_id AND o.approved_calculation_id = os.payroll_run_calculation_id
-                       AND o.run_kind = 'regular' AND o.status IN ('approved', 'posted') AND o.approved_by_user_id = d.assigned_by_user_id
+                       AND o.run_kind = 'regular' AND o.status IN ('approved', 'posted')
+                       AND (o.approved_by_user_id = d.assigned_by_user_id OR o.approved_by_user_id = d.employee_user_id)
                      -- A run already reversed has no live effect left to reconcile.
                      WHERE NOT EXISTS (SELECT 1 FROM public.payroll_run_postings orp
                                         WHERE orp.school_id = o.school_id AND orp.payroll_run_id = o.id AND orp.posting_kind = 'reversal')
@@ -137,12 +178,33 @@ return new class extends Migration
                                 JOIN discharged d ON d.compensation_assignment_id = e.compensation_assignment_id)
             $$;
 
+            -- Who an obligation concerns: the moment it opened AND now. Each alone is wrong: the live set can empty, and
+            -- the snapshot cannot see a change paid first since. Authors and Employees of either are not independent.
+            CREATE FUNCTION public.payroll_reversal_reconciliation_subjects(p_school uuid, p_reconciliation uuid)
+                RETURNS TABLE (assigned_by_user_id uuid, employee_id uuid, user_id uuid)
+                LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
+                WITH obligation AS MATERIALIZED (
+                    SELECT c.payroll_run_id, c.payroll_run_calculation_id, c.first_paid_assignments
+                      FROM public.payroll_reversal_reconciliations c WHERE c.school_id = p_school AND c.id = p_reconciliation
+                ), assignments AS MATERIALIZED (
+                    SELECT unnest(o.first_paid_assignments) AS id FROM obligation o
+                    UNION
+                    SELECT f.compensation_assignment_id FROM obligation o
+                     CROSS JOIN LATERAL public.payroll_run_first_paid_compensation(p_school, o.payroll_run_id, o.payroll_run_calculation_id) f
+                )
+                SELECT DISTINCT a.assigned_by_user_id, e.id, e.user_id
+                  FROM assignments x
+                  JOIN public.employee_compensation_assignments a ON a.school_id = p_school AND a.id = x.id
+                  JOIN public.employment_records er ON er.school_id = p_school AND er.id = a.employment_record_id
+                  JOIN public.employees e ON e.school_id = p_school AND e.id = er.employee_id
+            $$;
+
             -- What a reviewer's page must still match: bound to this obligation, so it can never be replayed on another.
             CREATE FUNCTION public.payroll_reversal_reconciliation_version(p_school uuid, p_reconciliation uuid) RETURNS text
                 LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
                 SELECT encode(sha256(convert_to(c.id::text || '|' || c.evidence_version
                            || '|' || COALESCE(public.payroll_run_independence_version(p_school, c.payroll_run_id), '')
-                           || '|' || (SELECT count(*) FROM public.payroll_run_first_paid_beneficiaries(p_school, c.payroll_run_id, c.payroll_run_calculation_id) b WHERE b.user_id IS NULL)::text, 'UTF8')), 'hex')
+                           || '|' || (SELECT count(DISTINCT s.employee_id) FROM public.payroll_reversal_reconciliation_subjects(p_school, c.id) s WHERE s.user_id IS NULL)::text, 'UTF8')), 'hex')
                   FROM public.payroll_reversal_reconciliations c
                  WHERE c.school_id = p_school AND c.id = p_reconciliation
             $$;
@@ -151,6 +213,8 @@ return new class extends Migration
                 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
             DECLARE
                 v_status text;
+                v_first_paid uuid[];
+                v_implicated uuid[];
             BEGIN
                 PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('payroll.compensation:' || NEW.school_id::text, 0));
 
@@ -165,6 +229,21 @@ return new class extends Migration
                 IF NEW.evidence_version IS DISTINCT FROM public.payroll_run_independence_version(NEW.school_id, NEW.payroll_run_id) THEN
                     RAISE EXCEPTION 'payroll_reversal_reconciliations_guard: an obligation binds the current evidence' USING ERRCODE = 'check_violation';
                 END IF;
+                IF NOT EXISTS (SELECT 1 FROM public.payroll_run_postings p
+                                 JOIN public.payroll_runs o ON o.school_id = p.school_id AND o.id = p.payroll_run_id
+                                 JOIN public.payroll_periods pp ON pp.school_id = o.school_id AND pp.id = o.payroll_period_id
+                                WHERE p.school_id = NEW.school_id AND p.id = NEW.reversal_posting_id
+                                  AND p.payroll_run_id = NEW.reversed_payroll_run_id AND p.actor_user_id = NEW.reversed_by_user_id
+                                  AND p.created_at = NEW.reversed_at AND pp.period_month = NEW.reversed_period_month) THEN
+                    RAISE EXCEPTION 'payroll_reversal_reconciliations_guard: an obligation copies the facts of its reversal' USING ERRCODE = 'check_violation';
+                END IF;
+                SELECT COALESCE(array_agg(f.compensation_assignment_id ORDER BY f.compensation_assignment_id), '{}') INTO v_first_paid
+                  FROM public.payroll_run_first_paid_compensation(NEW.school_id, NEW.payroll_run_id, NEW.payroll_run_calculation_id) f;
+                SELECT COALESCE(array_agg(e.compensation_assignment_id ORDER BY e.compensation_assignment_id), '{}') INTO v_implicated
+                  FROM public.payroll_run_independence_exception(NEW.school_id, NEW.payroll_run_id) e;
+                IF NEW.first_paid_assignments IS DISTINCT FROM v_first_paid OR NEW.implicated_assignments IS DISTINCT FROM v_implicated THEN
+                    RAISE EXCEPTION 'payroll_reversal_reconciliations_guard: an obligation snapshots the run as it stands' USING ERRCODE = 'check_violation';
+                END IF;
                 RETURN NEW;
             END;
             $$;
@@ -176,6 +255,10 @@ return new class extends Migration
             CREATE FUNCTION public.payroll_run_postings_reconciliation_required() RETURNS trigger
                 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
             BEGIN
+                -- Under RLS an empty answer proves nothing (PAY-15). A commit that cannot see this row is refused.
+                IF NOT EXISTS (SELECT 1 FROM public.payroll_run_postings p WHERE p.school_id = NEW.school_id AND p.id = NEW.id) THEN
+                    RAISE EXCEPTION 'payroll_run_postings_reconciliation_required: this reversal cannot be checked without its School context' USING ERRCODE = 'check_violation';
+                END IF;
                 IF EXISTS (SELECT 1 FROM public.payroll_reversal_affected_runs(NEW.school_id, NEW.id) f
                             WHERE f.status = 'posted'
                               AND NOT EXISTS (SELECT 1 FROM public.payroll_reversal_reconciliations c
@@ -195,17 +278,15 @@ return new class extends Migration
                 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
             DECLARE
                 v_run uuid;
-                v_calc uuid;
                 v_approver uuid;
                 v_reverser uuid;
             BEGIN
                 PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('payroll.compensation:' || NEW.school_id::text, 0));
 
-                SELECT c.payroll_run_id, c.payroll_run_calculation_id, r.approved_by_user_id, p.actor_user_id
-                  INTO v_run, v_calc, v_approver, v_reverser
+                SELECT c.payroll_run_id, r.approved_by_user_id, c.reversed_by_user_id
+                  INTO v_run, v_approver, v_reverser
                   FROM public.payroll_reversal_reconciliations c
                   JOIN public.payroll_runs r ON r.school_id = c.school_id AND r.id = c.payroll_run_id
-                  JOIN public.payroll_run_postings p ON p.school_id = c.school_id AND p.id = c.reversal_posting_id
                  WHERE c.school_id = NEW.school_id AND c.id = NEW.reconciliation_id;
                 IF v_run IS NULL THEN
                     RAISE EXCEPTION 'payroll_reversal_reconciliation_reviews_guard: a review names an obligation of its own School' USING ERRCODE = 'check_violation';
@@ -213,13 +294,13 @@ return new class extends Migration
                 IF NEW.evidence_version IS DISTINCT FROM public.payroll_reversal_reconciliation_version(NEW.school_id, NEW.reconciliation_id) THEN
                     RAISE EXCEPTION 'payroll_reversal_reconciliation_reviews_guard: a review binds the current evidence' USING ERRCODE = 'check_violation';
                 END IF;
-                IF NEW.unlinked_employee_count IS DISTINCT FROM (SELECT count(*) FROM public.payroll_run_first_paid_beneficiaries(NEW.school_id, v_run, v_calc) b WHERE b.user_id IS NULL) THEN
+                IF NEW.unlinked_employee_count IS DISTINCT FROM (SELECT count(DISTINCT s.employee_id) FROM public.payroll_reversal_reconciliation_subjects(NEW.school_id, NEW.reconciliation_id) s WHERE s.user_id IS NULL) THEN
                     RAISE EXCEPTION 'payroll_reversal_reconciliation_reviews_guard: a review records the Employees its conflict check could not see' USING ERRCODE = 'check_violation';
                 END IF;
                 IF NEW.reviewed_by_user_id = v_approver OR NEW.reviewed_by_user_id = v_reverser
                    OR public.payroll_run_has_participant(NEW.school_id, v_run, NEW.reviewed_by_user_id)
-                   OR EXISTS (SELECT 1 FROM public.payroll_run_first_paid_compensation(NEW.school_id, v_run, v_calc) f WHERE f.assigned_by_user_id = NEW.reviewed_by_user_id)
-                   OR EXISTS (SELECT 1 FROM public.payroll_run_first_paid_beneficiaries(NEW.school_id, v_run, v_calc) b WHERE b.user_id = NEW.reviewed_by_user_id) THEN
+                   OR EXISTS (SELECT 1 FROM public.payroll_reversal_reconciliation_subjects(NEW.school_id, NEW.reconciliation_id) s
+                               WHERE s.assigned_by_user_id = NEW.reviewed_by_user_id OR s.user_id = NEW.reviewed_by_user_id) THEN
                     RAISE EXCEPTION 'payroll_reversal_reconciliation_reviews_guard: a reviewer is independent of the run, its reversal and its first-paid changes' USING ERRCODE = 'check_violation';
                 END IF;
                 RETURN NEW;
@@ -280,6 +361,7 @@ return new class extends Migration
 
             REVOKE ALL ON FUNCTION public.payroll_run_first_paid_beneficiaries(uuid, uuid, uuid) FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.payroll_reversal_affected_runs(uuid, uuid) FROM PUBLIC;
+            REVOKE ALL ON FUNCTION public.payroll_reversal_reconciliation_subjects(uuid, uuid) FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.payroll_reversal_reconciliation_version(uuid, uuid) FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.payroll_reversal_reconciliations_guard() FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.payroll_run_postings_reconciliation_required() FROM PUBLIC;
@@ -289,6 +371,7 @@ return new class extends Migration
             REVOKE ALL ON FUNCTION public.employees_user_link_payroll_lock() FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION public.payroll_run_first_paid_beneficiaries(uuid, uuid, uuid) TO school_os_app;
             GRANT EXECUTE ON FUNCTION public.payroll_reversal_affected_runs(uuid, uuid) TO school_os_app;
+            GRANT EXECUTE ON FUNCTION public.payroll_reversal_reconciliation_subjects(uuid, uuid) TO school_os_app;
             GRANT EXECUTE ON FUNCTION public.payroll_reversal_reconciliation_version(uuid, uuid) TO school_os_app;
             SQL);
     }
@@ -317,7 +400,17 @@ return new class extends Migration
             DROP TRIGGER trg_payroll_reversal_reconciliations_guard ON payroll_reversal_reconciliations;
             DROP FUNCTION public.payroll_reversal_reconciliations_guard();
             DROP FUNCTION public.payroll_reversal_reconciliation_version(uuid, uuid);
+            DROP FUNCTION public.payroll_reversal_reconciliation_subjects(uuid, uuid);
             DROP FUNCTION public.payroll_reversal_affected_runs(uuid, uuid);
+            CREATE OR REPLACE FUNCTION public.payroll_run_independence_exception(p_school uuid, p_run uuid)
+                RETURNS TABLE (compensation_assignment_id uuid, employment_record_id uuid)
+                LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
+                SELECT f.compensation_assignment_id, f.employment_record_id
+                  FROM public.payroll_runs r
+                 CROSS JOIN LATERAL public.payroll_run_first_paid_compensation(r.school_id, r.id, r.approved_calculation_id) f
+                 WHERE r.school_id = p_school AND r.id = p_run AND r.run_kind = 'regular' AND r.status IN ('approved', 'posted')
+                   AND r.approved_calculation_id IS NOT NULL AND f.assigned_by_user_id = r.approved_by_user_id
+            $$;
             DROP FUNCTION public.payroll_run_first_paid_beneficiaries(uuid, uuid, uuid);
             SQL);
 

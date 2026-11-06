@@ -97,6 +97,7 @@ interface Props {
         attestation: { attestedBy: string | null; attestedAt: string | null } | null;
         details: {
             approvedBy: string | null;
+            employeesWithoutAccount?: number;
             reversedRuns: { id: string; periodMonth: string; reversedAt: string }[];
             changes: {
                 total: number;
@@ -670,9 +671,9 @@ const reversalPosting = computed(
                 </h3>
                 <p class="mt-1">
                     A payroll run this approval relied on was reversed. The person who approved this
-                    run also recorded compensation changes that no standing independent approval now
-                    covers. The approval stays on record. It cannot be withdrawn, and this is not a
-                    new approval.
+                    run recorded, or is the Employee of, compensation changes that no standing
+                    independent approval now covers. The approval stays on record. It cannot be
+                    withdrawn, and this is not a new approval.
                 </p>
                 <p
                     v-if="independence.blockedReason === 'not_independent'"
@@ -703,6 +704,11 @@ const reversalPosting = computed(
                 </p>
                 <template v-if="independence.details">
                     <p class="mt-2">Approved by {{ independence.details.approvedBy ?? '—' }}.</p>
+                    <p v-if="(independence.details.employeesWithoutAccount ?? 0) > 0" class="mt-2">
+                        {{ independence.details.employeesWithoutAccount }} Employee(s) with a
+                        compensation change in this run have no linked account, so the system cannot
+                        tell whether you are one of them. Your attestation records this.
+                    </p>
                     <ul class="mt-1 list-disc pl-5">
                         <li v-for="r in independence.details.reversedRuns" :key="r.id">
                             Run for {{ r.periodMonth }} was reversed on

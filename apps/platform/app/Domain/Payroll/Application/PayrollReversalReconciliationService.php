@@ -10,7 +10,6 @@ use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
 use App\Domain\Payroll\Infrastructure\PayrollReversalReconciliation;
 use App\Domain\Payroll\Infrastructure\PayrollReversalReconciliationReview;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
-use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Approval\ApprovalDecisionAuthority;
@@ -88,7 +87,7 @@ final class PayrollReversalReconciliationService
                         throw new ReconciliationEvidenceStaleException($obligation->id);
                     }
 
-                    $unlinked = $this->beneficiaries->of($run, $obligation->payroll_run_calculation_id, $actor->id)->unlinkedEmployees;
+                    $unlinked = $this->beneficiaries->ofObligation($school->id, $obligation->id, $actor->id)->unlinkedEmployees;
                     $review = PayrollReversalReconciliationReview::query()->create([
                         'school_id' => $school->id,
                         'reconciliation_id' => $obligation->id,
@@ -128,19 +127,21 @@ final class PayrollReversalReconciliationService
     }
 
     /**
-     * Why this actor is not independent of this obligation, or null. The run's
-     * makers and approver and the reverser come first, so the closed reason never
-     * reveals that someone who took part is also paid by the run.
+     * Why this actor is not independent of this obligation, or null, read from the
+     * moment it opened and from now. The run's makers, approver and reverser come
+     * first, so the closed reason never reveals that someone who took part is also
+     * paid by the run.
      *
      * @return 'not_independent'|'self_beneficiary'|null
      */
     public function conflict(PayrollReversalReconciliation $obligation, PayrollRun $run, User $actor): ?string
     {
-        $reverser = PayrollRunPosting::query()->where('school_id', $obligation->school_id)->whereKey($obligation->reversal_posting_id)->value('actor_user_id');
-        if ($actor->id === $run->approved_by_user_id || $actor->id === $reverser || $this->runs->participants($run)->participationOf($actor->id) !== null) {
+        $subject = $this->beneficiaries->ofObligation($obligation->school_id, $obligation->id, $actor->id);
+        if ($actor->id === $run->approved_by_user_id || $actor->id === $obligation->reversed_by_user_id
+            || $subject->authored || $this->runs->participants($run)->participationOf($actor->id) !== null) {
             return 'not_independent';
         }
 
-        return $this->beneficiaries->of($run, $obligation->payroll_run_calculation_id, $actor->id)->conflicted ? 'self_beneficiary' : null;
+        return $subject->conflicted ? 'self_beneficiary' : null;
     }
 }

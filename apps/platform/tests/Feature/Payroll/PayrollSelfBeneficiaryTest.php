@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Payroll;
 
+use App\Domain\Finance\Application\LedgerService;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Payroll\Application\Exceptions\PostingAttestationRequiredException;
+use App\Domain\Payroll\Application\Exceptions\PostingAttestorCannotReviewException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
 use App\Domain\Payroll\Application\PayrollApprovalReviewService;
@@ -13,6 +16,7 @@ use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\PayrollSelfBeneficiaries;
 use App\Domain\Payroll\Application\PostingAttestation;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
+use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -277,13 +281,13 @@ class PayrollSelfBeneficiaryTest extends TestCase
         $this->assertSame(1, $this->audit('payroll.run.reconciliation_reviewed', $november)[0]['employeesWithoutAccount']);
     }
 
-    private function assertRuntimeRefuses(callable $write, string $because): void
+    private function assertRuntimeRefuses(callable $write, string $because, string $reason): void
     {
         try {
             DB::transaction(fn () => $this->inSchool($this->school, $write));
             $this->fail('the runtime role was allowed to: '.$because);
         } catch (QueryException $e) {
-            $this->assertStringContainsString('guard', $e->getMessage(), $because);
+            $this->assertStringContainsString($reason, (string) $e->getPrevious()?->getMessage(), $because);
         }
     }
 
@@ -293,13 +297,38 @@ class PayrollSelfBeneficiaryTest extends TestCase
         $this->link($this->reviewer);
         $october = $this->calculatedRun('2015-10-01');
         $calculation = $this->inSchool($this->school, fn () => $this->runCalculation($october));
+        $attribution = fn (User $as) => ['status' => 'approved', 'approved_by_user_id' => $as->id, 'approved_at' => now(), 'approved_calculation_id' => $calculation];
 
-        $this->assertRuntimeRefuses(fn () => DB::table('payroll_runs')->where('id', $october->id)->update(['status' => 'approved', 'approved_by_user_id' => $this->reviewer->id, 'approved_at' => now(), 'approved_calculation_id' => $calculation]), 'approve own change');
+        $this->assertRuntimeRefuses(fn () => DB::table('payroll_runs')->where('id', $october->id)->update($attribution($this->reviewer)), 'approve own change', 'an approver is not the Employee of a change the run pays first');
         $this->assertSame('calculated', $this->runRow($october)['status']);
+
+        // The positive control: the same raw transition by someone else.
+        $this->inSchool($this->school, fn () => DB::table('payroll_runs')->where('id', $october->id)->update($attribution($this->checker)));
+        $this->assertSame('approved', $this->runRow($october)['status']);
     }
 
     #[Test]
-    public function the_database_refuses_a_forged_attestation_and_review_by_a_beneficiary(): void
+    public function the_database_refuses_a_forged_attestation_by_a_beneficiary(): void
+    {
+        // An unrelated posted run whose journal entry can supply a real, unused entry below.
+        $spare = $this->calculatedRun('2015-08-01');
+        $this->approve($spare, $this->checker);
+        $this->postRun($spare);
+        $november = $this->awaitingAttestation();
+        $this->link($this->poster);
+        // A real journal entry and posting row of this run by the poster, so only the conflict can refuse the attestation.
+        $this->assertRuntimeRefuses(function () use ($november, $spare): void {
+            $original = DB::table('payroll_run_postings')->where('payroll_run_id', $spare->id)->where('posting_kind', 'original')->first();
+            $entry = app(LedgerService::class)->reverseById($this->school, $original->journal_entry_id, $this->poster, 'test');
+            $posting = (string) Str::uuid7();
+            DB::table('payroll_run_postings')->insert(['id' => $posting, 'school_id' => $this->school->id, 'payroll_run_id' => $november->id, 'journal_entry_id' => $entry->journalEntryId, 'currency' => 'INR', 'posting_kind' => 'original', 'actor_user_id' => $this->poster->id]);
+            DB::table('payroll_posting_attestations')->insert(['id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'payroll_run_id' => $november->id, 'payroll_run_calculation_id' => $this->runRow($november)['approved_calculation_id'],
+                'payroll_run_posting_id' => $posting, 'evidence_version' => app(PayrollPostingIndependence::class)->version($november->fresh()), 'statement_code' => 'independence_changed_v1', 'attested_by_user_id' => $this->poster->id]);
+        }, 'attest own change', 'an attestor is not the Employee of a change the run pays first');
+    }
+
+    #[Test]
+    public function the_database_refuses_a_forged_review_by_a_beneficiary(): void
     {
         [$october, $november] = $this->octoberAndPostedNovember();
         $this->reverseRun($october);
@@ -307,16 +336,76 @@ class PayrollSelfBeneficiaryTest extends TestCase
         $this->link($this->reviewer);
 
         $this->assertRuntimeRefuses(fn () => DB::table('payroll_reversal_reconciliation_reviews')->insert(['id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'reconciliation_id' => $o->id,
-            'evidence_version' => $this->reviewVersion($o), 'statement_code' => 'reversal_impact_reviewed_v1', 'unlinked_employee_count' => 0, 'reviewed_by_user_id' => $this->reviewer->id]), 'review own change');
+            'evidence_version' => $this->reviewVersion($o), 'statement_code' => 'reversal_impact_reviewed_v1', 'unlinked_employee_count' => 0, 'reviewed_by_user_id' => $this->reviewer->id]), 'review own change', 'payroll_reversal_reconciliation_reviews_guard:');
         $this->assertSame(0, $this->reviews());
     }
 
-    #[Test]
-    public function changing_an_account_link_takes_the_compensation_lock_a_decision_holds(): void
+    /** P's own change: X authors it, an independent October pays it, and P may then approve November. */
+    private function novemberApprovedByItsEmployee(): array
     {
-        $trigger = DB::selectOne("select pg_get_triggerdef(oid) as d from pg_trigger where tgname = 'trg_employees_user_link_payroll_lock'");
+        $this->link($this->reviewer);
+        $this->travelTo(Carbon::parse('2015-09-28 06:00:00'));
+        $this->raise('2015-10-01', '55000.00');
+        $october = $this->calculatedRun('2015-10-01');
+        $this->approve($october, $this->checker);
+        $this->postRun($october);
+        $november = $this->calculatedRun('2015-11-01');
+        $this->assertSame('approved', $this->approve($november, $this->reviewer)->status, 'allowed: October stands, so November pays nothing of theirs first');
 
-        $this->assertStringContainsString('user_id', $trigger->d);
-        $this->assertStringContainsString('employees_user_link_payroll_lock', $trigger->d);
+        return [$october, $november];
+    }
+
+    #[Test]
+    public function a_reversal_that_makes_the_approver_the_beneficiary_needs_the_attestation(): void
+    {
+        [$october, $november] = $this->novemberApprovedByItsEmployee();
+
+        $this->reverseRun($october);
+
+        $version = (string) $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->version($november->fresh()));
+        $this->assertNotSame('', $version, 'owner decision 2026-11-06: their own pay is treated like their own change');
+        try {
+            $this->postRun($november);
+            $this->fail('it posted with no attestation');
+        } catch (PostingAttestorCannotReviewException|PostingAttestationRequiredException) {
+            $this->assertSame('approved', $this->runRow($november)['status']);
+        }
+        $this->inSchool($this->school, fn () => app(PayrollPostingService::class)->post($november->fresh(), $this->poster, $this->freshMfaProofFor($this->poster), null, new PostingAttestation($version, true)));
+        $this->assertSame('posted', $this->runRow($november)['status']);
+    }
+
+    #[Test]
+    public function a_reversal_after_posting_that_makes_the_approver_the_beneficiary_opens_an_obligation(): void
+    {
+        [$october, $november] = $this->novemberApprovedByItsEmployee();
+        $this->postRun($november);
+
+        $this->reverseRun($october);
+
+        $this->assertSame(1, $this->obligations($november));
+        $this->inSchool($this->school, fn () => $this->reviewAs($this->obligation($november), $this->checker));
+        $this->assertSame(1, $this->reviews());
+    }
+
+    #[Test]
+    public function an_attestor_is_shown_the_employees_the_check_could_not_see(): void
+    {
+        $november = $this->awaitingAttestation();
+
+        $review = $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->poster, true));
+
+        $this->assertSame(1, $review['details']['employeesWithoutAccount']);
+    }
+
+    #[Test]
+    public function an_implicated_reader_of_a_posted_run_gets_no_evidence_there_either(): void
+    {
+        [$october, $november] = $this->octoberAndPostedNovember();
+        $this->reverseRun($october);
+        $this->link($this->poster);
+
+        $this->assertNull($this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->poster, true))['details'], 'whatever the status');
+        $this->assertNull($this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->x, true))['details'], 'nor the implicated author');
+        $this->assertNotNull($this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->review($november->fresh(), $this->reviewer, true))['details']);
     }
 }

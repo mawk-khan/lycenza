@@ -54,9 +54,6 @@ final class PayrollReversalReconciliationReadService
                 ->leftJoin('payroll_reversal_reconciliation_reviews as v', fn ($j) => $j->on('v.reconciliation_id', '=', 'c.id')->on('v.school_id', '=', 'c.school_id'))
                 ->join('payroll_runs as r', fn ($j) => $j->on('r.id', '=', 'c.payroll_run_id')->on('r.school_id', '=', 'c.school_id'))
                 ->join('payroll_periods as p', fn ($j) => $j->on('p.id', '=', 'r.payroll_period_id')->on('p.school_id', '=', 'r.school_id'))
-                ->join('payroll_run_postings as rp', fn ($j) => $j->on('rp.id', '=', 'c.reversal_posting_id')->on('rp.school_id', '=', 'c.school_id'))
-                ->join('payroll_runs as o', fn ($j) => $j->on('o.id', '=', 'rp.payroll_run_id')->on('o.school_id', '=', 'rp.school_id'))
-                ->join('payroll_periods as op', fn ($j) => $j->on('op.id', '=', 'o.payroll_period_id')->on('op.school_id', '=', 'o.school_id'))
                 ->where('c.school_id', $school->id);
             if ($state === 'open') {
                 $query->whereNull('v.id');
@@ -66,7 +63,7 @@ final class PayrollReversalReconciliationReadService
 
             /** @var LengthAwarePaginator<int|string, array<string, mixed>> $rows */
             $rows = $query->orderByRaw('v.id IS NOT NULL')->orderByDesc('c.created_at')->orderByDesc('c.id')
-                ->paginate(self::PER_PAGE, ['c.id', 'c.created_at', 'c.payroll_run_id', 'p.period_month', 'o.id as reversed_run_id', 'op.period_month as reversed_period_month', 'rp.created_at as reversed_at', 'v.created_at as reviewed_at'], 'page', max(1, $page))
+                ->paginate(self::PER_PAGE, ['c.id', 'c.created_at', 'c.payroll_run_id', 'p.period_month', 'c.reversed_payroll_run_id', 'c.reversed_period_month', 'c.reversed_at', 'v.created_at as reviewed_at'], 'page', max(1, $page))
                 ->through(fn ($row): array => $this->summary((object) $row));
 
             return $rows;
@@ -82,7 +79,7 @@ final class PayrollReversalReconciliationReadService
             'openedAt' => $this->iso($row->created_at),
             'reviewedAt' => $row->reviewed_at === null ? null : $this->iso($row->reviewed_at),
             'affectedRun' => ['id' => $row->payroll_run_id, 'periodMonth' => substr((string) $row->period_month, 0, 7)],
-            'reversedRun' => ['id' => $row->reversed_run_id, 'periodMonth' => substr((string) $row->reversed_period_month, 0, 7), 'reversedAt' => $this->iso($row->reversed_at)],
+            'reversedRun' => ['id' => $row->reversed_payroll_run_id, 'periodMonth' => substr((string) $row->reversed_period_month, 0, 7), 'reversedAt' => $this->iso($row->reversed_at)],
         ];
     }
 
@@ -122,8 +119,6 @@ final class PayrollReversalReconciliationReadService
             $obligation = PayrollReversalReconciliation::query()->where('school_id', $school->id)->whereKey($reconciliationId)->first()
                 ?? throw new ModelNotFoundException('No query results for model.');
             $run = PayrollRun::query()->where('school_id', $school->id)->findOrFail($obligation->payroll_run_id);
-            $reversal = PayrollRunPosting::query()->where('school_id', $school->id)->findOrFail($obligation->reversal_posting_id);
-            $reversed = PayrollRun::query()->where('school_id', $school->id)->findOrFail($reversal->payroll_run_id);
             $review = $this->review($obligation);
 
             $conflict = $this->reconciliations->conflict($obligation, $run, $actor);
@@ -153,14 +148,17 @@ final class PayrollReversalReconciliationReadService
                     // Reversed after this opened: the obligation stays, and the reviewer is told.
                     'sinceReversed' => PayrollRunPosting::query()->where('school_id', $school->id)->where('payroll_run_id', $run->id)->where('posting_kind', 'reversal')->exists(),
                 ],
-                'reversedRun' => ['id' => $reversed->id, 'periodMonth' => $this->periodMonth($reversed), 'reversedAt' => $reversal->created_at->toIso8601String()],
+                'reversedRun' => ['id' => $obligation->reversed_payroll_run_id, 'periodMonth' => $obligation->reversed_period_month->format('Y-m'), 'reversedAt' => $obligation->reversed_at->toIso8601String()],
                 'exceptionStillApplies' => $current !== null,
                 'blockedReason' => $blocked,
                 'reviewVersion' => $blocked === null ? $this->reconciliations->version($obligation) : null,
+                // From the snapshot: a later approval can empty the live set, and that must never empty the evidence.
                 'details' => $showDetails ? [
-                    ...$this->independence->details($run, $page),
-                    'reversedBy' => User::query()->whereKey($reversal->actor_user_id)->value('name'),
-                    'employeesWithoutAccount' => $this->beneficiaries->of($run, $obligation->payroll_run_calculation_id, $actor->id)->unlinkedEmployees,
+                    'calculationId' => $obligation->payroll_run_calculation_id,
+                    'approvedBy' => User::query()->whereKey($run->approved_by_user_id)->value('name'),
+                    'reversedBy' => User::query()->whereKey($obligation->reversed_by_user_id)->value('name'),
+                    'employeesWithoutAccount' => $this->beneficiaries->ofObligation($school->id, $obligation->id, $actor->id)->unlinkedEmployees,
+                    'changes' => $this->independence->changesPage($school->id, DB::table(DB::raw('unnest(?::uuid[]) AS e(compensation_assignment_id)'))->addBinding([$obligation->implicated_assignments], 'from'), $page),
                 ] : null,
                 'review' => $review === null ? null : [
                     'reviewedAt' => $review->created_at->toIso8601String(),

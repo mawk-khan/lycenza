@@ -117,8 +117,8 @@ function review(): void {
                 <li>
                     The run for {{ reconciliation.reversedRun.periodMonth }} was reversed on
                     {{ formatDateTime(reconciliation.reversedRun.reversedAt) }}. The person who
-                    approved {{ reconciliation.affectedRun.periodMonth }} then became the author of
-                    a compensation change it paid first.
+                    approved {{ reconciliation.affectedRun.periodMonth }} then became the author, or
+                    the Employee, of a compensation change it paid first.
                 </li>
             </ol>
             <p class="mt-2">
@@ -161,7 +161,6 @@ function review(): void {
                 role="region"
                 aria-label="Compensation changes, scrollable"
             >
-                0" class="mt-2 overflow-x-auto">
                 <table class="data-table w-full min-w-[32rem] text-sm">
                     <caption class="sr-only">
                         Compensation changes behind this exception

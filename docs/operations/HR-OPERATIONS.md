@@ -171,7 +171,8 @@ recorded compensation provenance. Fix forward.
   review: not the run's approver or makers, not whoever reversed, and not anyone paid
   by a change in it. It needs `payroll.runs.approve` and sensitive view, and a fresh
   code. It blocks no other Payroll work and has no deadline, and it never closes on
-  its own, so check the open count on the Payroll page. A review is final, is not an
+  its own, even if a later approval covers the change, so check the open count on the
+  Payroll page. A review is final, is not an
   approval, and moves no money.
 - **A reversal is brief but School-wide.** Approvals and calculations of that
   School wait for it to commit.

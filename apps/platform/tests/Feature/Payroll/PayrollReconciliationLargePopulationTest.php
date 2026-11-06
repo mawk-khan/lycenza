@@ -92,7 +92,7 @@ class PayrollReconciliationLargePopulationTest extends TestCase
 
             [$count, $recording] = $queries(fn () => app(PayrollPostingIndependence::class)->recordAffectedBy($a, $posting, $prep));
             $this->assertSame(2, $count);
-            $this->assertLessThanOrEqual(13, $recording, 'measured flat from 500 to 10,000 entries');
+            $this->assertLessThanOrEqual(18, $recording, 'measured flat from 500 to 10,000 entries');
 
             $o = PayrollReversalReconciliation::query()->where('school_id', $sid)->where('payroll_run_id', $ids['b'])->firstOrFail();
             [$show, $reading] = $queries(fn () => app(PayrollReversalReconciliationReadService::class)->show($school, $reviewer, $o->id, true));

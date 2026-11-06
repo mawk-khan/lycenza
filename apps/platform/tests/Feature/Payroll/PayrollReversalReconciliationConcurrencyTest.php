@@ -9,6 +9,7 @@ use App\Domain\Payroll\Application\CompensationService;
 use App\Domain\Payroll\Application\FixedComponentValueInput;
 use App\Domain\Payroll\Application\PayrollPeriodService;
 use App\Domain\Payroll\Application\PayrollPostingService;
+use App\Domain\Payroll\Application\PayrollReversalReconciliationReadService;
 use App\Domain\Payroll\Application\PayrollReversalReconciliationService;
 use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Infrastructure\PayrollReversalReconciliation;
@@ -16,6 +17,8 @@ use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -322,6 +325,49 @@ class PayrollReversalReconciliationConcurrencyTest extends TestCase
         }
 
         $this->assertSame(0, DB::connection('pgsql_admin')->table('payroll_run_postings')->where('payroll_run_id', $this->october->id)->where('posting_kind', 'reversal')->count(), 'nothing of it committed');
+    }
+
+    #[Test]
+    public function a_commit_that_cannot_see_its_reversal_is_refused_never_passed(): void
+    {
+        $this->postRun($this->november);
+
+        try {
+            $this->inSchool($this->school, fn () => DB::transaction(function (): void {
+                app(PayrollPostingService::class)->reverse($this->october->fresh(), $this->finance, $this->freshMfaProofFor($this->finance), 'test');
+                // The obligation is in place, so only the lost context can refuse this. Fired alone, because Finance's
+                // own deferred balance check refuses a blind commit too, which would hide this one.
+                DB::select("SELECT set_config('app.current_school_id', '', true)");
+                DB::statement('SET CONSTRAINTS trg_payroll_run_postings_reconciliation_required IMMEDIATE');
+            }));
+            $this->fail('a check that could see no row passed');
+        } catch (\PDOException $e) {
+            $this->assertStringContainsString('this reversal cannot be checked without its School context', $e->getMessage());
+        }
+    }
+
+    #[Test]
+    public function the_reversed_runs_retention_never_takes_the_affected_runs_open_obligation(): void
+    {
+        $o = $this->postedThenReversed();
+        $admin = DB::connection('pgsql_admin');
+
+        $admin->transaction(function () use ($admin, $o): void {
+            // Retention's own session guard is what a real purge satisfies; this asserts the key, not that guard.
+            $admin->statement('ALTER TABLE payroll_run_postings DISABLE TRIGGER trg_retention_guard_payroll_run_postings');
+            $admin->table('payroll_run_postings')->where('id', $o->reversal_posting_id)->delete();
+            $admin->statement('ALTER TABLE payroll_run_postings ENABLE TRIGGER trg_retention_guard_payroll_run_postings');
+        });
+
+        $after = $this->inSchool($this->school, fn () => PayrollReversalReconciliation::query()->whereKey($o->id)->firstOrFail());
+        $this->assertNull($after->reversal_posting_id, 'only the link goes');
+        $this->assertSame($o->school_id, $after->school_id, 'rule 97: never school_id');
+        $state = $this->inSchool($this->school, fn () => app(PayrollReversalReconciliationReadService::class)->show($this->school, $this->reviewer, $o->id, true));
+        $this->assertSame('open', $state['state']);
+        $this->assertSame($this->october->id, $state['reversedRun']['id'], 'the facts stay');
+        $this->assertSame(1, $state['details']['changes']['total']);
+        $this->inSchool($this->school, fn () => app(PayrollReversalReconciliationService::class)->review($this->school, $o->id, $this->reviewer, new FreshMfaProof($this->reviewer->id, CarbonImmutable::now()), $this->version($after), true));
+        $this->assertSame(1, $this->reviews(), 'and it can still be closed, and only by a review');
     }
 
     #[Test]
