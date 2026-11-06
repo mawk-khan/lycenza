@@ -2041,3 +2041,11 @@ schema change and no lookup behaviour change.
 **Status.** P2-F2 is **complete**. OD-PPR-22 (per-role narrowing) is still
 open; §7.2 of the staging architecture now records that only the web role
 computes digests. R-00a stays blocked.
+
+## HR.R1-C5 amendment (2026-11-06): the rollback contract is enforced
+
+§26.7 said a hardened environment never runs a migration `down()`, and nothing
+stopped it. Every environment except `local` and `testing` now refuses
+`migrate:rollback`, `migrate:reset`, `migrate:refresh`, `migrate:fresh` and `db:wipe`.
+The real `APP_ENV` decides as well as `app()->environment()`, because `--env` changes
+only the latter. A new environment refuses by default.

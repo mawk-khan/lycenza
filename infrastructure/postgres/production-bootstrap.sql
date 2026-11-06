@@ -84,7 +84,7 @@ BEGIN
         RAISE EXCEPTION 'production-bootstrap: run this as the migration role % (or a superuser), not %', migration_role, current_user;
     END IF;
     -- HR.R1-C5 (PAY-15, ADR 0021): under FORCE RLS a role without this reads filtered tables, so its migrations and
-    -- rollback guards would act on an empty answer. Six migrations already refuse to run without it.
+    -- rollback guards would act on an empty answer. Three migrations already refuse to run without it.
     IF NOT (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = migration_role) THEN
         RAISE EXCEPTION 'production-bootstrap: migration role % needs BYPASSRLS (or superuser) -- it must see every row of every table', migration_role;
     END IF;

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
@@ -174,7 +175,7 @@ class RollbackSafeMigratorTest extends TestCase
             $this->fail('the rollback went ahead on rows it could not see');
         } catch (RollbackRefusedException $e) {
             $this->assertStringContainsString($this->name, $e->getMessage());
-            $this->assertStringContainsString('cannot see every row of c5_guarded', $e->getMessage());
+            $this->assertStringContainsString('cannot see every row', $e->getMessage());
             $this->assertStringNotContainsString($ids[0], $e->getMessage(), 'never a row');
         }
         $this->assertSame($ids, $this->rows('c5_guarded'));
@@ -195,6 +196,64 @@ class RollbackSafeMigratorTest extends TestCase
             $this->assertSame($ids, $this->rows('c5_guarded'));
             $this->assertWorldIntact();
         }
+    }
+
+    #[Test]
+    public function a_down_that_reads_nothing_is_refused_too_because_drop_is_never_filtered(): void
+    {
+        $ids = $this->sentinels('c5_guarded', (string) Str::uuid7());
+        $this->migration("Schema::drop('c5_guarded');");
+
+        $this->expectException(RollbackRefusedException::class);
+        try {
+            $this->rollback();
+        } finally {
+            $this->assertSame($ids, $this->rows('c5_guarded'));
+            $this->assertWorldIntact();
+        }
+    }
+
+    #[Test]
+    public function a_read_through_a_security_definer_function_raises_and_is_never_an_empty_answer(): void
+    {
+        $admin = DB::connection('pgsql_admin');
+        $this->grantBypass();
+        $ids = $this->sentinels('c5_guarded', (string) Str::uuid7());
+        // Owned by a role that cannot bypass: it filters, whoever calls it.
+        $admin->statement('CREATE ROLE c5_definer NOLOGIN NOSUPERUSER NOBYPASSRLS');
+        try {
+            $admin->statement('GRANT USAGE, CREATE ON SCHEMA public TO c5_definer');
+            $admin->statement('GRANT SELECT ON c5_guarded TO c5_definer');
+            $admin->statement("CREATE FUNCTION c5_visible() RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path = public AS 'SELECT EXISTS (SELECT 1 FROM c5_guarded)'");
+            $admin->statement('ALTER FUNCTION c5_visible() OWNER TO c5_definer');
+            $admin->statement('GRANT EXECUTE ON FUNCTION c5_visible() TO '.self::ROLE);
+            $this->migration("if (DB::selectOne('select c5_visible() as v')->v) { throw new RuntimeException('Refusing'); } Schema::drop('c5_guarded');");
+
+            try {
+                $this->rollback();
+                $this->fail('a filtered answer let the rollback through');
+            } catch (RollbackRefusedException $e) {
+                $this->assertStringContainsString('cannot see every row of c5_guarded', $e->getMessage());
+            }
+            $this->assertSame($ids, $this->rows('c5_guarded'));
+        } finally {
+            $admin->statement('DROP FUNCTION IF EXISTS c5_visible()');
+            $admin->statement('REVOKE ALL ON c5_guarded FROM c5_definer');
+            $admin->statement('REVOKE ALL ON SCHEMA public FROM c5_definer');
+            $admin->statement('DROP ROLE c5_definer');
+        }
+    }
+
+    #[Test]
+    public function a_pretend_run_changes_nothing_and_needs_no_transaction(): void
+    {
+        $this->sentinels('c5_guarded', (string) Str::uuid7());
+        $this->grantBypass();
+        $this->migration("DB::statement('ALTER TABLE c5_guarded ADD COLUMN c5_pretend integer');");
+
+        Artisan::call('migrate:rollback', ['--database' => self::CONNECTION, '--path' => $this->directory, '--realpath' => true, '--force' => true, '--pretend' => true]);
+
+        $this->assertWorldIntact();
     }
 
     #[Test]
@@ -266,6 +325,7 @@ class RollbackSafeMigratorTest extends TestCase
     #[Test]
     public function a_missing_privilege_is_a_refusal_and_never_an_empty_answer(): void
     {
+        $this->grantBypass();
         $admin = DB::connection('pgsql_admin');
         $admin->statement('CREATE TABLE c5_foreign (id uuid PRIMARY KEY)');
         try {
@@ -311,7 +371,19 @@ class RollbackSafeMigratorTest extends TestCase
             DB::prohibitDestructiveCommands(false);
         }
         $this->assertSame(1, DB::connection('pgsql_admin')->table('pg_class')->where('relname', 'migrations')->count());
-        $this->assertStringContainsString("prohibitDestructiveCommands(! \$this->app->environment(['local', 'testing']))", (string) file_get_contents(app_path('Providers/AppServiceProvider.php')));
+        $this->assertStringContainsString("Env::get('APP_ENV')", (string) file_get_contents(app_path('Providers/AppServiceProvider.php')), 'the real APP_ENV decides, never only --env');
+    }
+
+    #[Test]
+    public function the_env_option_cannot_talk_a_hardened_process_out_of_the_refusal(): void
+    {
+        // A real console process that believes `--env=local`, on a real APP_ENV of staging. The database named does not
+        // exist, so this test cannot wipe anything even if the refusal were missing.
+        $process = new Process(['php', 'artisan', 'migrate:fresh', '--env=local', '--force'], base_path(), ['APP_ENV' => 'staging', 'DB_DATABASE' => 'c5_no_such_database']);
+        $process->run();
+
+        $this->assertNotSame(0, $process->getExitCode());
+        $this->assertStringContainsString('prohibited', $process->getOutput().$process->getErrorOutput());
     }
 
     /** @return list<string> */

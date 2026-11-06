@@ -157,5 +157,5 @@ recorded compensation provenance. Fix forward.
   for any control. It is recorded; reconcile it by your normal correction route.
 - **A reversal is brief but School-wide.** Approvals and calculations of that
   School wait for it to commit.
-- **A migration rollback** is refused in staging and production, and on a role
+- **A migration rollback** is refused outside local and testing, and on any role
   without `BYPASSRLS`: see `DATABASE-BOOTSTRAP.md`, "Rollback safety".

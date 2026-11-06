@@ -9,8 +9,9 @@ use Tests\TestCase;
  * HR.R1-C5 (PAY-15): the static half of rollback safety. It proves nothing about
  * behaviour (`RollbackSafeMigratorTest` does, on real roles); it keeps the
  * inventory complete and keeps a `down()` from undoing the fail-closed runner.
- * Known limits: it reads source, follows no helper in another file, and a guard
- * built only inside raw SQL with no `throw` or "refuse" is not seen.
+ * Known limits: it reads source, follows same-file helpers one level only and no
+ * helper in another file, and a guard built only inside raw SQL with no `throw` or
+ * "refuse" is not seen.
  */
 class RollbackGuardInventoryTest extends TestCase
 {
@@ -26,6 +27,12 @@ class RollbackGuardInventoryTest extends TestCase
             $body = substr($source, $m[0][1] + strlen($m[0][0]));
             if (preg_match('/\n    (public|private|protected) (static )?function /', $body, $next, PREG_OFFSET_CAPTURE) === 1) {
                 $body = substr($body, 0, $next[0][1]);
+            }
+            preg_match_all('/(?:\$this->|self::)([a-zA-Z_]+)\(/', $body, $calls);
+            foreach (array_unique($calls[1]) as $helper) {
+                if (preg_match('/function '.$helper.'\([^)]*\)[^{]*\{(.*?)\n    \}/s', $source, $found) === 1) {
+                    $body .= "\n".$found[1];
+                }
             }
             $downs[basename($file, '.php')] = $body;
         }
@@ -62,8 +69,8 @@ class RollbackGuardInventoryTest extends TestCase
     public function a_down_stays_on_the_migration_connection_and_never_changes_the_setting(): void
     {
         foreach ($this->downs() as $name => $body) {
-            $this->assertDoesNotMatchRegularExpression('/DB::connection\(\s*[\'"]/', $body, "{$name} reads through a named connection");
-            $this->assertStringNotContainsString('row_security', $body, "{$name} touches row_security");
+            $this->assertDoesNotMatchRegularExpression('/DB::connection\(\s*[^)\s]|Schema::connection\(/', $body, "{$name} reads through a named connection");
+            $this->assertDoesNotMatchRegularExpression('/row_security|\brescue\(|EXCEPTION\s+WHEN|RESET\s+ALL|\bCOMMIT\b/i', $body, "{$name} can undo the fail-closed runner");
         }
     }
 

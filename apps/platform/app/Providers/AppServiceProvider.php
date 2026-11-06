@@ -63,6 +63,7 @@ use App\Support\Testing\TestDatabaseGuard;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Env;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -228,8 +229,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // HR.R1-C5 (ADR 0074 §26.7): a hardened environment never rolls a migration back. Only development may, so an
-        // environment nobody planned for refuses too.
-        DB::prohibitDestructiveCommands(! $this->app->environment(['local', 'testing']));
+        // environment nobody planned for refuses too. The real APP_ENV decides as well: `--env=local` on a console command
+        // changes app()->environment() and nothing about where it is running.
+        DB::prohibitDestructiveCommands(! $this->app->environment(['local', 'testing']) || ! in_array(Env::get('APP_ENV'), ['local', 'testing'], true));
 
         // Phase 0O.3 (ADR 0049 section 2): on every bearer request, a human
         // API token is valid only if Sanctum's own checks pass AND it has a

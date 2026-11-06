@@ -147,21 +147,28 @@ it.
 
 ## Rollback safety
 
-A rollback is not how a hardened environment recovers. Staging and production
-refuse `migrate:rollback`, `migrate:reset`, `migrate:refresh`, `migrate:fresh` and
-`db:wipe` (ADR 0074 §26.7). There, a defect is fixed by a reviewed forward migration
+A rollback is not how a hardened environment recovers. Every environment except
+`local` and `testing` refuses `migrate:rollback`, `migrate:reset`, `migrate:refresh`,
+`migrate:fresh` and `db:wipe`, judged on the real `APP_ENV`, so `--env=local` does not
+get round it (ADR 0074 §26.7). There, a defect is fixed by a reviewed forward migration
 or an approved restore (`PRODUCTION-RELEASE.md`). `down()` runs only on disposable
 databases.
 
 **Why the migration role needs `BYPASSRLS` or superuser.** Tenant tables use FORCE
 ROW LEVEL SECURITY, which binds the owner too. Without bypass, a read with no tenant
-context returns nothing, with no error. Bootstrap refuses such a role, six migrations
-refuse to run, and `platform:verify-database` fails `migration_owner_sees_every_row`.
+context returns nothing, with no error. Bootstrap refuses such a role, three
+migrations refuse to run, and `platform:verify-database` fails
+`migration_owner_sees_every_row`.
 
-**"Rollback refused, nothing changed".** Every `down()` runs with `row_security =
-off`, so PostgreSQL raises an error instead of quietly filtering. The migration's
-transaction is undone, and an earlier migration in the same command stays rolled
-back. To respond:
+**Confirm the provider's role before staging.** On a managed service, check that the
+chosen owner role reports `rolbypassrls` or `rolsuper`. The bootstrap, those three
+migrations and the rollback check all ask exactly that.
+
+**"Rollback refused".** A `down()` is refused before it starts unless the role sees
+every row, because a DROP is never filtered. It then runs with `row_security = off`,
+so a read through something that filters raises an error. That migration's
+transaction is undone. An earlier migration in the same command stays rolled back.
+To respond:
 
 1. Do not retry as a different role to get past it, and do not remove the setting.
 2. Confirm the role with `SELECT rolname, rolsuper, rolbypassrls FROM pg_roles`.

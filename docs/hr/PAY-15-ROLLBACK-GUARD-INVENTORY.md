@@ -4,8 +4,8 @@ This replaces the HR.R1-C4 inventory, which was wrong in two ways.
 
 - **Its premise.** It said the documented migration role is `NOSUPERUSER
   NOBYPASSRLS`. That line of `production-bootstrap.sql` describes `school_os_app`.
-  Six migrations refuse to run without RLS bypass, so a role that applied them all
-  sees every row, and those guards were authoritative for it.
+  Three migrations refuse to run without RLS bypass, so a role that applied them
+  all sees every row, and those guards were authoritative for it.
 - **Its count.** It matched the word "refuse" and found 47. Scanning every `down()`
   that can throw finds **65**.
 
@@ -15,9 +15,9 @@ a production-shaped database before the fix: the same hidden row was refused wit
 bypass, and destroyed without it.
 
 **Disposition of every entry is the same mechanism, not a per-file edit.**
-`App\Support\Database\RollbackSafeMigrator` runs every `down()` with `row_security =
-off`, so PostgreSQL raises an error instead of filtering, and the migration is
-refused. No published migration was changed (ADR 0066 §15.1). The classes below
+`App\Support\Database\RollbackSafeMigrator` refuses every `down()` before it starts
+unless the role sees every row, because a DROP is never filtered, and runs the rest
+with `row_security = off`. No published migration was changed (ADR 0066 §15.1). The classes below
 describe each guard; none of them is what makes it safe, so a guard this scan
 misclassifies or misses is covered all the same.
 
@@ -32,7 +32,7 @@ sit after it, so a step or batch rollback cannot reach it.
 
 | Class | Guards |
 |---|---:|
-| Reads FORCE-RLS rows. Authoritative for a role with bypass; a role without it is refused | 37 |
+| Reads FORCE-RLS rows. Authoritative for a role with bypass | 37 |
 | Reads tables without FORCE RLS or catalogs. Not RLS-dependent | 11 |
 | Reads no row in `down()`. Not RLS-dependent | 9 |
 | Always refuses (retention fence) | 2 |

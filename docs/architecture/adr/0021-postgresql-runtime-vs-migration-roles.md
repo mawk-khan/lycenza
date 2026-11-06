@@ -157,12 +157,12 @@ migration/owner role.
 
 This ADR named a superuser for local use and never stated what a provider-named
 migration role needs. It needs `BYPASSRLS` or superuser: FORCE RLS binds a table's
-owner, so without it a read returns an empty answer with no error. Six migrations
+owner, so without it a read returns an empty answer with no error. Three migrations
 already refused such a role, and a rollback guard could not tell (PAY-15).
 
 - Bootstrap refuses it and `platform:verify-database` checks it.
-- Every `down()` runs with `row_security = off` through `RollbackSafeMigrator`, so a
-  role that would see filtered rows is refused rather than misled. A non-superuser
+- `RollbackSafeMigrator` refuses every `down()` for a role that would see filtered
+  rows, because a DROP is never filtered, and runs the rest with `row_security = off`. A non-superuser
   role with `BYPASSRLS` completes every migration, and rolled back and reapplied all
   77 reachable ones with an identical schema, RLS state and grants.
 - `school_os_app` is unchanged: never `BYPASSRLS`.
