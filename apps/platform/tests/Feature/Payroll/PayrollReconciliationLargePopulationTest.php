@@ -18,12 +18,14 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * HR.R1-C6 (PAY-18): a reversal behind 2,100 entries and two dependent posted runs.
+ * HR.R1-C6 (PAY-18): a reversal behind 10,000 entries and two dependent posted runs.
  * Both runs are found and every change is reachable, with no cap, and the query
  * count does not depend on the size. Discovery runs under the School's exclusive
- * compensation lock, and an earlier form of it was quadratic: 116 s at 5,000
- * entries. Synthetic data, as the runtime role, in one transaction that always
- * rolls back.
+ * compensation lock, and two earlier forms of it were quadratic: 116 s at 5,000
+ * entries, then 184 s at 10,000 on a plan an analyzed database never chose (HR.R1-C7-R1).
+ * So every Employee has link history, and discovery runs under a statement timeout
+ * that only a quadratic plan reaches. Synthetic data, as the runtime role, in one
+ * transaction that always rolls back.
  */
 class PayrollReconciliationLargePopulationTest extends TestCase
 {
@@ -32,7 +34,7 @@ class PayrollReconciliationLargePopulationTest extends TestCase
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
 
-    private const int ENTRIES = 2100;
+    private const int ENTRIES = 10000;
 
     #[Test]
     public function every_dependent_run_and_change_is_found_in_a_bounded_number_of_queries(): void
@@ -42,6 +44,7 @@ class PayrollReconciliationLargePopulationTest extends TestCase
         $checker = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view', 'payroll.runs.view']);
         $reviewer = $this->createUserWithCapabilities($school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view', 'payroll.runs.view']);
         $prep = $this->createUserWithCapabilities($school, ['payroll.runs.view']);
+        $former = $this->createUser();
         $default = DB::getDefaultConnection();
         $sid = $school->id;
         $n = self::ENTRIES;
@@ -70,8 +73,11 @@ class PayrollReconciliationLargePopulationTest extends TestCase
             $rev = (string) Str::uuid7();
             $admin->statement("INSERT INTO payroll_run_postings (id, school_id, payroll_run_id, journal_entry_id, currency, posting_kind, actor_user_id, created_at) VALUES ('$orig','$sid','{$ids['a']}',gen_random_uuid(),'INR','original','{$prep->id}',now())");
             $admin->statement("INSERT INTO payroll_run_postings (id, school_id, payroll_run_id, journal_entry_id, currency, posting_kind, reversal_of_payroll_run_posting_id, actor_user_id, created_at) VALUES ('$rev','$sid','{$ids['a']}',gen_random_uuid(),'INR','reversal','$orig','{$prep->id}',now())");
+            foreach ([$prep, $former] as $linked) {
+                $admin->statement("INSERT INTO employee_account_links (id, school_id, employee_id, user_id, origin, linked_at, ended_at) SELECT gen_random_uuid(),'$sid',emp,'{$linked->id}','recorded',now() - interval '2 days',now() - interval '1 day' FROM e");
+            }
             $admin->statement("SET LOCAL session_replication_role = 'origin'");
-            $admin->statement('ANALYZE employees, employment_records, employee_compensation_assignments, payroll_runs, payroll_run_calculation_sources, payroll_run_postings');
+            $admin->statement('ANALYZE employee_account_links, employees, employment_records, employee_compensation_assignments, payroll_runs, payroll_run_calculation_sources, payroll_run_postings');
             app(TenantContext::class)->set($school);
             $admin->statement('SET LOCAL ROLE school_os_app');
             $admin->select("select set_config('app.current_school_id', ?, true)", [$sid]);
@@ -87,6 +93,7 @@ class PayrollReconciliationLargePopulationTest extends TestCase
             };
             $a = PayrollRun::query()->where('school_id', $sid)->findOrFail($ids['a']);
             $posting = PayrollRunPosting::query()->where('school_id', $sid)->findOrFail($rev);
+            $admin->statement("SET LOCAL statement_timeout = '30s'");
             [$found] = $queries(fn () => $admin->select('SELECT * FROM payroll_reversal_affected_runs(?, ?)', [$sid, $rev]));
             $this->assertCount(2, $found, 'both dependent runs, with no truncation');
 
@@ -97,7 +104,7 @@ class PayrollReconciliationLargePopulationTest extends TestCase
             $o = PayrollReversalReconciliation::query()->where('school_id', $sid)->where('payroll_run_id', $ids['b'])->firstOrFail();
             [$show, $reading] = $queries(fn () => app(PayrollReversalReconciliationReadService::class)->show($school, $reviewer, $o->id, true));
             $this->assertSame($n, $show['details']['changes']['total'], 'every change is reachable through the pages');
-            $this->assertSame($n, $show['details']['employeesWithoutAccount']);
+            $this->assertSame(0, $show['details']['employeesWithoutAccount'], 'every Employee has a known link');
             $this->assertCount(25, $show['details']['changes']['data'], 'never the whole run on one page');
             $this->assertLessThanOrEqual(36, $reading, 'a cold capability cache included; flat from 500 to 10,000 entries');
 
