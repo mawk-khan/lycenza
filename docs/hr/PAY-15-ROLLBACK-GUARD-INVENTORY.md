@@ -1,5 +1,8 @@
 # PAY-15 rollback-guard inventory (HR.R1-C5, 2026-11-06)
 
+The counts below are the HR.R1-C5 measurement of 65 entries. Later migrations add rows
+at the end of the table, so the table can hold more than the summary.
+
 This replaces the HR.R1-C4 inventory. Its classes came from a static scan. These come
 from **running every real guard** on a production-shaped database.
 
@@ -146,3 +149,4 @@ migrator covers such a guard all the same.
 | `2027_02_02_090000_record_payroll_compensation_sources` | Open | Blind: table destroyed | payroll_run_calculation_sources | drop constraint, drop function, drop trigger, dropcolumn, schema_drop, tenantrls_disable | **Table destroyed** | Refused by the migrator | Guard refused | Rolled back | Corrected by the migrator |
 | `2027_02_03_090000_harden_employment_lifecycle_admission` | Open | Blind: a constraint stopped the DDL | employee_assignments | drop constraint, drop function, drop trigger | Constraint stopped it | Refused by the migrator | Guard refused | Rolled back | Corrected by the migrator |
 | `2027_02_06_090000_create_payroll_posting_attestations` | Open | Sees its rows without bypass (Lifts FORCE first) | payroll_posting_attestations | drop function, drop trigger, schema_drop, tenantrls_disable | Refused | Refused by the migrator | Guard refused | Rolled back | Already safe |
+| `2027_02_07_090000_create_payroll_reversal_reconciliations` | Open | Sees its rows without bypass (Lifts FORCE first) | payroll_reversal_reconciliations | drop function, drop trigger, schema_drop, tenantrls_disable | n/a (added by HR.R1-C6) | Refused by the migrator | Guard refused | Rolled back | Already safe |

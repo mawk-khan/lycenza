@@ -55,6 +55,8 @@ type Status =
     // real PayrollRun.status value (ADR 0034 -- a run's own status
     // never becomes "reversed").
     | 'open'
+    // HR.R1-C6: a payroll reconciliation an independent person has reviewed.
+    | 'reviewed'
     | 'closed'
     | 'calculated'
     | 'approved'
@@ -129,6 +131,7 @@ const STYLES: Record<Status, { label: string; family: Family }> = {
     fulfilled: { label: 'Fulfilled', family: 'positive' },
     // PayrollPeriod / PayrollRun lifecycle.
     open: { label: 'Open', family: 'info' },
+    reviewed: { label: 'Reviewed', family: 'positive' },
     closed: { label: 'Closed', family: 'neutral' },
     calculated: { label: 'Calculated', family: 'info' },
     approved: { label: 'Approved', family: 'positive' },

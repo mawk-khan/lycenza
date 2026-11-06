@@ -86,6 +86,7 @@ use App\Domain\Payroll\Http\Controllers\MyPayslipController;
 use App\Domain\Payroll\Http\Controllers\PayrollAccountingConfigurationController;
 use App\Domain\Payroll\Http\Controllers\PayrollHrxInputController;
 use App\Domain\Payroll\Http\Controllers\PayrollPeriodController;
+use App\Domain\Payroll\Http\Controllers\PayrollReconciliationController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunPostingController;
 use App\Domain\Payroll\Http\Controllers\PayslipController;
@@ -1968,6 +1969,16 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/payroll-runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])
                 ->middleware(['capability:payroll.runs.reverse', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.reverse');
+            // HR.R1-C6 (PAY-18, OD-HR-23): the service re-reads authority and decides independence under the run lock.
+            Route::get('/payroll-reconciliations', [PayrollReconciliationController::class, 'index'])
+                ->middleware('capability:payroll.runs.view')
+                ->name('schools.payroll-reconciliations.index');
+            Route::get('/payroll-reconciliations/{payrollReconciliation}', [PayrollReconciliationController::class, 'show'])
+                ->middleware(['capability:payroll.runs.view', 'private-no-store'])
+                ->name('schools.payroll-reconciliations.show');
+            Route::post('/payroll-reconciliations/{payrollReconciliation}/review', [PayrollReconciliationController::class, 'review'])
+                ->middleware(['capability:payroll.runs.approve', 'capability:payroll.compensation.sensitive.view', 'throttle:school-api-mutations'])
+                ->name('schools.payroll-reconciliations.review');
 
             Route::post('/payroll-accounting-configuration', [PayrollAccountingConfigurationController::class, 'store'])
                 ->middleware(['capability:payroll.accounting.manage', 'throttle:school-api-mutations'])

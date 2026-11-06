@@ -1916,3 +1916,11 @@ A reviewed catalogue release (owner decision 2026-11-05):
   a default sensitive view.
 - It prepares, approves, posts and manages nothing by itself; approval still
   needs `payroll.runs.approve` and never by a run participant.
+
+## HR.R1-C6 amendment (2026-11-06): two payroll decisions, no new authority
+
+OD-HR-23 and OD-HR-24 add no capability and no grant, and the catalogue is unchanged.
+The reconciliation review uses `payroll.runs.approve` with
+`payroll.compensation.sensitive.view`, so `payroll_approval_reviewer` is still how a
+School names its checker. Both decisions narrow who may act: a role can never lift
+the self-beneficiary or independence rules, however many keys one person holds.

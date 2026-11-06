@@ -10408,6 +10408,132 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/payroll-reconciliations:
+    get:
+      operationId: listPayrollReconciliations
+      summary: >
+        HR.R1-C6 (PAY-18, OD-HR-23): obligations opened when a reversal took
+        independence from a run already posted. Requires payroll.runs.view. Never
+        an amount or a name.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: state, in: query, required: false, schema: { type: string, enum: [open, reviewed, all], default: open } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/PayrollReconciliationSummary" } }
+                  meta:
+                    type: object
+                    required: [total, page, lastPage]
+                    properties: { total: { type: integer }, page: { type: integer }, lastPage: { type: integer } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/payroll-reconciliations/{payrollReconciliationId}:
+    get:
+      operationId: getPayrollReconciliation
+      summary: >
+        HR.R1-C6: the chronology of one obligation. Requires payroll.runs.view. Who
+        and which Employees need payroll.compensation.sensitive.view with current
+        MFA assurance, are withheld from anyone not independent, and reading them is
+        audited. Never an amount, bank, statutory or profile field.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollReconciliationId" }
+        - { name: independence_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollReconciliation" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id -- no existence oracle.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/payroll-reconciliations/{payrollReconciliationId}/review:
+    post:
+      operationId: reviewPayrollReconciliation
+      summary: >
+        HR.R1-C6 (OD-HR-23): the independent review that closes an obligation. It is
+        not an approval and changes no run, posting or calculation. Requires
+        payroll.runs.approve and payroll.compensation.sensitive.view, re-read under
+        the run lock, and a fresh MFA code (`mfa_code`, see StepUpMfaCode). Never the
+        run's makers or approver, whoever executed the reversal, or the Employee of
+        a change the run pays first. A review is final; a repeat is a 409 and changes
+        nothing, so no Idempotency-Key is taken.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollReconciliationId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [review_version, accepted, mfa_code]
+              properties:
+                review_version: { type: string, minLength: 64, maxLength: 64, description: "`reviewVersion` from the page the reviewer read." }
+                accepted: { type: boolean, description: "Must be true: a review is an explicit statement." }
+                mfa_code: { type: string, maxLength: 32, description: "Fresh MFA code -- see StepUpMfaCode." }
+      responses:
+        "201":
+          description: Reviewed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [id, reconciliationId, statementCode, reviewedAt]
+                    properties:
+                      id: { type: string, format: uuid }
+                      reconciliationId: { type: string, format: uuid }
+                      statementCode: { type: string }
+                      reviewedAt: { type: string, format: date-time }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking a required capability now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id -- no existence oracle.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: PAYROLL_RECONCILIATION_REVIEWER_NOT_INDEPENDENT, PAYROLL_SELF_BENEFICIARY_CONFLICT, PAYROLL_RECONCILIATION_EVIDENCE_STALE or PAYROLL_RECONCILIATION_ALREADY_REVIEWED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: PAYROLL_RECONCILIATION_ACCEPTANCE_REQUIRED, a refused `mfa_code`, or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/ecr:
     get:
       operationId: exportStatutoryEcr
@@ -15181,6 +15307,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    PayrollReconciliationId:
+      name: payrollReconciliationId
+      in: path
+      required: true
+      description: HR.R1-C6. Nonexistent or cross-School ids both answer 404 -- no existence oracle.
+      schema: { type: string, format: uuid }
     PayrollRunId:
       name: payrollRunId
       in: path
@@ -18253,10 +18385,40 @@ components:
       required: [phase, blockedReason, evidenceVersion, attestation, details]
       properties:
         phase: { type: string, enum: [before_posting, after_posting, attested] }
-        blockedReason: { type: string, nullable: true, enum: [not_independent, cannot_review, needs_mfa, null] }
+        blockedReason: { type: string, nullable: true, enum: [not_independent, self_beneficiary, cannot_review, needs_mfa, null] }
         evidenceVersion: { type: string, nullable: true, description: "Present only when this actor may attest." }
         attestation: { type: object, nullable: true, additionalProperties: true }
         details: { type: object, nullable: true, additionalProperties: true, description: "Never an amount, bank, statutory or profile field." }
+    PayrollReconciliationSummary:
+      type: object
+      required: [id, state, openedAt, reviewedAt, affectedRun, reversedRun]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [open, reviewed] }
+        openedAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        affectedRun:
+          type: object
+          required: [id, periodMonth]
+          properties: { id: { type: string, format: uuid }, periodMonth: { type: string } }
+        reversedRun:
+          type: object
+          required: [id, periodMonth, reversedAt]
+          properties: { id: { type: string, format: uuid }, periodMonth: { type: string }, reversedAt: { type: string, format: date-time } }
+    PayrollReconciliation:
+      type: object
+      required: [id, state, openedAt, affectedRun, reversedRun, exceptionStillApplies, blockedReason, reviewVersion, details, review]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [open, reviewed] }
+        openedAt: { type: string, format: date-time }
+        affectedRun: { type: object, additionalProperties: true }
+        reversedRun: { type: object, additionalProperties: true }
+        exceptionStillApplies: { type: boolean, description: "FALSE when a later independent approval covers the changes. The obligation stays open." }
+        blockedReason: { type: string, nullable: true, enum: [already_reviewed, not_independent, self_beneficiary, cannot_review, needs_mfa, null] }
+        reviewVersion: { type: string, nullable: true, description: "Present only when this actor may review now." }
+        details: { type: object, nullable: true, additionalProperties: true, description: "Never an amount, bank, statutory or profile field. `employeesWithoutAccount` counts Employees the conflict check could not see; zero is not proof of no conflict." }
+        review: { type: object, nullable: true, additionalProperties: true }
     PayrollRunApprovalReview:
       type: object
       required: [run, calculation, previousRun, totals, previousTotals, components, approvable, blocking, warnings, changes, adjustments, compensation]

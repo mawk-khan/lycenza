@@ -155,6 +155,24 @@ recorded compensation provenance. Fix forward.
   waits. An independent approval of the same change on another run also clears it.
 - **A posted run says it was affected after posting.** That reversal came too late
   for any control. It is recorded; reconcile it by your normal correction route.
+- **"This run pays a compensation change of your own" (HR.R1-C6).** You are the
+  Employee of a change this run pays for the first time. Someone whose pay it does
+  not change must approve, attest or review. There is no override.
+- **A School's first payroll, and any School-wide salary revision.** Every Employee
+  is first-paid in those runs, so everyone paid by them is refused. Before running
+  one, make sure a decider who is not paid by it holds `payroll.runs.approve` and
+  `payroll.compensation.sensitive.view`, such as a trustee or manager with no Employee
+  record. This is deliberate. Do not unlink an account to get past it.
+- **"N Employee(s) have no linked account".** The system cannot tell whether you are
+  one of them. You may proceed, and your decision records the count. It does not mean
+  there is no conflict: if you know you are one of them, stop and ask someone else.
+- **Payroll > Reconciliations (HR.R1-C6).** A reversal took independence from a run
+  that had already posted. Someone independent must read what happened and record a
+  review: not the run's approver or makers, not whoever reversed, and not anyone paid
+  by a change in it. It needs `payroll.runs.approve` and sensitive view, and a fresh
+  code. It blocks no other Payroll work and has no deadline, and it never closes on
+  its own, so check the open count on the Payroll page. A review is final, is not an
+  approval, and moves no money.
 - **A reversal is brief but School-wide.** Approvals and calculations of that
   School wait for it to commit.
 - **A migration rollback** is refused outside local and testing, and on any role

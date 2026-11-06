@@ -138,8 +138,66 @@ when a request is drafted.
 | Id | Subject | Current behaviour | Options |
 |---|---|---|---|
 | OD-HR-22 | An approval that loses its independent predecessor before it is posted (PAY-16) | **Decided, see below.** | Was: A accept, B acknowledge, C refuse |
-| OD-HR-23 | A reversal that takes independence from a run ALREADY posted (PAY-18) | **Open.** The reversal is not blocked. It writes a durable `payroll.run.independence_changed` event, and the run page shows it. Nobody is required to acknowledge it. | **A. Keep the record only.** **B. Require an independent acknowledgement at reversal (recommended if a control is wanted):** it adds a condition to a financial correction. **C. Refuse the reversal:** a legitimate correction could be blocked, so not recommended |
-| OD-HR-24 | Beneficiary conflict in payroll decisions (PAY-19) | **Open.** A person whose own pay is implicated can attest, and can approve, if they made no part of the run. | **A. Accept.** **B. Refuse them for the attestation only.** **C. Refuse them for approval and attestation (recommended):** consistent, but a small School may have fewer eligible people |
+| OD-HR-23 | A reversal that takes independence from a run ALREADY posted (PAY-18) | **Decided, see below.** | Was: A record only, B acknowledge at reversal, C refuse the reversal. The owner chose a fourth form: the reversal completes and an OPEN obligation is required |
+| OD-HR-24 | Beneficiary conflict in payroll decisions (PAY-19) | **Decided, see below.** | Was: A accept, B refuse for attestation only, C refuse for approval and attestation |
+
+### OD-HR-23 decision record
+
+| # | Field | Record |
+|---|---|---|
+| 1 | Decision | OD-HR-23, an **OPEN reconciliation obligation**. Selected by the owner in the HR.R1-C6 gate, 2026-11-06. An engineering and product direction, not a legal or security determination |
+| 2 | Problem | PAY-18. A reversal takes independence from a run already posted, and no check at posting can reach that |
+| 3 | Behaviour before | A durable `payroll.run.independence_changed` event and a notice on the run. Nobody had to act |
+| 4 | Selected | The reversal always completes. In its own transaction it opens one obligation per affected posted run. Only an independent review closes it |
+| 5 | Rejected | Record only (nobody accountable). Acknowledge at reversal, the register's former Option B (holds up a legitimate correction). Refuse the reversal. Blocking settlement or period close while open (one absent reviewer stalls a small School) |
+| 6 | Payroll states | No new state. `posted` runs only; an `approved` run meets the C4 attestation instead. A run already reversed has no live effect and is not affected. Reversing an affected run later keeps its obligation |
+| 7 | Actors | The reverser, the reviewer, and anyone with `payroll.runs.view`, who sees that an obligation exists |
+| 8 | Capabilities | Existing keys only: `payroll.runs.approve` and current `payroll.compensation.sensitive.view`, re-read under the run lock. No new capability, no new grant |
+| 9 | MFA | The reviewer's own fresh code, in the service. Evidence needs current MFA assurance |
+| 10 | Sensitive data | The C4 evidence: who approved and reversed, which runs, employee numbers, names, structures and dates. Never an amount, bank, statutory or profile field |
+| 11 | Independence | Never the affected run's approver, creator, calculators, adjustment authors or first-paid authors, whoever executed the reversal, or a beneficiary under OD-HR-24. The poster and the approver of the reversed run are not excluded |
+| 12 | Event timing | Only a reversal after the affected run posted. Earlier orders stay with HR.R1-C3 and C4 |
+| 13 | Audit | `payroll.run.reconciliation_opened`, `payroll.run.reconciliation_reviewed`, `payroll.run.independence_reviewed` for every evidence read, `payroll.run.reversal_impact_unknown` when a reversed run has no recorded provenance. Ids and closed codes only |
+| 14 | Retention | Evidence of its run. It leaves with the run (FK cascade), never before it, so it adds no purge blocker |
+| 15 | Concurrency | A reversal holds the compensation lock exclusively; a review holds the affected run row, then the lock shared, so each is ordered wholly before or after the other. The review row is unique per obligation |
+| 16 | Failure behaviour | A reversal cannot commit with an affected posted run left without its obligation (`payroll_run_postings_reconciliation_required`, deferred to commit). A stale, repeated or foreign review changes nothing |
+| 17 | Small School | Nobody eligible means it stays OPEN. There is no override, no deadline and no automatic clearing. It blocks no other Payroll action |
+| 18 | Development | Live |
+| 19 | Staging | None: paused and infrastructure-blocked |
+| 20 | Production | None: NO-GO |
+| 21 | Authority | The owner, in the HR.R1-C6 gate |
+| 22 | Date | 2026-11-06 |
+| 23 | Re-review | If an approval-withdrawal path is added, if a deadline or escalation is wanted, or before any School uses Payroll for real |
+
+### OD-HR-24 decision record
+
+| # | Field | Record |
+|---|---|---|
+| 1 | Decision | OD-HR-24, Option C, **first-paid changes**. Selected by the owner in the HR.R1-C6 gate, 2026-11-06, with two follow-ups: unknown identity proceeds and is recorded, and first assignments count. An engineering and product direction, not a legal or security determination |
+| 2 | Problem | PAY-19. A person whose own pay is implicated could approve or attest if they made no part of the run |
+| 3 | Behaviour before | Only makers were excluded |
+| 4 | Selected | Refused at approval, the C4 attestation and the C6 review if the run pays first ANY compensation change of the Employee linked to that User, whoever authored it, whether pay rose, fell or stayed equal |
+| 5 | Rejected | Accept the risk. Attestation only (a person could approve a run paying their own change). Exception changes only (leaves the approval half open). Exempting first assignments. A threshold for School-wide events (a policy invented here) |
+| 6 | Payroll states | `calculated` to `approved`, the attestation at `approved` to `posted`, and the review of a `posted` run. Correction runs pay no compensation change and are out of scope; rule 95 already refuses one's own deltas |
+| 7 | Actors | The approver, the attesting poster, the reconciliation reviewer. Other holders of the same keys are unaffected |
+| 8 | Capabilities | None added |
+| 9 | MFA | Unchanged |
+| 10 | Sensitive data | A closed reason to the actor about their own conflict, never whose change or what amount. A conflicted actor sees no evidence |
+| 11 | Definition | `payroll_run_first_paid_beneficiaries`, through `employees.user_id` only. Never a name, email, code or phone. The Employee row survives a rehire. An ordinary salary recipient is not a beneficiary |
+| 12 | Event timing | At each decision, under the shared compensation lock. A link change takes it exclusively, so it is ordered against every decision |
+| 13 | Audit | `employeesWithoutAccount` on `payroll.run.approved` and `payroll.run.independence_attested`, and a column on the review |
+| 14 | Retention | No new record of its own |
+| 15 | Concurrency | As row 12, proven in two processes for approval and for review |
+| 16 | Failure behaviour | A closed refusal, `PAYROLL_SELF_BENEFICIARY_CONFLICT`. Backed by `trg_payroll_runs_self_beneficiary`, `trg_payroll_posting_attestations_self_beneficiary` and the review guard |
+| 17 | Small School | **A School's first payroll, and any School-wide salary revision, needs a decider not paid by it,** such as a trustee or manager with no Employee record. Every Employee is first-paid in those runs. There is no override: the run waits. Recorded as the owner's explicit choice |
+| 18 | Development | Live |
+| 19 | Staging | None |
+| 20 | Production | None: NO-GO |
+| 21 | Authority | The owner, in the HR.R1-C6 gate |
+| 22 | Date | 2026-11-06 |
+| 23 | Re-review | If `employees.user_id` gains history, or before any School uses Payroll for real |
+
+**Unknown identity.** `employees.user_id` is optional and holds only the current link. An implicated Employee with no linked account does not block: the decider is shown the count, and it is recorded on the decision. That count is never evidence that no conflict exists, and the system never claims one. An unlink before a decision also removes the link from this check, so link changes stay audited HR actions. This is a recorded limit, not a closed one.
 
 ### OD-HR-22 decision record
 
@@ -156,9 +214,9 @@ when a request is drafted.
 | Stale evidence | Bound to `evidenceVersion` and re-checked under the run and compensation locks; a mismatch is `PAYROLL_POSTING_EVIDENCE_STALE` |
 | Concurrency | Posting holds the compensation lock shared and a reversal exclusive, so each is ordered wholly before or after the other |
 | No independent actor | Posting is refused with a controlled reason and the run stays `approved`. The control never downgrades to a warning. An independent approval of the same change on another run also clears the exception |
-| Reversal after posting | Not prevented. Recorded durably and shown on the run (PAY-18, OD-HR-23) |
+| Reversal after posting | Not prevented. An OPEN obligation, reviewed independently (PAY-18, OD-HR-23, decided) |
 | Effect | Development: live. Staging: none, paused and blocked. Production: none, NO-GO |
-| Re-review | If an approval-withdrawal path is ever added, or OD-HR-23 is decided |
+| Re-review | If an approval-withdrawal path is ever added |
 
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 

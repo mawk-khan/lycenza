@@ -87,6 +87,8 @@ class DatabaseRoleVerifier
         'payroll_run_calculation_sources',
         // HR.R1-C4: a posting attestation is approval and posting evidence; it leaves with its posting.
         'payroll_posting_attestations',
+        // HR.R1-C6: reconciliation evidence leaves with its run.
+        'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
@@ -120,6 +122,8 @@ class DatabaseRoleVerifier
         'payroll_run_calculation_sources',
         // HR.R1-C4: a recorded attestation never changes.
         'payroll_posting_attestations',
+        // HR.R1-C6: an obligation and its review never change; there is no status to update.
+        'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
         // ORG.8E (ADR 0076 §63): evidence rows are never rewritten.
         'student_lifecycle_events', 'attendance_record_corrections',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
@@ -619,6 +623,7 @@ class DatabaseRoleVerifier
             && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
         $results[] = $this->payrollApprovalProvenanceCheck();
+        $results[] = $this->payrollReconciliationCheck();
         $results[] = $this->employmentLifecycleAdmissionCheck();
 
         return $results;
@@ -647,6 +652,23 @@ class DatabaseRoleVerifier
      * compensation writes take the School's compensation lock; calculated
      * results and lines are never rewritten.
      */
+    /**
+     * HR.R1-C6 (PAY-18, PAY-19): a reversal cannot commit without its obligation, a review
+     * stays independent, nobody decides on their own first-paid change, and a link change is
+     * ordered against every decision. Every trigger enabled, and the deferred one still deferred.
+     */
+    private function payrollReconciliationCheck(): CheckResult
+    {
+        $enabled = (int) DB::selectOne(
+            "select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in
+             ('trg_payroll_reversal_reconciliations_guard', 'trg_payroll_run_postings_reconciliation_required', 'trg_payroll_reversal_reconciliation_reviews_guard',
+              'trg_payroll_runs_self_beneficiary', 'trg_payroll_posting_attestations_self_beneficiary', 'trg_employees_user_link_payroll_lock')"
+        )->c;
+        $deferred = (int) DB::selectOne("select count(*) as c from pg_trigger where tgname = 'trg_payroll_run_postings_reconciliation_required' and tgdeferrable and tginitdeferred")->c;
+
+        return CheckResult::of('payroll_reconciliation_guarded', $enabled === 6 && $deferred === 1);
+    }
+
     private function payrollApprovalProvenanceCheck(): CheckResult
     {
         $guard = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'payroll_runs_approval_evidence_guard' and p.pronamespace = 'public'::regnamespace");

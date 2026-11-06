@@ -209,6 +209,15 @@ final class ApprovalWorkflowRegistry
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
             'evidence' => 'payroll_run_postings (append-only) + payroll_posting_attestations when a reversal took the approval\'s independence (HR.R1-C4) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
         ],
+        // HR.R1-C6 (PAY-18, OD-HR-23): closing an OPEN obligation is a direct review, never a second approval.
+        'App\Domain\Payroll\Application\PayrollReversalReconciliationService' => [
+            'capability' => 'payroll.runs.approve', 'action' => 'Independent review of a post-posting reversal (with current payroll.compensation.sensitive.view)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'a closed statement code; no free text',
+            'evidence' => 'payroll_reversal_reconciliation_reviews (append-only) + school_audit_events payroll.run.reconciliation_reviewed',
+            // Never the run's makers or approver, whoever executed the reversal, or the Employee of a change it pays first.
+            'relationshipConflict' => 'payroll_run_independence',
+            'dbGuard' => ['trigger' => 'trg_payroll_reversal_reconciliation_reviews_guard', 'refusal' => 'a reviewer is independent of the run, its reversal and its first-paid changes'],
+        ],
         // ORG.12C (ADR 0080 §8): legal name, registration and affiliation references.
         'App\Domain\Schools\Application\SchoolIdentityService' => [
             'capability' => 'school.profile.manage', 'action' => 'School institutional identity change',
@@ -264,6 +273,8 @@ final class ApprovalWorkflowRegistry
      * with the reason. Anything else decision-shaped must be a workflow.
      */
     public const NOT_WORKFLOWS = [
+        // HR.R1-C6 (OD-HR-23): declared in DIRECT_ASSURED. Nothing is requested, and nothing executes because of it.
+        'payroll_reversal_reconciliation_reviews.reviewed_by_user_id' => 'who independently reviewed a post-posting reversal (an evidence statement that changes no run, never a request decided by a second person)',
         'attendance_sessions.submitted_by_user_id' => 'who submitted a Student attendance register; a register is recorded, never requested or decided by a second person',
         'fee_assessment_run_items.overlap_decided_by_user_id' => 'the run operator\'s include/exclude review of an overlapping item in their own run (UAT-C6), not a request decided by a second person',
         'fee_assessment_runs.previewed_by_user_id' => 'who previewed an operator run',

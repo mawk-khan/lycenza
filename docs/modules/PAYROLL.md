@@ -1224,13 +1224,8 @@ review lists what changed, never the unchanged register.
     never cached. An attestation covers only the evidence it named: a later
     reversal shows as new exposure, and the attestation stays on the run even if a
     later independent approval ends the exception.
-  - **Not covered (PAY-19):** someone whose own pay is in the implicated changes can
-    attest if they made no part of the run. Approval has the same gap.
-  - **After posting (PAY-18, open, OD-HR-23).** A check at posting cannot stop a
-    later reversal. The reversal is never blocked, the run is never reopened, and
-    `payroll.run.independence_changed` plus a notice on the run record it for
-    reconciliation. Nobody is required to acknowledge it, so PAY-16 is closed only
-    for the orders up to posting.
+  - **Own pay (PAY-19, HR.R1-C6):** see "Self-beneficiary conflict" below.
+  - **After posting (PAY-18, HR.R1-C6):** see "Reversal reconciliation" below.
 - **Performance of the posting check (measured 2026-11-06, local DDEV, one
   machine, 5 rolled-back postings per size; every entry implicated in the exception
   case).** An ordinary posting adds 2 queries. Both counts are constant by size.
@@ -1243,6 +1238,57 @@ review lists what changed, never the unchanged register.
   | 10,000 | 42, 512 ms | 59, 801 ms | 60 ms | 348 ms |
 
   No target is approved. The script was a scratch test (not committed).
+- **Reversal reconciliation (HR.R1-C6, PAY-18, OD-HR-23).** A check at posting
+  cannot stop a later reversal, so a reversal that takes independence from a posted
+  run opens an OPEN obligation for that run, in its own transaction.
+  - **Affected** is `payroll_reversal_affected_runs`, the one definition: a regular
+    run, not itself reversed, whose exception now contains a change the reversed run
+    discharged. No cap. A run with an unrelated exception is not affected (PAY-20).
+  - **Atomic.** `payroll_run_postings_reconciliation_required` is deferred to commit:
+    a reversal cannot commit with an affected posted run left without its obligation,
+    whichever code wrote it.
+  - **Open means no review row.** `payroll_reversal_reconciliations` and
+    `payroll_reversal_reconciliation_reviews` are append-only, with no status column.
+    It never clears on its own: a later independent approval, or reversing the
+    affected run, leaves it open, and the reviewer is told.
+  - **The review** needs `payroll.runs.approve` and sensitive view, re-read under the
+    run lock, a fresh code and an explicit acceptance, and names `reviewVersion`,
+    bound to that obligation and to the evidence now. Never the run's approver,
+    creator, calculators, adjustment authors or first-paid authors, the reverser, or
+    a self-beneficiary. It is final and has no correction path.
+  - **It is not an approval.** It changes no run, posting, calculation or Finance
+    record, and certifies nothing about the original decision. It blocks no other
+    Payroll action and has no deadline.
+  - **Unknown impact.** A reversed run with no recorded provenance cannot say what it
+    discharged, so `payroll.run.reversal_impact_unknown` records that. Nothing is
+    backfilled.
+  - **Performance (measured 2026-11-06, local DDEV, one machine, one rolled-back run
+    per size, two dependent posted runs, every entry implicated).** Query counts are
+    constant by size. No target is approved.
+
+  | Entries | Discovery | Record and open (13 q) | Evidence (28 q) | Eligibility (9 q) | Review (37 q) |
+  |---:|---:|---:|---:|---:|---:|
+  | 500 | 13 ms | 77 ms | 76 ms | 12 ms | 69 ms |
+  | 2,000 | 28 ms | 157 ms | 135 ms | 22 ms | 120 ms |
+  | 5,000 | 62 ms | 318 ms | 249 ms | 36 ms | 263 ms |
+  | 10,000 | 220 ms | 817 ms | 458 ms | 70 ms | 378 ms |
+
+  The first form of discovery asked each run's exception once per source row: 1.5 s
+  at 500 and 116 s at 5,000, under the exclusive compensation lock.
+  `PayrollReconciliationLargePopulationTest` pins the bounds.
+- **Self-beneficiary conflict (HR.R1-C6, PAY-19, OD-HR-24).** `PayrollSelfBeneficiaries`
+  is the one answer, at approval, at the C4 attestation and at the C6 review, each
+  backed by a database guard.
+  - **The rule.** The run pays first ANY compensation change of the Employee linked to
+    the actor, whoever authored it, whether pay rose, fell or stayed equal. Receiving
+    an unchanged, already approved salary is not a conflict.
+  - **Identity** is `employees.user_id` only. The Employee row survives a rehire.
+  - **A first assignment counts,** so a School's first payroll and a School-wide
+    revision need a decider not paid by them. There is no override: the run waits.
+  - **Unknown identity.** An implicated Employee with no linked account does not
+    block. The count is shown and recorded, and is never evidence of no conflict.
+  - **Order.** A link change takes the compensation lock exclusively
+    (`trg_employees_user_link_payroll_lock`), so it is ordered against every decision.
 - **Compensation identity is frozen (PAY-14).** `trg_employee_compensation_assignments_identity`
   refuses the runtime role a change to an assignment's author, structure,
   employment or start. Closing it (`effective_to`) stays the ordinary write. Who

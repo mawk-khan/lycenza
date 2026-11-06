@@ -88,9 +88,11 @@ interface Props {
     canPost: boolean;
     accountingReadiness: AccountingReadiness | null;
     canReverse: boolean;
+    reconciliations: { id: string; state: 'open' | 'reviewed' }[];
     postingIndependence: {
         phase: 'before_posting' | 'after_posting' | 'attested';
-        blockedReason: 'not_independent' | 'cannot_review' | 'needs_mfa' | null;
+        blockedReason:
+            'not_independent' | 'self_beneficiary' | 'cannot_review' | 'needs_mfa' | null;
         evidenceVersion: string | null;
         attestation: { attestedBy: string | null; attestedAt: string | null } | null;
         details: {
@@ -681,6 +683,14 @@ const reversalPosting = computed(
                     with payroll.runs.post must post it.
                 </p>
                 <p
+                    v-else-if="independence.blockedReason === 'self_beneficiary'"
+                    class="mt-2"
+                    role="alert"
+                >
+                    This run pays a compensation change of your own for the first time, so you
+                    cannot attest to it. Someone whose own pay it does not change must post it.
+                </p>
+                <p
                     v-else-if="independence.blockedReason === 'cannot_review'"
                     class="mt-2"
                     role="alert"
@@ -818,9 +828,16 @@ const reversalPosting = computed(
             </p>
             <p v-else class="notice-attention mt-1">
                 The evidence behind this approval changed after this run was posted or attested, so
-                nobody has attested to the current evidence. Any reversal behind it is recorded for
-                reconciliation.
+                nobody has attested to the current evidence.
             </p>
+            <ul v-if="reconciliations.length > 0" class="mt-2 space-y-1">
+                <li v-for="r in reconciliations" :key="r.id">
+                    <Link class="underline" :href="`/app/payroll/reconciliations/${r.id}`">
+                        Reconciliation
+                    </Link>
+                    <StatusBadge class="ml-2" :status="r.state" />
+                </li>
+            </ul>
             <p v-if="independence.attestation" class="mt-1">
                 Attested by {{ independence.attestation.attestedBy ?? '—' }} on
                 {{ formatDateTime(independence.attestation.attestedAt) }}.

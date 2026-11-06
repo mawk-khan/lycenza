@@ -366,5 +366,16 @@ author approving the next run, which first paid the change. Amended:
     not change. Rejected: a warning (it can be ignored); a universal second stage
     (every run would pay for a rare case); a stored flag (it could drift from the
     one first-paid function).
-16. **HR.R1-C4, open (PAY-18, OD-HR-23).** A reversal after posting is recorded,
-    never blocked and never acknowledged.
+16. **HR.R1-C4, then HR.R1-C6 (PAY-18, OD-HR-23).** A reversal after posting is
+    never blocked. HR.R1-C4 recorded it. HR.R1-C6 opens an OPEN obligation for each
+    affected posted run, in the reversal's own transaction, closed only by an
+    independent review. Open means no review row: two append-only tables and no
+    status column, so the four run states do not change and nothing can be updated
+    into looking closed. A review is not an approval and changes no run. It blocks
+    nothing else, has no deadline and never clears on its own.
+17. **HR.R1-C6 (PAY-19, OD-HR-24).** Nobody approves, attests or reviews a run that
+    pays first a compensation change of the Employee linked to them
+    (`employees.user_id`), whoever authored it. Receiving a salary is not a conflict.
+    An unlinked Employee proceeds and is recorded, and is never evidence of no
+    conflict. A School's first payroll and a School-wide revision need a decider not
+    paid by them, with no override: the owner's explicit choice, 2026-11-06.

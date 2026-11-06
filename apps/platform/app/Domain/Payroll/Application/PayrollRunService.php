@@ -13,6 +13,7 @@ use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
 use App\Domain\Payroll\Application\Exceptions\RunRecalculationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
+use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
 use App\Domain\Payroll\Application\Exceptions\StaleRunReviewException;
 use App\Domain\Payroll\Application\Exceptions\ZeroEffectCorrectionException;
 use App\Domain\Payroll\Events\PayrollRunApproved;
@@ -81,6 +82,7 @@ class PayrollRunService
         private readonly PayrollAbsenceEvidenceReader $hrx,
         private readonly MakerCheckerPolicy $makerChecker,
         private readonly PayrollCompensationProvenance $provenance,
+        private readonly PayrollSelfBeneficiaries $beneficiaries,
     ) {}
 
     public const WORKFLOW = 'payroll_runs';
@@ -568,6 +570,12 @@ class PayrollRunService
                     throw new StaleRunReviewException($run->id);
                 }
 
+                // HR.R1-C6 (OD-HR-24): nobody approves a run that pays a change to their own pay for the first time.
+                $beneficiary = $this->beneficiaries->of($locked, (string) $latest, $approver->id);
+                if ($beneficiary->conflicted) {
+                    throw new SelfBeneficiaryConflictException($run->id);
+                }
+
                 $affected = PayrollRun::query()
                     ->where('id', $run->id)
                     ->where('status', 'calculated')
@@ -586,6 +594,8 @@ class PayrollRunService
                     'preparedByUserId' => $run->prepared_by_user_id,
                     'approvedCalculationId' => $latest,
                     'attributionVersion' => $attribution,
+                    // OD-HR-24: Employees this decision's conflict check could not see, recorded on the decision.
+                    'employeesWithoutAccount' => $beneficiary->unlinkedEmployees,
                     ...ApprovalProvenance::metadata($participants, ApprovalProvenance::APPROVED, $approver, 'school', $mfa),
                 ]);
 

@@ -4660,6 +4660,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payroll-reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.R1-C6 (PAY-18, OD-HR-23): obligations opened when a reversal took independence from a run already posted. Requires payroll.runs.view. Never an amount or a name. */
+        get: operations["listPayrollReconciliations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-reconciliations/{payrollReconciliationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.R1-C6: the chronology of one obligation. Requires payroll.runs.view. Who and which Employees need payroll.compensation.sensitive.view with current MFA assurance, are withheld from anyone not independent, and reading them is audited. Never an amount, bank, statutory or profile field. */
+        get: operations["getPayrollReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-reconciliations/{payrollReconciliationId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HR.R1-C6 (OD-HR-23): the independent review that closes an obligation. It is not an approval and changes no run, posting or calculation. Requires payroll.runs.approve and payroll.compensation.sensitive.view, re-read under the run lock, and a fresh MFA code (`mfa_code`, see StepUpMfaCode). Never the run's makers or approver, whoever executed the reversal, or the Employee of a change the run pays first. A review is final; a repeat is a 409 and changes nothing, so no Idempotency-Key is taken. */
+        post: operations["reviewPayrollReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/ecr": {
         parameters: {
             query?: never;
@@ -9483,7 +9534,7 @@ export interface components {
             /** @enum {string} */
             phase: "before_posting" | "after_posting" | "attested";
             /** @enum {string|null} */
-            blockedReason: "not_independent" | "cannot_review" | "needs_mfa" | null;
+            blockedReason: "not_independent" | "self_beneficiary" | "cannot_review" | "needs_mfa" | null;
             /** @description Present only when this actor may attest. */
             evidenceVersion: string | null;
             attestation: {
@@ -9494,6 +9545,55 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         } | null;
+        PayrollReconciliationSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            state: "open" | "reviewed";
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            reviewedAt: string | null;
+            affectedRun: {
+                /** Format: uuid */
+                id: string;
+                periodMonth: string;
+            };
+            reversedRun: {
+                /** Format: uuid */
+                id: string;
+                periodMonth: string;
+                /** Format: date-time */
+                reversedAt: string;
+            };
+        };
+        PayrollReconciliation: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            state: "open" | "reviewed";
+            /** Format: date-time */
+            openedAt: string;
+            affectedRun: {
+                [key: string]: unknown;
+            };
+            reversedRun: {
+                [key: string]: unknown;
+            };
+            /** @description FALSE when a later independent approval covers the changes. The obligation stays open. */
+            exceptionStillApplies: boolean;
+            /** @enum {string|null} */
+            blockedReason: "already_reviewed" | "not_independent" | "self_beneficiary" | "cannot_review" | "needs_mfa" | null;
+            /** @description Present only when this actor may review now. */
+            reviewVersion: string | null;
+            /** @description Never an amount, bank, statutory or profile field. `employeesWithoutAccount` counts Employees the conflict check could not see; zero is not proof of no conflict. */
+            details: {
+                [key: string]: unknown;
+            } | null;
+            review: {
+                [key: string]: unknown;
+            } | null;
+        };
         PayrollRunApprovalReview: {
             run: {
                 [key: string]: unknown;
@@ -11570,6 +11670,8 @@ export interface components {
         EmploymentRecordId: string;
         CompensationAssignmentId: string;
         PayrollPeriodId: string;
+        /** @description HR.R1-C6. Nonexistent or cross-School ids both answer 404 -- no existence oracle. */
+        PayrollReconciliationId: string;
         /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
         PayrollRunId: string;
         /** @description Checkpoint 9.6I. */
@@ -28470,6 +28572,195 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPayrollReconciliations: {
+        parameters: {
+            query?: {
+                state?: "open" | "reviewed" | "all";
+                page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PayrollReconciliationSummary"][];
+                        meta: {
+                            total: number;
+                            page: number;
+                            lastPage: number;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.runs.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getPayrollReconciliation: {
+        parameters: {
+            query?: {
+                independence_page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description HR.R1-C6. Nonexistent or cross-School ids both answer 404 -- no existence oracle. */
+                payrollReconciliationId: components["parameters"]["PayrollReconciliationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PayrollReconciliation"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.runs.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Nonexistent or cross-School id -- no existence oracle. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    reviewPayrollReconciliation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description HR.R1-C6. Nonexistent or cross-School ids both answer 404 -- no existence oracle. */
+                payrollReconciliationId: components["parameters"]["PayrollReconciliationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description `reviewVersion` from the page the reviewer read. */
+                    review_version: string;
+                    /** @description Must be true: a review is an explicit statement. */
+                    accepted: boolean;
+                    /** @description Fresh MFA code -- see StepUpMfaCode. */
+                    mfa_code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Reviewed. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            reconciliationId: string;
+                            statementCode: string;
+                            /** Format: date-time */
+                            reviewedAt: string;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking a required capability now. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Nonexistent or cross-School id -- no existence oracle. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYROLL_RECONCILIATION_REVIEWER_NOT_INDEPENDENT, PAYROLL_SELF_BENEFICIARY_CONFLICT, PAYROLL_RECONCILIATION_EVIDENCE_STALE or PAYROLL_RECONCILIATION_ALREADY_REVIEWED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYROLL_RECONCILIATION_ACCEPTANCE_REQUIRED, a refused `mfa_code`, or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     exportStatutoryEcr: {

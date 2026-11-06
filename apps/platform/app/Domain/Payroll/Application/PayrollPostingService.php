@@ -288,8 +288,9 @@ class PayrollPostingService
                     'reversalJournalEntryId' => $reversalEntry->journalEntryId,
                 ]);
 
-                // HR.R1-C4: durable evidence of any run this reversal took independence from; it never blocks.
-                $this->independence->recordAffectedBy($locked, $actor);
+                // HR.R1-C4/C6: durable evidence of any run this reversal took independence from, with an OPEN
+                // obligation for one already posted. It never blocks the reversal.
+                $this->independence->recordAffectedBy($locked, $reversal, $actor);
 
                 event(new PayrollRunReversed($school->id, $run->id, $original->id, $reversalEntry->journalEntryId, $actor->id));
 

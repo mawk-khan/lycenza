@@ -58,6 +58,7 @@ final class PayrollApprovalReviewService
         private readonly EmploymentRoster $roster,
         private readonly AuditRecorder $audit,
         private readonly PayrollCompensationProvenance $provenance,
+        private readonly PayrollSelfBeneficiaries $beneficiaries,
     ) {}
 
     public function mayReview(User $actor, School $school): bool
@@ -220,6 +221,16 @@ final class PayrollApprovalReviewService
         // Shown here only; the decision itself is MakerCheckerPolicy's (PayrollRunService::approve()).
         if (app(PayrollRunService::class)->participants($run)->participationOf($actor->id) !== null) {
             $blocking[] = ['code' => 'PAYROLL_SELF_APPROVAL', 'message' => 'You prepared, calculated, adjusted or changed compensation for this run; another person must approve it.'];
+        }
+        // HR.R1-C6 (OD-HR-24): shown here only; the decision itself is PayrollRunService::approve() and the database.
+        if ($latest !== null && $latest->compensation_sources_recorded && $run->run_kind === 'regular') {
+            $beneficiary = $this->beneficiaries->of($run, $latest->id, $actor->id);
+            if ($beneficiary->conflicted) {
+                $blocking[] = ['code' => 'PAYROLL_SELF_BENEFICIARY_CONFLICT', 'message' => 'This run pays a compensation change of your own for the first time, so someone whose own pay it does not change must approve it.'];
+            }
+            if ($beneficiary->unlinkedEmployees > 0) {
+                $warnings[] = ['code' => 'PAYROLL_EMPLOYEES_WITHOUT_ACCOUNT', 'message' => "{$beneficiary->unlinkedEmployees} Employee(s) with a compensation change in this run have no linked account, so the system cannot tell whether you are one of them. Your approval records this."];
+            }
         }
         $totals = $this->totals($school, $run->id);
         if (! $totals['reconciles']) {

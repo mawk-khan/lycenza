@@ -205,8 +205,9 @@ class ApprovalWorkflowRegistryTest extends TestCase
             $this->assertNotContains($class, array_column(ApprovalWorkflowRegistry::WORKFLOWS, 'service'));
 
             if ($meta['relationshipConflict'] !== null) {
-                $this->assertSame('guardian_of_student_beneficiary', $meta['relationshipConflict']);
-                $this->assertStringContainsString('beneficiary->isGuardianOf(', $source, "{$class} checks the beneficiary conflict");
+                $this->assertContains($meta['relationshipConflict'], ['guardian_of_student_beneficiary', 'payroll_run_independence']);
+                $check = $meta['relationshipConflict'] === 'payroll_run_independence' ? 'participationOf(' : 'beneficiary->isGuardianOf(';
+                $this->assertStringContainsString($check, $source, "{$class} checks the conflict");
                 $this->assertSame('O', DB::selectOne('select tgenabled from pg_trigger where tgname = ?', [$meta['dbGuard']['trigger']])->tgenabled, "{$class}: the database backs it");
                 $this->assertStringContainsString($meta['dbGuard']['refusal'], (string) DB::selectOne(
                     'select p.prosrc from pg_trigger t join pg_proc p on p.oid = t.tgfoid where t.tgname = ?', [$meta['dbGuard']['trigger']],

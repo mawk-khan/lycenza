@@ -9,6 +9,7 @@ interface Props {
         viewRuns: boolean;
         viewStatutory: boolean;
     };
+    openReconciliations: number | null;
 }
 
 defineProps<Props>();
@@ -22,6 +23,10 @@ defineProps<Props>();
 
         <nav class="mt-6">
             <ul class="space-y-1 text-sm">
+                <li v-if="openReconciliations !== null">
+                    <a class="underline" href="/app/payroll/reconciliations">Reconciliations</a>
+                    <span v-if="openReconciliations > 0"> ({{ openReconciliations }} open)</span>
+                </li>
                 <li v-if="can.viewStructures">
                     <a class="underline" href="/app/payroll/components">Salary Components</a>
                 </li>

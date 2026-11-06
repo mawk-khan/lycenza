@@ -6,7 +6,9 @@ use App\Domain\Payroll\Application\Exceptions\PostingAttestationRequiredExceptio
 use App\Domain\Payroll\Application\Exceptions\PostingAttestorCannotReviewException;
 use App\Domain\Payroll\Application\Exceptions\PostingAttestorNotIndependentException;
 use App\Domain\Payroll\Application\Exceptions\PostingEvidenceStaleException;
+use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
 use App\Domain\Payroll\Infrastructure\PayrollPostingAttestation;
+use App\Domain\Payroll\Infrastructure\PayrollReversalReconciliation;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\User;
@@ -37,6 +39,7 @@ final class PayrollPostingIndependence
     public function __construct(
         private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
+        private readonly PayrollSelfBeneficiaries $beneficiaries,
     ) {}
 
     /** The evidence version of an open exception, or null when the approval still stands on its own. */
@@ -53,6 +56,10 @@ final class PayrollPostingIndependence
         $school = $run->school;
         if (! $this->isIndependent($run, $actor)) {
             throw new PostingAttestorNotIndependentException($run->id);
+        }
+        // HR.R1-C6 (OD-HR-24): nobody certifies independence over a change to their own pay.
+        if ($this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id)->conflicted) {
+            throw new SelfBeneficiaryConflictException($run->id);
         }
         if (! $this->capabilities->holdsInSchoolNow($actor, self::SENSITIVE_VIEW, $school)) {
             throw new PostingAttestorCannotReviewException($run->id);
@@ -84,6 +91,8 @@ final class PayrollPostingIndependence
             'approvedByUserId' => $run->approved_by_user_id,
             'evidenceVersion' => $version,
             'statementCode' => PayrollPostingAttestation::STATEMENT_INDEPENDENCE_CHANGED,
+            // OD-HR-24: Employees this attestation's conflict check could not see, recorded on the decision.
+            'employeesWithoutAccount' => $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id)->unlinkedEmployees,
         ]);
 
         return $attestation;
@@ -116,48 +125,61 @@ final class PayrollPostingIndependence
     /**
      * HR.R1-C4: a reversal can take independence from a run it never touches.
      * It does not block the reversal or change that run. An approved run meets the
-     * attestation at posting; a run already posted has nothing left to stop, so
-     * this durable event is the record (PAY-18, OD-HR-23). Under the reversal's
-     * exclusive compensation lock, after its posting row.
+     * attestation at posting. HR.R1-C6 (OD-HR-23): a run already posted has nothing
+     * left to stop, so it gets an OPEN obligation, here, in the reversal's own
+     * transaction (`payroll_run_postings_reconciliation_required` refuses the commit
+     * without one). Under the reversal's exclusive compensation lock, after its
+     * posting row. "Affected" is `payroll_reversal_affected_runs`, with no cap.
+     *
+     * A reversed run with no recorded provenance cannot say what it discharged, so
+     * that is recorded as unknown, never as "nothing affected".
      *
      * @return int the number of runs recorded
      */
-    public function recordAffectedBy(PayrollRun $reversed, User $actor): int
+    public function recordAffectedBy(PayrollRun $reversed, PayrollRunPosting $reversal, User $actor): int
     {
-        $affected = DB::select(
-            <<<'SQL'
-            SELECT DISTINCT o.id, o.status
-              FROM payroll_run_calculation_sources s
-              JOIN payroll_run_calculation_sources os
-                ON os.school_id = s.school_id AND os.compensation_assignment_id = s.compensation_assignment_id AND os.payroll_run_id <> s.payroll_run_id
-              JOIN payroll_runs o
-                ON o.school_id = os.school_id AND o.id = os.payroll_run_id AND o.approved_calculation_id = os.payroll_run_calculation_id
-              JOIN employee_compensation_assignments a
-                ON a.school_id = os.school_id AND a.id = os.compensation_assignment_id AND a.assigned_by_user_id = o.approved_by_user_id
-             WHERE s.school_id = ? AND s.payroll_run_id = ? AND s.payroll_run_calculation_id = ?
-               -- Only what the reversed run actually discharged: priced from the assignment, approved independently of its author.
-               AND s.basis = 'structure' AND ?::uuid IS DISTINCT FROM a.assigned_by_user_id
-               AND o.run_kind = 'regular' AND o.status IN ('approved', 'posted')
-            SQL,
-            [$reversed->school_id, $reversed->id, $reversed->approved_calculation_id, $reversed->approved_by_user_id],
-        );
+        if ($reversed->run_kind === 'regular' && ! $this->hasProvenance($reversed)) {
+            $this->audit->school($reversed->school, 'payroll.run.reversal_impact_unknown', actor: $actor, subject: $reversed, metadata: ['reversalPostingId' => $reversal->id]);
 
-        $recorded = 0;
+            return 0;
+        }
+
+        $affected = DB::select('SELECT payroll_run_id, status FROM payroll_reversal_affected_runs(?, ?) ORDER BY payroll_run_id', [$reversed->school_id, $reversal->id]);
+
         foreach ($affected as $row) {
-            $run = PayrollRun::query()->where('school_id', $reversed->school_id)->findOrFail($row->id);
-            $version = $this->version($run);
-            if ($version === null) {
-                continue;
-            }
+            $run = PayrollRun::query()->where('school_id', $reversed->school_id)->findOrFail($row->payroll_run_id);
+            $version = (string) $this->version($run);
             $this->audit->school($reversed->school, 'payroll.run.independence_changed', actor: $actor, subject: $run, metadata: [
                 'reversedRunId' => $reversed->id,
                 'status' => $run->status,
                 'evidenceVersion' => $version,
             ]);
-            $recorded++;
+            if ($row->status !== 'posted') {
+                continue; // an approved run meets the attestation at posting
+            }
+            $obligation = PayrollReversalReconciliation::query()->create([
+                'school_id' => $reversed->school_id,
+                'payroll_run_id' => $run->id,
+                'payroll_run_calculation_id' => $run->approved_calculation_id,
+                'reversal_posting_id' => $reversal->id,
+                'evidence_version' => $version,
+            ]);
+            $this->audit->school($reversed->school, 'payroll.run.reconciliation_opened', actor: $actor, subject: $run, metadata: [
+                'reconciliationId' => $obligation->id,
+                'reversedRunId' => $reversed->id,
+                'reversalPostingId' => $reversal->id,
+                'approvedCalculationId' => $run->approved_calculation_id,
+                'evidenceVersion' => $version,
+            ]);
         }
 
-        return $recorded;
+        return count($affected);
+    }
+
+    private function hasProvenance(PayrollRun $run): bool
+    {
+        return $run->approved_calculation_id !== null
+            && DB::table('payroll_run_calculation_sources')->where('school_id', $run->school_id)->where('payroll_run_calculation_id', $run->approved_calculation_id)->exists();
     }
 
     /**
@@ -179,13 +201,14 @@ final class PayrollPostingIndependence
         $blocked = match (true) {
             $run->status !== 'approved' => null,
             ! $independent => 'not_independent',
+            $version !== null && $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id)->conflicted => 'self_beneficiary',
             // A read, outside any decision transaction; the decision re-reads this fresh in assertMayAttest().
             ! $this->capabilities->canInSchool($actor, self::SENSITIVE_VIEW, $run->school) => 'cannot_review',
             ! $maySeeDetails => 'needs_mfa',
             default => null,
         };
         $canAttest = $run->status === 'approved' && $version !== null && $blocked === null;
-        $showDetails = $version !== null && $maySeeDetails && $blocked !== 'not_independent';
+        $showDetails = $version !== null && $maySeeDetails && ! in_array($blocked, ['not_independent', 'self_beneficiary'], true);
         if ($showDetails) {
             // Who was paid what structure, from when: reading it is audited, like every other sensitive payroll read.
             $this->audit->school($run->school, 'payroll.run.independence_reviewed', actor: $actor, subject: $run, metadata: ['evidenceVersion' => $version, 'page' => max(1, $page)]);
@@ -209,8 +232,14 @@ final class PayrollPostingIndependence
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function details(PayrollRun $run, int $page): array
+    /**
+     * The purpose-limited evidence of an exception: who approved, which runs were
+     * reversed and when, and the affected employee numbers, names, structures and
+     * dates. Never an amount, bank, statutory or profile field.
+     *
+     * @return array<string, mixed>
+     */
+    public function details(PayrollRun $run, int $page): array
     {
         $changes = DB::table(DB::raw('payroll_run_independence_exception(?, ?) AS e'))
             ->addBinding([$run->school_id, $run->id], 'from')

@@ -96,6 +96,8 @@ final class TenantRetentionCatalog
             'payroll_run_calculation_sources',
             // HR.R1-C4: a posting attestation is evidence of the posting; it leaves with it.
             'payroll_posting_attestations',
+            // HR.R1-C6: reconciliation evidence of a run leaves with that run (FK cascade), never before it.
+            'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
         ]],
         'payroll_calendar' => [self::TENANT_LIFETIME, 'E21.3F: monthly payroll period headers (dates and status; no personal data, no amount), School payroll configuration kept with the School', ['payroll_periods']],
         'finance_configuration' => [self::TENANT_LIFETIME, 'interprets the retained ledger', [

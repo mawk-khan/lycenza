@@ -8,6 +8,7 @@ use App\Domain\Payroll\Application\Exceptions\PayrollException;
 use App\Domain\Payroll\Application\PayrollApprovalReviewService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\Payroll\Application\PayrollPostingIndependence;
+use App\Domain\Payroll\Application\PayrollReversalReconciliationReadService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunReadService;
 use App\Domain\Payroll\Application\PayrollRunResultDetail;
@@ -357,6 +358,7 @@ class PayrollRunController extends Controller
             // HR.R1-C4 (PAY-16): shown to anyone who can read the run; identification needs sensitive sight.
             'postingIndependence' => $context->withSchool($school, fn () => app(PayrollPostingIndependence::class)->review(
                 PayrollRun::query()->findOrFail($run->id), $actor, $canViewSensitive, (int) request()->query('independence_page', '1'))),
+            'reconciliations' => app(PayrollReversalReconciliationReadService::class)->forRun($school, $actor, $run->id),
             'canViewSensitive' => $canViewSensitive,
             'sensitiveNeedsMfa' => $holdsSensitive && ! $canViewSensitive,
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),

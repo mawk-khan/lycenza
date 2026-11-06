@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Payroll;
 
+use App\Domain\Payroll\Application\PayrollReversalReconciliationReadService;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -44,6 +45,8 @@ class PayrollController extends Controller
                 // itself, this is UX-only like every other flag here.
                 'viewStatutory' => $capabilities->canInSchool($user, 'payroll.statutory.view', $school),
             ],
+            // HR.R1-C6: never defaulted to 0. A failed count fails the page rather than reporting nothing open.
+            'openReconciliations' => $capabilities->canInSchool($user, 'payroll.runs.view', $school) ? app(PayrollReversalReconciliationReadService::class)->openCount($school, $user) : null,
         ]);
     }
 }

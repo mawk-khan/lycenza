@@ -127,6 +127,7 @@ use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensati
 use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
 use App\Http\Controllers\App\Payroll\PayrollController;
 use App\Http\Controllers\App\Payroll\PayrollPeriodController;
+use App\Http\Controllers\App\Payroll\PayrollReconciliationController;
 use App\Http\Controllers\App\Payroll\PayrollRunController;
 use App\Http\Controllers\App\Payroll\PayrollRunPostingController;
 use App\Http\Controllers\App\Payroll\PayslipController as PayrollPayslipController;
@@ -2420,6 +2421,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])->name('runs.approve');
         Route::post('/runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])->name('runs.post');
         Route::post('/runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])->name('runs.reverse');
+
+        // HR.R1-C6 (PAY-18, OD-HR-23): post-posting reconciliation. Anyone who can see runs sees that an obligation
+        // exists; closing one needs approve AND sensitive view, a fresh code, and independence (the service decides).
+        Route::get('/reconciliations', [PayrollReconciliationController::class, 'index'])->middleware('capability:payroll.runs.view')->name('reconciliations.index');
+        Route::get('/reconciliations/{payrollReconciliation}', [PayrollReconciliationController::class, 'show'])->middleware(['capability:payroll.runs.view', 'private-no-store'])->name('reconciliations.show');
+        Route::post('/reconciliations/{payrollReconciliation}/review', [PayrollReconciliationController::class, 'review'])->middleware(['capability:payroll.runs.approve', 'capability:payroll.compensation.sensitive.view'])->name('reconciliations.review');
 
         // Phase 9.10: printable on-demand payslip, never persisted --
         // authorization/eligibility both enforced inside PayslipReadService.

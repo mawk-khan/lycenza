@@ -162,8 +162,9 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 ## 7. HR.R1-C3 update (2026-11-06)
 
 PAY-14 is closed for development. PAY-13 is corrected at approval. PAY-16 is closed
-for every order up to posting (HR.R1-C4, OD-HR-22); a reversal after posting is
-recorded, never acknowledged (PAY-18, OD-HR-23). PAY-15 is closed for development
-(HR.R1-C5), which removes one application blocker for staging. This changes no other
+for every order up to posting (HR.R1-C4, OD-HR-22), and after posting by HR.R1-C6: a
+reversal after posting opens an OPEN obligation for independent review (PAY-18,
+OD-HR-23). PAY-19 and PAY-20 are closed for development (HR.R1-C6). PAY-15 is closed
+for development (HR.R1-C5), which removes one application blocker for staging. This changes no other
 readiness determination: staging stays paused and infrastructure-blocked, and
 production stays NO-GO.
