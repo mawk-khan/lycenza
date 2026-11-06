@@ -8,11 +8,11 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * HR.R1-C4: this migration must not repeat PAY-15. The documented migration role
- * (`infrastructure/postgres/production-bootstrap.sql`) is NOSUPERUSER NOBYPASSRLS,
- * and FORCE ROW LEVEL SECURITY binds a table's owner too, so a plain read in
- * down() sees no rows there. This runs the real down() as such an owner, against
- * a real row, inside one transaction that is always rolled back.
+ * HR.R1-C4: this migration must not repeat PAY-15. FORCE ROW LEVEL SECURITY binds
+ * a table's owner, so a plain read in down() sees no rows for an owner WITHOUT
+ * BYPASSRLS (the migration role needs it, ADR 0021; a role can still lose it).
+ * This runs the real down() as such an owner, against a real row, inside one
+ * transaction that is always rolled back.
  */
 class PayrollAttestationRollbackGuardTest extends TestCase
 {

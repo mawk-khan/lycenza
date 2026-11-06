@@ -157,6 +157,5 @@ recorded compensation provenance. Fix forward.
   for any control. It is recorded; reconcile it by your normal correction route.
 - **A reversal is brief but School-wide.** Approvals and calculations of that
   School wait for it to commit.
-- **Before any migration rollback** on a role without `BYPASSRLS`, read PAY-15 in
-  `docs/hr/HR-R1-CLOSURE-CONTRACT.md`: a rollback guard may not see the rows it
-  protects there.
+- **A migration rollback** is refused in staging and production, and on a role
+  without `BYPASSRLS`: see `DATABASE-BOOTSTRAP.md`, "Rollback safety".

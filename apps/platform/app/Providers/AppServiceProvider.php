@@ -45,6 +45,7 @@ use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Configuration\ProductionConfigurationException;
 use App\Support\Configuration\ProductionConfigurationGuard;
 use App\Support\Configuration\UnsupportedEnvironmentException;
+use App\Support\Database\RollbackSafeMigrator;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\LogErrorReporter;
 use App\Support\Observability\Metrics\ArrayMetricStore;
@@ -59,8 +60,11 @@ use App\Support\ServiceAuth\ServiceAuthKeys;
 use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -71,6 +75,9 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // HR.R1-C5 (PAY-15): every framework path that runs a down() goes through this one migrator.
+        $this->app->extend('migrator', fn (Migrator $migrator, Application $app) => new RollbackSafeMigrator($app['migration.repository'], $app['db'], $app['files'], $app['events']));
+
         // PPR.1 (ADR 0074 section 26.2): only the four supported environments
         // boot. A typo (`stage`, `preprod`, `prod2`) or an empty APP_ENV must
         // never run as some weaker third state -- finding F-2 was exactly that.
@@ -220,6 +227,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // HR.R1-C5 (ADR 0074 §26.7): a hardened environment never rolls a migration back. Only development may, so an
+        // environment nobody planned for refuses too.
+        DB::prohibitDestructiveCommands(! $this->app->environment(['local', 'testing']));
+
         // Phase 0O.3 (ADR 0049 section 2): on every bearer request, a human
         // API token is valid only if Sanctum's own checks pass AND it has a
         // finite expiry, only catalog scopes (never `*`), and an enabled

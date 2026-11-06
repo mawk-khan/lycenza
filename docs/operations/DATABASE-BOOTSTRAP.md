@@ -7,7 +7,7 @@ privileges on a real database is performed by an authorized operator.
 
 | Role | Name | Attributes | Used by |
 |---|---|---|---|
-| Migration/admin | any name the deployment chooses (e.g. the managed service's owner role) — **not** `school_os_app` | owns the schema; can CREATE in `public` | `pgsql_admin`: the release step and the operator console only |
+| Migration/admin | any name the deployment chooses (e.g. the managed service's owner role) — **not** `school_os_app` | owns the schema; can CREATE in `public`; **has `BYPASSRLS` or is a superuser** (see Rollback safety) | `pgsql_admin`: the release step and the operator console only |
 | Runtime | **exactly `school_os_app`** (fixed v1 contract, O6) | `LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION`, never a member of the migration role | `pgsql`: web, workers, scheduler |
 | Retention (E21-RH.2, ADR 0066) | **exactly `school_os_retention`** | same attributes; a member of no role (nor the migration role nor `school_os_app`); owns nothing; **no default privileges** -- migrations grant it only EXECUTE on the approved retention functions, SELECT on what its units read, and SELECT + DELETE (never INSERT or UPDATE) on the tables its units delete from, each delete held in the database (E21-RH.6) | `pgsql_retention`: the destructive steps of scheduled retention (scheduler) and reviewed erasure cases (operator console) |
 
@@ -144,3 +144,34 @@ set `retention_recorded_at` explicitly, from the migration/owner login only
 (model D). Record the provenance, as `platform:lifecycle-markers-backfill`
 does from the audit ledger. The runtime and retention logins can never set
 it.
+
+## Rollback safety
+
+A rollback is not how a hardened environment recovers. Staging and production
+refuse `migrate:rollback`, `migrate:reset`, `migrate:refresh`, `migrate:fresh` and
+`db:wipe` (ADR 0074 §26.7). There, a defect is fixed by a reviewed forward migration
+or an approved restore (`PRODUCTION-RELEASE.md`). `down()` runs only on disposable
+databases.
+
+**Why the migration role needs `BYPASSRLS` or superuser.** Tenant tables use FORCE
+ROW LEVEL SECURITY, which binds the owner too. Without bypass, a read with no tenant
+context returns nothing, with no error. Bootstrap refuses such a role, six migrations
+refuse to run, and `platform:verify-database` fails `migration_owner_sees_every_row`.
+
+**"Rollback refused, nothing changed".** Every `down()` runs with `row_security =
+off`, so PostgreSQL raises an error instead of quietly filtering. The migration's
+transaction is undone, and an earlier migration in the same command stays rolled
+back. To respond:
+
+1. Do not retry as a different role to get past it, and do not remove the setting.
+2. Confirm the role with `SELECT rolname, rolsuper, rolbypassrls FROM pg_roles`.
+3. On a disposable database, give the role `BYPASSRLS`. The guard then reads every
+   row and decides for itself.
+4. Anywhere else, use a forward migration or an approved restore.
+
+A refusal says nothing about the data: the table may be empty. Its log line
+(`migration.rollback_refused`) carries the migration, connection and reason, never a
+row.
+
+**What this does not replace.** Rollback safety is not a backup. The restore drill
+(`BACKUP-AND-RESTORE.md`) is a separate prerequisite.

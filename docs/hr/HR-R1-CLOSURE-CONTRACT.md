@@ -71,7 +71,7 @@ Timetable substitution, Analytics (headcount, rates).
 |---|---|---|---|
 | PAY-13 | MEDIUM | (corrected by HR.R1-C3, see below) A reversed posted run still counts as having paid a compensation change: `reverse()` leaves the run `posted`, so `payroll_run_first_paid_compensation` excludes the change from the next run and its author may approve that run. The review packet does not list it. No test covers reversal. | Closed at approval (HR.R1-C3); see PAY-16 and PAY-18 for later boundaries |
 | PAY-14 | LOW | The runtime role can change `assigned_by_user_id` or `salary_structure_id` on a compensation assignment: no trigger freezes them, so raw SQL could defeat author exclusion or reprice unseen. No application path. | CLOSED for development (HR.R1-C3: `trg_employee_compensation_assignments_identity`) |
-| PAY-15 | LOW, conditional | The HR.R1-C1 `down()` guard reads FORCE-RLS tables with no tenant context. If a production migration role lacks BYPASSRLS, it could see no rows and drop provenance. Not exercised. | OPEN, condition confirmed by HR.R1-C3 (see below) |
+| PAY-15 | LOW, conditional | The HR.R1-C1 `down()` guard reads FORCE-RLS tables with no tenant context. If a production migration role lacks BYPASSRLS, it could see no rows and drop provenance. Not exercised. | CLOSED for development (HR.R1-C5, see below; its severity reasoning was corrected) |
 
 ## 4. Output
 
@@ -90,7 +90,7 @@ Timetable substitution, Analytics (headcount, rates).
 
 The final-candidate reviews also found raw-SQL routes around the corrected rule, all fixed in HR.R1-C3: a run could be reclassified to skip the guard's author and freshness checks, INSERTed already approved, or have its creator changed (`trg_payroll_runs_identity`), and a decided run could have no approver, counting as independent of every author (`payroll_runs_decided_has_approver`). Who acted stays an application boundary (rule 102).
 
-**PAY-15 evidence (2026-11-06).** The condition holds: `infrastructure/postgres/production-bootstrap.sql` creates the migration role `NOSUPERUSER NOBYPASSRLS`, and these tables use FORCE ROW LEVEL SECURITY, so a `down()` guard with no tenant context reads no rows on that role and would let the rollback proceed. It is safe locally only because DDEV's and Docker's migration role is a superuser. Reasoned from the bootstrap and the policies, not executed on such a role. The pattern is not confined to HR.R1-C1: 32 migrations carry a "refusing to roll back" guard (30 `exists()` calls, not individually assessed). No staging or production database exists, so nothing is exposed today, but this must be resolved before any rollback on such a role.
+**PAY-15 evidence (2026-11-06), CORRECTED by HR.R1-C5.** This paragraph first said the documented migration role is `NOBYPASSRLS`. That was wrong: the line describes `school_os_app`. See the HR.R1-C5 evidence below.
 
 ### Findings registered from the HR.R1-C2 review (2026-11-06)
 
@@ -113,4 +113,11 @@ Registered, not implemented. Severity is the reviewer's.
 
 The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affected run without an attestation. Fixed before publication: unaudited evidence reads, an attestation hiding later exposure, a guard race surfacing as a 500, and evidence that disagreed with the audit events. All reviews read code only and executed nothing. `withinGuards()` has no deterministic test, and approval vs correction and posting vs capability revocation have no two-process test.
 
-**PAY-15 update.** Inventory of every rollback guard: `docs/hr/PAY-15-ROLLBACK-GUARD-INVENTORY.md`. The new migration does not repeat it, proven by `PayrollAttestationRollbackGuardTest` as an owner without `BYPASSRLS`. PAY-15 itself stays OPEN and remains a staging blocker. PAY-17 and the three HR.R1-C2 LOW findings are unchanged.
+**PAY-15 update.** Superseded by the HR.R1-C5 evidence below. PAY-17 and the three HR.R1-C2 LOW findings are unchanged.
+
+**Evidence recorded (HR.R1-C5, 2026-11-06):** PAY-15 CLOSED for development.
+- **Correction.** Earlier evidence here said the documented migration role lacks `BYPASSRLS`, and that 27 of 47 guards fail open on it. The role requirement was never documented, but six migrations refuse to run without RLS bypass, so a role that applied them all sees every row. The real trigger is narrower: a role that lost bypass or stopped part way. The true guard count is in `docs/hr/PAY-15-ROLLBACK-GUARD-INVENTORY.md`.
+- **Reproduced** on a production-shaped database, as a real non-superuser role, with the real `migrate:rollback`. The same hidden row was refused with bypass and destroyed without it.
+- **Fixed centrally,** because published migrations are not rewritten (ADR 0066 §15.1): `RollbackSafeMigrator` runs every `down()` with `row_security = off`, so a filtered read raises an error and the migration is refused. Hardened environments now refuse every destructive migration command, enforcing ADR 0074 §26.7. Bootstrap refuses a migration role without bypass, and `platform:verify-database` checks both.
+- **Proven:** a real non-superuser role with `BYPASSRLS` rolled back all 77 reachable migrations and reapplied them, with byte-identical schema, RLS and grants.
+- **Not solved:** a guard is still not atomic with the DDL after it unless it lifts FORCE first, so a concurrent write in the gap is possible on a disposable database. Hardened environments refuse rollback, so the gap is not reachable there.

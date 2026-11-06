@@ -20,7 +20,8 @@
 --
 -- What it does -- and it is safe to run again (idempotent):
 --   * refuses a migration role named school_os_app, a missing migration
---     role, or a database other than the one named;
+--     role, a migration role without BYPASSRLS (or superuser), or a database
+--     other than the one named;
 --   * creates `school_os_app` (the FIXED v1 runtime role, ADR 0050
 --     section 6) if absent: LOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB,
 --     NOCREATEROLE, NOINHERIT, NOREPLICATION, and NO password;
@@ -81,6 +82,11 @@ BEGIN
     END IF;
     IF NOT (current_user = migration_role OR (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)) THEN
         RAISE EXCEPTION 'production-bootstrap: run this as the migration role % (or a superuser), not %', migration_role, current_user;
+    END IF;
+    -- HR.R1-C5 (PAY-15, ADR 0021): under FORCE RLS a role without this reads filtered tables, so its migrations and
+    -- rollback guards would act on an empty answer. Six migrations already refuse to run without it.
+    IF NOT (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = migration_role) THEN
+        RAISE EXCEPTION 'production-bootstrap: migration role % needs BYPASSRLS (or superuser) -- it must see every row of every table', migration_role;
     END IF;
     IF NOT has_schema_privilege(migration_role, 'public', 'CREATE') THEN
         RAISE EXCEPTION 'production-bootstrap: migration role % cannot CREATE in schema public -- it cannot run migrations', migration_role;

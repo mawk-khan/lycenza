@@ -163,8 +163,7 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 
 PAY-14 is closed for development. PAY-13 is corrected at approval. PAY-16 is closed
 for every order up to posting (HR.R1-C4, OD-HR-22); a reversal after posting is
-recorded, never acknowledged (PAY-18, OD-HR-23). PAY-15 stays open with its
-condition confirmed for the documented migration role
-(`docs/hr/HR-R1-CLOSURE-CONTRACT.md`): resolve it before any rollback on a role
-without `BYPASSRLS`. This changes no readiness determination: staging stays paused
-and infrastructure-blocked, and production stays NO-GO.
+recorded, never acknowledged (PAY-18, OD-HR-23). PAY-15 is closed for development
+(HR.R1-C5), which removes one application blocker for staging. This changes no other
+readiness determination: staging stays paused and infrastructure-blocked, and
+production stays NO-GO.

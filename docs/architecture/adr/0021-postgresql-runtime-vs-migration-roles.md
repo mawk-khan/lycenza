@@ -152,3 +152,17 @@ migration/owner role.
   retention roles never can; a SECURITY DEFINER function called by them is
   not exempt. Two retention-security migrations are fenced against rollback
   (`docs/operations/DATABASE-BOOTSTRAP.md`, "Retention security fences").
+
+## HR.R1-C5 amendment (2026-11-06): the migration role sees every row
+
+This ADR named a superuser for local use and never stated what a provider-named
+migration role needs. It needs `BYPASSRLS` or superuser: FORCE RLS binds a table's
+owner, so without it a read returns an empty answer with no error. Six migrations
+already refused such a role, and a rollback guard could not tell (PAY-15).
+
+- Bootstrap refuses it and `platform:verify-database` checks it.
+- Every `down()` runs with `row_security = off` through `RollbackSafeMigrator`, so a
+  role that would see filtered rows is refused rather than misled. A non-superuser
+  role with `BYPASSRLS` completes every migration, and rolled back and reapplied all
+  77 reachable ones with an identical schema, RLS state and grants.
+- `school_os_app` is unchanged: never `BYPASSRLS`.

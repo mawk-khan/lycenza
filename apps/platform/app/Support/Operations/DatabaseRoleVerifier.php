@@ -3,6 +3,7 @@
 namespace App\Support\Operations;
 
 use App\Support\Configuration\EnvironmentPolicy;
+use App\Support\Database\RollbackSafeMigrator;
 use App\Support\Retention\RetentionAnchors;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -433,6 +434,11 @@ class DatabaseRoleVerifier
 
         $owner = DB::selectOne("select relowner::regrole::text as owner from pg_class where oid = 'platform_role_assignments'::regclass")->owner;
         $member = DB::selectOne('select pg_has_role(?, ?, ?) as m', [$role, $owner, 'MEMBER'])->m;
+        // HR.R1-C5 (PAY-15, ADR 0021): the role that owns the schema must see every row, or a migration or rollback guard is
+        // reading a filtered table; and rollback must run through the fail-closed migrator.
+        $schemaOwner = DB::selectOne("select r.rolsuper or r.rolbypassrls as sees_all from pg_class c join pg_roles r on r.oid = c.relowner where c.oid = 'public.migrations'::regclass");
+        $results[] = CheckResult::of('migration_owner_sees_every_row', $schemaOwner !== null && (bool) $schemaOwner->sees_all);
+        $results[] = CheckResult::of('rollback_guards_fail_closed', app('migrator')::class === RollbackSafeMigrator::class);
         $results[] = CheckResult::of('runtime_role_not_owner_member', ! $member && $owner !== $role);
 
         $schema = DB::selectOne("select has_database_privilege(?, current_database(), 'CONNECT') as connect, has_schema_privilege(?, 'public', 'USAGE') as usage, has_schema_privilege(?, 'public', 'CREATE') as create_", [$role, $role, $role]);

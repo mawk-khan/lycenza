@@ -247,7 +247,8 @@ never runs a migration `down()`.
 - **`down()`.** CLAUDE.md rule 10 still requires a working (or deliberately
   refused) `down()`. It is a development and test guarantee, proven by the
   migration rollback tests on disposable databases, and **never** the
-  routine rollback path in staging or production. Two retention-fence
+  routine rollback path in staging or production. Since HR.R1-C5 those
+  environments refuse the commands outright. Two retention-fence
   migrations refuse `down()` by design (`DATABASE-BOOTSTRAP.md`).
 
 ## 4. Database roles

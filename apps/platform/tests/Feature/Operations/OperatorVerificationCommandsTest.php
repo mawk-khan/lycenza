@@ -77,6 +77,8 @@ class OperatorVerificationCommandsTest extends TestCase
             'payroll_approval_provenance_guarded',
             // HR.R1-C2 (HRC-1, HRC-2)
             'employment_lifecycle_admission_guarded',
+            // HR.R1-C5 (PAY-15)
+            'migration_owner_sees_every_row', 'rollback_guards_fail_closed',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);
