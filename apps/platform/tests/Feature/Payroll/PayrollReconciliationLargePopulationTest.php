@@ -22,9 +22,9 @@ use Tests\TestCase;
  * Both runs are found and every change is reachable, with no cap, and the query
  * count does not depend on the size. Discovery runs under the School's exclusive
  * compensation lock, and two earlier forms of it were quadratic: 116 s at 5,000
- * entries, then 184 s at 10,000 on a plan an analyzed database never chose (HR.R1-C7-R1).
- * So every Employee has link history, and discovery runs under a statement timeout
- * that only a quadratic plan reaches. Synthetic data, as the runtime role, in one
+ * entries, then over 60 s at 10,000 on a generic plan with planner statistics
+ * (HR.R1-C7-R1). So the fixture is analyzed, every Employee has link history, and
+ * discovery runs under a statement timeout that only a quadratic plan reaches. Synthetic data, as the runtime role, in one
  * transaction that always rolls back.
  */
 class PayrollReconciliationLargePopulationTest extends TestCase

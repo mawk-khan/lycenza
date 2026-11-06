@@ -9,10 +9,11 @@ use Illuminate\Support\Facades\DB;
  * HR.R1-C7 put the link check inside the join that finds what a reversed run
  * discharged. A SQL function here is planned without its parameter values, and the
  * planner then estimates one row after that anti-join, moves it ahead of the rest of
- * the join, and scans every assignment for each row. Measured on a fresh database at
- * 10,000 entries: 184 s per call, 560 s for a reversal, all under the School's
- * exclusive compensation lock. An analyzed database hid it (184 ms), so the plan
- * was luck.
+ * the join, and scans every assignment for each row. Measured at 10,000 entries:
+ * 184 s per call and 560 s for a reversal, all under the School's exclusive
+ * compensation lock. An independent run of the old body took 330 ms with no planner
+ * statistics and over 60 s with them. So the cost depends on the plan, and one fast
+ * measurement proved nothing: the same code once read 184 ms.
  *
  * The join is now materialized before the check, so it cannot be reordered. Only the
  * shape changes: same inputs, same rows. `2027_02_08_090000` is published, so this
