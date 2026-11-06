@@ -158,8 +158,8 @@ recorded compensation provenance. Fix forward.
 - **Unlinking does not clear a Payroll conflict (HR.R1-C7).** An Employee's account
   link can be removed as before, and the person is still that Employee for Payroll.
   If a link was simply wrong, use **Correct** in the Employee's Link history: it needs
-  your code, a reason and `hr.employees.manage`, cannot be used on your own link, and
-  is final. Never use it to free someone who really was that Employee. It is audited,
+  your code, a reason and `hr.employees.manage`, cannot be used on an Employee you are
+  or were linked to, and is final. Never use it to free someone who really was that Employee. It is audited,
   and the row stays.
 - **"This run pays a compensation change of your own" (HR.R1-C6).** You are the
   Employee of a change this run pays for the first time. Someone whose pay it does

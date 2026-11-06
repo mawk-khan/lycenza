@@ -25,9 +25,9 @@ use Tests\TestCase;
  * HR.R1-C7 (OD-HR-25), through the REAL retention commands on committed data, as the
  * retention identity: `platform:payroll-retention-prune` (retention_expire_payroll_*)
  * and `platform:employee-retention-prune`. Link history is evidence of the Employee
- * and leaves with them. A run can outlive that Employee because another Employee's
- * results keep it, and its open obligation keeps saying who it excluded, because the
- * obligation copied those ids when it opened. Everything still goes in the end.
+ * and leaves with them. A run another Employee's results keep also keeps this
+ * Employee, because a calculation source names their assignment, so the exclusion
+ * holds for as long as the run does. When the run expires everything goes.
  */
 class PayrollAccountLinkRetentionTest extends TestCase
 {

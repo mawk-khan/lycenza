@@ -4,6 +4,7 @@ namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\HrSelfAdministrationException;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAccountLink;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\School;
 use App\Models\User;
@@ -48,6 +49,28 @@ class HrSelfAdministrationGuard
         if ($linkedUserId !== null && $linkedUserId === $actor->id) {
             throw new HrSelfAdministrationException($operation);
         }
+    }
+
+    /**
+     * HR.R1-C7 (OD-HR-25): whether $actor has a link, current or ended and not
+     * corrected as erroneous, to this Employee. An unlink does not change who a
+     * person is, so this, not the current link, decides a person's own pay, and
+     * whether they may correct that Employee's links.
+     */
+    public function hasUncorrectedLink(User $actor, string $schoolId, string $employeeId): bool
+    {
+        return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('employee_id', $employeeId)
+            ->where('user_id', $actor->id)->whereNull('voided_at')->exists();
+    }
+
+    /** HR.R1-C7 (OD-HR-25): the same for a Payroll write, by employment. A plain read, as ownsEmployment(). */
+    public function isEmployeeOf(User $actor, School $school, string $employmentRecordId): bool
+    {
+        return app(TenantContext::class)->withSchool($school, function () use ($actor, $school, $employmentRecordId): bool {
+            $employeeId = EmploymentRecord::query()->whereKey($employmentRecordId)->value('employee_id');
+
+            return $employeeId !== null && $this->hasUncorrectedLink($actor, $school->id, $employeeId);
+        });
     }
 
     /**

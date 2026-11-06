@@ -9,10 +9,13 @@ use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAccountLink;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Payroll\Application\Exceptions\PayrollSelfAdministrationException;
 use App\Domain\Payroll\Application\Exceptions\PostingAttestationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
+use App\Domain\Payroll\Application\FixedComponentValueInput;
 use App\Domain\Payroll\Application\PayrollApprovalReviewService;
+use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
 use App\Domain\Payroll\Application\PayrollPostingIndependence;
 use App\Domain\Payroll\Application\PayrollPostingService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
@@ -356,6 +359,48 @@ class PayrollHistoricalLinkTest extends TestCase
         $this->assertSame($snapshot, [$fresh->first_paid_assignments, $fresh->implicated_assignments, $fresh->evidence_version]);
         $this->inSchool($this->school, fn () => $this->reviewAs($fresh, $this->reviewer));
         $this->assertSame(1, $this->reviews(), 'the link was never true, so they were never the Employee');
+    }
+
+    #[Test]
+    public function a_decision_records_that_its_decider_had_a_corrected_link(): void
+    {
+        $this->member($this->reviewer);
+        $this->member($this->poster);
+        $this->linkAndUnlink($this->reviewer);
+        $this->correctLinkOf($this->reviewer);
+        $this->link($this->poster);
+        $october = $this->calculatedRun('2015-10-01');
+
+        $this->approve($october, $this->reviewer);
+
+        $audit = $this->audit('payroll.run.approved', $october)[0];
+        $this->assertSame(0, $audit['employeesWithoutAccount'], 'the Employee is known, through the true link');
+        $this->assertSame(1, $audit['employeesWithCorrectedLink']);
+        $this->assertTrue($audit['deciderHadCorrectedLink'], 'a correction that cleared the way is visible on the decision it cleared');
+    }
+
+    #[Test]
+    public function nobody_records_their_own_pay_after_an_unlink(): void
+    {
+        $this->member($this->x);
+        $this->linkAndUnlink($this->x);
+
+        try {
+            $this->inSchool($this->school, fn () => app(PayrollCompensationAdministrationService::class)->assign(
+                $this->school, $this->record->fresh(), $this->setup['structure'], Carbon::parse('2015-10-01'),
+                [new FixedComponentValueInput($this->setup['line'], '90000.00')], $this->x, $this->freshMfaProofFor($this->x),
+            ));
+            $this->fail('recorded a raise of their own');
+        } catch (PayrollSelfAdministrationException) {
+            $this->assertSame(1, $this->inSchool($this->school, fn () => DB::table('employee_compensation_assignments')->where('employment_record_id', $this->record->id)->count()));
+        }
+
+        $this->correctLinkOf($this->x);
+        $this->inSchool($this->school, fn () => app(PayrollCompensationAdministrationService::class)->assign(
+            $this->school, $this->record->fresh(), $this->setup['structure'], Carbon::parse('2015-10-01'),
+            [new FixedComponentValueInput($this->setup['line'], '90000.00')], $this->x, $this->freshMfaProofFor($this->x),
+        ));
+        $this->assertSame(2, $this->inSchool($this->school, fn () => DB::table('employee_compensation_assignments')->where('employment_record_id', $this->record->id)->count()), 'positive control: a link that was never true');
     }
 
     // 11.

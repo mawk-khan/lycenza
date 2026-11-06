@@ -597,6 +597,7 @@ class PayrollRunService
                     // OD-HR-24, OD-HR-25: what this decision's conflict check could not see, recorded on the decision.
                     'employeesWithoutAccount' => $beneficiary->unlinkedEmployees,
                     'employeesWithCorrectedLink' => $beneficiary->correctedEmployees,
+                    'deciderHadCorrectedLink' => $beneficiary->actorHadCorrectedLink,
                     ...ApprovalProvenance::metadata($participants, ApprovalProvenance::APPROVED, $approver, 'school', $mfa),
                 ]);
 

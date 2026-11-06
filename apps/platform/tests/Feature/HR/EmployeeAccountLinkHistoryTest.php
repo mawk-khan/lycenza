@@ -286,6 +286,43 @@ class EmployeeAccountLinkHistoryTest extends TestCase
     private User $hr2;
 
     #[Test]
+    public function one_person_with_two_accounts_cannot_clear_one_with_the_other(): void
+    {
+        $second = $this->member();
+        $this->linkTo($second);
+        $this->unlink();
+        $this->linkTo($this->hr2 = $this->fullHrActor($this->school));
+        $link = collect($this->links())->firstWhere('user_id', $second->id);
+
+        $history = $this->in(fn () => app(EmployeeAccountLinkHistory::class)->forEmployee($this->employee->fresh(), $this->hr2));
+        $this->assertSame([false, false], array_column($history, 'mayCorrect'), 'they are this Employee, under another account');
+
+        try {
+            $this->correct($link, $this->hr2);
+            $this->fail('corrected a link of their own Employee');
+        } catch (HrSelfAdministrationException) {
+            $this->assertNull(collect($this->links())->firstWhere('user_id', $second->id)->voided_at);
+        }
+
+        // The database says the same to a caller that skipped the service.
+        $this->expectExceptionMessage('nobody corrects a link of an Employee they are linked to');
+        $this->in(fn () => DB::select('SELECT employee_account_link_void(?, ?, ?, ?)', [$this->school->id, $link->id, 'wrong_person', $this->hr2->id]));
+    }
+
+    #[Test]
+    public function someone_else_may_correct_that_link(): void
+    {
+        $second = $this->member();
+        $this->linkTo($second);
+        $this->unlink();
+        $this->linkTo($this->fullHrActor($this->school));
+
+        $this->correct(collect($this->links())->firstWhere('user_id', $second->id));
+
+        $this->assertNotNull(collect($this->links())->firstWhere('user_id', $second->id)->voided_at);
+    }
+
+    #[Test]
     public function an_mfa_proof_is_the_actors_own(): void
     {
         $this->linkTo($this->member());

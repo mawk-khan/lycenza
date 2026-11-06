@@ -4,6 +4,7 @@ namespace App\Domain\HR\Application\AccountLinks;
 
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\Exceptions\EmployeeAccountLinkAlreadyCorrectedException;
+use App\Domain\HR\Application\Exceptions\HrSelfAdministrationException;
 use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\Employee;
@@ -24,7 +25,7 @@ use LogicException;
  * the same transaction. A decision already recorded keeps what it recorded.
  *
  * `hr.employees.manage`, whole-School, read fresh under the lock, the actor's own
- * fresh-MFA proof, a closed reason, and never one's own link. Compensation lock
+ * fresh-MFA proof, a closed reason, and never by anyone linked to that Employee. Compensation lock
  * first, as for every link writer, then the Employee row.
  */
 final class EmployeeAccountLinkCorrectionService
@@ -52,7 +53,10 @@ final class EmployeeAccountLinkCorrectionService
             $locked = Employee::query()->where('school_id', $school->id)->whereKey($employee->id)->lockForUpdate()->firstOrFail();
             $link = EmployeeAccountLink::query()->where('school_id', $school->id)->where('employee_id', $locked->id)->whereKey($linkId)->firstOrFail();
 
-            $this->selfAdministration->refuseSelfLink($actor, $link->user_id, 'correct');
+            // Not only this row: someone with any link to this Employee is that person, under another account.
+            if ($this->selfAdministration->hasUncorrectedLink($actor, $school->id, $locked->id)) {
+                throw new HrSelfAdministrationException('correct');
+            }
             if ($link->voided_at !== null) {
                 throw new EmployeeAccountLinkAlreadyCorrectedException($link->id);
             }

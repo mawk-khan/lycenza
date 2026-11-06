@@ -87,7 +87,8 @@ final class PayrollReversalReconciliationService
                         throw new ReconciliationEvidenceStaleException($obligation->id);
                     }
 
-                    $unlinked = $this->beneficiaries->ofObligation($school->id, $obligation->id, $actor->id)->unlinkedEmployees;
+                    $finding = $this->beneficiaries->ofObligation($school->id, $obligation->id, $actor->id);
+                    $unlinked = $finding->unlinkedEmployees;
                     $review = PayrollReversalReconciliationReview::query()->create([
                         'school_id' => $school->id,
                         'reconciliation_id' => $obligation->id,
@@ -104,6 +105,8 @@ final class PayrollReversalReconciliationService
                         'evidenceVersion' => $version,
                         'statementCode' => $review->statement_code,
                         'employeesWithoutAccount' => $unlinked,
+                        'employeesWithCorrectedLink' => $finding->correctedEmployees,
+                        'deciderHadCorrectedLink' => $finding->actorHadCorrectedLink,
                     ]);
 
                     return $review;

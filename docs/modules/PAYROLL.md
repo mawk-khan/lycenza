@@ -1288,7 +1288,9 @@ review lists what changed, never the unchanged register.
   decision is prospective, and no decision is rewritten. A corrected link stops
   counting; that Employee is unknown again, because a correction says who they are
   not, and the decision records both counts (`employeesWithoutAccount`,
-  `employeesWithCorrectedLink`). An approval by someone with such a link never
+  `employeesWithCorrectedLink`, plus `deciderHadCorrectedLink`). The own-pay refusals
+  on compensation, overrides and deltas read the same links
+  (`HrSelfAdministrationGuard::isEmployeeOf()`). An approval by someone with such a link never
   discharges that Employee's change, linked or not. A calculation reads
   compensation, never identity. An assignment a calculation read outlives its run
   (`payroll_run_calculation_sources_assignment_fk`, RESTRICT).

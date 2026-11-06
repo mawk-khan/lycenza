@@ -51,7 +51,7 @@ class PayrollCompensationAdministrationService
     ): EmployeeCompensationAssignment {
         $this->authorizeCapabilityFor($actor, 'payroll.compensation.sensitive.manage', $school);
         // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
-        if ($this->selfAdministration->ownsEmployment($actor, $school, $employmentRecord->id)) {
+        if ($this->selfAdministration->isEmployeeOf($actor, $school, $employmentRecord->id)) {
             throw new PayrollSelfAdministrationException('compensation.assign');
         }
 

@@ -24,16 +24,23 @@ use Illuminate\Support\Facades\DB;
  */
 final class PayrollSelfBeneficiaries
 {
+    /** Bound to the School. */
+    private const CORRECTED = 'EXISTS (SELECT 1 FROM employee_account_links l WHERE l.school_id = ? AND l.employee_id = b.employee_id AND l.voided_at IS NOT NULL)';
+
+    /** Bound to the School, then the actor. */
+    private const CORRECTED_FOR_ACTOR = 'EXISTS (SELECT 1 FROM employee_account_links l WHERE l.school_id = ? AND l.employee_id = b.employee_id AND l.voided_at IS NOT NULL AND l.user_id = ?)';
+
     public function of(PayrollRun $run, string $calculationId, string $userId): SelfBeneficiaryFinding
     {
         $row = DB::selectOne(
             'SELECT COALESCE(bool_or(b.user_id = ?), false) AS conflicted, count(*) FILTER (WHERE b.user_id IS NULL) AS unlinked,
-                    count(*) FILTER (WHERE b.user_id IS NULL AND EXISTS (SELECT 1 FROM employee_account_links l WHERE l.school_id = ? AND l.employee_id = b.employee_id)) AS corrected
+                    count(DISTINCT b.employee_id) FILTER (WHERE '.self::CORRECTED.') AS corrected,
+                    COALESCE(bool_or('.self::CORRECTED_FOR_ACTOR.'), false) AS own_corrected
                FROM payroll_run_first_paid_beneficiaries(?, ?, ?) b',
-            [$userId, $run->school_id, $run->school_id, $run->id, $calculationId],
+            [$userId, $run->school_id, $run->school_id, $userId, $run->school_id, $run->id, $calculationId],
         );
 
-        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked, correctedEmployees: (int) $row->corrected);
+        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked, correctedEmployees: (int) $row->corrected, actorHadCorrectedLink: (bool) $row->own_corrected);
     }
 
     /**
@@ -45,11 +52,13 @@ final class PayrollSelfBeneficiaries
     {
         $row = DB::selectOne(
             'SELECT COALESCE(bool_or(s.user_id = ?), false) AS conflicted, COALESCE(bool_or(s.assigned_by_user_id = ?), false) AS authored,
-                    count(DISTINCT s.employee_id) FILTER (WHERE s.user_id IS NULL) AS unlinked
+                    count(DISTINCT s.employee_id) FILTER (WHERE s.user_id IS NULL) AS unlinked,
+                    count(DISTINCT s.employee_id) FILTER (WHERE '.str_replace('b.employee_id', 's.employee_id', self::CORRECTED).') AS corrected,
+                    COALESCE(bool_or('.str_replace('b.employee_id', 's.employee_id', self::CORRECTED_FOR_ACTOR).'), false) AS own_corrected
                FROM payroll_reversal_reconciliation_subjects(?, ?) s',
-            [$userId, $userId, $schoolId, $reconciliationId],
+            [$userId, $userId, $schoolId, $schoolId, $userId, $schoolId, $reconciliationId],
         );
 
-        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked, (bool) $row->authored);
+        return new SelfBeneficiaryFinding((bool) $row->conflicted, (int) $row->unlinked, (bool) $row->authored, (int) $row->corrected, (bool) $row->own_corrected);
     }
 }

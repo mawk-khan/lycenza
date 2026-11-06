@@ -79,7 +79,9 @@ return new class extends Migration
         TenantRls::enable('employee_account_links');
         DB::statement('REVOKE INSERT, UPDATE, DELETE ON employee_account_links FROM school_os_app');
 
-        // Cutover: what is known now, and nothing earlier. Before the trigger, so this is the only such write.
+        // Cutover: what is known now, and nothing earlier. Before the trigger, so this is the only such write,
+        // and locked until the transaction ends, so no link can change between this read and the trigger.
+        DB::statement('LOCK TABLE employees IN SHARE ROW EXCLUSIVE MODE');
         DB::statement("INSERT INTO employee_account_links (id, school_id, employee_id, user_id, origin)
             SELECT gen_random_uuid(), school_id, id, user_id, 'cutover' FROM employees WHERE user_id IS NOT NULL");
 
@@ -118,10 +120,14 @@ return new class extends Migration
             -- Marks a row and never removes it. Only an ended link: the service unlinks first, in the same transaction.
             CREATE FUNCTION public.employee_account_link_void(p_school uuid, p_link uuid, p_reason text, p_actor uuid) RETURNS void
                 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+            DECLARE
+                v_employee uuid;
             BEGIN
                 IF p_school::text IS DISTINCT FROM current_setting('app.current_school_id', true) THEN
                     RAISE EXCEPTION 'employee_account_link_void: not this School' USING ERRCODE = 'insufficient_privilege';
                 END IF;
+                -- A correction changes what a decision reads, so it is ordered against decisions like any link change.
+                PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('payroll.compensation:' || p_school::text, 0));
                 -- Who acted stays an application boundary, but a forged call must at least name someone who could have.
                 IF NOT EXISTS (
                     SELECT 1 FROM public.school_memberships m
@@ -131,6 +137,11 @@ return new class extends Migration
                      WHERE m.school_id = p_school AND m.user_id = p_actor AND m.status = 'active'
                 ) THEN
                     RAISE EXCEPTION 'employee_account_link_void: the actor holds no whole-School HR authority here' USING ERRCODE = 'insufficient_privilege';
+                END IF;
+                SELECT employee_id INTO v_employee FROM public.employee_account_links WHERE school_id = p_school AND id = p_link;
+                IF EXISTS (SELECT 1 FROM public.employee_account_links l
+                            WHERE l.school_id = p_school AND l.employee_id = v_employee AND l.user_id = p_actor AND l.voided_at IS NULL) THEN
+                    RAISE EXCEPTION 'employee_account_link_void: nobody corrects a link of an Employee they are linked to' USING ERRCODE = 'check_violation';
                 END IF;
                 UPDATE public.employee_account_links SET voided_at = clock_timestamp(), voided_by_user_id = p_actor, void_reason = p_reason
                  WHERE school_id = p_school AND id = p_link AND ended_at IS NOT NULL AND voided_at IS NULL AND user_id IS DISTINCT FROM p_actor;

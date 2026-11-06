@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Application\AccountLinks;
 
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAccountLink;
 use App\Models\User;
@@ -17,12 +18,14 @@ use Illuminate\Support\Facades\DB;
  */
 final class EmployeeAccountLinkHistory
 {
-    public function __construct(private readonly HrEmployeeAccess $access) {}
+    public function __construct(private readonly HrEmployeeAccess $access, private readonly HrSelfAdministrationGuard $selfAdministration) {}
 
     /** @return list<array<string, mixed>> */
     public function forEmployee(Employee $employee, User $actor): array
     {
         $this->access->requireWholeSchool($actor, 'hr.employees.manage', $employee->school);
+
+        $mayCorrect = ! $this->selfAdministration->hasUncorrectedLink($actor, $employee->school_id, $employee->id);
 
         return EmployeeAccountLink::query()->where('school_id', $employee->school_id)->where('employee_id', $employee->id)
             ->orderByDesc('linked_at')->orderByDesc('id')->get()
@@ -39,7 +42,7 @@ final class EmployeeAccountLinkHistory
                 'endedAt' => $link->ended_at?->toIso8601String(),
                 'correctedAt' => $link->voided_at?->toIso8601String(),
                 'correctionReason' => $link->void_reason === null ? null : EmployeeAccountLinkVoidReason::from($link->void_reason)->label(),
-                'mayCorrect' => $link->voided_at === null && $link->user_id !== $actor->id,
+                'mayCorrect' => $mayCorrect && $link->voided_at === null,
             ])->all();
     }
 }

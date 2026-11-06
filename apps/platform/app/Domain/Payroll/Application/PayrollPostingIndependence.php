@@ -190,12 +190,12 @@ final class PayrollPostingIndependence
         return count($affected);
     }
 
-    /** @return array{employeesWithoutAccount: int, employeesWithCorrectedLink: int} */
+    /** @return array{employeesWithoutAccount: int, employeesWithCorrectedLink: int, deciderHadCorrectedLink: bool} */
     private function identityEvidence(PayrollRun $run, User $actor): array
     {
         $finding = $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id);
 
-        return ['employeesWithoutAccount' => $finding->unlinkedEmployees, 'employeesWithCorrectedLink' => $finding->correctedEmployees];
+        return ['employeesWithoutAccount' => $finding->unlinkedEmployees, 'employeesWithCorrectedLink' => $finding->correctedEmployees, 'deciderHadCorrectedLink' => $finding->actorHadCorrectedLink];
     }
 
     private function hasProvenance(PayrollRun $run): bool

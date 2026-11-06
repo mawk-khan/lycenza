@@ -73,7 +73,7 @@ class PayrollRunAdministrationService
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.prepare', $run->school);
         // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
-        if ($this->selfAdministration->ownsEmployment($actor, $run->school, $employmentRecord->id)) {
+        if ($this->selfAdministration->isEmployeeOf($actor, $run->school, $employmentRecord->id)) {
             throw new PayrollSelfAdministrationException('run.manual_override');
         }
 
@@ -87,7 +87,7 @@ class PayrollRunAdministrationService
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.prepare', $run->school);
         // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
-        if ($this->selfAdministration->ownsEmployment($actor, $run->school, $employmentRecord->id)) {
+        if ($this->selfAdministration->isEmployeeOf($actor, $run->school, $employmentRecord->id)) {
             throw new PayrollSelfAdministrationException('run.correction_delta');
         }
 
