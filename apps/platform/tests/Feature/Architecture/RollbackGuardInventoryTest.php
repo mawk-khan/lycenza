@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Architecture;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -13,6 +14,7 @@ use Tests\TestCase;
  * helper in another file, and a guard built only inside raw SQL with no `throw` or
  * "refuse" is not seen.
  */
+#[Group('repository-documents')]
 class RollbackGuardInventoryTest extends TestCase
 {
     /** @return array<string, string> migration name => its down() body */

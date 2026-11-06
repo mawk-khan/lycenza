@@ -64,7 +64,13 @@ class ResetTestDatabase extends Command
 
         $this->dropSchemaFunctions();
 
-        $this->call('migrate:fresh', ['--database' => 'pgsql_admin', '--force' => true]);
+        // HR.R1-C5: a refused or failed reset is a failure, never "reset complete" on a half-built database.
+        $migrated = $this->call('migrate:fresh', ['--database' => 'pgsql_admin', '--force' => true]);
+        if ($migrated !== self::SUCCESS) {
+            $this->error('Testing database reset failed: migrate:fresh did not complete.');
+
+            return $migrated;
+        }
 
         // The FULL canonical testing seed set (Database\Seeders\
         // DatabaseSeeder), not just CapabilityAndRoleSeeder alone --
