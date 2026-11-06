@@ -62,35 +62,49 @@ class ResetTestDatabase extends Command
         $database = config('database.testing_database');
         $this->info("Resetting testing database '{$database}'...");
 
+        // HR.R1-C5: the wipe comes first because it is the framework's gate. A hardened process refuses it here, with
+        // nothing changed, while dropSchemaFunctions() below is raw SQL that no gate would stop.
+        $wiped = $this->call('db:wipe', ['--database' => 'pgsql_admin', '--force' => true]);
+        if ($wiped !== self::SUCCESS) {
+            return $this->failedReset($wiped, 'db:wipe');
+        }
+
         $this->dropSchemaFunctions();
 
-        // HR.R1-C5: a refused or failed reset is a failure, never "reset complete" on a half-built database.
         $migrated = $this->call('migrate:fresh', ['--database' => 'pgsql_admin', '--force' => true]);
         if ($migrated !== self::SUCCESS) {
-            $this->error('Testing database reset failed: migrate:fresh did not complete.');
-
-            return $migrated;
+            return $this->failedReset($migrated, 'migrate:fresh');
         }
 
         // The FULL canonical testing seed set (Database\Seeders\
         // DatabaseSeeder), not just CapabilityAndRoleSeeder alone --
         // the Phase 0C.3 incident this closes left unrelated suites failing
         // because a seeder never ran. See section 9 of the 0C.3A brief.
-        $this->call('db:seed', ['--force' => true]);
+        $seeded = $this->call('db:seed', ['--force' => true]);
+        if ($seeded !== self::SUCCESS) {
+            return $this->failedReset($seeded, 'db:seed');
+        }
 
         $this->info('Testing database reset complete.');
 
         return self::SUCCESS;
     }
 
+    private function failedReset(int $result, string $step): int
+    {
+        $this->error("Testing database reset failed: {$step} did not complete.");
+
+        return $result;
+    }
+
     /**
-     * `migrate:fresh` drops every table (and with it every trigger) but
-     * not the PL/pgSQL functions several migrations create with a plain
+     * `db:wipe` drops every table (and with it every trigger) but not
+     * the PL/pgSQL functions several migrations create with a plain
      * `CREATE FUNCTION`, so a second reset of an already-migrated test
      * database failed with "function ... already exists". Runs only
-     * after TestDatabaseGuard has verified the database identity above,
-     * via the same pgsql_admin connection migrate:fresh uses, and never
-     * touches extension-owned functions.
+     * after TestDatabaseGuard has verified the database identity above
+     * and `db:wipe` has passed its gate, via the same pgsql_admin
+     * connection, and never touches extension-owned functions.
      */
     private function dropSchemaFunctions(): void
     {

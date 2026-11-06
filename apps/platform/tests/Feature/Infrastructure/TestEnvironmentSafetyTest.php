@@ -77,6 +77,30 @@ class TestEnvironmentSafetyTest extends TestCase
     }
 
     /**
+     * HR.R1-C5: `--env=testing` gets a hardened process past both checks above, and the
+     * framework's gate then refuses. The refusal must come before anything changes: the
+     * functions and triggers were once dropped first, on raw SQL no gate stops. DB_PORT 1
+     * means a destructive step placed before the gate fails on the connection instead of
+     * reaching a database, so this test cannot damage one and the assertions below catch it.
+     */
+    #[Test]
+    public function platform_test_db_reset_refused_by_a_hardened_process_fails_before_it_changes_anything(): void
+    {
+        $process = $this->artisanSubprocess(
+            ['platform:test-db-reset', '--force', '--env=testing'],
+            ['APP_ENV' => 'staging', 'DB_PORT' => '1'],
+        );
+        $process->run();
+
+        $output = $process->getOutput().$process->getErrorOutput();
+        $this->assertSame(1, $process->getExitCode(), $output);
+        $this->assertStringContainsString('prohibited', $output);
+        $this->assertStringContainsString('Testing database reset failed: db:wipe did not complete.', $output);
+        $this->assertStringNotContainsString('SQLSTATE', $output, 'nothing may have tried the database');
+        $this->assertStringNotContainsString('reset complete', $output);
+    }
+
+    /**
      * Item 23/24/25: hostile ambient CACHE_STORE/QUEUE_CONNECTION/
      * MAIL_MAILER, all three at once, run through the actual PHPUnit
      * invocation path (not a raw `php artisan` call, which force="true"
