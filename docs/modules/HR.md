@@ -269,7 +269,7 @@ before. An Employee with no row is unknown. A link that was never true is correc
 through `EmployeeAccountLinkCorrectionService`: marked with a closed reason, never
 removed, and the current link goes with it. An ordinary unlink is not a correction.
 Only whole-School `hr.employees.manage` reads the history or corrects a link (fresh
-MFA), and never someone with an uncorrected link to that Employee. It leaves with the Employee (`hr_evidence`). Payroll
+MFA), and never by an account ever linked to that Employee. It leaves with the Employee (`hr_evidence`). Payroll
 reads it for independence decisions and no other module reads it.
 
 **User linkage**: `unique(school_id, user_id)`, not a global

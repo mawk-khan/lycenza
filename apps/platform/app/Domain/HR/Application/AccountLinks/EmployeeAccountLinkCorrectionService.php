@@ -53,8 +53,8 @@ final class EmployeeAccountLinkCorrectionService
             $locked = Employee::query()->where('school_id', $school->id)->whereKey($employee->id)->lockForUpdate()->firstOrFail();
             $link = EmployeeAccountLink::query()->where('school_id', $school->id)->where('employee_id', $locked->id)->whereKey($linkId)->firstOrFail();
 
-            // Not only this row: someone with any link to this Employee is that person, under another account.
-            if ($this->selfAdministration->hasUncorrectedLink($actor, $school->id, $locked->id)) {
+            // Not only this row: an account ever tied to this Employee may be that person's other account.
+            if ($this->selfAdministration->hasAnyLink($actor, $school->id, $locked->id)) {
                 throw new HrSelfAdministrationException('correct');
             }
             if ($link->voided_at !== null) {

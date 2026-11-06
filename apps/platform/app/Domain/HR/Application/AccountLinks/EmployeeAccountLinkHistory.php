@@ -25,7 +25,7 @@ final class EmployeeAccountLinkHistory
     {
         $this->access->requireWholeSchool($actor, 'hr.employees.manage', $employee->school);
 
-        $mayCorrect = ! $this->selfAdministration->hasUncorrectedLink($actor, $employee->school_id, $employee->id);
+        $mayCorrect = ! $this->selfAdministration->hasAnyLink($actor, $employee->school_id, $employee->id);
 
         return EmployeeAccountLink::query()->where('school_id', $employee->school_id)->where('employee_id', $employee->id)
             ->orderByDesc('linked_at')->orderByDesc('id')->get()

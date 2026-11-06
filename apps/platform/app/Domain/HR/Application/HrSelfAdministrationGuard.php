@@ -63,6 +63,16 @@ class HrSelfAdministrationGuard
             ->where('user_id', $actor->id)->whereNull('voided_at')->exists();
     }
 
+    /**
+     * HR.R1-C7 (OD-HR-25): whether $actor ever had a link to this Employee, corrected
+     * or not. Stricter than hasUncorrectedLink(), for one purpose: nobody tied to an
+     * Employee's identity in any way corrects that Employee's links.
+     */
+    public function hasAnyLink(User $actor, string $schoolId, string $employeeId): bool
+    {
+        return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('employee_id', $employeeId)->where('user_id', $actor->id)->exists();
+    }
+
     /** HR.R1-C7 (OD-HR-25): the same for a Payroll write, by employment. A plain read, as ownsEmployment(). */
     public function isEmployeeOf(User $actor, School $school, string $employmentRecordId): bool
     {

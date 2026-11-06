@@ -140,7 +140,7 @@ return new class extends Migration
                 END IF;
                 SELECT employee_id INTO v_employee FROM public.employee_account_links WHERE school_id = p_school AND id = p_link;
                 IF EXISTS (SELECT 1 FROM public.employee_account_links l
-                            WHERE l.school_id = p_school AND l.employee_id = v_employee AND l.user_id = p_actor AND l.voided_at IS NULL) THEN
+                            WHERE l.school_id = p_school AND l.employee_id = v_employee AND l.user_id = p_actor) THEN
                     RAISE EXCEPTION 'employee_account_link_void: nobody corrects a link of an Employee they are linked to' USING ERRCODE = 'check_violation';
                 END IF;
                 UPDATE public.employee_account_links SET voided_at = clock_timestamp(), voided_by_user_id = p_actor, void_reason = p_reason

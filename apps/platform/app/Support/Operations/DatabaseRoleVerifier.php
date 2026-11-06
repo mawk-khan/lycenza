@@ -666,7 +666,10 @@ class DatabaseRoleVerifier
         $definer = (int) DB::selectOne("select count(*) as c from pg_proc where pronamespace = 'public'::regnamespace and proname in ('employees_record_account_link', 'employee_account_link_void') and prosecdef and proconfig is not null")->c;
         $writes = (bool) DB::selectOne("select has_table_privilege('school_os_app', 'employee_account_links', 'INSERT') or has_table_privilege('school_os_app', 'employee_account_links', 'UPDATE') or has_table_privilege('school_os_app', 'employee_account_links', 'DELETE') as w")->w;
 
-        return CheckResult::of('employee_account_links_guarded', $triggers === 2 && $definer === 2 && ! $writes);
+        $void = (string) DB::selectOne("select coalesce((select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_void'), '') as src")->src;
+        $pinned = str_contains($void, 'pg_advisory_xact_lock') && str_contains($void, 'nobody corrects a link') && str_contains($void, 'hr.employees.manage');
+
+        return CheckResult::of('employee_account_links_guarded', $triggers === 2 && $definer === 2 && ! $writes && $pinned);
     }
 
     /**

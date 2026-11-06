@@ -310,6 +310,20 @@ class EmployeeAccountLinkHistoryTest extends TestCase
     }
 
     #[Test]
+    public function an_account_whose_own_link_was_corrected_still_corrects_nothing_on_that_employee(): void
+    {
+        $this->linkTo($this->hr2 = $this->fullHrActor($this->school));
+        $this->unlink();
+        $this->correct($this->links()[0]);
+        $other = $this->member();
+        $this->linkTo($other);
+        $this->unlink();
+
+        $this->expectException(HrSelfAdministrationException::class);
+        $this->correct($this->links()[0], $this->hr2);
+    }
+
+    #[Test]
     public function someone_else_may_correct_that_link(): void
     {
         $second = $this->member();
