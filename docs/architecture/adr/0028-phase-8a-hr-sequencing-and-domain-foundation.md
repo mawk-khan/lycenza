@@ -538,10 +538,13 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
    reproduced as `40P01` on the code they affected. A fourth existed already:
    `lockParties()` took the two Employees in id order while a decider holds the
    manager's, and the correction widened it to rejections and task decisions. The
-   delta review found that too, so both now take the manager's Employee first. The
-   one writer-against-writer order given up is two Campus writers assigning two
-   people to each other at once, which a reporting line refuses anyway. All four
-   are in `ReportingLineEmploymentEndConcurrencyTest`.
+   delta review found that too, so both now take the manager's Employee first. All
+   four are in `ReportingLineEmploymentEndConcurrencyTest`. **The price:** id order
+   protected writer against writer, and manager-first gives that up where two line
+   writes cross roles, for example a Campus `assign` and a `correct()` or reciprocal
+   `remove` on the same people. Decisions happen constantly and those crossings are
+   rare, and one aborts safely with a 500, so decisions were preferred. Registered
+   in the closure contract.
 4. **Leave credit.** The net of the adjustment chain (rule 134), not of
    adjustments naming the accrual directly. A correction names the entry it
    corrects, so undoing the debit names the debit.

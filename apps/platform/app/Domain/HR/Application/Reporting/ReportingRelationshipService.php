@@ -42,7 +42,7 @@ use LogicException;
  * remove the later line first.
  *
  * In ONE transaction, in the HR lock order: the Employee placement locks of
- * both people (sorted; FOR SHARE, or FOR NO KEY UPDATE for a Campus-scoped
+ * both people (manager first; FOR SHARE, or FOR NO KEY UPDATE for a Campus-scoped
  * actor whose decision rests on their Campus sets) -> the self-administration
  * check -> the School's reporting advisory lock (the one the database
  * trigger takes, so concurrent writers serialize and the second sees the

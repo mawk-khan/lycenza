@@ -4468,7 +4468,7 @@ writers serialize and the second sees the first's committed lines):
   - `unchanged`, `no_line_on_date`, `already_voided`;
   - loops (`ReportingHierarchyCycleException`).
 - **Lock order:**
-  1. the Employee placement locks of both people, sorted;
+  1. the Employee placement locks of both people, manager first;
   2. the self-administration check;
   3. the School's reporting advisory lock;
   4. both employments FOR SHARE, sorted;

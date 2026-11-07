@@ -187,6 +187,7 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Registered from the reviews, not fixed (LOW):**
   - `campus_id`, `department_id` and `position_id` stay writable by the runtime role on a closed or never-effective placement, and `ends_on` can be cleared on a running employment. No application path does either, and those keys restrict deletes, so nothing prevents freezing them. It was outside the registered finding.
   - `setPrimary()` to a placement that has not started demotes the current primary, leaving a running employment with none until it starts. Audited and reversible. It belongs with HRC-7.
+  - Line writers with crossed roles can deadlock, which id order used to prevent in some of these cases. A Campus `assign(sub=M1, mgr=M2)` against `correct(S: M1→M2)`, or a reciprocal `remove` and `assign`, can abort one side safely with a 500. A deliberate trade for decisions, which are far more frequent.
 - **A 500 on a deadlock.** Neither `app/Domain/HR` nor `app/Domain/Leave` translates `40P01`. The orders corrected here no longer reach it; any remaining one is an uncontrolled error with nothing written.
 - **An unexplained single failure.** `EmployeeAccountLinkCorrectionTest::the_reason_list_is_closed` failed once with a `QueryException` in a local run that was not captured. Its body touches no database, so the error came from setup or teardown. It did not recur in a full HR run or six targeted reruns. No cause is known.
 
