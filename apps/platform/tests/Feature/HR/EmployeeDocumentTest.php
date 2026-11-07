@@ -452,7 +452,8 @@ class EmployeeDocumentTest extends TestCase
         $publicMethodNames = array_values(array_diff(array_map(fn ($method) => $method->getName(), $reflection->getMethods(ReflectionMethod::IS_PUBLIC)), ['__construct']));
         sort($publicMethodNames);
 
-        $this->assertSame(['archive', 'content', 'register', 'update'], $publicMethodNames);
+        // HR.R1-C10: archiveRegistered() delegates to archive() and touches no bytes itself.
+        $this->assertSame(['archive', 'archiveRegistered', 'content', 'register', 'update'], $publicMethodNames);
 
         // HR.2A (S-12, D1-26; ADR 0029 HR.2A amendment): the bytes go only through
         // DocumentService::createForEmployee() / archiveForEmployee() and
