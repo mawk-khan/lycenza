@@ -41,7 +41,7 @@ by the C10 brief has no Transport finding in it.
 | XRP-3 | P3, P3 | Verified active defect, domain-owner dependency | TeachingAssignments, HR reader | `TeachingAssignmentController.php:163`, `ElectiveTeachingAssignmentController.php:71` | OPEN | None | Separate owner checkpoint |
 | XRP-4 | P3, P3 | Verified, domain-owner dependency | Timetable, Transport | `TimetableSeparationObligations.php:27`, `TransportSeparationObligations.php:26` | OPEN | Owner | Document, or a date-scoped answer. Neither table has an employment column |
 | XRP-7 | P3, P3 | Missing test evidence, added | HR | `StaffTypeGrantsNothingTest` | **CLOSED** | None | None |
-| TRR-1 | P2 latent, P3 latent | Verified defect, corrected | Payroll | `a_name_that_is_a_formula_never_reaches_the_spreadsheet_as_one` | **CLOSED** | None | None |
+| TRR-1 | P2 latent, P3 latent | Verified defect, corrected | Payroll | `a_name_that_is_a_formula_never_reaches_the_spreadsheet_as_one`, `a_stored_identifier_that_is_a_formula_stays_text_and_keeps_its_column` | **CLOSED** for the two CSV exports | None | The ECR is `text/plain` with `#~#`, a separate LOW |
 | TRR-6 | P3, P3 | Architecture-contract gap | Approval, Tasks | `TaskAuthority.php:36-39`, `ApprovalWorkflowRegistryTest.php:24` | OPEN | Architecture | Register or declare exempt, with a reason |
 | TRR-7 | P3, P3 | Missing test evidence, added | Tasks | `a_run_interrupted_by_a_failed_batch_resumes_from_its_cursor` | **CLOSED** | None | None |
 | TRR-8 | P3, P3 | Owner-decision dependency | Tasks, HR | Reading | OPEN | Owner | Accept as documented, or show it on the completed case |
@@ -66,7 +66,13 @@ routes. **That was wrong.** The generic Documents API reaches the same tier. Rep
 Severity **P2**: a published MFA control (ADR 0071 §26.7, rule 95) and a self-administration
 control (S-3) were bypassable by someone already holding the capability. No other School
 was reachable. It needed no owner decision, because the contract already existed. Corrected
-in C10, 15 tests in `HighlySensitiveHrDocumentWriteTest`.
+in C10, 17 tests in `HighlySensitiveHrDocumentWriteTest`, through a port so that Documents
+never depends on HR.
+
+**What stays, and is recorded.** The generic upload has no category, and its tier is the
+caller's word: an identity scan declared `sensitive` takes no code and no sensitive
+capability. Nothing on that route can tell. Whether the route should accept Employee
+uploads at all is an owner question, D-4's neighbour.
 
 ## New findings from C10
 
@@ -77,6 +83,10 @@ in C10, 15 tests in `HighlySensitiveHrDocumentWriteTest`.
 | C10-N3 | P3 | `LeavePageSupport.php:47` has the XRP-3 shape: `limit(1000)` with no order | By reading; OPEN |
 | C10-N4 | P3 | The rule 98 coverage guard proves a contract, never assurance. That is why it could not see HRC-3 | Recorded limit |
 | C10-N5 | Docs | ADR 0034:43 and `PAYROLL.md:97` say Payroll reads HR through its Application layer; most reads do not | Part of D-2 |
+| C10-N7 | P3 | The ECR writes `full_name` into a `#~#` file, and a name is only `string|max:255`, so a delimiter or newline shifts fields. It is not CSV, so `CsvCell` does not apply. Statutory, unreachable until a role holds the key | By reading; OPEN, with S-4 |
+| C10-N8 | P3 | PAN format is not validated on entry; the export now keeps any value as text | By reading; OPEN, with S-4 |
+| C10-N9 | P3 | A failed fresh-MFA code has no route-specific throttle: `documents-writes` allows 30 a minute. Systemic | By reading; OPEN, Security |
+| C10-N10 | LOW, development only | A Document archived through the old bypass leaves an active record that neither path can archive | By reading; no production data exists |
 | C10-N6 | Docs | `E21-RETENTION-DETERMINATION.md:490` says the link has no separate history table; `employee_account_links` exists since C7. A determination record, so left for its owner | OPEN |
 
 ## Backlog as the audit grouped it

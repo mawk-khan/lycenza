@@ -988,7 +988,10 @@ distinct segment counts and literals, no routing precedence ambiguity.
 ### Layering — the controller is transport-only
 
 `DocumentController` validates input, calls exactly one Application
-service method per action, and shapes the response. It owns none of:
+service method per action, and shapes the response. The one addition
+(HR.R1-C10): an upload or archive of an Employee's Document first asks
+`EmployeeDocumentPolicy`, a port HR implements, for the fresh-MFA step-up,
+the self-administration refusal and the HR register. It owns none of:
 
 - domain authorization (every service method already performs its own
   capability check against the real authenticated actor before any

@@ -229,6 +229,7 @@ final class SchoolRouteCoverage
             Coverage::service('api.v1.schools.employees.documents.sensitive', DocumentListingService::class, 'listSensitive'),
             Coverage::service('api.v1.schools.documents.show', DocumentReadService::class, 'metadata'),
             Coverage::service('api.v1.schools.documents.content', DocumentReadService::class, 'content'),
+            // HR.R1-C10: a Document the HR register holds is archived by EmployeeDocumentService, through EmployeeDocumentPolicy.
             Coverage::service('api.v1.schools.documents.archive', DocumentService::class, 'archive'),
 
             // Domain\Admissions\Http\Controllers\ApplicantController

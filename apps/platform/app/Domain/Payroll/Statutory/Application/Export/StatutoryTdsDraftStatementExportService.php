@@ -111,7 +111,7 @@ class StatutoryTdsDraftStatementExportService
 
         return implode(',', [
             '"'.str_replace('"', '""', CsvCell::safe($runResult->employee->full_name)).'"',
-            $pan,
+            '"'.str_replace('"', '""', CsvCell::safe($pan)).'"',
             $regime,
             $runResult->gross_amount,
             $result->tds_monthly_deduction ?? '0.00',

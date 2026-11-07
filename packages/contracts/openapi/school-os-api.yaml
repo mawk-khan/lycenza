@@ -5287,7 +5287,8 @@ paths:
         hr.employees.documents.manage, or hr.employees.sensitive.manage
         for classification_tier=highly_sensitive, which also needs a fresh
         MFA code (`mfa_code`, see StepUpMfaCode; SR.4, ADR 0071 §26.7). Nobody
-        files on their own HR record. A thin transport over
+        files on their own HR record, and only PDF, JPEG and PNG are taken, as
+        on the HR register. A thin transport over
         DocumentService::create() -- authorization, MIME/size policy,
         and audit all remain in the Application service.
       parameters:
@@ -5518,6 +5519,16 @@ paths:
       responses:
         "204":
           description: Archived. No body -- avoids an unintended Highly Sensitive metadata-read audit merely to build a response.
+        "409":
+          description: The Document is already archived (`DOCUMENT_ARCHIVED`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401":
           description: Missing/invalid bearer token.
         "403":

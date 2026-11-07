@@ -204,7 +204,8 @@ class StatutoryExportsTest extends TestCase
     #[Test]
     public function a_name_that_is_a_formula_never_reaches_the_spreadsheet_as_one(): void
     {
-        // HR.R1-C10 (TRR-1): the name is the free-text cell in both CSV exports. A leading quote keeps it as text.
+        // HR.R1-C10 (TRR-1): a leading quote keeps a free-text cell as text. The name is in both exports, and the
+        // PAN (below) is stored as given, with no format check.
         $school = $this->createSchool();
         $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedAndStatutoryCalculatedRun($school));
         $exporter = $this->createUserWithCapabilities($school, ['payroll.statutory.exports.generate', 'payroll.statutory.view']);
@@ -215,6 +216,25 @@ class StatutoryExportsTest extends TestCase
 
             $this->assertStringContainsString('"\'=HYPERLINK(""http://x"",""y"")"', explode("\n", $content)[1], $service);
         }
+    }
+
+    #[Test]
+    public function a_stored_identifier_that_is_a_formula_stays_text_and_keeps_its_column(): void
+    {
+        $school = $this->createSchool();
+        $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedAndStatutoryCalculatedRun($school));
+        $exporter = $this->createUserWithCapabilities($school, ['payroll.statutory.exports.generate', 'payroll.statutory.view', 'payroll.statutory.identifiers.view']);
+        $this->context()->withSchool($school, fn () => EmployeeStatutoryIdentifier::query()->create([
+            'school_id' => $school->id,
+            'employment_record_id' => $built['employmentRecordId'],
+            'identifier_type' => 'pan',
+            'encrypted_value' => '=CMD,X',
+            'lookup_hash' => str_repeat('b', 64),
+        ]));
+
+        $content = $this->context()->withSchool($school, fn () => app(StatutoryTdsDraftStatementExportService::class)->generate($built['run'], $exporter));
+
+        $this->assertStringContainsString(',"\'=CMD,X",', explode("\n", $content)[1]);
     }
 
     #[Test]

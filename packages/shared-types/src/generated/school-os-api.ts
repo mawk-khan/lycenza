@@ -2315,7 +2315,7 @@ export interface paths {
         /** Phase 0E.5 -- owner-scoped ordinary Document listing (public/internal/sensitive tiers only). Requires hr.employees.documents.view. highly_sensitive rows are excluded at the SQL level -- never counted in meta.total, never occupying a page slot (docs/modules/DOCUMENTS.md "Visible-total-only pagination"). */
         get: operations["listEmployeeDocuments"];
         put?: never;
-        /** Phase 0E.5 -- uploads a generic Document owned by an Employee (ADR 0012, docs/modules/DOCUMENTS.md). Requires hr.employees.documents.manage, or hr.employees.sensitive.manage for classification_tier=highly_sensitive, which also needs a fresh MFA code (`mfa_code`, see StepUpMfaCode; SR.4, ADR 0071 §26.7). Nobody files on their own HR record. A thin transport over DocumentService::create() -- authorization, MIME/size policy, and audit all remain in the Application service. */
+        /** Phase 0E.5 -- uploads a generic Document owned by an Employee (ADR 0012, docs/modules/DOCUMENTS.md). Requires hr.employees.documents.manage, or hr.employees.sensitive.manage for classification_tier=highly_sensitive, which also needs a fresh MFA code (`mfa_code`, see StepUpMfaCode; SR.4, ADR 0071 §26.7). Nobody files on their own HR record, and only PDF, JPEG and PNG are taken, as on the HR register. A thin transport over DocumentService::create() -- authorization, MIME/size policy, and audit all remain in the Application service. */
         post: operations["uploadEmployeeDocument"];
         delete?: never;
         options?: never;
@@ -20359,6 +20359,24 @@ export interface operations {
             };
             /** @description Document does not exist, belongs to a different School, or has an owner type not yet activated. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The Document is already archived (`DOCUMENT_ARCHIVED`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

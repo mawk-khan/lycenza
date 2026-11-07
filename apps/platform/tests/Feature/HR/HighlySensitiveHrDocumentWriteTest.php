@@ -5,11 +5,13 @@ namespace Tests\Feature\HR;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Application\EmployeeDocumentService;
 use App\Domain\HR\Application\EmployeeService;
+use App\Domain\HR\Application\Exceptions\HrSelfAdministrationException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Models\UserMfaRecoveryCode;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -114,7 +116,8 @@ class HighlySensitiveHrDocumentWriteTest extends TestCase
     #[Test]
     public function a_wrong_code_and_a_spent_code_write_nothing(): void
     {
-        $this->genericUpload($this->writer, $this->employee, ['mfa_code' => '000000'])->assertStatus(422);
+        $this->mfaEnrolled($this->writer);
+        $this->genericUpload($this->writer, $this->employee, ['mfa_code' => '000000'])->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['mfa_code']]]);
         $code = $this->freshMfaCode($this->writer);
         $this->genericUpload($this->writer, $this->employee, ['mfa_code' => $code])->assertCreated();
         $this->assertSame(1, $this->documents());
@@ -137,7 +140,7 @@ class HighlySensitiveHrDocumentWriteTest extends TestCase
         $this->registerUpload($this->writer, ['mfa_code' => $this->freshMfaCode($this->writer)])->assertCreated();
 
         $this->assertSame(2, $this->documents());
-        $this->assertSame(1, (int) $this->inSchool(fn () => SchoolAuditEvent::query()->where('event_type', 'document.created')->where('metadata->classificationTier', 'highly_sensitive')->count() > 0));
+        $this->assertSame(2, (int) $this->inSchool(fn () => SchoolAuditEvent::query()->where('event_type', 'document.created')->where('metadata->classificationTier', 'highly_sensitive')->count()));
     }
 
     #[Test]
@@ -155,6 +158,7 @@ class HighlySensitiveHrDocumentWriteTest extends TestCase
         $this->genericUpload($reader, $this->employee, ['mfa_code' => $code])->assertForbidden();
 
         $this->assertSame(0, $this->documents());
+        $this->assertSame(0, UserMfaRecoveryCode::query()->where('user_id', $reader->id)->whereNotNull('consumed_at')->count(), 'refused before the code is spent');
         $this->api($reader, "/employees/{$this->employee->id}/documents", ['file' => $this->file(), 'classification_tier' => 'sensitive'])->assertCreated();
     }
 
@@ -212,13 +216,16 @@ class HighlySensitiveHrDocumentWriteTest extends TestCase
         $own = $this->createEmployee($this->school, ['user_id' => $this->writer->id]);
         $record = $this->registerHrDocument($own, $other, 'highly_sensitive', 'identity_document');
 
-        $response = $this->genericUpload($this->writer, $own, ['mfa_code' => $this->freshMfaCode($this->writer)]);
-        $this->assertContains($response->status(), [403, 409, 422]);
+        $this->genericUpload($this->writer, $own, ['mfa_code' => $this->freshMfaCode($this->writer)])
+            ->assertForbidden()->assertJsonPath('error.code', HrSelfAdministrationException::CODE);
+        $this->api($this->writer, "/employees/{$own->id}/documents", ['file' => $this->file(), 'classification_tier' => 'sensitive'])
+            ->assertForbidden()->assertJsonPath('error.code', HrSelfAdministrationException::CODE);
         $this->assertSame(1, (int) $this->inSchool(fn () => DB::table('documents')->where('employee_id', $own->id)->count()));
 
-        $archive = $this->api($this->writer, "/documents/{$record->document_id}/archive", ['mfa_code' => $this->freshMfaCode($this->writer)]);
-        $this->assertContains($archive->status(), [403, 409, 422]);
+        $this->api($this->writer, "/documents/{$record->document_id}/archive", ['mfa_code' => $this->freshMfaCode($this->writer)])
+            ->assertForbidden()->assertJsonPath('error.code', HrSelfAdministrationException::CODE);
         $this->assertSame(['active', 'active'], $this->states($record));
+        $this->assertSame(0, UserMfaRecoveryCode::query()->where('user_id', $this->writer->id)->whereNotNull('consumed_at')->count(), 'a refused target spends no code');
     }
 
     #[Test]
@@ -232,10 +239,39 @@ class HighlySensitiveHrDocumentWriteTest extends TestCase
         $this->assertContains($this->api($outsider, "/documents/{$record->document_id}/archive", ['mfa_code' => $code])->status(), [403, 404]);
         $this->assertContains($this->genericUpload($outsider, $this->employee, ['mfa_code' => $this->freshMfaCode($outsider)])->status(), [403, 404]);
 
+        // Through the outsider's own School: the same ids are unknown there, and answering so spends no code.
+        $own = "/api/v1/schools/{$other->id}";
+        app('auth')->forgetGuards();
+        $token = $outsider->createToken('t')->plainTextToken;
+        $headers = ['Authorization' => "Bearer {$token}", 'Accept' => 'application/json'];
+        $this->withHeaders($headers)->post("{$own}/documents/{$record->document_id}/archive", ['mfa_code' => $this->freshMfaCode($outsider)])->assertNotFound();
+        $this->withHeaders($headers)->post("{$own}/employees/{$this->employee->id}/documents", ['file' => $this->file(), 'classification_tier' => 'highly_sensitive', 'mfa_code' => $this->freshMfaCode($outsider)])->assertNotFound();
+        $this->assertSame(0, UserMfaRecoveryCode::query()->where('user_id', $outsider->id)->whereNotNull('consumed_at')->count(), 'a forged id spends no code');
+
         // An insider, a forged id.
         $this->api($this->writer, '/documents/'.Str::uuid7().'/archive', ['mfa_code' => $this->freshMfaCode($this->writer)])->assertNotFound();
+        $this->api($this->writer, '/employees/'.Str::uuid7().'/documents', ['file' => $this->file(), 'classification_tier' => 'highly_sensitive', 'mfa_code' => $this->freshMfaCode($this->writer)])->assertNotFound();
         $this->assertSame(['active', 'active'], $this->states($record));
         $this->assertSame(1, $this->documents());
+    }
+
+    #[Test]
+    public function the_generic_route_takes_only_the_file_types_the_register_takes(): void
+    {
+        $response = $this->api($this->writer, "/employees/{$this->employee->id}/documents", [
+            'file' => UploadedFile::fake()->createWithContent('sheet.docx', "PK\x03\x04 not scanned"), 'classification_tier' => 'sensitive',
+        ]);
+
+        $this->assertContains($response->status(), [415, 422], (string) $response->getContent());
+        $this->assertSame(0, $this->documents());
+    }
+
+    #[Test]
+    public function documents_never_names_an_hr_class_for_this(): void
+    {
+        foreach ([app_path('Domain/Documents/Application/DocumentService.php'), app_path('Domain/Documents/Http/Controllers/DocumentController.php')] as $file) {
+            $this->assertDoesNotMatchRegularExpression('/^use App\\\\Domain\\\\HR\\\\(Application|Http)/m', (string) file_get_contents($file), basename($file).' depends on HR, which depends on Documents');
+        }
     }
 
     #[Test]

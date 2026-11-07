@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\AcademicStructure\Application\Calendar\AcademicYearActivationBlocker;
 use App\Domain\AcademicStructure\Application\Calendar\AcademicYearDateDependency;
+use App\Domain\Documents\Application\EmployeeDocumentPolicy;
 use App\Domain\Examinations\Application\ExaminationYearDateDependency;
 use App\Domain\Examinations\Application\Marks\StudentMarkPlacementCancellationBlocker;
 use App\Domain\Fees\Application\FeeAssessmentPlacementCancellationBlocker;
@@ -14,6 +15,7 @@ use App\Domain\Guardians\Application\GuardianAccountOwnership;
 use App\Domain\Hostel\Application\HostelTransferBlocker;
 use App\Domain\HR\Application\EmploymentEndParticipant;
 use App\Domain\HR\Application\Separation\SeparationObligationSource;
+use App\Domain\HR\Http\Support\HrEmployeeDocumentPolicy;
 use App\Domain\Identity\Application\GuardianAccountOwnershipReader;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
 use App\Domain\Leave\Application\LeaveSeparationObligations;
@@ -179,6 +181,8 @@ class AppServiceProvider extends ServiceProvider
         // Attendance. Bound here, not in Leave, so Leave never references the
         // module that depends on it.
         $this->app->bind(AttendancePresenceConflictReader::class, StaffAttendancePresenceReader::class);
+        // HR.R1-C10: Documents states what it needs of an Employee's records; HR answers (rule 4).
+        $this->app->bind(EmployeeDocumentPolicy::class, HrEmployeeDocumentPolicy::class);
         // ORG.8A-R1 (ADR 0076 §59): Guardians' port, answered by Identity's account links (no Guardians -> Identity dependency).
         $this->app->bind(GuardianAccountOwnership::class, GuardianAccountOwnershipReader::class);
 

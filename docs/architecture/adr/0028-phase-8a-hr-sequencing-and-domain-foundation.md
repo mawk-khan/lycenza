@@ -557,7 +557,11 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
    last-save-wins, and that is the operative contract until an owner extends it. The
    original wording stays as the record of what was written.
 2. **Generic Documents routes (HRC-3).** A Highly Sensitive Employee Document takes the
-   SR.4 step-up on these routes too, one's own record is refused, and a Document the HR
-   register holds is archived by the register. The category-less generic upload stays, as
-   an existing API contract. It is not a second HR document register.
+   SR.4 step-up on these routes too, one's own record is refused, only PDF, JPEG and PNG
+   are taken, and a Document the HR register holds is archived by the register. The rules
+   arrive through `EmployeeDocumentPolicy`, a port Documents declares and HR implements:
+   the first version imported HR into Documents, which made the dependency bidirectional
+   (rule 4), and review caught it. The category-less generic upload stays, as an existing
+   API contract. Its tier is the caller's word, so an identity scan declared `sensitive`
+   takes no code. That is a recorded residual, not a second HR document register.
 3. **Credit predicate (LVA-5).** One predicate, pinned to the database list.

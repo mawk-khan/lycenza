@@ -199,16 +199,35 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
         return ['id' => (string) Str::uuid7()] + $row;
     }
 
-    /** The clearance guard reads the requirement as this School, so another School's answers as "no such active requirement". */
     private function assertForeignRowRefused(string $table, QueryException $e, string $expected): void
     {
-        if ($table === 'separation_clearance_items') {
-            $this->assertSame('23514', (string) $e->getCode());
-            $this->assertStringContainsString('exact snapshot of an active requirement', $e->getMessage());
-
-            return;
-        }
         $this->assertStringContainsString($expected, (string) $e->getCode().' '.$e->getMessage(), "{$table}: refused for another reason");
+    }
+
+    /** @return array<string, array{0: string, 1: string, 2: string}> */
+    public static function clearanceReferences(): array
+    {
+        return [
+            'to its case' => ['case_id', 'employment_separation_cases', 'separation_clearance_items_case_id_school_id_foreign'],
+            'to its requirement' => ['requirement_id', 'separation_clearance_requirements', 'exact snapshot of an active requirement'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('clearanceReferences')]
+    public function a_clearance_item_of_another_schools_parent_is_refused_with_the_key_behind_it(string $column, string $parent, string $cause): void
+    {
+        // The guard reads the requirement as this School, so for that column it answers first and the key cannot be
+        // reached by a statement. Each key is the structural backstop, so it is also asserted from the catalogue.
+        $theirs = $this->firstRow('separation_clearance_items', $this->a);
+        $row = $this->asNewRow('separation_clearance_items', $this->firstRow('separation_clearance_items', $this->b));
+        $row[$column] = $theirs[$column];
+
+        $e = $this->failure(fn () => $this->as($this->b, fn () => DB::connection('pgsql')->table('separation_clearance_items')->insert($row)));
+
+        $this->assertStringContainsString($cause, (string) $e?->getMessage());
+        $key = DB::connection('pgsql')->selectOne("select pg_get_constraintdef(oid) as d from pg_constraint where conrelid = 'separation_clearance_items'::regclass and contype = 'f' and confrelid = ?::regclass", [$parent]);
+        $this->assertStringContainsString("({$column}, school_id)", (string) $key?->d);
     }
 
     #[Test]
@@ -222,7 +241,8 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
 
         $this->assertNotNull($e, 'the database accepted a row for another School');
         $this->assertSame(0, $this->as($this->a, fn () => DB::connection('pgsql')->table($table)->where('id', $row['id'])->count()));
-        $this->assertForeignRowRefused($table, $e, 'row-level security');
+        // The clearance guard reads the case and requirement as School B, so a School A row is no such snapshot.
+        $this->assertForeignRowRefused($table, $e, $table === 'separation_clearance_items' ? 'exact snapshot of an active requirement' : 'row-level security');
     }
 
     /** @return array<string, array{0: string}> */
@@ -251,6 +271,8 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
         $e = $this->failure(fn () => $this->as($this->a, fn () => DB::connection('pgsql')->table($table)->where('id', $row['id'])->update(['school_id' => $this->b->id])));
 
         $this->assertNotNull($e, 'the database moved a row between Schools');
+        // RLS, unless the table's own immutability guard answers first, as it does for these four.
+        $this->assertMatchesRegularExpression('/row-level security|terms are immutable|immutable \\(hr_|never edited/', $e->getMessage(), "{$table}: refused for another reason");
         $this->assertSame($this->a->id, $this->as($this->a, fn () => DB::connection('pgsql')->table($table)->where('id', $row['id'])->value('school_id')));
     }
 
@@ -279,10 +301,10 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
         return [
             'case to employment' => ['employment_separation_cases', 'employment_record_id'],
             'case event to case' => ['employment_separation_events', 'case_id'],
-            'clearance item to case' => ['separation_clearance_items', 'case_id'],
-            'clearance item to requirement' => ['separation_clearance_items', 'requirement_id'],
             'task to employment' => ['workforce_tasks', 'employment_record_id'],
             'task to category' => ['workforce_tasks', 'category_id'],
+            'task to template' => ['workforce_tasks', 'template_id'],
+            'task to template version' => ['workforce_tasks', 'template_version_id'],
             'task event to task' => ['workforce_task_events', 'task_id'],
             'template version to category' => ['workforce_task_template_versions', 'category_id'],
             'template version to template' => ['workforce_task_template_versions', 'template_id'],
@@ -310,9 +332,6 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
             if (($row[$key] ?? null) !== null) {
                 $row[$key] = '2030-01-01';
             }
-        }
-        if ($table === 'separation_clearance_items') {
-            $row['code'] = 'other';
         }
 
         $e = $this->failure(fn () => $this->as($this->b, fn () => DB::connection('pgsql')->table($table)->insert($row)));
