@@ -20366,7 +20366,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The Document is already archived (`DOCUMENT_ARCHIVED`). */
+            /** @description A Document held by the HR register is already archived (`DOCUMENT_ARCHIVED`). Any other Document is archived again without error. */
             409: {
                 headers: {
                     [name: string]: unknown;

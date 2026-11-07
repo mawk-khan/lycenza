@@ -5520,7 +5520,7 @@ paths:
         "204":
           description: Archived. No body -- avoids an unintended Highly Sensitive metadata-read audit merely to build a response.
         "409":
-          description: The Document is already archived (`DOCUMENT_ARCHIVED`).
+          description: A Document held by the HR register is already archived (`DOCUMENT_ARCHIVED`). Any other Document is archived again without error.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

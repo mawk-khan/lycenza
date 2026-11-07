@@ -66,13 +66,15 @@ routes. **That was wrong.** The generic Documents API reaches the same tier. Rep
 Severity **P2**: a published MFA control (ADR 0071 §26.7, rule 95) and a self-administration
 control (S-3) were bypassable by someone already holding the capability. No other School
 was reachable. It needed no owner decision, because the contract already existed. Corrected
-in C10, 17 tests in `HighlySensitiveHrDocumentWriteTest`, through a port so that Documents
-never depends on HR.
+in C10, 17 tests in `HighlySensitiveHrDocumentWriteTest`, through a port HR implements, so
+no Application-level cycle exists. Documents' older read of the HR `Employee` model stays
+(rule 4, recorded in the ownership map).
 
 **What stays, and is recorded.** The generic upload has no category, and its tier is the
 caller's word: an identity scan declared `sensitive` takes no code and no sensitive
 capability. Nothing on that route can tell. Whether the route should accept Employee
-uploads at all is an owner question, D-4's neighbour.
+uploads at all is an owner question (`HR-R1-C10-CLOSURE-READINESS.md` §4). **HRC-3 is closed for
+the bypass it reproduced, not for that question.**
 
 ## New findings from C10
 
