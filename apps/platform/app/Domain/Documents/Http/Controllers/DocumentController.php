@@ -11,6 +11,8 @@ use App\Domain\Documents\Application\DocumentReadService;
 use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Documents\Application\Exceptions\DocumentNotFoundException;
 use App\Domain\Documents\Infrastructure\Document;
+use App\Domain\HR\Application\EmployeeDocumentService;
+use App\Domain\HR\Http\Support\HighlySensitiveDocumentStepUp;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Auth\Mfa\SensitiveReadAssurance;
@@ -69,6 +71,9 @@ class DocumentController extends Controller
             'file' => ['required', 'file'],
             'classification_tier' => ['required', 'string'],
         ]);
+
+        // HR.R1-C10 (HRC-3): the same step-up as the HR register. This route was the bypass of it (ADR 0071 §26.7).
+        app(HighlySensitiveDocumentStepUp::class)->requireFor($request, $request->user(), $school, $validated['classification_tier'], null);
 
         $document = app(DocumentService::class)->create(
             $school,
@@ -255,6 +260,15 @@ class DocumentController extends Controller
         // identically (ADR 0063 section 18).
         if ($model === null) {
             throw new DocumentNotFoundException(strtolower($document));
+        }
+
+        // HR.R1-C10 (HRC-3): an Employee's Document takes the HR step-up, and one the HR register holds is archived by
+        // the register, so the record and the Document never disagree and the owner's own rules apply.
+        if ($model->owner_type === 'employee') {
+            app(HighlySensitiveDocumentStepUp::class)->requireFor($request, $request->user(), $school, null, $model->classification_tier);
+            if (app(EmployeeDocumentService::class)->archiveRegistered($school, $model, $request->user())) {
+                return response()->noContent();
+            }
         }
 
         app(DocumentService::class)->archive($school, $model, $request->user());

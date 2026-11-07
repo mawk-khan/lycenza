@@ -14,8 +14,11 @@ when HR background work fails. It sits beside `FAILED-JOBS.md`,
    - `leave_policy_invariants`, `tenant_tables_force_rls`.
 2. Confirm the scheduler and a queue worker are running, then check that the
    scheduled-task heartbeats are fresh (`platform:operations-status`):
-   - `workforce-tasks-generate` runs every minute;
-   - the leave accrual and eligibility runs.
+   - `workforce-tasks-generate` runs every minute.
+
+   Leave accrual and eligibility are not scheduled and have no heartbeat. They are
+   run by a person from the accrual workspace (§4), so a missed month is silent:
+   check it by hand until the owner decides D-3.
 3. Sign in as an HR administrator and check:
    - **HR reports** opens;
    - **Staff attendance** shows "Showing 1–N of TOTAL staff", and TOTAL

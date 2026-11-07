@@ -13,6 +13,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
 use App\Support\Privacy\PartialValueMasker;
+use App\Support\StudentReports\Export\CsvCell;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -109,7 +110,7 @@ class StatutoryTdsDraftStatementExportService
             ->reduce(fn (Money $carry, PayrollStatutoryCalculationResult $r) => $carry->add(Money::of($r->tds_monthly_deduction ?? '0.00', 'INR')), Money::of('0.00', 'INR'));
 
         return implode(',', [
-            '"'.str_replace('"', '""', $runResult->employee->full_name).'"',
+            '"'.str_replace('"', '""', CsvCell::safe($runResult->employee->full_name)).'"',
             $pan,
             $regime,
             $runResult->gross_amount,

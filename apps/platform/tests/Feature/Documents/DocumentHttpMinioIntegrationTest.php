@@ -123,6 +123,7 @@ class DocumentHttpMinioIntegrationTest extends TestCase
             ->post("/api/v1/schools/{$school->id}/employees/{$employee->id}/documents", [
                 'file' => UploadedFile::fake()->createWithContent('secret.pdf', $content),
                 'classification_tier' => 'highly_sensitive',
+                'mfa_code' => $this->freshMfaCode($sensitiveActor),
             ])
             ->assertCreated();
         $documentId = $uploadResponse->json('data.document_id');

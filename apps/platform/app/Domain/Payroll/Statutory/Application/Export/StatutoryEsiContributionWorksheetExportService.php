@@ -9,6 +9,7 @@ use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResul
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\StudentReports\Export\CsvCell;
 use App\Support\Tenancy\TenantContext;
 
 /**
@@ -104,7 +105,7 @@ class StatutoryEsiContributionWorksheetExportService
         }
 
         return implode(',', [
-            '"'.str_replace('"', '""', $runResult->employee->full_name).'"',
+            '"'.str_replace('"', '""', CsvCell::safe($runResult->employee->full_name)).'"',
             $periodStart,
             $periodEnd,
             $coveredAtStart,

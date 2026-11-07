@@ -128,6 +128,18 @@ class LeaveOpeningAdjustmentTest extends TestCase
     }
 
     #[Test]
+    public function the_default_leave_year_follows_the_schools_day_not_the_servers(): void
+    {
+        // HR.R1-C10 (LVA-6): 20:00 UTC on 31 March is already 1 April in the School, which is the next Leave Year.
+        $w = $this->fresh();
+        $next = $this->leaveYear($w['school'], $w['admin'], '2027-04-15');
+        $this->travelTo('2027-03-31 20:00:00');
+
+        $this->actingAs($w['admin'])->withHeader('X-School-Id', $w['school']->id)->get('/app/leave/entitlements')->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->component('App/Leave/Entitlements')->where('leaveYearId', $next->id));
+    }
+
+    #[Test]
     public function the_entitlements_page_shows_statements_and_the_accruals_page_renders(): void
     {
         $w = $this->fresh();

@@ -25,6 +25,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -210,6 +211,53 @@ class WorkforceTaskTest extends TestCase
         $resumed = app(TaskGenerationService::class)->run($this->school, batch: 500);
         $this->assertSame(2100, WorkforceTask::query()->count(), 'resuming never duplicates');
         $this->assertSame(2100, $resumed->existing - 0, 'the second pass finds every task already there');
+    }
+
+    #[Test]
+    public function a_run_interrupted_by_a_failed_batch_resumes_from_its_cursor(): void
+    {
+        // HR.R1-C10 (TRR-7): the test above resets the cursor, so it proves idempotency, not a resume. The third
+        // batch fails here, so two committed and the third rolled back, and the same run then finishes from there.
+        foreach (range(1, 7) as $i) {
+            $this->staff('teaching');
+        }
+        $this->template('resume');
+        $real = app(SchoolOperationalGuard::class);
+        $calls = 0;
+        $failing = new class($real, $calls) extends SchoolOperationalGuard
+        {
+            public function __construct(private SchoolOperationalGuard $real, private int &$calls) {}
+
+            public function requireOperational(string $schoolId): void
+            {
+                if (++$this->calls === 3) {
+                    throw new \RuntimeException('the worker stopped');
+                }
+                $this->real->requireOperational($schoolId);
+            }
+        };
+        $this->app->instance(SchoolOperationalGuard::class, $failing);
+        $this->app->forgetInstance(TaskGenerationService::class);
+
+        try {
+            app(TaskGenerationService::class)->run($this->school, batch: 2);
+            $this->fail('the third batch must fail');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('the worker stopped', $e->getMessage());
+        }
+        $this->assertSame(4, WorkforceTask::query()->count(), 'two batches committed, the third left nothing');
+        $interrupted = DB::table('workforce_task_generation_runs')->where('school_id', $this->school->id)->sole();
+        $this->assertSame('running', $interrupted->status);
+        $this->assertNotNull($interrupted->cursor);
+        $this->assertSame(4, (int) $interrupted->examined);
+
+        $this->app->instance(SchoolOperationalGuard::class, $real);
+        $this->app->forgetInstance(TaskGenerationService::class);
+        $resumed = app(TaskGenerationService::class)->run($this->school, batch: 2);
+
+        $this->assertSame([$interrupted->id, 'completed'], [$resumed->id, $resumed->status], 'the same run finished');
+        $this->assertSame([7, 7, 0], [$resumed->examined, $resumed->created, $resumed->existing], 'it continued from the cursor: nothing was examined twice');
+        $this->assertSame(7, WorkforceTask::query()->count());
     }
 
     #[Test]

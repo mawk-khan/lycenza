@@ -135,15 +135,15 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 | Functional tests | Green: focused suites plus the exact-SHA CI run (completion report) |
 | Database integrity | `platform:verify-database` on DDEV: 0 failures; 246 forced-RLS tables; HR invariants PASS. One operator-evidence item: runtime connection encryption. |
 | Authorization and security | No unresolved HIGH finding; R-HR15-1 closed |
-| Privacy and legal gates | Preserved: HRX-L1/L2/L4, ADR 0040, D-11, OD-HR-1/2, HR-L8, OD-HR-14 to 20 |
+| Privacy and legal gates | Preserved: HRX-L1/L2/L4, ADR 0040, D-11, HR-L8, OD-HR-14 to 20 (OD-HR-1/2 decided since) |
 | Browser UAT | Done for the flows in §4; write flows that need MFA were not exercised in a browser |
 | Accessibility | Axe clean on 22 pages; a screen-reader pass is still needed |
 | Performance | Measured (§3); no agreed target; R-HR16-1 (month view) |
-| Monitoring | Scheduled-task heartbeats and alert rules exist for task generation and accrual (HR.10, HR.13); runbook `docs/operations/HR-OPERATIONS.md` |
+| Monitoring | A scheduled-task heartbeat and alert rule exist for task generation (HR.13). Leave accrual and eligibility are manual and have none (corrected by HR.R1-C10, LVA-1; the choice is D-3); runbook `docs/operations/HR-OPERATIONS.md` |
 | Migration and rollback | HR.16 adds no migration. Rollback is a code revert. HR.2A's data-losing rollback stays forward-fix only. |
 | **Local testing (DDEV)** | **GO** for the implemented HR scope with synthetic data |
 | **Staging testing** | **CONDITIONAL.** It may test the implemented HR scope with synthetic data only, provided: the staging environment and its approvals exist; E16 is current (the 2026-11-01 decision runs out after 2026-11-28); the legacy-document inventory is done; the API client MFA note is published; and backup and restore evidence exists for staging (a documented policy is not a tested restore). Payroll, clock attendance, exports and person-count analytics stay disabled. |
-| **Production** | **NO-GO.** Blocked by OD-HR-1/2 (Payroll), HRX-L2/OD-HR-14, ADR 0040 cohort size, D-11, the legal gates, staging evidence and HR.R1 |
+| **Production** | **NO-GO.** Blocked by HRX-L4, E45 and the statutory gates (Payroll), HRX-L2/OD-HR-14, ADR 0040 cohort size, D-11, the legal gates, staging evidence and HR.R1 |
 | HR.R1 | Open (mandatory) |
 
 ## 6. OD-HR-1 / OD-HR-2 update (2026-11-05)

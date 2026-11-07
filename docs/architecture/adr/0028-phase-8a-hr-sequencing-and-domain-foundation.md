@@ -548,3 +548,16 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
 4. **Leave credit.** The net of the adjustment chain (rule 134), not of
    adjustments naming the accrual directly. A correction names the entry it
    corrects, so undoing the debit names the debit.
+
+## HR.R1-C10 amendment (2026-11-07): recovered audit corrections
+
+1. **Stale-form tokens (HRC-5).** The HR.2A amendment's item 5 says "editable profile
+   records carry a stale-form token". The code, rule 132 and HR.md cover identity and
+   personal edits only. Addresses, contacts, qualifications, experience and notes are
+   last-save-wins, and that is the operative contract until an owner extends it. The
+   original wording stays as the record of what was written.
+2. **Generic Documents routes (HRC-3).** A Highly Sensitive Employee Document takes the
+   SR.4 step-up on these routes too, one's own record is refused, and a Document the HR
+   register holds is archived by the register. The category-less generic upload stays, as
+   an existing API contract. It is not a second HR document register.
+3. **Credit predicate (LVA-5).** One predicate, pinned to the database list.

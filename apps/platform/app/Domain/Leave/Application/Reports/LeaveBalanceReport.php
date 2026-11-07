@@ -107,7 +107,7 @@ final class LeaveBalanceReport implements HrReport
             }
             // Recorded by the end of the School-local day.
             $bound = SchoolTimezone::startOfNextDayUtc($school, $asOf);
-            $credit = "(l.kind IN ('".implode("', '", LeaveLedgerEntry::CREDIT_KINDS)."') OR (l.kind = 'adjustment' AND l.direction = 'credit'))";
+            $credit = LeaveLedgerEntry::isCreditSql('l');
             $opening = "l.kind IN ('".implode("', '", self::OPENING_KINDS)."')";
 
             $accounts = DB::table('leave_ledger_entries as l')->where('l.school_id', $school->id)->where('l.leave_year_id', $year->id)

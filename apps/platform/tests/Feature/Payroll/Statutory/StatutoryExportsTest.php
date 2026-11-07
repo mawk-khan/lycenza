@@ -26,6 +26,7 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -198,6 +199,22 @@ class StatutoryExportsTest extends TestCase
         $this->assertCount(2, $lines);
         $this->assertStringContainsString('"Asha Rao"', $lines[1]);
         $this->assertStringContainsString(',false,false,28000.00,0.00,0.00,0.00', $lines[1]);
+    }
+
+    #[Test]
+    public function a_name_that_is_a_formula_never_reaches_the_spreadsheet_as_one(): void
+    {
+        // HR.R1-C10 (TRR-1): the name is the free-text cell in both CSV exports. A leading quote keeps it as text.
+        $school = $this->createSchool();
+        $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedAndStatutoryCalculatedRun($school));
+        $exporter = $this->createUserWithCapabilities($school, ['payroll.statutory.exports.generate', 'payroll.statutory.view']);
+        $this->context()->withSchool($school, fn () => DB::table('employees')->where('full_name', 'Asha Rao')->update(['full_name' => '=HYPERLINK("http://x","y")']));
+
+        foreach ([StatutoryEsiContributionWorksheetExportService::class, StatutoryTdsDraftStatementExportService::class] as $service) {
+            $content = $this->context()->withSchool($school, fn () => app($service)->generate($built['run'], $exporter));
+
+            $this->assertStringContainsString('"\'=HYPERLINK(""http://x"",""y"")"', explode("\n", $content)[1], $service);
+        }
     }
 
     #[Test]

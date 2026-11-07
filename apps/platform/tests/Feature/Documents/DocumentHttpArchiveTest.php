@@ -12,6 +12,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class DocumentHttpArchiveTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     protected function setUp(): void
     {
@@ -77,7 +78,7 @@ class DocumentHttpArchiveTest extends TestCase
         $document = $this->createDocument($school, $employee, $actor, 'highly_sensitive');
 
         $this->withHeader('Authorization', 'Bearer '.$this->token($actor))
-            ->post("/api/v1/schools/{$school->id}/documents/{$document->id}/archive")
+            ->post("/api/v1/schools/{$school->id}/documents/{$document->id}/archive", ['mfa_code' => $this->freshMfaCode($actor)])
             ->assertNoContent();
 
         app(TenantContext::class)->set($school);

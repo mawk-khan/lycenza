@@ -68,7 +68,7 @@ class LeaveAdminController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
         $actor = $context->actor();
-        $today = CarbonImmutable::now()->toDateString();
+        $today = SchoolTimezone::today($school);
 
         return Inertia::render('App/Leave/Configuration', [
             'settings' => $reads->settings($school, $actor),
@@ -183,7 +183,8 @@ class LeaveAdminController extends Controller
         $actor = $context->actor();
         $validated = $request->validate(['employment_record_id' => ['sometimes', 'uuid'], 'leave_year_id' => ['sometimes', 'uuid'], 'run_leave_type_id' => ['sometimes', 'uuid']]);
         $years = $reads->leaveYears($school, $actor);
-        $yearId = $validated['leave_year_id'] ?? (collect($years)->first(fn (array $y) => $y['startsOn'] <= now()->toDateString() && $y['endsOn'] >= now()->toDateString())['id'] ?? ($years[0]['id'] ?? null));
+        $today = SchoolTimezone::today($school);
+        $yearId = $validated['leave_year_id'] ?? (collect($years)->first(fn (array $y) => $y['startsOn'] <= $today && $y['endsOn'] >= $today)['id'] ?? ($years[0]['id'] ?? null));
         $employmentId = $validated['employment_record_id'] ?? null;
         $canManage = $capabilities->canInSchool($actor, LeaveCapabilities::MANAGE, $school);
 

@@ -56,8 +56,23 @@ class LeaveLedgerEntry extends Model
     public static function signedUnitsSql(string $alias = ''): string
     {
         $p = $alias === '' ? '' : "{$alias}.";
+        $credit = self::isCreditSql($alias);
+
+        return "CASE WHEN {$credit} THEN {$p}units ELSE -{$p}units END";
+    }
+
+    /** THE SQL predicate of a credit (HR.R1-C10, LVA-5). Every reader of the sign uses this or isCredit(). */
+    public static function isCreditSql(string $alias = ''): string
+    {
+        $p = $alias === '' ? '' : "{$alias}.";
         $credits = implode(', ', array_map(fn (string $k) => "'{$k}'", self::CREDIT_KINDS));
 
-        return "CASE WHEN {$p}kind IN ({$credits}) OR ({$p}kind = 'adjustment' AND {$p}direction = 'credit') THEN {$p}units ELSE -{$p}units END";
+        return "({$p}kind IN ({$credits}) OR ({$p}kind = 'adjustment' AND {$p}direction = 'credit'))";
+    }
+
+    /** The PHP form of isCreditSql(), for a row already read. */
+    public static function isCredit(string $kind, ?string $direction): bool
+    {
+        return in_array($kind, self::CREDIT_KINDS, true) || ($kind === 'adjustment' && $direction === 'credit');
     }
 }

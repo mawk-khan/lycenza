@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class DocumentHttpUploadTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     protected function setUp(): void
     {
@@ -113,6 +114,7 @@ class DocumentHttpUploadTest extends TestCase
             ->post("/api/v1/schools/{$school->id}/employees/{$employee->id}/documents", [
                 'file' => UploadedFile::fake()->create('secret.pdf', 10, 'application/pdf'),
                 'classification_tier' => 'highly_sensitive',
+                'mfa_code' => $this->freshMfaCode($actor),
             ])
             ->assertCreated();
 

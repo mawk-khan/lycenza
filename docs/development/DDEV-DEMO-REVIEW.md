@@ -269,7 +269,7 @@ minute.
 
 | Persona | Email | Purpose | Main access | Known limitations |
 |---|---|---|---|---|
-| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role + the `payroll_approval_reviewer` add-on (OD-HR-1: sees the pay it approves on the payroll approval review) (151 capabilities, incl. the three SR.2 class grant rights): all modules incl. Finance and Payroll administration; Settings → Staff accounts shows the full fixed catalogue (17 roles) and can grant every one | HR departments/positions/categories, sensitive HR records, payroll amounts and statutory screens are 403 for her own account (she GRANTS those roles, she does not hold them, ADR 0071 D3) |
+| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role + the `payroll_approval_reviewer` add-on (OD-HR-1: sees the pay it approves on the payroll approval review) (151 capabilities, incl. the three SR.2 class grant rights): all modules incl. Finance and Payroll administration; Settings → Staff accounts shows the full fixed catalogue (17 roles) and can grant every one | HR departments/positions/categories, sensitive HR records, payroll amounts are visible only under current MFA on the approval review, and statutory screens are 403 for her own account (she GRANTS those roles, she does not hold them, ADR 0071 D3) |
 | Principal | `principal@example.test` | Academic administration | `principal` system role (93): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403; Staff accounts shows who has access but not their roles (no `school.roles.view`, SR.2) |
 | HR & Payroll | `hr.payroll@example.test` | HR and payroll depth | Production `hr_officer` + `hr_sensitive_records` + `payroll_officer` (additive, SR.3), plus the ONE remaining demo-only role `demo.payroll_statutory` (exactly the five legally gated `payroll.statutory.*` keys, so the built statutory screens stay reviewable) | Payroll approval, posting and reversal stay with School Admin (maker/checker); no students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
@@ -338,7 +338,7 @@ with two jobs holds two roles -- the Canteen & Stores persona shows this.
 
 **SR.5 live review (2026-10-10, ADR 0071 §27).** `ddev demo-reset --build`
 was run and checked against the live demo.
-- **Database:** 17 School system roles; the three grant rights on
+- **Database:** 20 School system roles; the three grant rights on
   `school_admin` only; `payroll_officer` with 8 keys; `demo.payroll_statutory`
   the only demo role (HR & Payroll only).
 - **Personas:** each persona holds exactly its production role(s) from the
@@ -352,7 +352,7 @@ was run and checked against the live demo.
   - Communications is refused approvals and Students.
 - **Payroll and statutory landing pages** are navigation shells with no data:
   they open and show only what the persona holds.
-- **Staff accounts:** School Admin sees all 17 roles, all grantable; the
+- **Staff accounts:** School Admin sees all 20 roles, all grantable; the
   principal sees the staff list and no role catalogue.
 - **Login throttle:** it is 6 attempts per minute per IP, so wait a minute
   between rapid persona switches.
@@ -645,7 +645,7 @@ The table names the navigation group → entry for each surface.
 | Inventory, Canteen, Visitors | Operations → Inventory, Canteen, Visitors | School Admin, Principal, the module's operational role | Demo-operable | Canteen settings: School Admin |
 | Communications | Communications → Communication Hub | School Admin, Principal, Communications officer | Demo-operable (Mailpit only) | Student conversations need `communications.conversations.students` (no role holds it) |
 | Reports | Reports → Curriculum coverage, Audit log | School Admin, Principal | Demo-operable | No person-level Analytics and no export. Each audit-log view is itself audited. |
-| Administration | Administration → School settings, Staff accounts, Automation, Custom domains, API clients | School Admin | Demo-operable | Staff accounts: invite, grant or revoke the 17 School roles, off-board (fresh MFA; SR). Custom domains use the fake DNS/TLS fakes in DDEV. |
+| Administration | Administration → School settings, Staff accounts, Automation, Custom domains, API clients | School Admin | Demo-operable | Staff accounts: invite, grant or revoke the 20 School roles, off-board (fresh MFA; SR). Custom domains use the fake DNS/TLS fakes in DDEV. |
 | Account security | Account bar | everyone | Demo-operable | MFA enrolment |
 | API tokens | Account bar (platform host only) | everyone | Demo-operable | Personal tokens are for integrations and are never needed to operate the web application |
 | Guardian portal | Guardian portal → Messages, Conversations, Attendance, Fees | Guardian | Demo-operable; **production-gated** in code (`PortalAvailability`, E46) | Development only |

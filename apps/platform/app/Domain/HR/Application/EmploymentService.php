@@ -427,10 +427,9 @@ class EmploymentService
     }
 
     /**
-     * See docs/modules/HR.md "Temporal data strategy" -- overlap is
-     * NOT database-constrained (no daterange/EXCLUDE extension exists
-     * or is introduced here); this is the sole enforcement point,
-     * called only after the Employee row lock above has been taken.
+     * The clean refusal of an overlap, called only after the Employee row
+     * lock above has been taken. The database backstop is the HR.1A
+     * trigger `trg_employment_records_no_overlap`.
      */
     private function assertNoOverlap(Employee $employee, string $startsOn, ?string $endsOn): void
     {

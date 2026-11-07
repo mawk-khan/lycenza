@@ -19,7 +19,7 @@ use Carbon\CarbonImmutable;
  *
  * Inputs, all from their owners, read in a FIXED number of queries whatever
  * the staff count (never per row):
- * - HR's EmploymentRoster::on(): the employments spanning the date (any
+ * - HR's EmploymentRoster::pageOverlapping(): the employments spanning the date (any
  *   status but draft);
  * - HR's WorkforceAsOfReader::placementsOn(): each one's staff type,
  *   Employee Category (HR.1A terms effective that day) and primary

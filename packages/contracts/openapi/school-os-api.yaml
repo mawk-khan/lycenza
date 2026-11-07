@@ -5285,7 +5285,9 @@ paths:
         Phase 0E.5 -- uploads a generic Document owned by an Employee
         (ADR 0012, docs/modules/DOCUMENTS.md). Requires
         hr.employees.documents.manage, or hr.employees.sensitive.manage
-        for classification_tier=highly_sensitive. A thin transport over
+        for classification_tier=highly_sensitive, which also needs a fresh
+        MFA code (`mfa_code`, see StepUpMfaCode; SR.4, ADR 0071 §26.7). Nobody
+        files on their own HR record. A thin transport over
         DocumentService::create() -- authorization, MIME/size policy,
         and audit all remain in the Application service.
       parameters:
@@ -5301,6 +5303,7 @@ paths:
               properties:
                 file: { type: string, format: binary }
                 classification_tier: { type: string, enum: [public, internal, sensitive, highly_sensitive] }
+                mfa_code: { type: string, maxLength: 32, description: "Required for highly_sensitive -- see StepUpMfaCode." }
       responses:
         "201":
           description: Created.
@@ -5497,10 +5500,21 @@ paths:
       summary: >
         Phase 0E.5 -- archives a Document (status only -- never a hard
         delete, never an object delete, never a classification/owner
-        change). A thin transport over DocumentService::archive().
+        change). A thin transport over DocumentService::archive(). A Highly
+        Sensitive Employee Document needs a fresh MFA code (`mfa_code`, see
+        StepUpMfaCode), and one held by the HR register is archived by that
+        register, so the two stay in step.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/DocumentId" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mfa_code: { type: string, maxLength: 32, description: "Required for a Highly Sensitive Employee Document -- see StepUpMfaCode." }
       responses:
         "204":
           description: Archived. No body -- avoids an unintended Highly Sensitive metadata-read audit merely to build a response.

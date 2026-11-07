@@ -11,6 +11,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentTooLargeException;
 use App\Domain\Documents\Application\Exceptions\DocumentTypeNotAllowedException;
 use App\Domain\Documents\Application\Exceptions\InvalidDocumentClassificationException;
 use App\Domain\Documents\Infrastructure\Document;
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\LMS\Application\LmsParentResourceAuthorization;
 use App\Domain\LMS\Infrastructure\Assignment;
@@ -152,6 +153,7 @@ class DocumentService
         private readonly TenantContext $context,
         private readonly LmsParentResourceAuthorization $lmsParents,
         private readonly ApplicantDocumentFloor $applicantFloor,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     public function create(School $school, CreateDocumentData $data, User $actor): Document
@@ -166,6 +168,10 @@ class DocumentService
                 // this transaction (the owned teacher path locks its
                 // identity and TeachingAssignments here). A refusal
                 // rolls back and the compensation removes the bytes.
+                // HR.R1-C10 (HRC-3): nobody files a document on their own HR record, on this path either (S-3).
+                if ($data->owner->type === 'employee') {
+                    $this->selfAdministration->refuseOwnEmployee($actor, $data->owner->id, 'profile.document');
+                }
                 $this->holdLmsParent($school, $data->owner->type, $data->owner->id, $actor, new DocumentOwnerNotFoundException($data->owner->type, $data->owner->id));
             }, fn (Document $document) => null);
         });
@@ -525,6 +531,9 @@ class DocumentService
             $this->authorizeForExistingOwner($school, $document, $actor);
 
             return DB::transaction(function () use ($school, $document, $actor) {
+                if ($document->owner_type === 'employee') {
+                    $this->selfAdministration->refuseOwnEmployee($actor, (string) $document->employee_id, 'profile.document');
+                }
                 $this->holdLmsParent($school, $document->owner_type, (string) ($document->learning_content_id ?? $document->assignment_id), $actor, new DocumentNotFoundException($document->id));
 
                 $document->update(['status' => 'archived']);

@@ -242,6 +242,26 @@ class EmployeeDocumentService
     }
 
     /**
+     * HR.R1-C10 (HRC-3): the generic Documents route, asked to archive a Document
+     * this register holds, archives it here. Returns false when the register holds
+     * no record of it, which leaves the Document to the generic path.
+     */
+    public function archiveRegistered(School $school, Document $document, User $actor): bool
+    {
+        [$employee, $record] = $this->context->withSchool($school, fn (): array => [
+            Employee::query()->where('school_id', $school->id)->find($document->employee_id),
+            EmployeeDocument::query()->where('school_id', $school->id)->where('document_id', $document->id)->first(),
+        ]);
+        if ($employee === null || $record === null) {
+            return false;
+        }
+
+        $this->archive($employee, $record, $actor);
+
+        return true;
+    }
+
+    /**
      * HR.2A: the bytes of a governed record, re-authorized by the Document's
      * own tier on every download (DocumentReadService::employeeContent());
      * a Highly Sensitive open is audited there. A legacy path-only record has

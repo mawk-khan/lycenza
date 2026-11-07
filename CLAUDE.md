@@ -1122,9 +1122,9 @@ once several modules copy it.
     grants only through `App\Support\Testing\LocalCatalogueFixtures`
     (local/testing only; `platform:verify-database` fails if its schema
     exists elsewhere) -- never by re-granting the runtime role privileges.
-    The School staff catalogue is exactly the 17 system roles pinned by
+    The School staff catalogue is exactly the 20 system roles pinned by
     `Tests\Feature\Authorization\StaffRoleCatalogueSnapshotTest` (ADR 0071
-    §4, §25); changing it is a reviewed release, never a runtime action, and
+    §4, §25, §30, §32, §33); changing it is a reviewed release, never a runtime action, and
     operational roles never carry an authority, legal-gated or owned-scope
     capability.
 
@@ -1859,6 +1859,7 @@ once several modules copy it.
      - **Stale-form tokens.** Identity and personal edits carry an `EmployeeProfileVersion` token: stale is a 409, missing is a 422.
      - **Experience** is derived (`ExperienceCalculator`), never stored.
      - **HR documents** are uploads through `DocumentService::createForEmployee()` with a closed `EmployeeDocumentCategory`, and reference their Document (`document_id`). Never a raw storage path, never an `other` category. An identity document is always Highly Sensitive. Every download is re-authorized by the Document's tier, and viewing an Employee never implies downloading their files.
+     - **The generic Documents API is no side door (HR.R1-C10).** `POST /employees/{id}/documents` and `POST /documents/{id}/archive` take the same `HighlySensitiveDocumentStepUp`, refuse one's own record, and a Document the HR register holds is archived by the register. A rule 98 coverage entry proves authorization, never assurance: a new write route to a protected tier needs its own step-up test.
 133. **Leave policy rules and eligibility live on the immutable policy version; eligibility is never ambiguous and never guessed (HR.9, ADR 0065 §28).**
      - **Timing rules.**
        - `min_notice_days` and `max_backdate_days` are calendar days; `max_units_per_request` is chargeable half-day units; NULL = no rule.
@@ -1895,7 +1896,7 @@ once several modules copy it.
        - One open run per month; `failed` resumes from the cursor; examined = the sum of the disjoint outcomes.
        - Never a generic `idempotent` replay for a run.
      - **Adjustments and openings** need `hr.leave.manage` then a fresh MFA code (S-7). A correction is a new adjustment naming an entry of the same account; nothing is edited.
-     - **What corrected a credit (HR.R1-C9):** the net of its adjustment chain, through `signedUnitsSql()`, by `source_id` only. Never by equal amounts, never debits alone, and never treat an unnamed debit as a correction.
+     - **What corrected a credit (HR.R1-C9):** the net of its adjustment chain, through `signedUnitsSql()`, by `source_id` only. Never by equal amounts, never debits alone, and never treat an unnamed debit as a correction. Every reader asks `LeaveLedgerEntry::isCreditSql()` or `isCredit()`, and the database list is pinned to `CREDIT_KINDS` (HR.R1-C10).
      - **Not built until decided:** in-year carried expiry (OD-HR-16) and proration (OD-HR-17).
 135. **Line managers decide leave only through the `line_manager` add-on, the current reporting line and one stage (HR.11, OD-HR-5, ADR 0065 §30, ADR 0071 §30).**
      - **The role:** `line_manager` holds exactly `hr.leave.approve`.
@@ -1941,7 +1942,7 @@ once several modules copy it.
 140. **HR reports come from one closed catalogue, are whole-School and browser-only, and never count people (HR.14, ADR 0028 HR.14 amendment, `docs/modules/HR.md` "HR reports (HR.14)").**
      - **One catalogue:** `App\Support\HrReports\HrReportRegistry` (code-owned; never a table, saved query, request-built SQL or tenant formula). A rendered report is an `HrReport` read model in its owning module (HR, Leave, Staff Attendance, WorkforceTasks) reading only that module's paths; existing pages are governed entries.
      - **Authority:** ALL of a report's existing capabilities for the WHOLE School, decided fresh by `HrReportAccess` on the hub, the page and every page of rows. A Campus grant, platform, elevation, Group, Network, `line_manager` or `team_task_manager` authority opens nothing. No `reports.view` key.
-     - **Contract:** filters only from `HrReportFilter`; sorts are closed keys with unique tie-breakers; a range above `maxRangeDays` is a 422, never a truncation. Columns are OPERATIONAL or RESTRICTED (absent, never blanked); chosen columns are validated against what the viewer may see; `HrReportColumn::PROHIBITED` keys (personal, family, statutory, bank, pay, protected, health, free text, internal ids) are refused.
+     - **Contract:** filters only from `HrReportFilter`; sorts are closed keys with unique tie-breakers; a range above `maxRangeDays` is refused with a page error, never a truncation. Columns are OPERATIONAL or RESTRICTED (absent, never blanked); chosen columns are validated against what the viewer may see; `HrReportColumn::PROHIBITED` keys (personal, family, statutory, bank, pay, protected, health, free text, internal ids) are refused.
      - **History:** as-of reports read effective-dated rows only (`WorkforceAsOfReader::coveringQuery()`, `ReportingAsOfReader`), one row per employment. Leave balances use the one ledger's sign convention on the posting clock. Absentees are recorded absent halves not covered by approved leave, in SQL. Task counts are occurrences by status that reconcile, with HR.13's overdue and recorded attribution.
      - **Never:** headcount, MIS totals, rates, percentages, trends or demographic breakdowns (ADR 0040); birthdays; clock, device or location facts (HRX-L2); another domain's data its owner has not exposed (staff children, Inventory custody, fees, salary logs); a task remark or description; a User id or email; an export, print, saved view or background job (owner decision 2026-11-05, D-11).
 141. **HR integrity contracts (HR.16, ADR 0028 HR.16 amendment, `docs/hr/HR-16-READINESS.md`).**

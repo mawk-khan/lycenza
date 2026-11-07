@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Leave;
 
+use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
@@ -175,5 +176,28 @@ class LeaveArchitectureGuardTest extends TestCase
         $this->assertSame(['hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage', 'hr.leave.self', 'hr.leave.view'], $leave, 'HRX.2 adds approve; HRX.4 adds self');
         $bundle = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', 'staff_self_service')->pluck('rc.capability_key')->sort()->values()->all();
         $this->assertSame(['communications.events.view', 'communications.inbox.view', 'hr.leave.self', 'hr.staff_attendance.self', 'hr.tasks.self', 'payroll.payslips.self'], $bundle, 'HRX.4: the self-service bundle, and nothing administrative (ORG.9D-3R1: plus reading the School calendar; ORG.9D-1R1: and own Communications; HR.13: own staff tasks)');
+    }
+
+    #[Test]
+    public function the_database_credit_list_is_the_ledgers_one_sign_convention(): void
+    {
+        // HR.R1-C10 (LVA-5): `leave_ledger_guard()` hard-codes the list; nothing else tied it to CREDIT_KINDS.
+        $source = (string) DB::connection('pgsql_admin')->selectOne("select prosrc from pg_proc where proname = 'leave_ledger_guard'")->prosrc;
+        $this->assertSame(1, preg_match('/WHEN kind IN \\(([^)]+)\\) THEN units/', $source, $list), 'the guard changed shape');
+
+        $kinds = array_map(fn (string $k) => trim($k, " '"), explode(',', $list[1]));
+        sort($kinds);
+        $expected = LeaveLedgerEntry::CREDIT_KINDS;
+        sort($expected);
+
+        $this->assertSame($expected, $kinds);
+    }
+
+    #[Test]
+    public function no_reader_restates_the_credit_rule(): void
+    {
+        foreach (glob(app_path('Domain/Leave/Application/{,*/}*.php'), GLOB_BRACE) as $file) {
+            $this->assertDoesNotMatchRegularExpression("/kind\\s*=\\s*'adjustment'\\s*AND\\s*\\w*\\.?direction|=== 'adjustment' && /", (string) file_get_contents($file), basename($file).' restates the credit rule; use LeaveLedgerEntry::isCreditSql() or isCredit()');
+        }
     }
 }

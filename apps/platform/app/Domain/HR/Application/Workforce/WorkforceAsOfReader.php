@@ -253,8 +253,10 @@ final class WorkforceAsOfReader
     /**
      * HR.14: SQL for the id of the primary assignment of employment alias
      * $employmentAlias that applied on the date expression $dateSql (the
-     * latest primary starting on or before it) -- history, the same question
-     * primariesFor() answers, as a correlated expression for a report union.
+     * latest primary starting on or before it, even if that period has since
+     * closed; a placement that never took effect is skipped) -- a correlated
+     * expression for a report union. It is NOT primariesFor(), which answers
+     * only a primary covering the date (HR.R1-C10, HRC-9).
      */
     public static function primaryOnSql(string $employmentAlias, string $dateSql): string
     {

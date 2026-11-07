@@ -133,7 +133,15 @@ class EmploymentRoster
             return [];
         }
 
-        return $this->rows($school, fn ($q) => $q->whereIn('id', $employmentRecordIds));
+        // HR.R1-C10 (LVA-8): every id asked for gets its label. rows() caps one query, so the ids are read in chunks
+        // and re-sorted as one list (rule 141: no population cap).
+        $rows = [];
+        foreach (array_chunk(array_values(array_unique($employmentRecordIds)), self::LIMIT) as $chunk) {
+            array_push($rows, ...$this->rows($school, fn ($q) => $q->whereIn('id', $chunk)));
+        }
+        usort($rows, fn (array $a, array $b) => [$a['fullName'] ?? '', $a['employmentRecordId']] <=> [$b['fullName'] ?? '', $b['employmentRecordId']]);
+
+        return $rows;
     }
 
     /**

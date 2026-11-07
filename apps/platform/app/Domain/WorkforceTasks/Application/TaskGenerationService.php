@@ -19,7 +19,7 @@ use Symfony\Component\Uid\UuidV7;
 
 /**
  * HR.13 (owner decision 2026-11-04, "scheduled, calendar-neutral"): the ONE
- * recurring-task generator, run nightly by `workforce-tasks:generate` and on
+ * recurring-task generator, run every minute by `workforce-tasks:generate` and on
  * demand ("generate now"). It creates only TODAY's occurrences (School-local
  * date), never a backlog: a missed day is not filled in.
  *

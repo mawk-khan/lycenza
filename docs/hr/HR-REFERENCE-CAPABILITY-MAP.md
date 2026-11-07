@@ -702,8 +702,8 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
   - 1 is HRX-L3;
   - 1 is D-11.
 - **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A; 132 (36.6 %) after HR.3A; 134 (37.1 %) after HR.2A.**
-- **Buildable now without any gate:** the 90 MISSING and 40 PARTIAL rows.
-  These are the substance of HR.1–HR.3 and HR.9–HR.14.
+- **Buildable without any gate, at HR.0A:** the 90 MISSING and 40 PARTIAL rows of that date, the substance of
+  HR.1–HR.3 and HR.9–HR.14. **Current counts (HR.R1-C10 recount, §5):** 11 MISS, 20 PART.
 
 ## 6. Reference behaviours deliberately not adopted
 

@@ -205,19 +205,13 @@ class LeaveReadService
             'availableUnits' => (int) $r->credits - (int) $r->debits,
         ], DB::select(
             'SELECT leave_type_id,
-                    coalesce(sum(units) FILTER (WHERE kind IN ('.self::creditKindsSql().") OR (kind = 'adjustment' AND direction = 'credit')), 0) AS credits,
-                    coalesce(sum(units) FILTER (WHERE kind NOT IN (".self::creditKindsSql().") AND NOT (kind = 'adjustment' AND direction = 'credit')), 0) AS debits
+                    coalesce(sum(units) FILTER (WHERE '.LeaveLedgerEntry::isCreditSql().'), 0) AS credits,
+                    coalesce(sum(units) FILTER (WHERE NOT '.LeaveLedgerEntry::isCreditSql().'), 0) AS debits
                FROM leave_ledger_entries
               WHERE school_id = ? AND employment_record_id = ? AND leave_year_id = ?
-              GROUP BY leave_type_id ORDER BY leave_type_id",
+              GROUP BY leave_type_id ORDER BY leave_type_id',
             [$school->id, $employmentRecordId, $leaveYearId],
         )));
-    }
-
-    /** HR.10: the ledger's credit kinds as an SQL list (LeaveLedgerEntry::CREDIT_KINDS, the one sign convention). */
-    private static function creditKindsSql(): string
-    {
-        return implode(', ', array_map(fn (string $k) => "'{$k}'", LeaveLedgerEntry::CREDIT_KINDS));
     }
 
     /** @return array<string, mixed> */

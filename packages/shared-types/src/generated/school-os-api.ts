@@ -2315,7 +2315,7 @@ export interface paths {
         /** Phase 0E.5 -- owner-scoped ordinary Document listing (public/internal/sensitive tiers only). Requires hr.employees.documents.view. highly_sensitive rows are excluded at the SQL level -- never counted in meta.total, never occupying a page slot (docs/modules/DOCUMENTS.md "Visible-total-only pagination"). */
         get: operations["listEmployeeDocuments"];
         put?: never;
-        /** Phase 0E.5 -- uploads a generic Document owned by an Employee (ADR 0012, docs/modules/DOCUMENTS.md). Requires hr.employees.documents.manage, or hr.employees.sensitive.manage for classification_tier=highly_sensitive. A thin transport over DocumentService::create() -- authorization, MIME/size policy, and audit all remain in the Application service. */
+        /** Phase 0E.5 -- uploads a generic Document owned by an Employee (ADR 0012, docs/modules/DOCUMENTS.md). Requires hr.employees.documents.manage, or hr.employees.sensitive.manage for classification_tier=highly_sensitive, which also needs a fresh MFA code (`mfa_code`, see StepUpMfaCode; SR.4, ADR 0071 §26.7). Nobody files on their own HR record. A thin transport over DocumentService::create() -- authorization, MIME/size policy, and audit all remain in the Application service. */
         post: operations["uploadEmployeeDocument"];
         delete?: never;
         options?: never;
@@ -2383,7 +2383,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Phase 0E.5 -- archives a Document (status only -- never a hard delete, never an object delete, never a classification/owner change). A thin transport over DocumentService::archive(). */
+        /** Phase 0E.5 -- archives a Document (status only -- never a hard delete, never an object delete, never a classification/owner change). A thin transport over DocumentService::archive(). A Highly Sensitive Employee Document needs a fresh MFA code (`mfa_code`, see StepUpMfaCode), and one held by the HR register is archived by that register, so the two stay in step. */
         post: operations["archiveDocument"];
         delete?: never;
         options?: never;
@@ -20088,6 +20088,8 @@ export interface operations {
                     file: string;
                     /** @enum {string} */
                     classification_tier: "public" | "internal" | "sensitive" | "highly_sensitive";
+                    /** @description Required for highly_sensitive -- see StepUpMfaCode. */
+                    mfa_code?: string;
                 };
             };
         };
@@ -20323,7 +20325,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Required for a Highly Sensitive Employee Document -- see StepUpMfaCode. */
+                    mfa_code?: string;
+                };
+            };
+        };
         responses: {
             /** @description Archived. No body -- avoids an unintended Highly Sensitive metadata-read audit merely to build a response. */
             204: {

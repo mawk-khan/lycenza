@@ -443,6 +443,10 @@ suggested naming is overridden here in favor of repo consistency):
 - Prior `EmployeeAssignment` rows (including their `manager_assignment_id`
   links) are immutable history — a rehire never rewrites or reparents
   them.
+- **One known exception to "history never moves" (HRC-7).** `setPrimary()`
+  demotes an open primary in place, so as-of answers for past dates change,
+  and only the `primary_correction` row records it. A named placement change
+  never does this. Recorded design.
 - **An archived Employee is restored first** (HR.R1-C9, HRC-12, owner
   decision 2026-11-07). Every path to a new employment answers from the
   Employee row it locked, and `trg_employment_records_archived_identity`
@@ -5279,12 +5283,12 @@ the request.
 - **Filters** come only from the closed `HrReportFilter` vocabulary;
   entity ids that are foreign match nothing; choices are only the options the
   owner offers; dates are School-local; a range above the report's
-  `maxRangeDays` is a 422, never a silent truncation. Search is literal (LIKE
+  `maxRangeDays` is refused with a page error (HTTP 200 with `errors`, since HR.16), never a silent truncation. Search is literal (LIKE
   wildcards escaped); sorts are closed keys mapped to fixed ORDER BYs with a
   unique tie-breaker.
 - **Columns** are OPERATIONAL or RESTRICTED (absent, never blanked, without
   `requires`). On `hr.staff_details` the viewer chooses among the columns
-  they may see; anything else is a 422. `HrReportColumn::PROHIBITED` refuses
+  they may see; anything else is refused the same way. `HrReportColumn::PROHIBITED` refuses
   personal, family, statutory, bank, pay, protected, health and free-text
   fields. The controller strips every key outside the chosen columns.
 - **History:** as-of reports read effective-dated rows only

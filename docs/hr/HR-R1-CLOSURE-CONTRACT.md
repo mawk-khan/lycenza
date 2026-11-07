@@ -207,7 +207,7 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 | R1-03 temporal | **Finding** | Calendar has no as-of answer (LVA-3, D-6). Policy has no public as-of reader. Shifts are absent by design |
 | R1-04 authorization | Recorded | Re-run on the baseline |
 | R1-05 reports | Recorded | Re-run on the baseline |
-| R1-06 isolation | **Finding** | No raw-role test names `employment_separation_cases`, its events, the clearance tables or the six `workforce_task*` tables. Forced RLS itself is checked globally |
+| R1-06 isolation | **Finding** at C9; ten tables closed by C10 | No raw-role test named `employment_separation_cases`, its events, the clearance tables or the six `workforce_task*` tables. Forced RLS itself is checked globally |
 | R1-07 lifecycle | Recorded, except shifts | Timetable and Transport answer as obligations and are never closed by HR, by rule 137 |
 | R1-08 reconciliation | Recorded | Re-run on the baseline |
 | R1-09 offboarding | **Finding** | Library, Inventory and Finance are NOT_INTEGRATED by owner decision. Timetable substitution does not exist. §1 of this contract requires those connections, so the owner must say how the verdict reads them |
@@ -216,5 +216,14 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 | R1-12 security | **Finding** | S-4 latent, S-7 partial, S-16 for `staff_holidays`, X-1 partial, and the owner record behind S-6 not located |
 
 **Whether legal and environment items block a development-scope verdict is not stated in §4.** The owner needs to define it.
+
+**Evidence recorded (HR.R1-C10, 2026-11-07):** the recovered audit is reconciled, HRC-3 is closed, and the ten R1-06 tables have raw-role evidence. HR.R1 stays OPEN. `HR-R1-C10-CLOSURE-READINESS.md` holds the matrix, decision packages and sequence. `HR-R1-0-AUDIT-REGISTER.md` holds all 61 findings with the audit's own text.
+
+- **HRC-3 was real, and the C9 record of it was wrong.** C9 read the HR register routes and recorded "not reproduced". The generic Documents API reached the same tier: on `82e70a8a`, with no code, an upload answered 201 and an archive 204, the archive left the HR record active, and nothing refused a person's own record. It needed the capability, and no other School was reachable. S-3 was marked FIXED while this stood. Corrected against the existing contract (ADR 0071 §26.7, rule 95), with 15 tests.
+- **R1-06.** The ten tables are `employment_separation_cases`, `employment_separation_events`, `separation_clearance_items`, `separation_clearance_requirements` and the six `workforce_task*` tables. `HrSeparationAndTaskRawIsolationTest`: 76 cases as the real runtime role. No bypass was found. It failed when RLS was really switched off on one table, and when DELETE was really granted on another. The catalogue was restored afterwards and rechecked.
+- **7 of the 17 named findings closed:** HRC-9, LVA-5, LVA-6, LVA-8, XRP-7, TRR-1, TRR-7. HRC-7 is documented. 9 stay open, each with an owner and next action.
+- **R0-19 corrected,** row by row in the register, including rule 93 (20 roles), rule 140, and the false accrual-heartbeat claims.
+- **S-6.** No owner determination exists. The "recorded decision" was an audit classification about approval only, carried forward without its citation.
+- **Found by C10, open:** `is_paid` can change on an untracked leave type with approved requests (C10-N1, reproduced), and five smaller items in the register.
 
 **Publication-history recommendation to the Platform owner (not built).** `lycenza-ci publication-check` proves the candidate tip. A narrow addition would run `php -l` over the PHP files each commit in `main..candidate` changes, and refuse a range containing one that does not parse. That is the whole of it: no CI redesign. Disposition is the Platform owner's.

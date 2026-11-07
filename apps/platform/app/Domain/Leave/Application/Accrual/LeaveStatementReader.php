@@ -58,7 +58,7 @@ final class LeaveStatementReader
             $byKind = array_fill_keys(LeaveLedgerEntry::KINDS, 0);
             $lines = [];
             foreach ($entries as $e) {
-                $credit = in_array($e->kind, LeaveLedgerEntry::CREDIT_KINDS, true) || ($e->kind === 'adjustment' && $e->direction === 'credit');
+                $credit = LeaveLedgerEntry::isCredit($e->kind, $e->direction);
                 $signed = $credit ? $e->units : -$e->units;
                 $running += $signed;
                 $byKind[$e->kind] += $signed;
