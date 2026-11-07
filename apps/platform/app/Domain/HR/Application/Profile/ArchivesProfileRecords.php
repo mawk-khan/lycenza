@@ -31,6 +31,8 @@ trait ArchivesProfileRecords
     {
         $this->context->withSchool($employee->school, function () use ($employee, $record, $reason, $actor, $eventType, $metadata): void {
             DB::transaction(function () use ($employee, $record, $reason, $actor, $eventType, $metadata): void {
+                // HR.R1-C13 (C12-N1, rule 86): archiving is a School business effect, so the School answers first.
+                $this->operational->requireOperational($employee->school_id);
                 // SR.4 / HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.archive');
                 $locked = $record->newQuery()->whereKey($record->getKey())->lockForUpdate()->firstOrFail();

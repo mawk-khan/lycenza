@@ -119,12 +119,10 @@ class EmployeeService
             // HR.1A (S-11): `school_id` and `record_status` are never mass
             // assignable -- set explicitly here, the one creating path.
             $employee = (new Employee([
-                'user_id' => null,
-                'employee_number' => $employeeNumber,
                 'full_name' => $attributes['full_name'],
                 'work_email' => $workEmail,
                 'work_phone' => $attributes['work_phone'] ?? null,
-            ]))->forceFill(['school_id' => $school->id, 'record_status' => 'active']);
+            ]))->forceFill(['school_id' => $school->id, 'record_status' => 'active', 'employee_number' => $employeeNumber]);
             $employee->save();
         } catch (QueryException $e) {
             if ($workEmail !== null && $this->violatesConstraint($e, 'employees_work_email_unique')) {
@@ -343,7 +341,8 @@ class EmployeeService
 
                 $previousUserId = $locked->user_id;
                 DB::select("SELECT set_config('app.link_actor_user_id', ?, true)", [$actor->id]); // who ended it, in the history
-                $locked->update(['user_id' => null]);
+                $locked->user_id = null;
+                $locked->save();
 
                 $this->audit->school($school, 'employee.user_unlinked', actor: $actor, subject: $locked, metadata: [
                     'employeeId' => $locked->id,
@@ -409,7 +408,8 @@ class EmployeeService
         }
 
         DB::select("SELECT set_config('app.link_actor_user_id', ?, true)", [$actor->id]); // who made it, in the history
-        $locked->update(['user_id' => $userId]);
+        $locked->user_id = $userId;
+        $locked->save();
 
         $this->audit->school($school, 'employee.user_linked', actor: $actor, subject: $locked, metadata: [
             'employeeId' => $locked->id,

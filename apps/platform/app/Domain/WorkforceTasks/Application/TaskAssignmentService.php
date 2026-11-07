@@ -11,6 +11,7 @@ use App\Domain\WorkforceTasks\Infrastructure\WorkforceTask;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -39,6 +40,7 @@ final class TaskAssignmentService
         private readonly TaskAuthority $authority,
         private readonly EmploymentCoverage $coverage,
         private readonly WorkforceAsOfReader $workforce,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -47,6 +49,8 @@ final class TaskAssignmentService
     public function assign(School $school, string $employmentRecordId, array $terms, User $actor): WorkforceTask
     {
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $terms, $actor): WorkforceTask {
+            // HR.R1-C13 (C12-N1, rule 86): the manager path holds the School through the acting Employee; the administrative path does not.
+            $this->operational->requireOperational($school->id);
             $path = $this->lockAssignee($school, $employmentRecordId, $actor);
             $task = $this->create($school, $employmentRecordId, self::terms($school, $terms), $path, $actor, null);
             $this->audit->school($school, 'hr.task.assigned', actor: $actor, subject: $task, metadata: ['employmentRecordId' => $employmentRecordId, 'path' => $path, 'dueOn' => $task->due_on->toDateString()]);
@@ -58,6 +62,8 @@ final class TaskAssignmentService
     public function reassign(School $school, string $taskId, int $expectedVersion, string $newEmploymentRecordId, User $actor): WorkforceTask
     {
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $taskId, $expectedVersion, $newEmploymentRecordId, $actor): WorkforceTask {
+            // HR.R1-C13 (C12-N1, rule 86): the manager path holds the School through the acting Employee; the administrative path does not.
+            $this->operational->requireOperational($school->id);
             $task = WorkforceTask::query()->where('school_id', $school->id)->whereKey($taskId)->lockForUpdate()->first() ?? throw TaskException::notFound();
             if ($this->authority->pathFor($actor, $school, $task->employment_record_id, lock: true) === null) {
                 throw TaskException::notFound();

@@ -90,7 +90,7 @@ class EmployeeSchemaTest extends TestCase
 
         $this->expectException(EmployeeNumberIsImmutableException::class);
 
-        $employee->update(['employee_number' => 'EMP-999999']);
+        $employee->forceFill(['employee_number' => 'EMP-999999'])->save();
     }
 
     #[Test]

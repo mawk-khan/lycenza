@@ -576,21 +576,20 @@ final class DemoSisData
     {
         $main = $this->campuses['gachibowli_main'];
         $teacher = $this->b->inSchool(function () use ($main): Employee {
-            $category = EmployeeCategory::query()->create(['school_id' => $this->school->id, 'name' => 'Teaching', 'code' => 'TEACH', 'status' => 'active']);
-            $department = Department::query()->create(['school_id' => $this->school->id, 'name' => 'Academics', 'code' => 'ACAD', 'status' => 'active']);
-            $position = Position::query()->create(['school_id' => $this->school->id, 'name' => 'Primary Teacher', 'code' => 'PRT', 'status' => 'active']);
+            $category = EmployeeCategory::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Teaching', 'code' => 'TEACH', 'status' => 'active']);
+            $department = Department::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Academics', 'code' => 'ACAD', 'status' => 'active']);
+            $position = Position::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Primary Teacher', 'code' => 'PRT', 'status' => 'active']);
             // HR.1A (S-11): school_id and record_status are never mass assignable.
-            $employee = (new Employee([
-                'user_id' => null,
+            $employee = (new Employee(['full_name' => 'Shalini Varma']))->forceFill([
+                'school_id' => $this->school->id, 'record_status' => 'active',
                 'employee_number' => app(EmployeeNumberFormatter::class)->format(app(EmployeeNumberAllocator::class)->allocate($this->school)),
-                'full_name' => 'Shalini Varma',
-            ]))->forceFill(['school_id' => $this->school->id, 'record_status' => 'active']);
+            ]);
             $employee->save();
             $record = EmploymentRecord::query()->forceCreate([
                 'school_id' => $this->school->id, 'employee_id' => $employee->id, 'employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => '2024-06-01',
                 'ends_on' => null, 'probation_ends_on' => null, 'status' => 'active', 'employee_category_id' => $category->id,
             ]);
-            EmployeeAssignment::query()->create([
+            EmployeeAssignment::query()->forceCreate([
                 'school_id' => $this->school->id, 'employment_record_id' => $record->id, 'campus_id' => $main->id, 'department_id' => $department->id,
                 'position_id' => $position->id, 'is_primary' => true, 'starts_on' => '2024-06-01', 'ends_on' => null,
             ]);

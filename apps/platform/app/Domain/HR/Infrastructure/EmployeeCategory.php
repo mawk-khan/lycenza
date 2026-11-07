@@ -34,12 +34,8 @@ class EmployeeCategory extends Model
 
     protected $table = 'employee_categories';
 
-    protected $fillable = [
-        'school_id',
-        'name',
-        'code',
-        'status',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['name', 'code'];
 
     protected static function newFactory(): EmployeeCategoryFactory
     {

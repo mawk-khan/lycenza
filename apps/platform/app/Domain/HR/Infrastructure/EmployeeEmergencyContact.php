@@ -42,16 +42,8 @@ class EmployeeEmergencyContact extends Model
 
     protected $table = 'employee_emergency_contacts';
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'name',
-        'relationship',
-        'phone',
-        'alternate_phone',
-        'email',
-        'is_primary',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['name', 'relationship', 'phone', 'alternate_phone', 'email'];
 
     protected function casts(): array
     {

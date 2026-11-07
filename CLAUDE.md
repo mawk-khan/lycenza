@@ -859,9 +859,12 @@ docs/roadmap             MASTER-ROADMAP.md
     identity, employment, terms, placement, reporting lines and separation
     do this at the start of their transaction, before their own rows
     (HR.R1-C11, HRC-11). Onboarding has already taken the Campus by then, and
-    separation completion takes Identity's lock first (rule 141). HR's profile
-    and reference-data writers still rely on the request-time check: a
-    recorded residual, C11-N1.
+    separation completion takes Identity's lock first (rule 141). HR's profile,
+    reference-data, document and task writers do the same (HR.R1-C13, C11-N1,
+    C12-N1). A writing class of the HR family names the guard or says why not
+    in `HrSchoolGuardCoverageTest`. Bytes are stored before `DocumentService`'s
+    transaction, so a document writer checks before them as well. Retention
+    never takes this guard.
 
 87. **A release is one immutable, verified image digest; the repository
     reaches VERIFIED, never PUBLISHED or PROMOTED (ADR 0052).** Production
@@ -1205,13 +1208,19 @@ once several modules copy it.
     - **`schools.status` is not mass assignable.** Only the lifecycle
       services write it, explicitly (`forceFill`). Never add it back to
       `School::$fillable`.
-    - **Lifecycle models take state from their owner only (HR.R1-C11, HRC-10,
-      GOV-6).** The nine in `Tests\Support\LifecycleModels` keep state, actor
-      and parent columns out of `$fillable`; their owning writers use
-      `forceCreate`/`forceFill`. Eloquent silently drops a non-fillable key
-      unless the model is totally guarded (that throws), so `TestCase` makes
-      a dropped key fail on those models and keeps the throw on every totally
-      guarded model: never turn that off.
+    - **Lifecycle models take state from their owner only (HR.R1-C11, HR.R1-C13,
+      HRC-10, GOV-6).** The 28 in `Tests\Support\LifecycleModels` keep state,
+      owner, actor and parent columns out of `$fillable`; their owning writers
+      use `forceCreate`/`forceFill` on fixed arrays. Never `forceCreate` a
+      caller's array: it goes through `fill()`, and only the owner's columns are
+      forced. Eloquent silently drops a non-fillable key unless the model is
+      totally guarded (that throws), and production has no strict mode, so a
+      writer that adds such a key to an array loses it with no error. `TestCase`
+      makes a dropped key fail on those models and keeps the throw on every
+      totally guarded model: never turn that off, except in a test that states
+      it is proving production's behaviour. Every model of the HR, Leave, Staff
+      Attendance, WorkforceTasks and Payroll namespaces has exactly one
+      disposition in `HrModelMassAssignmentCatalogueTest`.
     - **Platform-role grant and revoke re-verify a fresh MFA code** inside
       `PlatformRoleGovernanceService`.
     - **History fails closed.** Audit, accounting, settlement and grant

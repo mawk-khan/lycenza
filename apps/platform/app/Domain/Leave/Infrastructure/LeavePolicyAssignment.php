@@ -21,9 +21,8 @@ class LeavePolicyAssignment extends Model
 
     protected $table = 'leave_policy_assignments';
 
-    protected $fillable = ['school_id', 'employment_record_id', 'leave_policy_id', 'leave_type_id', 'effective_from', 'effective_to', 'created_by_user_id', 'ended_at', 'ended_by_user_id',
-        // HR.9: the eligibility run and matched rule that created it (both or neither).
-        'eligibility_run_id', 'eligibility_rule_id'];
+    /** HR.R1-C13 (GOV-6): nothing by mass assignment. Every column is stated by its writer. */
+    protected $fillable = [];
 
     protected function casts(): array
     {

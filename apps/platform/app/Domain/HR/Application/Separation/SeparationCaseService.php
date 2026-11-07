@@ -427,7 +427,7 @@ final class SeparationCaseService
             ->orderBy('sequence')->orderBy('code')->get();
 
         foreach ($requirements as $requirement) {
-            SeparationClearanceItem::query()->create([
+            SeparationClearanceItem::query()->forceCreate([
                 'case_id' => $case->id,
                 'requirement_id' => $requirement->id,
                 'code' => $requirement->code,

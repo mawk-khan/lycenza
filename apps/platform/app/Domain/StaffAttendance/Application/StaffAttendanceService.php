@@ -255,7 +255,7 @@ class StaffAttendanceService
         $records = [];
         foreach ($items as $item) {
             try {
-                $record = StaffAttendanceRecord::query()->create([
+                $record = StaffAttendanceRecord::query()->forceCreate([
                     'school_id' => $school->id, 'employment_record_id' => $item['employmentRecordId'], 'attendance_date' => $date,
                     'first_half_status' => $item['halves'][1], 'second_half_status' => $item['halves'][2], 'recorded_by_user_id' => $actor->id,
                 ]);

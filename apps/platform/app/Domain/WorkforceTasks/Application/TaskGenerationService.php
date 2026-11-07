@@ -67,18 +67,22 @@ final class TaskGenerationService
     {
         return $this->context->withSchool($school, function () use ($school, $actor, $batch): TaskGenerationRun {
             $date = SchoolTimezone::today($school);
-            DB::table('workforce_task_generation_runs')->insertOrIgnore([
-                'id' => (string) new UuidV7, 'school_id' => $school->id, 'occurrence_on' => $date, 'status' => 'running',
-                'started_by_user_id' => $actor?->id, 'started_at' => now(), 'created_at' => now(), 'updated_at' => now(),
-            ]);
-            if ($actor !== null) {
-                // "Generate now" after today's run finished (e.g. a template activated
-                // since): a new pass over the whole roster. Inserts stay idempotent; the
-                // counts accumulate per pass (existing tasks are counted as existing).
-                DB::transaction(fn () => TaskGenerationRun::query()->where('school_id', $school->id)->where('occurrence_on', $date)
-                    ->where('status', 'completed')->lockForUpdate()->get()
-                    ->each(fn (TaskGenerationRun $r) => $r->forceFill(['status' => 'running', 'cursor' => null, 'finished_at' => null])->save()));
-            }
+            // HR.R1-C13 (rule 86): the run row is an effect too, so a refused School is left with none.
+            DB::transaction(function () use ($school, $actor, $date): void {
+                $this->operational->requireOperational($school->id);
+                DB::table('workforce_task_generation_runs')->insertOrIgnore([
+                    'id' => (string) new UuidV7, 'school_id' => $school->id, 'occurrence_on' => $date, 'status' => 'running',
+                    'started_by_user_id' => $actor?->id, 'started_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                if ($actor !== null) {
+                    // "Generate now" after today's run finished (e.g. a template activated
+                    // since): a new pass over the whole roster. Inserts stay idempotent; the
+                    // counts accumulate per pass (existing tasks are counted as existing).
+                    TaskGenerationRun::query()->where('school_id', $school->id)->where('occurrence_on', $date)
+                        ->where('status', 'completed')->lockForUpdate()->get()
+                        ->each(fn (TaskGenerationRun $r) => $r->forceFill(['status' => 'running', 'cursor' => null, 'finished_at' => null])->save());
+                }
+            });
 
             while (true) {
                 $finished = DB::transaction(function () use ($school, $date, $batch): bool {

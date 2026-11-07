@@ -149,7 +149,7 @@ class EmployeeAssignmentService
             throw new AssignmentInactiveCampusException($campus->id);
         }
 
-        $assignment = EmployeeAssignment::query()->create([
+        $assignment = EmployeeAssignment::query()->forceCreate([
             'school_id' => $school->id,
             'employment_record_id' => $employment->id,
             'campus_id' => $campus?->id,
@@ -203,7 +203,7 @@ class EmployeeAssignmentService
                 // HR.3A: reporting lines join employments, so ending one
                 // assignment (a transfer's source, a secondary role) never
                 // touches them.
-                $assignment->update(['ends_on' => $endsOn]);
+                $assignment->forceFill(['ends_on' => $endsOn])->save();
 
                 $employeeId = $assignment->employmentRecord->employee_id;
 
@@ -343,7 +343,7 @@ class EmployeeAssignmentService
             ->update(['is_primary' => false]);
 
         try {
-            $assignment->update(['is_primary' => true]);
+            $assignment->forceFill(['is_primary' => true])->save();
         } catch (UniqueConstraintViolationException) {
             throw new ConcurrentPrimaryAssignmentConflictException($assignment->employment_record_id);
         } catch (QueryException $e) {

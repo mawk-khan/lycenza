@@ -44,9 +44,8 @@ class EmployeeQualification extends Model
 
     protected $table = 'employee_qualifications';
 
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
     protected $fillable = [
-        'school_id',
-        'employee_id',
         'qualification_type',
         'qualification_name',
         'specialization',
@@ -56,8 +55,6 @@ class EmployeeQualification extends Model
         'starts_on',
         'completed_on',
         'grade_or_result',
-        'verification_status',
-        'verified_at',
     ];
 
     protected function casts(): array

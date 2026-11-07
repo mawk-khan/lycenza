@@ -182,7 +182,7 @@ class LeaveEligibilityService
             ]);
             foreach ($plan as $row) {
                 try {
-                    $assignment = LeavePolicyAssignment::query()->create([
+                    $assignment = LeavePolicyAssignment::query()->forceCreate([
                         'school_id' => $school->id, 'employment_record_id' => $row->employmentRecordId, 'leave_policy_id' => $row->policyId,
                         'leave_type_id' => $type->id, 'effective_from' => $asOf, 'effective_to' => $row->assignmentEndsOn,
                         'created_by_user_id' => $actor->id, 'eligibility_run_id' => $run->id, 'eligibility_rule_id' => $row->ruleId,

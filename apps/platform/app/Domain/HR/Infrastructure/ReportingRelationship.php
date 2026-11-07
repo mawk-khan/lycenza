@@ -45,11 +45,8 @@ class ReportingRelationship extends Model
 
     protected $table = 'reporting_relationships';
 
-    protected $fillable = [
-        'subordinate_employment_id', 'manager_employment_id', 'starts_on', 'ends_on',
-        'started_via', 'start_reason', 'started_by_user_id', 'ended_via', 'end_reason', 'ended_by_user_id',
-        'voided_at', 'voided_by_user_id', 'void_reason',
-    ];
+    /** HR.R1-C13 (GOV-6): nothing by mass assignment. Every column is stated by its writer. */
+    protected $fillable = [];
 
     protected function casts(): array
     {

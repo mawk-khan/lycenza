@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -31,6 +32,7 @@ class EmployeePersonalDetailService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -46,6 +48,7 @@ class EmployeePersonalDetailService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor, $expectedVersion) {
             return DB::transaction(function () use ($employee, $attributes, $actor, $expectedVersion) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A: the Employee row lock FIRST (it serializes the first insert and the token
                 // check); then the self-administration read (a weaker lock on the same row).
                 Employee::query()->whereKey($employee->id)->lock('for no key update')->firstOrFail();
@@ -57,10 +60,11 @@ class EmployeePersonalDetailService
                         throw new EmployeeProfileChangedException;
                     }
                 }
-                $detail = EmployeePersonalDetail::query()->updateOrCreate(
-                    ['employee_id' => $employee->id, 'school_id' => $employee->school_id],
-                    $attributes,
-                );
+                // HR.R1-C13 (GOV-6): the owner's columns are stated, and the caller's fields pass through fill().
+                // The Employee lock above serializes the first insert, so this read decides.
+                $detail = EmployeePersonalDetail::query()->where('employee_id', $employee->id)->first()
+                    ?? (new EmployeePersonalDetail)->forceFill(['employee_id' => $employee->id, 'school_id' => $employee->school_id]);
+                $detail->fill($attributes)->save();
 
                 $this->audit->school($employee->school, 'employee.personal_details.updated', actor: $actor, subject: $detail, metadata: [
                     'employeeId' => $employee->id,

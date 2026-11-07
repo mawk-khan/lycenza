@@ -41,17 +41,8 @@ class EmployeeCertification extends Model
 
     protected $table = 'employee_certifications';
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'name',
-        'issuer',
-        'credential_number',
-        'issued_on',
-        'expires_on',
-        'verification_status',
-        'verified_at',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['name', 'issuer', 'credential_number', 'issued_on', 'expires_on'];
 
     protected function casts(): array
     {

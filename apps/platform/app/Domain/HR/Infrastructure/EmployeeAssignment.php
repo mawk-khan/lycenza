@@ -46,16 +46,8 @@ class EmployeeAssignment extends Model
 
     protected $table = 'employee_assignments';
 
-    protected $fillable = [
-        'school_id',
-        'employment_record_id',
-        'campus_id',
-        'department_id',
-        'position_id',
-        'is_primary',
-        'starts_on',
-        'ends_on',
-    ];
+    /** HR.R1-C13 (GOV-6): nothing by mass assignment. Every column is stated by its writer. */
+    protected $fillable = [];
 
     protected function casts(): array
     {

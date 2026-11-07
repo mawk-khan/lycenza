@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeReferenceCode;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ final class EmployeeReferenceCodeService
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly HrEmployeeAccess $access,
         private readonly EmployeePlacementLock $placement,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public static function normalize(string $value): string
@@ -56,6 +58,7 @@ final class EmployeeReferenceCodeService
         }
 
         return $this->context->withSchool($school, fn (): EmployeeReferenceCode => DB::transaction(function () use ($school, $employee, $kind, $value, $actor): EmployeeReferenceCode {
+            $this->operational->requireOperational($school->id);
             $this->placement->forEmployeeWrite($school, $employee->id);
             $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.reference_code');
 
@@ -94,6 +97,7 @@ final class EmployeeReferenceCodeService
         $this->access->requireWholeSchool($actor, self::CAPABILITY, $school);
 
         return $this->context->withSchool($school, fn (): EmployeeReferenceCode => DB::transaction(function () use ($school, $employee, $code, $reason, $actor): EmployeeReferenceCode {
+            $this->operational->requireOperational($school->id);
             $this->placement->forEmployeeWrite($school, $employee->id);
             $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.reference_code');
             $locked = EmployeeReferenceCode::query()->where('school_id', $school->id)->where('employee_id', $employee->id)

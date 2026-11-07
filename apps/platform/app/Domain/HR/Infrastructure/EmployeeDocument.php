@@ -47,22 +47,8 @@ class EmployeeDocument extends Model
 
     protected $table = 'employee_documents';
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'category',
-        'classification_tier',
-        'storage_disk',
-        'storage_path',
-        'original_filename',
-        'mime_type',
-        'size_bytes',
-        'uploaded_by_user_id',
-        'uploaded_at',
-        'issued_on',
-        'expires_on',
-        'status',
-    ];
+    /** HR.R1-C13 (GOV-6): nothing by mass assignment. Every column is stated by its writer. */
+    protected $fillable = [];
 
     protected function casts(): array
     {

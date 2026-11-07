@@ -102,7 +102,7 @@ class EmployeeUserLinkageTest extends TestCase
         // per-test transaction RefreshDatabase already has open --
         // matches EmployeeNumberAllocationTest's identical pattern.
         DB::transaction(function () use ($school, $user): void {
-            Employee::query()->create([
+            Employee::query()->forceCreate([
                 'school_id' => $school->id,
                 'user_id' => $user->id,
                 'employee_number' => 'EMP-999999',

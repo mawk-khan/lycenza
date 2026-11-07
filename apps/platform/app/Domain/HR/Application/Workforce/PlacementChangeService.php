@@ -105,7 +105,7 @@ final class PlacementChangeService
             // 1. Close the source the day before (only narrows: never an overlap).
             $plannedEnd = $locked->ends_on?->toDateString();
             $closedOn = CarbonImmutable::parse($effectiveOn)->subDay()->toDateString();
-            $locked->update(['ends_on' => $closedOn]);
+            $locked->forceFill(['ends_on' => $closedOn])->save();
             $this->audit->school($school, 'hr.assignment.ended', actor: $actor, subject: $locked, metadata: [
                 'employeeId' => $employeeId,
                 'employmentRecordId' => $employment->id,

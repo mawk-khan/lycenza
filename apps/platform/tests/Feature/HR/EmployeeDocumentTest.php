@@ -92,7 +92,7 @@ class EmployeeDocumentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeDocument::query()->create([
+            EmployeeDocument::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'category' => 'other',
@@ -140,7 +140,7 @@ class EmployeeDocumentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeDocument::query()->create([
+            EmployeeDocument::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'category' => 'id_proof',
@@ -178,7 +178,7 @@ class EmployeeDocumentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeeDocument::query()->create([
+            EmployeeDocument::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'category' => 'other',

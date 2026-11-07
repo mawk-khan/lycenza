@@ -71,7 +71,7 @@ class EmployeeEmergencyContactTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeEmergencyContact::query()->create([
+            EmployeeEmergencyContact::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'name' => 'Second Primary Attempt',
@@ -140,7 +140,7 @@ class EmployeeEmergencyContactTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeeEmergencyContact::query()->create([
+            EmployeeEmergencyContact::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'name' => 'Rogue Contact',

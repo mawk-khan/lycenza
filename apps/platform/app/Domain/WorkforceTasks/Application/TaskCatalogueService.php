@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\CodeNormalizer;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
@@ -30,6 +31,7 @@ final class TaskCatalogueService
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly TaskAuthority $authority,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function createCategory(School $school, string $code, string $label, User $actor): TaskCategory
@@ -203,6 +205,8 @@ final class TaskCatalogueService
     }
 
     /**
+     * HR.R1-C13 (C12-N1, rule 86): every path, the administrative one included, asks the School first.
+     *
      * @template T
      *
      * @param  callable(): T  $work
@@ -210,6 +214,10 @@ final class TaskCatalogueService
      */
     private function inSchool(School $school, callable $work): mixed
     {
-        return $this->context->withSchool($school, fn () => DB::transaction($work));
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $work): mixed {
+            $this->operational->requireOperational($school->id);
+
+            return $work();
+        }));
     }
 }

@@ -38,9 +38,8 @@ class EmployeePersonalDetail extends Model
 
     protected $table = 'employee_personal_details';
 
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
     protected $fillable = [
-        'school_id',
-        'employee_id',
         'date_of_birth',
         'nationality',
         'marital_status',

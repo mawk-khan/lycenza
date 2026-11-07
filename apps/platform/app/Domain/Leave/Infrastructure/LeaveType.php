@@ -25,7 +25,8 @@ class LeaveType extends Model
 
     protected $table = 'leave_types';
 
-    protected $fillable = ['school_id', 'code', 'name', 'is_paid', 'tracks_balance', 'allows_half_day', 'status'];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['code', 'name', 'is_paid', 'tracks_balance', 'allows_half_day'];
 
     protected function casts(): array
     {

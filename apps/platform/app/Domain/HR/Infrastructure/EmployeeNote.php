@@ -38,13 +38,8 @@ class EmployeeNote extends Model
 
     public const array CLASSIFICATION_TIERS = ['sensitive', 'confidential'];
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'author_user_id',
-        'body',
-        'classification_tier',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['body', 'classification_tier'];
 
     /** HR.2A: archived (S-16) rows are frozen evidence; reads show live rows. */
     protected function casts(): array

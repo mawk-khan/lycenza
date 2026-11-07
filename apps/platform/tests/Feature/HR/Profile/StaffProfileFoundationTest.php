@@ -152,7 +152,7 @@ class StaffProfileFoundationTest extends TestCase
     public function nobody_writes_their_own_hr_profile_records(): void
     {
         $own = $this->createEmployee($this->school, ['user_id' => $this->hr->id]);
-        $address = $this->inSchool(fn () => EmployeeAddress::query()->create(['employee_id' => $own->id, 'address_type' => 'current', 'address_line1' => '1 Own Street', 'country_code' => 'IN']));
+        $address = $this->inSchool(fn () => EmployeeAddress::query()->forceCreate(['employee_id' => $own->id, 'address_type' => 'current', 'address_line1' => '1 Own Street', 'country_code' => 'IN']));
 
         foreach ([
             'identity' => fn () => app(EmployeeService::class)->update($own, ['full_name' => 'Self Renamed'], $this->hr),

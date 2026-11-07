@@ -37,7 +37,8 @@ class StaffAttendanceRecord extends Model
 
     protected $table = 'staff_attendance_records';
 
-    protected $fillable = ['school_id', 'employment_record_id', 'attendance_date', 'first_half_status', 'second_half_status', 'recorded_by_user_id'];
+    /** HR.R1-C13 (GOV-6): nothing by mass assignment. Every column is stated by its writer. */
+    protected $fillable = [];
 
     protected function casts(): array
     {

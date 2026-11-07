@@ -87,7 +87,7 @@ class EmployeeNumberAllocationTest extends TestCase
         // savepoint mechanism a_rolled_back_employee_creation_does_not_consume_a_number
         // relies on, applied here for the same reason.
         DB::transaction(function () use ($school): void {
-            Employee::query()->create([
+            Employee::query()->forceCreate([
                 'school_id' => $school->id,
                 'employee_number' => 'EMP-000001',
                 'full_name' => 'Duplicate Attempt',

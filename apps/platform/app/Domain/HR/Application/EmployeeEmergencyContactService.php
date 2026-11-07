@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -35,6 +36,7 @@ class EmployeeEmergencyContactService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -47,14 +49,16 @@ class EmployeeEmergencyContactService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.emergency_contact');
-                $contact = EmployeeEmergencyContact::query()->create([
-                    ...$attributes,
+                // HR.R1-C13 (GOV-6): the caller's fields pass through fill(); the owner's columns are stated here.
+                $contact = new EmployeeEmergencyContact($attributes);
+                $contact->forceFill([
                     'employee_id' => $employee->id,
                     'school_id' => $employee->school_id,
                     'is_primary' => false,
-                ]);
+                ])->save();
 
                 $this->audit->school($employee->school, 'employee.emergency_contact.created', actor: $actor, subject: $contact, metadata: [
                     'employeeId' => $employee->id,
@@ -78,6 +82,7 @@ class EmployeeEmergencyContactService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $contact, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $contact, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.emergency_contact');
                 $contact->update($attributes);
@@ -121,6 +126,7 @@ class EmployeeEmergencyContactService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $contact, $actor) {
             return DB::transaction(function () use ($employee, $contact, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.emergency_contact');
                 EmployeeEmergencyContact::query()
@@ -129,7 +135,7 @@ class EmployeeEmergencyContactService
                     ->where('id', '!=', $contact->id)
                     ->update(['is_primary' => false]);
 
-                $contact->update(['is_primary' => true]);
+                $contact->forceFill(['is_primary' => true])->save();
 
                 $this->audit->school($employee->school, 'employee.emergency_contact.primary_changed', actor: $actor, subject: $contact, metadata: [
                     'employeeId' => $employee->id,

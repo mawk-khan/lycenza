@@ -57,7 +57,7 @@ class LeavePolicyAssignmentService
             $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
 
             try {
-                $assignment = LeavePolicyAssignment::query()->create([
+                $assignment = LeavePolicyAssignment::query()->forceCreate([
                     'school_id' => $school->id, 'employment_record_id' => $employmentRecordId, 'leave_policy_id' => $policy->id,
                     'leave_type_id' => $policy->leave_type_id, 'effective_from' => $from, 'effective_to' => $to, 'created_by_user_id' => $actor->id,
                 ]);

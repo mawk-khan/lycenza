@@ -98,7 +98,7 @@ class EmployeeTenantIsolationTest extends TestCase
 
         $this->expectException(TenantContextRequiredException::class);
 
-        Employee::query()->create(['employee_number' => 'EMP-000001', 'full_name' => 'Orphan']);
+        Employee::query()->forceCreate(['employee_number' => 'EMP-000001', 'full_name' => 'Orphan']);
     }
 
     #[Test]

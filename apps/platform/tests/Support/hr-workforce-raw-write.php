@@ -35,7 +35,7 @@ try {
                 'school_id' => $schoolId, 'employee_id' => $argv[3], 'employment_type' => 'permanent',
                 'staff_type' => 'teaching', 'starts_on' => $argv[4], 'ends_on' => null, 'status' => 'active',
             ])->id,
-            'primary' => EmployeeAssignment::query()->create([
+            'primary' => EmployeeAssignment::query()->forceCreate([
                 'school_id' => $schoolId, 'employment_record_id' => $argv[3], 'position_id' => $argv[4],
                 'is_primary' => true, 'starts_on' => $argv[5], 'ends_on' => null,
             ])->id,

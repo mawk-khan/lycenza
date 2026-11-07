@@ -77,7 +77,7 @@ class EmployeeNumberingAfterDemoSeedTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
 
         // Reproduce the out-of-step state: a row written without the allocator.
-        $this->in($school, fn () => Employee::query()->create([
+        $this->in($school, fn () => Employee::query()->forceCreate([
             'school_id' => $school->id, 'user_id' => null, 'employee_number' => 'EMP-000001',
             'full_name' => 'Written out of band', 'record_status' => 'active',
         ]));
@@ -101,7 +101,7 @@ class EmployeeNumberingAfterDemoSeedTest extends TestCase
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $this->actingAs($user)->post("/app/schools/{$school->id}/activate");
-        $this->in($school, fn () => Employee::query()->create([
+        $this->in($school, fn () => Employee::query()->forceCreate([
             'school_id' => $school->id, 'user_id' => null, 'employee_number' => 'EMP-000001',
             'full_name' => 'Written out of band', 'record_status' => 'active',
         ]));
@@ -117,7 +117,7 @@ class EmployeeNumberingAfterDemoSeedTest extends TestCase
     public function the_api_returns_a_409_for_a_number_collision(): void
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
-        $this->in($school, fn () => Employee::query()->create([
+        $this->in($school, fn () => Employee::query()->forceCreate([
             'school_id' => $school->id, 'user_id' => null, 'employee_number' => 'EMP-000001',
             'full_name' => 'Written out of band', 'record_status' => 'active',
         ]));

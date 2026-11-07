@@ -11,6 +11,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ class DepartmentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -53,7 +55,8 @@ class DepartmentService
             $this->assertParentBelongsToSchool($school, $parent);
 
             return DB::transaction(function () use ($school, $attributes, $campus, $parent, $actor) {
-                $department = Department::query()->create([
+                $this->operational->requireOperational($school->id);
+                $department = Department::query()->forceCreate([
                     'school_id' => $school->id,
                     'campus_id' => $campus?->id,
                     'parent_department_id' => $parent?->id,
@@ -89,6 +92,7 @@ class DepartmentService
 
         return $this->context->withSchool($school, function () use ($school, $department, $attributes, $actor) {
             return DB::transaction(function () use ($school, $department, $attributes, $actor) {
+                $this->operational->requireOperational($school->id);
                 $department->update($attributes);
 
                 $this->audit->school($school, 'hr.department.updated', actor: $actor, subject: $department, metadata: [
@@ -133,6 +137,7 @@ class DepartmentService
             }
 
             return DB::transaction(function () use ($school, $department, $newParent, $actor) {
+                $this->operational->requireOperational($school->id);
                 // HR.1A (S-9): the cycle check runs INSIDE the transaction, after the
                 // School's Department-hierarchy lock -- the same advisory lock the
                 // backstop trigger trg_hr_departments_no_cycle takes -- so two opposite
@@ -143,7 +148,7 @@ class DepartmentService
                 }
 
                 try {
-                    $department->update(['parent_department_id' => $newParent?->id]);
+                    $department->forceFill(['parent_department_id' => $newParent?->id])->save();
                 } catch (QueryException $e) {
                     if ($newParent !== null && str_contains($e->getMessage(), 'hr_departments_no_cycle')) {
                         throw new DepartmentHierarchyCycleException($department->id, $newParent->id);
@@ -166,7 +171,8 @@ class DepartmentService
 
         return $this->context->withSchool($school, function () use ($school, $department, $status, $eventType, $actor) {
             return DB::transaction(function () use ($school, $department, $status, $eventType, $actor) {
-                $department->update(['status' => $status]);
+                $this->operational->requireOperational($school->id);
+                $department->forceFill(['status' => $status])->save();
 
                 $this->audit->school($school, $eventType, actor: $actor, subject: $department);
 

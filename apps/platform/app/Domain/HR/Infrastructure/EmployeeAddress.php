@@ -46,17 +46,8 @@ class EmployeeAddress extends Model
     /** Domain-stable values -- not School-configurable reference data. */
     public const array TYPES = ['current', 'permanent', 'mailing', 'other'];
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'address_type',
-        'address_line1',
-        'address_line2',
-        'city',
-        'state_region',
-        'postal_code',
-        'country_code',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['address_type', 'address_line1', 'address_line2', 'city', 'state_region', 'postal_code', 'country_code'];
 
     /** HR.2A: archived (S-16) rows are frozen evidence; reads show live rows. */
     protected function casts(): array

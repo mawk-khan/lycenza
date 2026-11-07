@@ -127,7 +127,7 @@ class EmployeePersonalDetailTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeePersonalDetail::query()->create([
+            EmployeePersonalDetail::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'personal_email' => 'duplicate@example.com',
@@ -147,7 +147,7 @@ class EmployeePersonalDetailTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeePersonalDetail::query()->create([
+            EmployeePersonalDetail::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'personal_email' => 'cross-school@example.com',

@@ -230,7 +230,8 @@ class WorkforceTaskTest extends TestCase
 
             public function requireOperational(string $schoolId): void
             {
-                if (++$this->calls === 3) {
+                // The first call opens the run, so the fourth is the third batch.
+                if (++$this->calls === 4) {
                     throw new \RuntimeException('the worker stopped');
                 }
                 $this->real->requireOperational($schoolId);

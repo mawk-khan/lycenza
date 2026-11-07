@@ -47,7 +47,7 @@ final class SeparationClearanceRequirementService
                 $sequence = (int) SeparationClearanceRequirement::query()->where('school_id', $school->id)->max('sequence') + 1;
 
                 try {
-                    $requirement = DB::transaction(fn () => SeparationClearanceRequirement::query()->create([
+                    $requirement = DB::transaction(fn () => SeparationClearanceRequirement::query()->forceCreate([
                         'code' => CodeNormalizer::normalize($code),
                         'label' => $label,
                         'responsibility' => $responsibility->value,

@@ -1,17 +1,24 @@
 <?php
 
 use App\Domain\HR\Application\EmployeeAssignmentService;
+use App\Domain\HR\Application\EmployeeNoteService;
 use App\Domain\HR\Application\EmploymentService;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Application\Reporting\ReportingChangeReason;
 use App\Domain\HR\Application\Reporting\ReportingRelationshipService;
 use App\Domain\HR\Application\Workforce\PlacementChangeKind;
 use App\Domain\HR\Application\Workforce\PlacementChangeReason;
 use App\Domain\HR\Application\Workforce\PlacementChangeService;
+use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmployeeNote;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Domain\Timetable\Infrastructure\TimetableEntry;
+use App\Domain\WorkforceTasks\Application\TaskCancelReason;
+use App\Domain\WorkforceTasks\Application\TaskCatalogueService;
+use App\Domain\WorkforceTasks\Application\TaskWorkflowService;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
@@ -32,6 +39,10 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php hr-lifecycle-op.php <schoolId> assign <employmentId> <startsOn> <positionId> <campusId> <actorId>
 //   php hr-lifecycle-op.php <schoolId> primary <assignmentId> <actorId>
 //   php hr-lifecycle-op.php <schoolId> report <subordinateEmploymentId> <managerEmploymentId> <effectiveOn> <actorId>
+//   php hr-lifecycle-op.php <schoolId> note <employeeId> <actorId>
+//   php hr-lifecycle-op.php <schoolId> note-archive <employeeId> <noteId> <actorId>
+//   php hr-lifecycle-op.php <schoolId> task-category <actorId>
+//   php hr-lifecycle-op.php <schoolId> task-cancel <taskId> <version> <actorId>
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -60,6 +71,14 @@ try {
             'report' => (string) $app->make(ReportingRelationshipService::class)->assign(
                 EmploymentRecord::query()->findOrFail($argv[3]), EmploymentRecord::query()->findOrFail($argv[4]), $argv[5], ReportingChangeReason::ORGANISATIONAL_CHANGE, User::query()->findOrFail($argv[6]),
             )->id,
+            'note' => (string) $app->make(EmployeeNoteService::class)->add(Employee::query()->findOrFail($argv[3]), ['body' => 'Written in a race', 'classification_tier' => 'sensitive'], User::query()->findOrFail($argv[4]))->id,
+            'note-archive' => (function () use ($app, $argv): string {
+                $app->make(EmployeeNoteService::class)->remove(Employee::query()->findOrFail($argv[3]), EmployeeNote::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), ProfileRecordArchiveReason::NO_LONGER_CURRENT);
+
+                return 'archived';
+            })(),
+            'task-category' => (string) $app->make(TaskCatalogueService::class)->createCategory(School::query()->findOrFail($argv[1]), 'raced', 'Raced', User::query()->findOrFail($argv[3]))->id,
+            'task-cancel' => (string) $app->make(TaskWorkflowService::class)->cancel(School::query()->findOrFail($argv[1]), $argv[3], (int) $argv[4], TaskCancelReason::NO_LONGER_NEEDED, User::query()->findOrFail($argv[5]))->status,
             default => throw new InvalidArgumentException("unknown kind {$kind}"),
         };
     });

@@ -83,7 +83,7 @@ class EmployeeCertificationTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeCertification::query()->create([
+            EmployeeCertification::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'name' => 'Invalid Range Certificate',
@@ -120,7 +120,7 @@ class EmployeeCertificationTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeeCertification::query()->create([
+            EmployeeCertification::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'name' => 'Rogue Certificate',

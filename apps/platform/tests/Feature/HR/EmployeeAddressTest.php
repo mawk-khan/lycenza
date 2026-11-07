@@ -86,7 +86,7 @@ class EmployeeAddressTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeAddress::query()->create([
+            EmployeeAddress::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'address_type' => 'current',
@@ -107,7 +107,7 @@ class EmployeeAddressTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeAddress::query()->create([
+            EmployeeAddress::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'address_type' => 'permanent',
@@ -142,7 +142,7 @@ class EmployeeAddressTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeeAddress::query()->create([
+            EmployeeAddress::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'address_type' => 'current',

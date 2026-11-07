@@ -627,16 +627,16 @@ final class DemoDataBuilder
     private function buildHr(): void
     {
         $this->inSchool(function () {
-            $teaching = EmployeeCategory::query()->create(['school_id' => $this->school->id, 'name' => 'Teaching', 'code' => 'TEACH', 'status' => 'active']);
-            $nonTeaching = EmployeeCategory::query()->create(['school_id' => $this->school->id, 'name' => 'Non-Teaching', 'code' => 'NONTEACH', 'status' => 'active']);
+            $teaching = EmployeeCategory::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Teaching', 'code' => 'TEACH', 'status' => 'active']);
+            $nonTeaching = EmployeeCategory::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Non-Teaching', 'code' => 'NONTEACH', 'status' => 'active']);
 
-            $academics = Department::query()->create(['school_id' => $this->school->id, 'name' => 'Academics', 'code' => 'ACAD', 'status' => 'active']);
-            $admin = Department::query()->create(['school_id' => $this->school->id, 'name' => 'Administration', 'code' => 'ADMIN', 'status' => 'active']);
-            $transport = Department::query()->create(['school_id' => $this->school->id, 'name' => 'Transport', 'code' => 'TRANS', 'status' => 'active']);
+            $academics = Department::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Academics', 'code' => 'ACAD', 'status' => 'active']);
+            $admin = Department::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Administration', 'code' => 'ADMIN', 'status' => 'active']);
+            $transport = Department::query()->forceCreate(['school_id' => $this->school->id, 'name' => 'Transport', 'code' => 'TRANS', 'status' => 'active']);
 
             $positions = [];
             foreach (['TGT' => 'Trained Graduate Teacher', 'PGT' => 'Post Graduate Teacher', 'ACCT' => 'Accountant', 'LIB' => 'Librarian', 'DRV' => 'Driver', 'OFFICE' => 'Office Assistant'] as $code => $name) {
-                $positions[$code] = Position::query()->create(['school_id' => $this->school->id, 'name' => $name, 'code' => $code, 'status' => 'active']);
+                $positions[$code] = Position::query()->forceCreate(['school_id' => $this->school->id, 'name' => $name, 'code' => $code, 'status' => 'active']);
             }
 
             $staff = [
@@ -662,11 +662,10 @@ final class DemoDataBuilder
             $formatter = app(EmployeeNumberFormatter::class);
             foreach ($staff as $key => [$name, $positionCode, $department, $category]) {
                 // HR.1A (S-11): school_id and record_status are never mass assignable.
-                $employee = (new Employee([
-                    'user_id' => null,
+                $employee = (new Employee(['full_name' => $name]))->forceFill([
+                    'school_id' => $this->school->id, 'record_status' => 'active',
                     'employee_number' => $formatter->format($allocator->allocate($this->school)),
-                    'full_name' => $name,
-                ]))->forceFill(['school_id' => $this->school->id, 'record_status' => 'active']);
+                ]);
                 $employee->save();
 
                 $record = EmploymentRecord::query()->forceCreate([
@@ -682,7 +681,7 @@ final class DemoDataBuilder
                     'employee_category_id' => $category->id,
                 ]);
 
-                EmployeeAssignment::query()->create([
+                EmployeeAssignment::query()->forceCreate([
                     'school_id' => $this->school->id,
                     'employment_record_id' => $record->id,
                     'campus_id' => $this->campus->id,
@@ -727,23 +726,23 @@ final class DemoDataBuilder
                     'recorded_by_user_id' => $this->admin->id,
                 ])->save();
             }
-            EmployeeAddress::query()->create([
+            EmployeeAddress::query()->forceCreate([
                 'school_id' => $this->school->id, 'employee_id' => $employee->id, 'address_type' => 'current',
                 'address_line1' => '12 Demo Residency', 'city' => $profile['city'], 'state_region' => 'Maharashtra', 'postal_code' => '411001', 'country_code' => 'IN',
             ]);
             [$type, $name, $institution, $completed] = $profile['qualification'];
-            EmployeeQualification::query()->create([
+            EmployeeQualification::query()->forceCreate([
                 'school_id' => $this->school->id, 'employee_id' => $employee->id, 'qualification_type' => $type,
                 'qualification_name' => $name, 'institution' => $institution, 'country_code' => 'IN', 'completed_on' => $completed,
             ]);
             foreach ($profile['experience'] as [$organization, $title, $from, $to]) {
-                EmployeeExperience::query()->create([
+                EmployeeExperience::query()->forceCreate([
                     'school_id' => $this->school->id, 'employee_id' => $employee->id, 'organization' => $organization,
                     'job_title' => $title, 'starts_on' => $from, 'ends_on' => $to,
                 ]);
             }
             if (isset($profile['certification'])) {
-                EmployeeCertification::query()->create([
+                EmployeeCertification::query()->forceCreate([
                     'school_id' => $this->school->id, 'employee_id' => $employee->id,
                     'name' => $profile['certification'][0], 'issuer' => $profile['certification'][1], 'issued_on' => '2016-02-15',
                 ]);

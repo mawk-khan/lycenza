@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\EmployeeExperience;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -30,6 +31,7 @@ class EmployeeExperienceService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -42,13 +44,15 @@ class EmployeeExperienceService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.experience');
-                $experience = EmployeeExperience::query()->create([
-                    ...$attributes,
+                // HR.R1-C13 (GOV-6): the caller's fields pass through fill(); the owner's columns are stated here.
+                $experience = new EmployeeExperience($attributes);
+                $experience->forceFill([
                     'employee_id' => $employee->id,
                     'school_id' => $employee->school_id,
-                ]);
+                ])->save();
 
                 $this->audit->school($employee->school, 'hr.experience.created', actor: $actor, subject: $experience, metadata: [
                     'employeeId' => $employee->id,
@@ -72,6 +76,7 @@ class EmployeeExperienceService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $experience, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $experience, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.experience');
                 $experience->update($attributes);

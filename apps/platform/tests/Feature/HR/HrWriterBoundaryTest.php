@@ -50,7 +50,7 @@ class HrWriterBoundaryTest extends TestCase
 
     /** These also write, through a row they locked, which no source scan can see from the model. Listed so they stay known. */
     private const WRITE_A_LOCKED_ROW = [
-        'Domain/HR/Application/Workforce/PlacementChangeService.php' => "\$locked->update(['ends_on'",
+        'Domain/HR/Application/Workforce/PlacementChangeService.php' => "\$locked->forceFill(['ends_on'",
         'Domain/WorkforceTasks/Application/TaskWorkflowService.php' => '->forceFill(',
     ];
 
@@ -101,7 +101,7 @@ class HrWriterBoundaryTest extends TestCase
         $this->assertSame(['leave_requests'], $this->writesIn("DB::table('leave_requests as r')->where('a', 1)->delete();", self::OWNED, self::OWNED_TABLES));
         $this->assertSame(['WorkforceTask'], $this->writesIn('$t = new WorkforceTask();', self::OWNED, self::OWNED_TABLES));
         $this->assertSame([], $this->writesIn("EmploymentRecord::query()->where('a', 1)->first();", self::OWNED, self::OWNED_TABLES));
-        $this->assertSame([], $this->writesIn("EmployeeCategory::query()->create(['a' => 1]);", self::OWNED, self::OWNED_TABLES), 'a longer name is another model');
+        $this->assertSame([], $this->writesIn("EmployeeCategory::query()->forceCreate(['a' => 1]);", self::OWNED, self::OWNED_TABLES), 'a longer name is another model');
         $this->assertSame([], $this->writesIn('$service->update($a, Employee::query()->findOrFail($id));', self::OWNED, self::OWNED_TABLES), 'a read passed into a service is no write of it');
         $this->assertSame(['workforce_tasks'], $this->writesIn('DB::statement("INSERT INTO workforce_tasks (id) VALUES (1)");', self::OWNED, self::OWNED_TABLES));
     }

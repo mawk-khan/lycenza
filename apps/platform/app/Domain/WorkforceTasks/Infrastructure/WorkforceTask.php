@@ -54,7 +54,7 @@ class WorkforceTask extends Model
 
     protected $table = 'workforce_tasks';
 
-    protected $fillable = ['title', 'description', 'category_id', 'completion_mode', 'available_on', 'due_on', 'section_id', 'subject_offering_id', 'staff_type', 'department_id', 'position_id', 'campus_id'];
+    protected $fillable = ['title', 'description', 'category_id', 'completion_mode', 'available_on', 'due_on', 'section_id', 'subject_offering_id'];
 
     protected function casts(): array
     {

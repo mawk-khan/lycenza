@@ -7,6 +7,7 @@ use App\Domain\WorkforceTasks\Infrastructure\WorkforceTask;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +35,7 @@ final class TaskWorkflowService
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly TaskAuthority $authority,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function submit(School $school, string $taskId, int $expectedVersion, ?string $remarks, User $actor): WorkforceTask
@@ -152,6 +154,8 @@ final class TaskWorkflowService
     }
 
     /**
+     * HR.R1-C13 (C12-N1, rule 86): every path, the administrative one included, asks the School first.
+     *
      * @template T
      *
      * @param  callable(): T  $work
@@ -159,6 +163,10 @@ final class TaskWorkflowService
      */
     private function inSchool(School $school, callable $work): mixed
     {
-        return $this->context->withSchool($school, fn () => DB::transaction($work));
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $work): mixed {
+            $this->operational->requireOperational($school->id);
+
+            return $work();
+        }));
     }
 }

@@ -146,7 +146,7 @@ class EmployeeAssignmentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $employmentB, $positionA): void {
-            EmployeeAssignment::query()->create([
+            EmployeeAssignment::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'employment_record_id' => $employmentB->id,
                 'position_id' => $positionA->id,
@@ -170,7 +170,7 @@ class EmployeeAssignmentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $employmentA, $positionA, $campusB): void {
-            EmployeeAssignment::query()->create([
+            EmployeeAssignment::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'employment_record_id' => $employmentA->id,
                 'position_id' => $positionA->id,
@@ -195,7 +195,7 @@ class EmployeeAssignmentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $employmentA, $positionA, $departmentB): void {
-            EmployeeAssignment::query()->create([
+            EmployeeAssignment::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'employment_record_id' => $employmentA->id,
                 'position_id' => $positionA->id,
@@ -219,7 +219,7 @@ class EmployeeAssignmentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $employmentA, $positionB): void {
-            EmployeeAssignment::query()->create([
+            EmployeeAssignment::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'employment_record_id' => $employmentA->id,
                 'position_id' => $positionB->id,
@@ -522,7 +522,7 @@ class EmployeeAssignmentTest extends TestCase
         $this->expectExceptionMessage('hr_employee_assignments_primary_no_overlap');
 
         DB::transaction(function () use ($school, $employment, $position): void {
-            EmployeeAssignment::query()->create([
+            EmployeeAssignment::query()->forceCreate([
                 'school_id' => $school->id,
                 'employment_record_id' => $employment->id,
                 'position_id' => $position->id,

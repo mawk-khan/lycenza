@@ -37,7 +37,7 @@ class LeaveTypeService
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $code, $name, $isPaid, $tracksBalance, $allowsHalfDay, $actor) {
             $this->guard->requireOperational($school->id);
             try {
-                $type = LeaveType::query()->create([
+                $type = LeaveType::query()->forceCreate([
                     'school_id' => $school->id, 'code' => $code, 'name' => trim($name),
                     'is_paid' => $isPaid, 'tracks_balance' => $tracksBalance, 'allows_half_day' => $allowsHalfDay, 'status' => 'active',
                 ]);

@@ -5360,8 +5360,8 @@ The evidence, the remediation matrix and the readiness determination are in
   Identity, employment, terms, placement, reporting and separation writers
   take `SchoolOperationalGuard` first in their transaction. Onboarding,
   import and rehire reach them, and import reports the refusal as a failed
-  row. Profile and reference-data writers rely on the request-time check
-  (C11-N1).
+  row. Profile, reference-data, document and task writers do the same since
+  HR.R1-C13 (`docs/hr/HR-R1-C13-HARDENING.md`).
 - **A leave type in use keeps its rules (HR.R1-C11, C10-N1).** A policy, a
   ledger row or a request freezes `is_paid`, `tracks_balance` and
   `allows_half_day` (`leave_types_freeze`); a name stays editable.

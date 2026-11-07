@@ -7,6 +7,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -30,6 +31,7 @@ class PositionService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -41,7 +43,8 @@ class PositionService
 
         return $this->context->withSchool($school, function () use ($school, $attributes, $actor) {
             return DB::transaction(function () use ($school, $attributes, $actor) {
-                $position = Position::query()->create([
+                $this->operational->requireOperational($school->id);
+                $position = Position::query()->forceCreate([
                     'school_id' => $school->id,
                     'name' => $attributes['name'],
                     'code' => $attributes['code'],
@@ -70,6 +73,7 @@ class PositionService
 
         return $this->context->withSchool($school, function () use ($school, $position, $attributes, $actor) {
             return DB::transaction(function () use ($school, $position, $attributes, $actor) {
+                $this->operational->requireOperational($school->id);
                 $position->update($attributes);
 
                 $this->audit->school($school, 'hr.position.updated', actor: $actor, subject: $position, metadata: [
@@ -101,7 +105,8 @@ class PositionService
 
         return $this->context->withSchool($school, function () use ($school, $position, $status, $eventType, $actor) {
             return DB::transaction(function () use ($school, $position, $status, $eventType, $actor) {
-                $position->update(['status' => $status]);
+                $this->operational->requireOperational($school->id);
+                $position->forceFill(['status' => $status])->save();
 
                 $this->audit->school($school, $eventType, actor: $actor, subject: $position);
 

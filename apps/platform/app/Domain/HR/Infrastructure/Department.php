@@ -50,15 +50,8 @@ class Department extends Model
 
     protected $table = 'hr_departments';
 
-    protected $fillable = [
-        'school_id',
-        'campus_id',
-        'parent_department_id',
-        'name',
-        'code',
-        'description',
-        'status',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['name', 'code', 'description'];
 
     protected static function newFactory(): DepartmentFactory
     {

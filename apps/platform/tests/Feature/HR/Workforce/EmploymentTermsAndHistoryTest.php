@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -227,7 +228,13 @@ class EmploymentTermsAndHistoryTest extends TestCase
         $other = $this->createSchool();
         $employee = $this->createEmployee($this->school);
 
-        $this->inSchool(fn () => $employee->update(['school_id' => $other->id, 'record_status' => 'archived', 'full_name' => 'Renamed']));
+        // Outside strict mode, as in production: the protected keys are dropped and the rest lands.
+        Model::preventSilentlyDiscardingAttributes(false);
+        try {
+            $this->inSchool(fn () => $employee->update(['school_id' => $other->id, 'record_status' => 'archived', 'full_name' => 'Renamed']));
+        } finally {
+            Model::preventSilentlyDiscardingAttributes(true);
+        }
 
         $fresh = $this->inSchool(fn () => Employee::query()->findOrFail($employee->id));
         $this->assertSame([$this->school->id, 'active', 'Renamed'], [$fresh->school_id, $fresh->record_status, $fresh->full_name]);

@@ -7,6 +7,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -27,6 +28,7 @@ class EmployeeCategoryService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -38,7 +40,8 @@ class EmployeeCategoryService
 
         return $this->context->withSchool($school, function () use ($school, $attributes, $actor) {
             return DB::transaction(function () use ($school, $attributes, $actor) {
-                $category = EmployeeCategory::query()->create([
+                $this->operational->requireOperational($school->id);
+                $category = EmployeeCategory::query()->forceCreate([
                     'school_id' => $school->id,
                     'name' => $attributes['name'],
                     'code' => $attributes['code'],
@@ -66,6 +69,7 @@ class EmployeeCategoryService
 
         return $this->context->withSchool($school, function () use ($school, $category, $attributes, $actor) {
             return DB::transaction(function () use ($school, $category, $attributes, $actor) {
+                $this->operational->requireOperational($school->id);
                 $category->update($attributes);
 
                 $this->audit->school($school, 'hr.employee_category.updated', actor: $actor, subject: $category, metadata: [
@@ -97,7 +101,8 @@ class EmployeeCategoryService
 
         return $this->context->withSchool($school, function () use ($school, $category, $status, $eventType, $actor) {
             return DB::transaction(function () use ($school, $category, $status, $eventType, $actor) {
-                $category->update(['status' => $status]);
+                $this->operational->requireOperational($school->id);
+                $category->forceFill(['status' => $status])->save();
 
                 $this->audit->school($school, $eventType, actor: $actor, subject: $category);
 

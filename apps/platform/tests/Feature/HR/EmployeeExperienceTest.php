@@ -81,7 +81,7 @@ class EmployeeExperienceTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeExperience::query()->create([
+            EmployeeExperience::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'organization' => 'Some Organization',
@@ -104,7 +104,7 @@ class EmployeeExperienceTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeeExperience::query()->create([
+            EmployeeExperience::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'organization' => 'Rogue Organization',

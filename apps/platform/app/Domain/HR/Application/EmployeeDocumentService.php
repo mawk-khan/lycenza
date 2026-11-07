@@ -16,6 +16,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
@@ -89,6 +90,7 @@ class EmployeeDocumentService
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly DocumentService $documents,
         private readonly DocumentReadService $documentReads,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -115,8 +117,14 @@ class EmployeeDocumentService
         $record = null;
         $this->context->withSchool($employee->school, function () use ($employee, $file, $category, $tier, $dates, $actor, &$record): void {
             // HR.2A (S-3): nobody files documents on their own HR record.
-            DB::transaction(fn () => $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document'));
+            // HR.R1-C13 (C11-N1, rule 86): the bytes are stored before DocumentService's transaction
+            // opens, so a refused School is told here, and the check that holds is in the closure.
+            DB::transaction(function () use ($employee, $actor): void {
+                $this->operational->requireOperational($employee->school_id);
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document');
+            });
             $this->documents->createForEmployee($employee->school, $employee->id, $file, self::documentsTier($tier), $actor, function (Document $document) use ($employee, $category, $tier, $dates, $actor, &$record): void {
+                $this->operational->requireOperational($employee->school_id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document');
                 $record = new EmployeeDocument;
                 $record->forceFill([
@@ -178,6 +186,7 @@ class EmployeeDocumentService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $document, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $document, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR documents.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document');
                 if ($document->status !== 'active') {
@@ -230,13 +239,15 @@ class EmployeeDocumentService
             ]);
         };
 
-        $this->context->withSchool($employee->school, function () use ($employee, $document, $actor, $archive): void {
+        // HR.R1-C13 (C11-N1, rule 86): one transaction, so the School comes before the Document's row lock.
+        $this->context->withSchool($employee->school, fn () => DB::transaction(function () use ($employee, $document, $actor, $archive): void {
+            $this->operational->requireOperational($employee->school_id);
             if ($document->document_id !== null) {
                 $this->documents->archiveForEmployee($employee->school, $employee->id, $document->document_id, $actor, fn () => $archive());
             } else {
-                DB::transaction($archive);
+                $archive();
             }
-        });
+        }));
 
         return $this->context->withSchool($employee->school, fn () => $document->fresh() ?? $document);
     }

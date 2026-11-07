@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +33,7 @@ class EmployeeCertificationService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -44,15 +46,17 @@ class EmployeeCertificationService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
-                $certification = EmployeeCertification::query()->create([
-                    ...$attributes,
+                // HR.R1-C13 (GOV-6): the caller's fields pass through fill(); the owner's columns are stated here.
+                $certification = new EmployeeCertification($attributes);
+                $certification->forceFill([
                     'employee_id' => $employee->id,
                     'school_id' => $employee->school_id,
                     'verification_status' => 'unverified',
                     'verified_at' => null,
-                ]);
+                ])->save();
 
                 $this->audit->school($employee->school, 'hr.certification.created', actor: $actor, subject: $certification, metadata: [
                     'employeeId' => $employee->id,
@@ -76,16 +80,18 @@ class EmployeeCertificationService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $certification, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $certification, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $wasVerified = $certification->verification_status !== 'unverified';
 
+                $certification->fill($attributes);
+                // HR.R1-C13 (GOV-6): verification is not fillable, so the reset is stated, and the audit still names it.
                 if ($attributes !== [] && $wasVerified) {
-                    $attributes['verification_status'] = 'unverified';
-                    $attributes['verified_at'] = null;
+                    $certification->forceFill(['verification_status' => 'unverified', 'verified_at' => null]);
+                    $attributes = [...$attributes, 'verification_status' => 'unverified', 'verified_at' => null];
                 }
-
-                $certification->update($attributes);
+                $certification->save();
 
                 $this->audit->school($employee->school, 'hr.certification.updated', actor: $actor, subject: $certification, metadata: [
                     'employeeId' => $employee->id,
@@ -119,9 +125,10 @@ class EmployeeCertificationService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
             return DB::transaction(function () use ($employee, $certification, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
-                $certification->update(['verification_status' => 'verified', 'verified_at' => now()]);
+                $certification->forceFill(['verification_status' => 'verified', 'verified_at' => now()])->save();
 
                 $this->audit->school($employee->school, 'hr.certification.verified', actor: $actor, subject: $certification, metadata: [
                     'employeeId' => $employee->id,
@@ -141,9 +148,10 @@ class EmployeeCertificationService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
             return DB::transaction(function () use ($employee, $certification, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
-                $certification->update(['verification_status' => 'rejected', 'verified_at' => null]);
+                $certification->forceFill(['verification_status' => 'rejected', 'verified_at' => null])->save();
 
                 $this->audit->school($employee->school, 'hr.certification.rejected', actor: $actor, subject: $certification, metadata: [
                     'employeeId' => $employee->id,

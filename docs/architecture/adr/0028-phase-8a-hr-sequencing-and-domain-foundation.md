@@ -582,7 +582,14 @@ decision was taken or needed.
   and separation writers take `SchoolOperationalGuard` at the start of their transaction,
   before their own rows. Separation completion keeps rule 141's order: Identity's lock,
   then the School.
-  Profile and reference-data writers do not yet: residual C11-N1.
+  Profile and reference-data writers did not yet: residual C11-N1, closed by HR.R1-C13.
 - **Not added.** No database writer lock, no change to the projection guard (a catalogue
   test now pins its single writer), and no adoption of the proposed one-writer
   definition, which stays Architecture's decision (`docs/hr/HR-R1-C11-HARDENING.md` §3).
+
+### HR.R1-C13 amendment (2026-11-07)
+
+**Status: implemented for development.** Rule 86 now reaches HR's profile, reference-data, document and task writers, and the 19 service-bound and stateful HR and Leave models take their owner, state and actor columns from their writers (`docs/hr/HR-R1-C13-HARDENING.md`).
+
+- **The generic Documents route answers through its port.** `HrEmployeeDocumentPolicy` asks the School, so Documents still names no HR class and takes no new dependency (rule 4).
+- **Not decided here.** R1-01, D-1, D-2 and every other pending decision.

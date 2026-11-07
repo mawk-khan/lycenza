@@ -88,7 +88,7 @@ class DepartmentTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($school): void {
-            Department::query()->create([
+            Department::query()->forceCreate([
                 'school_id' => $school->id,
                 'name' => 'Human Resources Again',
                 'code' => 'HR',
@@ -271,7 +271,7 @@ class DepartmentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $parentB): void {
-            Department::query()->create([
+            Department::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'name' => 'Rogue Child',
                 'code' => 'ROGUE',
@@ -317,7 +317,7 @@ class DepartmentTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $campusB): void {
-            Department::query()->create([
+            Department::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'name' => 'Rogue Campus Department',
                 'code' => 'ROGUE2',

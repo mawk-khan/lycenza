@@ -95,7 +95,7 @@ class EmployeeNoteTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB, $author): void {
-            EmployeeNote::query()->create([
+            EmployeeNote::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'author_user_id' => $author->id,

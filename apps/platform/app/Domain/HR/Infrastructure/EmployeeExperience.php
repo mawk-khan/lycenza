@@ -45,17 +45,8 @@ class EmployeeExperience extends Model
 
     protected $table = 'employee_experience_records';
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'organization',
-        'job_title',
-        'starts_on',
-        'ends_on',
-        'description',
-        'location',
-        'country_code',
-    ];
+    /** HR.R1-C13 (GOV-6): descriptive fields only. The owner, parent and state columns come from its writer. */
+    protected $fillable = ['organization', 'job_title', 'starts_on', 'ends_on', 'description', 'location', 'country_code'];
 
     protected function casts(): array
     {

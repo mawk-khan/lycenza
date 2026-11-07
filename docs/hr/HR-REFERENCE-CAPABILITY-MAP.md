@@ -596,6 +596,8 @@ come from the status column of §4, read mechanically: one row per
 | NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
 | **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
 
+HR.R1-C13 (2026-11-07) changed no row's status: it hardened writers and models and recounted 361, with the same totals as HR.R1-C10.
+
 HR.R1-C11 (2026-11-07) changed no row's status: it hardened writers and recounted 361, with the same totals as HR.R1-C10.
 
 HR.16 (2026-11-05) changed no row's status: it corrected reporting semantics (status on a date, as-posted leave), closed R-HR15-1 and the Staff Attendance cap, and added browser, axe and performance evidence (`HR-16-READINESS.md`).

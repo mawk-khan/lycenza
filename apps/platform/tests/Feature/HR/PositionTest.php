@@ -85,7 +85,7 @@ class PositionTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($school): void {
-            Position::query()->create([
+            Position::query()->forceCreate([
                 'school_id' => $school->id,
                 'name' => 'Another Teacher Title',
                 'code' => 'TCH',

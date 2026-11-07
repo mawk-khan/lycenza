@@ -90,7 +90,7 @@ class EmployeeCategoryTest extends TestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         DB::transaction(function () use ($school): void {
-            EmployeeCategory::query()->create([
+            EmployeeCategory::query()->forceCreate([
                 'school_id' => $school->id,
                 'name' => 'Visiting Again',
                 'code' => 'VISIT',

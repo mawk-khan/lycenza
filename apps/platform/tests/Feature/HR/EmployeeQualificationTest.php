@@ -93,7 +93,7 @@ class EmployeeQualificationTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employee): void {
-            EmployeeQualification::query()->create([
+            EmployeeQualification::query()->forceCreate([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
                 'qualification_type' => 'bachelors',
@@ -117,7 +117,7 @@ class EmployeeQualificationTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmployeeQualification::query()->create([
+            EmployeeQualification::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'qualification_type' => 'bachelors',

@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\EmployeeNote;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +35,7 @@ class EmployeeNoteService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -47,14 +49,16 @@ class EmployeeNoteService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.note');
-                $note = EmployeeNote::query()->create([
-                    ...$attributes,
+                // HR.R1-C13 (GOV-6): the caller's fields pass through fill(); the owner's columns are stated here.
+                $note = new EmployeeNote($attributes);
+                $note->forceFill([
                     'employee_id' => $employee->id,
                     'school_id' => $employee->school_id,
                     'author_user_id' => $actor->id,
-                ]);
+                ])->save();
 
                 $this->audit->school($employee->school, 'employee.note.created', actor: $actor, subject: $note, metadata: [
                     'employeeId' => $employee->id,
@@ -78,6 +82,7 @@ class EmployeeNoteService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $note, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $note, $attributes, $actor) {
+                $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.note');
                 $note->update($attributes);

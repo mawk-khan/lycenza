@@ -59,9 +59,10 @@ class Employee extends Model
      * HR.1A (S-11): `school_id` and `record_status` are never mass assignable
      * (the rule 118 pattern): EmployeeService sets them explicitly. The
      * database also refuses any change of `employee_number` or `school_id`
-     * (`trg_employees_identity_guard`).
+     * (`trg_employees_identity_guard`). HR.R1-C13 (GOV-6): the link moves
+     * only through EmployeeService, and the number comes from the allocator.
      */
-    protected $fillable = ['user_id', 'employee_number', 'full_name', 'work_email', 'work_phone'];
+    protected $fillable = ['full_name', 'work_email', 'work_phone'];
 
     protected static function newFactory(): EmployeeFactory
     {

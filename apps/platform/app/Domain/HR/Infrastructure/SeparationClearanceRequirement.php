@@ -31,7 +31,8 @@ class SeparationClearanceRequirement extends Model
 
     protected $table = 'separation_clearance_requirements';
 
-    protected $fillable = ['code', 'label', 'responsibility', 'is_mandatory', 'staff_type', 'sequence', 'created_by_user_id'];
+    /** HR.R1-C13 (GOV-6): nothing by mass assignment. Every column is stated by its writer. */
+    protected $fillable = [];
 
     protected function casts(): array
     {
