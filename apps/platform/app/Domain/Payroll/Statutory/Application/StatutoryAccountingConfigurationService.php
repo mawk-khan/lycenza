@@ -9,6 +9,7 @@ use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryAccountingConfig
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -44,6 +45,7 @@ class StatutoryAccountingConfigurationService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -53,6 +55,8 @@ class StatutoryAccountingConfigurationService
     {
         return $this->context->withSchool($school, function () use ($school, $accountIds, $actor) {
             return DB::transaction(function () use ($school, $accountIds, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 $this->validateAccounts($school, $accountIds);
 
                 $config = PayrollStatutoryAccountingConfiguration::query()->updateOrCreate(

@@ -12,6 +12,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Privacy\PartialValueMasker;
 use App\Support\Privacy\StatutoryIdentifierLookupHasher;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,7 @@ class StatutoryIdentifierAdminService
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly StatutoryIdentifierLookupHasher $hasher,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -101,6 +103,8 @@ class StatutoryIdentifierAdminService
             }
 
             return DB::transaction(function () use ($school, $employmentRecordId, $identifierType, $normalized, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 $identifier = EmployeeStatutoryIdentifier::query()->updateOrCreate(
                     ['school_id' => $school->id, 'employment_record_id' => $employmentRecordId, 'identifier_type' => $identifierType],
                     [

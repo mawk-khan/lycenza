@@ -10,6 +10,7 @@ use App\Domain\Payroll\Infrastructure\SalaryStructureComponent;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -40,12 +41,15 @@ class SalaryStructureService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function createDraft(School $school, string $code, string $name, User $actor): SalaryStructure
     {
         return $this->context->withSchool($school, function () use ($school, $code, $name, $actor) {
             return DB::transaction(function () use ($school, $code, $name, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 // Postgres rejects `FOR UPDATE` combined with an
                 // aggregate function in the same query -- lock the
                 // matching rows via a plain SELECT, then compute the
@@ -87,6 +91,7 @@ class SalaryStructureService
 
         return $this->context->withSchool($school, function () use ($school, $structure, $data, $actor) {
             return DB::transaction(function () use ($school, $structure, $data, $actor) {
+                $this->operational->requireOperational($school->id);
                 try {
                     $component = SalaryStructureComponent::query()->create([
                         'school_id' => $school->id,
@@ -126,6 +131,7 @@ class SalaryStructureService
         return $this->context->withSchool($school, function () use ($school, $structure, $actor) {
             try {
                 return DB::transaction(function () use ($school, $structure, $actor) {
+                    $this->operational->requireOperational($school->id);
                     $previousActive = SalaryStructure::query()
                         ->where('school_id', $school->id)
                         ->where('code', $structure->code)

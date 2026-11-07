@@ -38,6 +38,7 @@ use App\Support\Approval\MakerCheckerPolicy;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Money\Money;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +83,7 @@ class PayrollRunService
         private readonly PayrollCompensationProvenance $provenance,
         private readonly PayrollSelfBeneficiaries $beneficiaries,
         private readonly CorrectionTargetGuard $correctionTarget,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public const WORKFLOW = 'payroll_runs';
@@ -121,6 +123,8 @@ class PayrollRunService
         return $this->context->withSchool($school, function () use ($school, $period, $actor) {
             try {
                 return DB::transaction(function () use ($school, $period, $actor) {
+                    // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                    $this->operational->requireOperational($school->id);
                     $run = PayrollRun::query()->forceCreate([
                         'school_id' => $school->id,
                         'payroll_period_id' => $period->id,
@@ -163,6 +167,7 @@ class PayrollRunService
 
         return $this->context->withSchool($school, function () use ($school, $correctsRun, $period, $actor) {
             return DB::transaction(function () use ($school, $correctsRun, $period, $actor) {
+                $this->operational->requireOperational($school->id);
                 // HR.R1-C8 (PAY-17): under the lock a reversal needs, never a check made before it.
                 $target = $this->correctionTarget->hold($school->id, $correctsRun->id);
                 if (! $target->isRegular() || $target->status !== 'posted') {
@@ -212,6 +217,7 @@ class PayrollRunService
 
         $this->context->withSchool($school, function () use ($school, $run, $employmentRecord, $lines, $reason, $actor) {
             DB::transaction(function () use ($school, $run, $employmentRecord, $lines, $reason, $actor) {
+                $this->operational->requireOperational($school->id);
                 $this->lockEditableRun($run);
                 foreach ($lines as $line) {
                     PayrollAdjustment::query()->create([
@@ -265,6 +271,7 @@ class PayrollRunService
 
         $this->context->withSchool($school, function () use ($school, $run, $employmentRecord, $componentAmounts, $reason, $actor) {
             DB::transaction(function () use ($school, $run, $employmentRecord, $componentAmounts, $reason, $actor) {
+                $this->operational->requireOperational($school->id);
                 $this->lockEditableRun($run);
                 foreach ($componentAmounts as $componentId => $amount) {
                     PayrollAdjustment::query()->create([
@@ -298,6 +305,7 @@ class PayrollRunService
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor) {
             return DB::transaction(function () use ($school, $run, $actor) {
+                $this->operational->requireOperational($school->id);
                 // Serializes concurrent calculate() attempts on the SAME
                 // run (Checkpoint 9.4 real-concurrency requirement) --
                 // a different run takes a different lock. Re-check status
@@ -536,6 +544,7 @@ class PayrollRunService
 
         return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa, $reviewedCalculationId, $reviewedAttribution) {
             return DB::transaction(function () use ($school, $run, $approver, $mfa, $reviewedCalculationId, $reviewedAttribution) {
+                $this->operational->requireOperational($school->id);
                 // ORG.8B: the run row is locked, so no calculation or adjustment (both lock it) can change
                 // the participants or the results between this decision and its commit.
                 $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();

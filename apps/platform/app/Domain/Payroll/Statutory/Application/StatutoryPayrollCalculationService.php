@@ -43,6 +43,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -92,6 +93,7 @@ class StatutoryPayrollCalculationService
         private readonly LwfCalculationService $lwf,
         private readonly IncomeTaxSlabCalculator $incomeTax,
         private readonly TdsMonthlyDeductionService $tds,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -113,6 +115,8 @@ class StatutoryPayrollCalculationService
         try {
             return $this->context->withSchool($school, function () use ($school, $run, $actor) {
                 return DB::transaction(function () use ($school, $run, $actor) {
+                    // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                    $this->operational->requireOperational($school->id);
                     $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                     if (! in_array($locked->status, ['draft', 'calculated'], true)) {
                         throw new StatutoryRunNotEligibleForCalculationException($run->id, $locked->status);

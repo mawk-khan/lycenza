@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -36,6 +37,7 @@ class EmployeePfStatusAdminService
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function view(School $school, string $employmentRecordId, User $actor): ?EmployeePfStatus
@@ -61,6 +63,8 @@ class EmployeePfStatusAdminService
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
 
             return DB::transaction(function () use ($school, $employmentRecordId, $data, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 // Row lock (existing row, if any) -- serializes two
                 // concurrent configure() calls for the SAME
                 // EmploymentRecord so the final state is always

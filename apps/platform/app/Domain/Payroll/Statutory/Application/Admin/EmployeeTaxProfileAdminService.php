@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class EmployeeTaxProfileAdminService
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -59,6 +61,8 @@ class EmployeeTaxProfileAdminService
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
 
             return DB::transaction(function () use ($school, $employmentRecordId, $fiscalYearStart, $data, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 EmployeeTaxProfile::query()
                     ->where('school_id', $school->id)
                     ->where('employment_record_id', $employmentRecordId)

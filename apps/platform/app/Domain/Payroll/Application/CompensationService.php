@@ -16,6 +16,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -62,6 +63,7 @@ class CompensationService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -86,6 +88,8 @@ class CompensationService
 
         return $this->context->withSchool($school, function () use ($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor) {
             return DB::transaction(function () use ($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 // Runs INSIDE the tenant context/transaction -- checked
                 // here, not before withSchool(), because `$structure->components`
                 // is a lazy relation that would otherwise be evaluated

@@ -868,8 +868,14 @@ docs/roadmap             MASTER-ROADMAP.md
     reference-data, document and task writers do the same (HR.R1-C13, C11-N1,
     C12-N1). A writing class of the HR family names the guard or says why not
     in `HrSchoolGuardCoverageTest`. Bytes are stored before `DocumentService`'s
-    transaction, so a document writer checks before them as well. Retention
-    never takes this guard.
+    transaction, so a document writer checks before them as well. Payroll's
+    canonical writers ask first in their transaction as well, the School FOR
+    SHARE before their own rows and the compensation lock; approval's
+    controller path, post, reverse and the reconciliation review reach it
+    through `ApprovalDecisionAuthority` after the run row (HR.R1-C15, C14-N6).
+    A writing class under `app/Domain/Payroll` names the guard or says why
+    not in `PayrollSchoolGuardCoverageTest`. Retention never
+    takes this guard.
 
 87. **A release is one immutable, verified image digest; the repository
     reaches VERIFIED, never PUBLISHED or PROMOTED (ADR 0052).** Production

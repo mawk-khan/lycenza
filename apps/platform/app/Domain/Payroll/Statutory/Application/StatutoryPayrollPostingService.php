@@ -19,6 +19,7 @@ use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryRunPosting;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
@@ -75,6 +76,7 @@ class StatutoryPayrollPostingService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly CorrectionTargetGuard $correctionTarget,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function post(PayrollRun $run, User $actor): PayrollStatutoryRunPosting
@@ -83,6 +85,8 @@ class StatutoryPayrollPostingService
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor) {
             return DB::transaction(function () use ($school, $run, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                 if ($locked->status !== 'posted') {
                     throw new StatutoryRunNotPostedException($run->id, $locked->status);
@@ -148,6 +152,7 @@ class StatutoryPayrollPostingService
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor, $reason) {
             return DB::transaction(function () use ($school, $run, $actor, $reason) {
+                $this->operational->requireOperational($school->id);
                 $original = PayrollStatutoryRunPosting::query()
                     ->where('school_id', $school->id)
                     ->where('payroll_run_id', $run->id)

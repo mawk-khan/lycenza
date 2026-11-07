@@ -1174,6 +1174,17 @@ review lists what changed, never the unchanged register.
     the service and through `trg_payroll_run_postings_reversal_lock`); approval
     and calculation hold it shared, after their run row. Each is ordered wholly
     before or after the reversal, and no run locks another, so no cycle exists.
+  - **The School comes first (HR.R1-C15, C14-N6, rule 86).** Every canonical
+    writer holds the School FOR SHARE as the first statement of its
+    transaction, before its own rows and the compensation lock; approval's
+    controller path (`PayrollRunAdministrationService::approve`), post,
+    reverse and the reconciliation review reach it after the run row, through
+    `ApprovalDecisionAuthority`. FOR SHARE never waits on FOR SHARE, and the
+    writers of the School row (lifecycle, identity and bootstrap FOR UPDATE;
+    settings and profile by plain UPDATE) take no Payroll lock afterwards, so
+    neither placement can form a cycle. A suspension, or a School settings or
+    profile save, waits for in-flight Payroll work; Payroll writers never wait
+    on each other for the School. `HR-R1-C15-PAYROLL-SCHOOL-GUARD.md`.
   - **A reversal never forces a recalculation.** The figures have not changed,
     so freshness is unaffected.
   - **The packet can go stale without a new calculation.** The review shows

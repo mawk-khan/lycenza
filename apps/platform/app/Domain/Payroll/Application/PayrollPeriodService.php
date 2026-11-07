@@ -8,6 +8,7 @@ use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ class PayrollPeriodService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function createPeriod(School $school, Carbon $month, ?Carbon $paymentDate, User $actor): PayrollPeriod
@@ -36,6 +38,8 @@ class PayrollPeriodService
 
         return $this->context->withSchool($school, function () use ($school, $start, $end, $paymentDate, $actor) {
             return DB::transaction(function () use ($school, $start, $end, $paymentDate, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 $period = PayrollPeriod::query()->forceCreate([
                     'school_id' => $school->id,
                     'period_month' => $start->toDateString(),
@@ -75,6 +79,7 @@ class PayrollPeriodService
 
         return $this->context->withSchool($school, function () use ($school, $period, $actor) {
             return DB::transaction(function () use ($school, $period, $actor) {
+                $this->operational->requireOperational($school->id);
                 $affected = PayrollPeriod::query()
                     ->where('id', $period->id)
                     ->where('status', 'draft')
@@ -106,6 +111,7 @@ class PayrollPeriodService
 
         return $this->context->withSchool($school, function () use ($school, $period, $actor) {
             return DB::transaction(function () use ($school, $period, $actor) {
+                $this->operational->requireOperational($school->id);
                 $affected = PayrollPeriod::query()
                     ->where('id', $period->id)
                     ->where('status', 'open')

@@ -6,6 +6,7 @@ use App\Domain\Payroll\Infrastructure\SalaryComponent;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -31,12 +32,15 @@ class SalaryComponentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function create(School $school, string $code, string $name, string $type, ?string $liabilityLedgerAccountId, User $actor): SalaryComponent
     {
         return $this->context->withSchool($school, function () use ($school, $code, $name, $type, $liabilityLedgerAccountId, $actor) {
             return DB::transaction(function () use ($school, $code, $name, $type, $liabilityLedgerAccountId, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 $component = SalaryComponent::query()->create([
                     'school_id' => $school->id,
                     'code' => $code,
@@ -63,6 +67,7 @@ class SalaryComponentService
 
         return $this->context->withSchool($school, function () use ($school, $component, $actor) {
             return DB::transaction(function () use ($school, $component, $actor) {
+                $this->operational->requireOperational($school->id);
                 $component->update(['status' => 'inactive']);
 
                 $this->audit->school($school, 'payroll.component.deactivated', actor: $actor, subject: $component);

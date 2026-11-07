@@ -18,6 +18,7 @@ contract.
 | HR.R1 owner decision docket, HR.4–8 disposition and evidence | `HR-R1-C12-DECISION-DOCKET.md`, `HR-R1-C12-HR4-8-DISPOSITION.md`, `HR-R1-C12-EVIDENCE-APPENDIX.md` | HR.R1-C12, 2026-11-07; every decision pending |
 | HR.R1-C13 School check and model hardening | `HR-R1-C13-HARDENING.md` | HR.R1-C13, 2026-11-07 |
 | HR.R1-C14 WO-10 residual hardening and the Platform proposal | `HR-R1-C14-RESIDUAL-HARDENING.md` | HR.R1-C14, 2026-11-07 |
+| HR.R1-C15 Payroll execution-time School check (C14-N6) | `HR-R1-C15-PAYROLL-SCHOOL-GUARD.md` | HR.R1-C15, 2026-11-07 |
 | Demo plan | `HR-DEMO-PLAN.md` | draft |
 | HR.1A workforce foundation (implemented contract) | `docs/modules/HR.md` "Workforce foundation (HR.1A)" + ADR 0028 HR.1A amendment + CLAUDE.md rule 130 | implemented 2026-11-03 |
 | HR.2A staff profile foundation (implemented contract) | `docs/modules/HR.md` "Staff profile foundation (HR.2A)" + ADR 0028 and ADR 0029 HR.2A amendments + CLAUDE.md rule 132 | implemented 2026-11-03 |

@@ -9,6 +9,7 @@ use App\Domain\Payroll\Infrastructure\PayrollAccountingConfiguration;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -46,12 +47,15 @@ class PayrollAccountingConfigurationService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function configure(School $school, string $salaryExpenseLedgerAccountId, string $salaryPayableLedgerAccountId, User $actor): PayrollAccountingConfiguration
     {
         return $this->context->withSchool($school, function () use ($school, $salaryExpenseLedgerAccountId, $salaryPayableLedgerAccountId, $actor) {
             return DB::transaction(function () use ($school, $salaryExpenseLedgerAccountId, $salaryPayableLedgerAccountId, $actor) {
+                // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
+                $this->operational->requireOperational($school->id);
                 $this->validateAccounts($school, $salaryExpenseLedgerAccountId, $salaryPayableLedgerAccountId);
 
                 $config = PayrollAccountingConfiguration::query()->updateOrCreate(
