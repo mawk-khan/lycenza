@@ -114,12 +114,25 @@ class EmployeeController extends Controller
         return response()->json(['data' => $history->forEmployee($model, $request->user())]);
     }
 
-    public function correctAccountLink(Request $request, School $school, string $employee, string $accountLink, EmployeeAccountLinkCorrectionService $corrections, EmployeeAccountLinkHistory $history, HrEmployeeAccess $access, FreshMfaRequirement $mfa): JsonResponse
+    public function requestAccountLinkCorrection(Request $request, School $school, string $employee, string $accountLink, EmployeeAccountLinkCorrectionService $corrections, EmployeeAccountLinkHistory $history, HrEmployeeAccess $access): JsonResponse
     {
         $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
         $validated = $request->validate(['reason' => ['required', Rule::enum(EmployeeAccountLinkVoidReason::class)]]);
+        $corrections->request($model, $accountLink, EmployeeAccountLinkVoidReason::from($validated['reason']), $request->user());
+
+        return response()->json(['data' => $history->forEmployee($model, $request->user())], 201);
+    }
+
+    public function decideAccountLinkCorrection(Request $request, School $school, string $employee, string $accountLinkCorrection, EmployeeAccountLinkCorrectionService $corrections, EmployeeAccountLinkHistory $history, HrEmployeeAccess $access, FreshMfaRequirement $mfa): JsonResponse
+    {
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
+        $validated = $request->validate(['decision' => ['required', Rule::in(['approve', 'refuse'])], 'reviewed_version' => ['required_if:decision,approve', 'nullable', 'string', 'size:64']]);
         $proof = $mfa->requireForAction($request, $request->user());
-        $corrections->correct($model, $accountLink, EmployeeAccountLinkVoidReason::from($validated['reason']), $request->user(), $proof);
+        if ($validated['decision'] === 'approve') {
+            $corrections->approve($school, $accountLinkCorrection, $validated['reviewed_version'], $request->user(), $proof);
+        } else {
+            $corrections->refuse($school, $accountLinkCorrection, $request->user(), $proof);
+        }
 
         return response()->json(['data' => $history->forEmployee($model, $request->user())]);
     }

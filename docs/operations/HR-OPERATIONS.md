@@ -157,10 +157,19 @@ recorded compensation provenance. Fix forward.
   for any control. It is recorded; reconcile it by your normal correction route.
 - **Unlinking does not clear a Payroll conflict (HR.R1-C7).** An Employee's account
   link can be removed as before, and the person is still that Employee for Payroll.
-  If a link was simply wrong, use **Correct** in the Employee's Link history: it needs
-  your code, a reason and `hr.employees.manage`, cannot be used on an Employee you are
-  or were linked to, and is final. Never use it to free someone who really was that Employee. It is audited,
-  and the row stays.
+If a link was simply wrong, use **Request correction** in the Employee's Link
+  history. Nothing changes until a second person approves. Both of you need
+  `hr.employees.manage`, your own linked Employee record and a current employment, and
+  neither of you may ever have been linked to that Employee. The reviewer gives a code,
+  and the decision is final. If the Employee's links change meanwhile, the request can
+  only be refused: request again. A School with one such person has to wait until it
+  has two. There is no platform override. Never use this to free someone who really
+  was that Employee: it is audited, the row stays, and Payroll shows it on the approval.
+- **"The run this corrects has been reversed" (HR.R1-C8).** That correction can never
+  be approved or posted. It stays as a record. To change pay, use the normal run.
+- **"Corrections still standing" on a reversed run.** Reversing a run does not reverse
+  its posted corrections, so their amounts stand alone in the ledger. Someone with
+  `payroll.runs.reverse` decides whether to reverse each one.
 - **"This run pays a compensation change of your own" (HR.R1-C6).** You are the
   Employee of a change this run pays for the first time. Someone whose pay it does
   not change must approve, attest or review. There is no override.

@@ -4,7 +4,6 @@ namespace App\Domain\Payroll\Application;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\Exceptions\ConcurrentRunApprovalConflictException;
-use App\Domain\Payroll\Application\Exceptions\CorrectionTargetAlreadyReversedException;
 use App\Domain\Payroll\Application\Exceptions\DuplicateRegularRunException;
 use App\Domain\Payroll\Application\Exceptions\InvalidCorrectionTargetException;
 use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
@@ -26,7 +25,6 @@ use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunCalculation;
 use App\Domain\Payroll\Infrastructure\PayrollRunHrxInput;
-use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
@@ -83,6 +81,7 @@ class PayrollRunService
         private readonly MakerCheckerPolicy $makerChecker,
         private readonly PayrollCompensationProvenance $provenance,
         private readonly PayrollSelfBeneficiaries $beneficiaries,
+        private readonly CorrectionTargetGuard $correctionTarget,
     ) {}
 
     public const WORKFLOW = 'payroll_runs';
@@ -148,16 +147,11 @@ class PayrollRunService
     /**
      * Phase 9.5 correction (ADR 0034 "Run kinds, correction model, and
      * posting") -- creates a `correction` run against an original
-     * `regular`, already-`posted` run. Application-layer pre-checks
-     * (regular + posted + not-yet-reversed) give a clean domain error
-     * ahead of the database trigger `trg_payroll_runs_validate_correction_target`
-     * (Checkpoint 9.1), which remains the authoritative guarantee. A
-     * `posted` run always has exactly one `original` `PayrollRunPosting`
-     * row (`PayrollPostingService::post()` creates both atomically) --
-     * `$originalPosting === null` is structurally unreachable given the
-     * status check above it, but is treated identically to "already
-     * reversed" anyway (fail closed, no oracle for a state that should
-     * never occur).
+     * `regular`, already-`posted`, unreversed run. HR.R1-C8 (PAY-17): the
+     * target is held FOR SHARE and checked inside the transaction, so a
+     * reversal is ordered wholly before or after this; the database
+     * trigger `trg_payroll_runs_validate_correction_target` says the same.
+     * The check is repeated at approval and posting (`CorrectionTargetGuard`).
      */
     public function createCorrectionRun(PayrollRun $correctsRun, PayrollPeriod $period, User $actor): PayrollRun
     {
@@ -167,22 +161,14 @@ class PayrollRunService
             throw new PeriodNotOpenException($period->id, $period->status);
         }
 
-        if (! $correctsRun->isRegular() || $correctsRun->status !== 'posted') {
-            throw new InvalidCorrectionTargetException("payroll run '{$correctsRun->id}' must be a posted regular run, got run_kind={$correctsRun->run_kind}, status={$correctsRun->status}.");
-        }
-
         return $this->context->withSchool($school, function () use ($school, $correctsRun, $period, $actor) {
-            $originalPosting = PayrollRunPosting::query()
-                ->where('school_id', $school->id)
-                ->where('payroll_run_id', $correctsRun->id)
-                ->where('posting_kind', 'original')
-                ->first();
-
-            if ($originalPosting === null || $originalPosting->reversal()->exists()) {
-                throw new CorrectionTargetAlreadyReversedException($correctsRun->id);
-            }
-
             return DB::transaction(function () use ($school, $correctsRun, $period, $actor) {
+                // HR.R1-C8 (PAY-17): under the lock a reversal needs, never a check made before it.
+                $target = $this->correctionTarget->hold($school->id, $correctsRun->id);
+                if (! $target->isRegular() || $target->status !== 'posted') {
+                    throw new InvalidCorrectionTargetException("payroll run '{$target->id}' must be a posted regular run, got run_kind={$target->run_kind}, status={$target->status}.");
+                }
+
                 $run = PayrollRun::query()->create([
                     'school_id' => $school->id,
                     'payroll_period_id' => $period->id,
@@ -551,6 +537,10 @@ class PayrollRunService
                 $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
                 if ($locked->status !== 'calculated') {
                     throw new ConcurrentRunApprovalConflictException($run->id);
+                }
+                // HR.R1-C8 (PAY-17): before the compensation lock, the order a reversal takes them.
+                if ($locked->isCorrection()) {
+                    $this->correctionTarget->hold($school->id, (string) $locked->corrects_payroll_run_id);
                 }
                 // HR.R1-C1: no compensation write of this School can overtake the freshness check below.
                 $this->provenance->lock($school->id, shared: true);

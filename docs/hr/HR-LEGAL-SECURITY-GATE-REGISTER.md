@@ -238,6 +238,21 @@ Linked to OD-HR-24, which it amends in one respect only: the definition of who t
 
 **Known limits, recorded.** A correction is one person with a fresh code, by the owner's choice. So two `hr.employees.manage` holders can clear each other's links, and **one person holding a second account with `hr.employees.manage` that was never linked to their Employee can clear their own link and then decide on their own pay.** The system cannot tell two accounts are one person. It shows only on the decision (`deciderHadCorrectedLink`) and the audit event. **MEDIUM. Readiness consequence: production needs an owner decision on a second person for corrections, or a review of `employee.user_link_corrected` before a School uses Payroll for real.** An own-pay refusal reads links before the compensation lock, so a colleague's concurrent link could pass it. That person is still refused at every decision, though a colleague may approve the raise. LOW, and the same shape as before C7. If every whole-School `hr.employees.manage` holder was ever linked to an Employee, for example a one-administrator School, nobody can correct that Employee's links until another holder is granted: it fails closed, and a false conflict blocks only that account's decisions on that Employee's first-paid changes. The actor on a raw write is an application boundary: the row is always recorded, but `linked_by_user_id` is NULL outside the service, and a raw call of the correction function can name any actor who holds the authority (rule 102). A retained run keeps its Employee past that Employee's own eight years, until the run expires: a dependency, as designed since HR.R1-C1, and now enforced by the database.
 
+### OD-HR-25 amendment (HR.R1-C8, 2026-11-06)
+
+No new identifier: this amends OD-HR-25, whose record above stands as decided. **The owner selected these options for development in the HR.R1-C8 gate. This is engineering direction. It is not legal, privacy or DPO approval, and it authorizes nothing outside development.**
+
+| # | Field | Amended to |
+|---|---|---|
+| 9, 10 | Correction and actors | **Two linked staff.** A requester and a different reviewer, each with whole-School `hr.employees.manage`, a current link to a different active Employee with a current employment, and no link of any kind, ever, to the affected Employee. Two accounts sharing an uncorrected link to any Employee count as one person. The reviewer gives a fresh MFA code. A request changes nothing; the link keeps counting until approval, and stands on a refusal. An approval is what voids the link, in one transaction. An approval binds the link history shown to the reviewer: a relink or another correction makes it stale, and it can then only be refused |
+| 4 | Purpose | **Confirmed:** rule 95's refusal of one's own compensation, override or delta reads link history under OD-HR-25 |
+| new | One-administrator School | The request stays pending and the conflict stays in force until a second qualified person exists. There is no platform path, and no self-correction |
+| new | Collusion | Not technically prevented, and never claimed to be. Two staff can agree to approve a false correction, and a fabricated Employee could qualify an account. Both are recorded: `employee.user_link_correction_requested`, `employee.user_link_corrected`, `deciderHadCorrectedLink`, and a warning in the approval packet (`PAYROLL_EMPLOYEE_LINK_CORRECTED`) |
+
+**What each control is.** The database enforces: no void without an approved row, qualification of the named requester and reviewer, the frozen terms, the evidence binding, finality and the absence of a DELETE. The service enforces the fresh MFA code and the School-local current employment. Who actually acted stays an application boundary (rule 102): a raw runtime writer can name a qualified decider. Nothing here proves two accounts are two people: the system holds no record of natural persons, and none was added.
+
+**The C7 MEDIUM** (one person with a never-linked second HR account) stays in the record below as written. That exact path is closed, because such an account no longer qualifies. What remains is a different and narrower risk: a person holding a second account that is linked to a second Employee record they control, or two people colluding.
+
 ### OD-HR-22 decision record
 
 | Field | Record |

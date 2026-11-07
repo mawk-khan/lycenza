@@ -180,7 +180,14 @@ is built entirely from explicit `payroll_adjustments` delta lines —
 never a re-run of the automatic kernel. This is a deliberate,
 deltas-only design: it keeps correction a targeted fix rather than a
 retro-pay engine. One original run may have multiple correction runs.
-A correction run may only be created once the original is `posted`.
+A correction run may only be created once the original is `posted`, and
+only while it stands: HR.R1-C8 (PAY-17) refuses creating, approving or
+posting a correction of a reversed run, in the service and the database,
+because its delta would have no economic basis. A correction already
+posted when its target is reversed stands, is named on the reversal and
+shown on the run, and an authorized person decides whether to reverse it.
+A correction refused this way stays as a record and ages from its own
+creation, so it never holds its target's evidence.
 
 Correction adjustments carry a positive `amount` and an explicit
 `increase`/`decrease` direction — never an arbitrary signed literal.
@@ -1281,6 +1288,10 @@ review lists what changed, never the unchanged register.
   The first form of discovery asked each run's exception once per source row: 1.5 s
   at 500 and 116 s at 5,000, under the exclusive compensation lock.
   `PayrollReconciliationLargePopulationTest` pins the bounds.
+- **Link corrections (HR.R1-C8).** A correction takes two linked staff, and until
+  the second approves, the link keeps counting here. The approval packet warns when
+  a run pays a change of an Employee with a corrected link
+  (`PAYROLL_EMPLOYEE_LINK_CORRECTED`). That changes no Payroll state.
 - **Historical links (HR.R1-C7, OD-HR-25).** Identity for every rule below is
   `employee_account_links`, not `employees.user_id`: each link not corrected as
   erroneous counts at each decision, whenever it ended. Scope stays the run: only

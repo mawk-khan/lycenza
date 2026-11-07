@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Feature\HR\Concerns\CreatesLinkedHrStaff;
 use Tests\TestCase;
 
 /**
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class EmployeeAccountLinkRawRoleTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesLinkedHrStaff, CreatesTenancyFixtures;
 
     /** @var array<int, string> committed, so the admin connection sees what the runtime role wrote */
     protected $connectionsToTransact = [];
@@ -126,13 +127,114 @@ class EmployeeAccountLinkRawRoleTest extends TestCase
     }
 
     #[Test]
-    public function the_correction_function_only_acts_in_the_session_school(): void
+    public function the_old_direct_correction_function_is_gone_and_nothing_else_voids_a_link(): void
+    {
+        $this->assertSame(0, (int) DB::connection('pgsql_admin')->selectOne("select count(*) as c from pg_proc where proname = 'employee_account_link_void'")->c);
+        $this->assertFalse((bool) DB::connection('pgsql_admin')->selectOne("select has_function_privilege('school_os_app', 'employee_account_link_corrections_apply()', 'EXECUTE') as x")->x);
+    }
+
+    /** One open request by real linked staff, on a link of this Employee. */
+    private function pending(): array
     {
         $linkId = $this->rawLink();
         $this->in($this->school, fn () => DB::statement('UPDATE employees SET user_id = NULL WHERE id = ?', [$this->employee->id]));
+        $requester = $this->linkedHrStaff($this->school);
+        $reviewer = $this->linkedHrStaff($this->school);
+        $id = (string) Str::uuid();
+        $this->in($this->school, fn () => DB::table('employee_account_link_corrections')->insert([
+            'id' => $id, 'school_id' => $this->school->id, 'employee_id' => $this->employee->id, 'account_link_id' => $linkId, 'reason' => 'wrong_person',
+            'evidence_version' => DB::selectOne('SELECT employee_account_link_correction_version(?, ?) AS v', [$this->school->id, $linkId])->v, 'requested_by_user_id' => $requester->id,
+        ]));
 
-        $this->expectExceptionMessage('not this School');
-        $this->in($this->other, fn () => DB::select('SELECT employee_account_link_void(?, ?, ?, ?)', [$this->school->id, $linkId, 'wrong_person', $this->user->id]));
+        return [$id, $linkId, $requester, $reviewer];
+    }
+
+    #[Test]
+    public function the_positive_control_a_real_shape_approval_voids_in_the_same_statement(): void
+    {
+        [$id, $linkId, , $reviewer] = $this->pending();
+
+        $this->in($this->school, fn () => DB::statement("UPDATE employee_account_link_corrections SET status = 'approved', decided_by_user_id = ?, decided_at = now() WHERE id = ?", [$reviewer->id, $id]));
+
+        $this->assertSame('wrong_person', DB::connection('pgsql_admin')->table('employee_account_links')->where('id', $linkId)->value('void_reason'));
+    }
+
+    #[Test]
+    public function the_database_refuses_every_forged_decision(): void
+    {
+        [$id, $linkId, $requester, $reviewer] = $this->pending();
+        $decide = fn (string $userId, string $status = 'approved') => $this->in($this->school, fn () => DB::transaction(fn () => DB::statement('UPDATE employee_account_link_corrections SET status = ?, decided_by_user_id = ?, decided_at = now() WHERE id = ?', [$status, $userId, $id])));
+        $refused = function (callable $write, string $reason): void {
+            try {
+                $write();
+                $this->fail('accepted: '.$reason);
+            } catch (QueryException $e) {
+                $this->assertStringContainsString($reason, $e->getMessage());
+            }
+        };
+
+        $refused(fn () => $decide($requester->id), 'known to be one person');
+        $refused(fn () => $decide($this->createUser()->id), 'the reviewer is linked staff');
+        $refused(fn () => $decide($this->fullHrActor($this->school)->id), 'the reviewer is linked staff');
+        $refused(fn () => $this->in($this->school, fn () => DB::transaction(fn () => DB::statement("UPDATE employee_account_link_corrections SET reason = 'setup_error' WHERE id = ?", [$id]))), 'the terms of a request are frozen');
+        $refused(fn () => $this->in($this->school, fn () => DB::transaction(fn () => DB::statement("UPDATE employee_account_link_corrections SET status = 'approved', decided_by_user_id = ?, decided_at = now(), evidence_version = ? WHERE id = ?", [$reviewer->id, str_repeat('a', 64), $id]))), 'the terms of a request are frozen');
+        $this->assertNull(DB::connection('pgsql_admin')->table('employee_account_links')->where('id', $linkId)->value('voided_at'), 'nothing got through');
+
+        // Replay: a final row never moves again.
+        $decide($reviewer->id, 'refused');
+        $refused(fn () => $decide($reviewer->id), 'a decision is final');
+        $this->assertNull(DB::connection('pgsql_admin')->table('employee_account_links')->where('id', $linkId)->value('voided_at'));
+    }
+
+    #[Test]
+    public function the_database_refuses_a_forged_request(): void
+    {
+        [$id, $linkId, $requester, $reviewer] = $this->pending();
+        $version = fn (string $link) => $this->in($this->school, fn () => DB::selectOne('SELECT employee_account_link_correction_version(?, ?) AS v', [$this->school->id, $link])->v);
+        $insert = fn (array $over) => $this->in($this->school, fn () => DB::transaction(fn () => DB::table('employee_account_link_corrections')->insert($over + [
+            'id' => (string) Str::uuid(), 'school_id' => $this->school->id, 'employee_id' => $this->employee->id, 'account_link_id' => $linkId, 'reason' => 'setup_error',
+            'evidence_version' => $version($linkId), 'requested_by_user_id' => $requester->id,
+        ])));
+        $refused = function (array $over, string $reason) use ($insert): void {
+            try {
+                $insert($over);
+                $this->fail('accepted: '.$reason);
+            } catch (QueryException $e) {
+                $this->assertStringContainsString($reason, $e->getMessage());
+            }
+        };
+
+        $refused(['status' => 'approved', 'decided_by_user_id' => $reviewer->id, 'decided_at' => now()], 'a correction is born requested');
+        $refused(['employee_id' => $this->createEmployee($this->school, ['user_id' => null])->id], 'a correction names an uncorrected link of its Employee');
+        $refused(['requested_by_user_id' => $this->fullHrActor($this->school)->id], 'the requester is linked staff');
+        $refused(['evidence_version' => str_repeat('b', 64)], 'a correction binds the current history');
+        $refused([], 'employee_account_link_corrections_one_open');
+    }
+
+    #[Test]
+    public function correction_history_cannot_be_deleted_and_stays_in_its_school(): void
+    {
+        [$id] = $this->pending();
+
+        try {
+            $this->in($this->school, fn () => DB::transaction(fn () => DB::statement('DELETE FROM employee_account_link_corrections WHERE id = ?', [$id])));
+            $this->fail('deleted');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('permission denied', $e->getMessage());
+        }
+
+        $this->assertSame(1, (int) $this->in($this->school, fn () => DB::selectOne('select count(*) as c from employee_account_link_corrections where id = ?', [$id])->c), 'positive control');
+        $this->assertSame(0, (int) $this->in($this->other, fn () => DB::selectOne('select count(*) as c from employee_account_link_corrections where id = ?', [$id])->c));
+        $row = DB::connection('pgsql_admin')->selectOne("select relrowsecurity, relforcerowsecurity from pg_class where relname = 'employee_account_link_corrections' and relnamespace = 'public'::regnamespace");
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function a_request_cannot_name_a_link_of_another_school(): void
+    {
+        $linkId = $this->rawLink();
+        $this->expectExceptionMessage('a correction names an uncorrected link of its Employee');
+        DB::connection('pgsql_admin')->table('employee_account_link_corrections')->insert(['id' => (string) Str::uuid(), 'school_id' => $this->other->id, 'employee_id' => $this->createEmployee($this->other, ['user_id' => null])->id, 'account_link_id' => $linkId, 'reason' => 'setup_error', 'evidence_version' => str_repeat('c', 64), 'requested_by_user_id' => $this->linkedHrStaff($this->other)->id]);
     }
 
     #[Test]

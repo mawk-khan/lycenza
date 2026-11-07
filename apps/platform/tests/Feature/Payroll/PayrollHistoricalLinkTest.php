@@ -2,8 +2,6 @@
 
 namespace Tests\Feature\Payroll;
 
-use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService;
-use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Infrastructure\Employee;
@@ -24,8 +22,6 @@ use App\Domain\Payroll\Application\PayrollSelfBeneficiaries;
 use App\Domain\Payroll\Application\PostingAttestation;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\User;
-use App\Support\Auth\Mfa\FreshMfaProof;
-use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -33,6 +29,7 @@ use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ProvidesSensitiveActionMfa;
+use Tests\Feature\HR\Concerns\CreatesLinkedHrStaff;
 use Tests\Feature\Payroll\Concerns\BuildsPayrollIndependenceScenarios;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
@@ -46,7 +43,7 @@ use Tests\TestCase;
  */
 class PayrollHistoricalLinkTest extends TestCase
 {
-    use BuildsPayrollIndependenceScenarios, CreatesPayrollRetentionFixtures, ProvidesSensitiveActionMfa;
+    use BuildsPayrollIndependenceScenarios, CreatesLinkedHrStaff, CreatesPayrollRetentionFixtures, ProvidesSensitiveActionMfa;
 
     private User $hr;
 
@@ -82,10 +79,8 @@ class PayrollHistoricalLinkTest extends TestCase
     private function correctLinkOf(User $user, ?Employee $employee = null): void
     {
         $employee ??= $this->employee;
-        $this->inSchool($this->school, function () use ($user, $employee): void {
-            $link = EmployeeAccountLink::query()->where('employee_id', $employee->id)->where('user_id', $user->id)->firstOrFail();
-            app(EmployeeAccountLinkCorrectionService::class)->correct($employee->fresh(), $link->id, EmployeeAccountLinkVoidReason::WrongPerson, $this->hr, new FreshMfaProof($this->hr->id, CarbonImmutable::now()));
-        });
+        $link = $this->inSchool($this->school, fn () => EmployeeAccountLink::query()->where('employee_id', $employee->id)->where('user_id', $user->id)->firstOrFail());
+        $this->correctLink($employee, $link->id);
     }
 
     private function assertApprovalRefused(PayrollRun $run, User $as): void
@@ -401,6 +396,38 @@ class PayrollHistoricalLinkTest extends TestCase
             [new FixedComponentValueInput($this->setup['line'], '90000.00')], $this->x, $this->freshMfaProofFor($this->x),
         ));
         $this->assertSame(2, $this->inSchool($this->school, fn () => DB::table('employee_compensation_assignments')->where('employment_record_id', $this->record->id)->count()), 'positive control: a link that was never true');
+    }
+
+    #[Test]
+    public function a_pending_correction_leaves_the_conflict_in_force(): void
+    {
+        $this->member($this->reviewer);
+        $this->linkAndUnlink($this->reviewer);
+        $october = $this->calculatedRun('2015-10-01');
+        $link = $this->inSchool($this->school, fn () => EmployeeAccountLink::query()->where('employee_id', $this->employee->id)->firstOrFail());
+        $correction = $this->requestCorrection($this->employee, $link->id, $this->linkedHrStaff($this->school));
+
+        $this->assertApprovalRefused($october, $this->reviewer);
+
+        $this->refuseCorrection($this->school, $correction, $this->linkedHrStaff($this->school));
+        $this->assertApprovalRefused($october, $this->reviewer);
+
+        $this->approveCorrection($this->school, $this->requestCorrection($this->employee, $link->id, $this->linkedHrStaff($this->school)), $this->linkedHrStaff($this->school));
+        $this->approve($october, $this->reviewer);
+        $this->assertSame('approved', $this->runRow($october)['status'], 'only an approved correction clears it');
+    }
+
+    #[Test]
+    public function the_review_packet_shows_a_corrected_link(): void
+    {
+        $this->member($this->reviewer);
+        $this->linkAndUnlink($this->reviewer);
+        $this->correctLinkOf($this->reviewer);
+        $october = $this->calculatedRun('2015-10-01');
+
+        $packet = $this->inSchool($this->school, fn () => app(PayrollApprovalReviewService::class)->packet($this->school, $october->id, $this->checker));
+
+        $this->assertContains('PAYROLL_EMPLOYEE_LINK_CORRECTED', array_column($packet['warnings'], 'code'));
     }
 
     // 11.

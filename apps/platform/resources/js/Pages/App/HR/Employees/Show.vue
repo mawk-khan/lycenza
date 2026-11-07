@@ -263,7 +263,16 @@ interface AccountLinkEntry {
     endedAt: string | null;
     correctedAt: string | null;
     correctionReason: string | null;
-    mayCorrect: boolean;
+    mayRequestCorrection: boolean;
+    correctionRequest: {
+        id: string;
+        reason: string;
+        requestedBy: string | null;
+        requestedAt: string;
+        evidenceVersion: string;
+        stale: boolean;
+        mayDecide: boolean;
+    } | null;
 }
 
 interface AccountCandidate {
@@ -650,18 +659,38 @@ function removeAccountLink(): void {
     router.post(`${base}/account-link/remove`, {}, { preserveScroll: true });
 }
 
-// HR.R1-C7 (OD-HR-25): saying a link was never true. An ordinary unlink is not this.
+// HR.R1-C8 (OD-HR-25 as amended): a request changes nothing; another linked staff member decides.
 const correctingLinkId = ref<string | null>(null);
-const linkCorrectionForm = useForm({ reason: '', confirm: false, mfa_code: '' });
-function submitLinkCorrection(): void {
-    linkCorrectionForm.post(`${base}/account-link/${correctingLinkId.value}/correct`, {
+const correctionRequestForm = useForm({ reason: '' });
+function submitCorrectionRequest(): void {
+    correctionRequestForm.post(`${base}/account-link/${correctingLinkId.value}/correction`, {
         preserveScroll: true,
         onSuccess: () => {
-            linkCorrectionForm.reset();
+            correctionRequestForm.reset();
             correctingLinkId.value = null;
         },
     });
 }
+const correctionDecisionForm = useForm({
+    decision: 'approve',
+    reviewed_version: '',
+    confirm: false,
+    mfa_code: '',
+});
+function decideCorrection(
+    request: NonNullable<AccountLinkEntry['correctionRequest']>,
+    decision: 'approve' | 'refuse',
+): void {
+    correctionDecisionForm.decision = decision;
+    correctionDecisionForm.reviewed_version = request.evidenceVersion;
+    correctionDecisionForm.post(`${base}/account-link-corrections/${request.id}/decision`, {
+        preserveScroll: true,
+        onSuccess: () => correctionDecisionForm.reset(),
+    });
+}
+const pendingCorrections = computed(() =>
+    props.accountLinkHistory.filter((link) => link.correctionRequest !== null),
+);
 const accountLinkStates: Record<AccountLinkEntry['state'], string> = {
     current: 'Current',
     ended: 'Ended',
@@ -1009,8 +1038,8 @@ function submitNote(): void {
                     <h4 class="font-medium text-ink">Link history</h4>
                     <p class="mt-1 text-ink-muted">
                         Removing a link does not change who this person is: an ended link still
-                        counts when Payroll checks for a conflict over this Employee's pay. Use
-                        Correct only if the link was never true.
+                        counts when Payroll checks for a conflict over this Employee's pay. Request
+                        a correction only if the link was never true.
                     </p>
                     <div
                         class="mt-2 overflow-x-auto"
@@ -1051,14 +1080,17 @@ function submitNote(): void {
                                         }}
                                     </td>
                                     <td>
+                                        <span v-if="link.correctionRequest" class="text-ink-muted"
+                                            >Correction waiting</span
+                                        >
                                         <button
-                                            v-if="link.mayCorrect"
+                                            v-else-if="link.mayRequestCorrection"
                                             type="button"
                                             class="underline"
-                                            :aria-label="`Correct the link to ${link.account ?? 'this account'}`"
+                                            :aria-label="`Request a correction of the link to ${link.account ?? 'this account'}`"
                                             @click="correctingLinkId = link.id"
                                         >
-                                            Correct
+                                            Request correction
                                         </button>
                                     </td>
                                 </tr>
@@ -1068,15 +1100,19 @@ function submitNote(): void {
                     <form
                         v-if="correctingLinkId !== null"
                         class="mt-3 space-y-3 border-t border-line pt-3"
-                        @submit.prevent="submitLinkCorrection"
+                        @submit.prevent="submitCorrectionRequest"
                     >
+                        <p class="text-ink-muted">
+                            This changes nothing yet. Another staff member must approve it, and
+                            until then the link keeps counting for Payroll.
+                        </p>
                         <div>
                             <label class="field-label" for="account-link-reason"
                                 >Why was this link never true?</label
                             >
                             <select
                                 id="account-link-reason"
-                                v-model="linkCorrectionForm.reason"
+                                v-model="correctionRequestForm.reason"
                                 required
                                 class="input mt-1 w-auto"
                             >
@@ -1090,44 +1126,23 @@ function submitNote(): void {
                                 </option>
                             </select>
                             <p
-                                v-if="linkCorrectionForm.errors.reason"
+                                v-if="correctionRequestForm.errors.reason"
                                 class="mt-1 text-danger"
                                 role="alert"
                             >
-                                {{ linkCorrectionForm.errors.reason }}
+                                {{ correctionRequestForm.errors.reason }}
                             </p>
                         </div>
-                        <MfaCodeField
-                            id="account-link-correction-mfa"
-                            v-model="linkCorrectionForm.mfa_code"
-                            :has-mfa-factor="hasMfaFactor"
-                            action="Correcting an account link"
-                            :error="linkCorrectionForm.errors.mfa_code"
-                        />
-                        <label class="flex items-start gap-2">
-                            <input
-                                v-model="linkCorrectionForm.confirm"
-                                type="checkbox"
-                                class="mt-1"
-                            />
-                            <span
-                                >I confirm this account never belonged to this Employee. Payroll
-                                stops treating that person as this Employee, and any decision
-                                already made keeps what it recorded. This is final.</span
-                            >
-                        </label>
                         <div class="flex gap-3">
                             <button
                                 type="submit"
                                 :disabled="
-                                    linkCorrectionForm.processing ||
-                                    !linkCorrectionForm.confirm ||
-                                    linkCorrectionForm.reason === '' ||
-                                    !hasMfaFactor
+                                    correctionRequestForm.processing ||
+                                    correctionRequestForm.reason === ''
                                 "
-                                class="btn btn-danger"
+                                class="btn btn-primary"
                             >
-                                Correct link
+                                Request correction
                             </button>
                             <button
                                 type="button"
@@ -1138,6 +1153,99 @@ function submitNote(): void {
                             </button>
                         </div>
                     </form>
+                    <p
+                        v-if="
+                            accountError &&
+                            !workspace.summary.user_linked &&
+                            workspace.summary.employee_record_status !== 'active'
+                        "
+                        class="mt-2 text-danger"
+                        role="alert"
+                    >
+                        {{ accountError }}
+                    </p>
+                    <section
+                        v-for="link in pendingCorrections"
+                        :key="link.correctionRequest?.id"
+                        class="mt-3 border-t border-line pt-3"
+                        :aria-label="`Correction of the link to ${link.account ?? 'this account'}`"
+                    >
+                        <h5 class="font-medium text-ink">
+                            Correction waiting: {{ link.account ?? 'Account removed' }}
+                        </h5>
+                        <p class="mt-1 text-ink-muted">
+                            {{ link.correctionRequest?.reason }}. Requested by
+                            {{ link.correctionRequest?.requestedBy ?? 'a former user' }} on
+                            {{ linkDate(link.correctionRequest?.requestedAt ?? null) }}. The link
+                            keeps counting for Payroll until this is approved.
+                        </p>
+                        <p
+                            v-if="link.correctionRequest?.stale"
+                            class="notice-attention mt-2"
+                            role="status"
+                        >
+                            This Employee's account links changed after this was requested, so it
+                            can only be refused. Request a new correction if it is still needed.
+                        </p>
+                        <p
+                            v-else-if="link.correctionRequest && !link.correctionRequest.mayDecide"
+                            class="mt-2 text-ink-muted"
+                        >
+                            You cannot decide this. It needs another current staff member, linked to
+                            their own Employee record, who has never been linked to this Employee.
+                        </p>
+                        <form
+                            v-if="link.correctionRequest?.mayDecide"
+                            class="mt-3 space-y-3"
+                            @submit.prevent="decideCorrection(link.correctionRequest!, 'approve')"
+                        >
+                            <MfaCodeField
+                                :id="`account-link-correction-mfa-${link.id}`"
+                                v-model="correctionDecisionForm.mfa_code"
+                                :has-mfa-factor="hasMfaFactor"
+                                action="Deciding an account link correction"
+                                :error="correctionDecisionForm.errors.mfa_code"
+                            />
+                            <label
+                                v-if="!link.correctionRequest.stale"
+                                class="flex items-start gap-2"
+                            >
+                                <input
+                                    v-model="correctionDecisionForm.confirm"
+                                    type="checkbox"
+                                    class="mt-1"
+                                />
+                                <span
+                                    >I have checked this account never belonged to this Employee.
+                                    Payroll stops treating that person as this Employee, and any
+                                    decision already made keeps what it recorded. This is
+                                    final.</span
+                                >
+                            </label>
+                            <div class="flex gap-3">
+                                <button
+                                    v-if="!link.correctionRequest.stale"
+                                    type="submit"
+                                    :disabled="
+                                        correctionDecisionForm.processing ||
+                                        !correctionDecisionForm.confirm ||
+                                        !hasMfaFactor
+                                    "
+                                    class="btn btn-danger"
+                                >
+                                    Approve correction
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="correctionDecisionForm.processing || !hasMfaFactor"
+                                    class="btn btn-secondary"
+                                    @click="decideCorrection(link.correctionRequest!, 'refuse')"
+                                >
+                                    Refuse
+                                </button>
+                            </div>
+                        </form>
+                    </section>
                 </div>
             </div>
         </section>

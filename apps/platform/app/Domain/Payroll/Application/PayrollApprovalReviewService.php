@@ -59,6 +59,7 @@ final class PayrollApprovalReviewService
         private readonly AuditRecorder $audit,
         private readonly PayrollCompensationProvenance $provenance,
         private readonly PayrollSelfBeneficiaries $beneficiaries,
+        private readonly CorrectionTargetGuard $correctionTarget,
     ) {}
 
     public function mayReview(User $actor, School $school): bool
@@ -205,6 +206,10 @@ final class PayrollApprovalReviewService
     {
         $blocking = [];
         $warnings = [];
+        // HR.R1-C8 (PAY-17): shown here only; the refusal is CorrectionTargetGuard and the database.
+        if ($run->isCorrection() && $this->correctionTarget->reversed($run->school_id, (string) $run->corrects_payroll_run_id)) {
+            $blocking[] = ['code' => 'PAYROLL_CORRECTION_TARGET_ALREADY_REVERSED', 'message' => 'The run this corrects has been reversed, so this correction can never be approved or posted.'];
+        }
         if ($run->status !== 'calculated') {
             $blocking[] = ['code' => 'PAYROLL_RUN_NOT_AWAITING_APPROVAL', 'message' => "This run is {$run->status}; only a calculated run can be approved."];
         }
@@ -227,6 +232,10 @@ final class PayrollApprovalReviewService
             $beneficiary = $this->beneficiaries->of($run, $latest->id, $actor->id);
             if ($beneficiary->conflicted) {
                 $blocking[] = ['code' => 'PAYROLL_SELF_BENEFICIARY_CONFLICT', 'message' => 'This run pays a compensation change of your own for the first time, so someone whose own pay it does not change must approve it.'];
+            }
+            // HR.R1-C8: a correction that could change who may decide is never silent. It changes no state.
+            if ($beneficiary->correctedEmployees > 0) {
+                $warnings[] = ['code' => 'PAYROLL_EMPLOYEE_LINK_CORRECTED', 'message' => "{$beneficiary->correctedEmployees} Employee(s) with a compensation change in this run had an account link corrected as an error. Check the correction is right before you rely on it."];
             }
             if ($beneficiary->unlinkedEmployees > 0) {
                 $warnings[] = ['code' => 'PAYROLL_EMPLOYEES_WITHOUT_ACCOUNT', 'message' => "{$beneficiary->unlinkedEmployees} Employee(s) with a compensation change in this run have no linked account, so the system cannot tell whether you are one of them. Your approval records this."];

@@ -103,6 +103,7 @@ class PayrollPostingService
         private readonly ApprovalDecisionAuthority $authority,
         private readonly PayrollCompensationProvenance $provenance,
         private readonly PayrollPostingIndependence $independence,
+        private readonly CorrectionTargetGuard $correctionTarget,
     ) {}
 
     /**
@@ -161,6 +162,10 @@ class PayrollPostingService
                 $this->authority->requireCurrent($actor, 'payroll.runs.post', $school);
                 if ($locked->status !== 'approved') {
                     throw new InvalidRunTransitionException($locked->status, 'posted');
+                }
+                // HR.R1-C8 (PAY-17): a correction never posts onto a reversed target. Before the compensation lock.
+                if ($locked->isCorrection()) {
+                    $this->correctionTarget->hold($school->id, (string) $locked->corrects_payroll_run_id);
                 }
                 // HR.R1-C4 (PAY-16): shared, after the run row, so a reversal is ordered wholly before or after this
                 // posting. If one took the approval's independence, the poster must independently attest to the
@@ -286,6 +291,9 @@ class PayrollPostingService
                 $this->audit->school($school, 'payroll.run.reversed', actor: $actor, subject: $run, metadata: [
                     'originalPostingId' => $original->id,
                     'reversalJournalEntryId' => $reversalEntry->journalEntryId,
+                    // HR.R1-C8: a posted correction stands on its own and is never reversed here. It is named, so
+                    // an authorized person can decide (owner, HR.R1-C8; ADR 0034: a reversal is never blocked).
+                    'standingCorrectionRunIds' => $this->standingCorrections($school->id, $locked->id),
                 ]);
 
                 // HR.R1-C4/C6: durable evidence of any run this reversal took independence from, with an OPEN
@@ -303,6 +311,18 @@ class PayrollPostingService
                 return $reversal;
             });
         });
+    }
+
+    /**
+     * HR.R1-C8: the posted, unreversed corrections of this run. They outlive a reversal of it.
+     *
+     * @return list<string>
+     */
+    public function standingCorrections(string $schoolId, string $runId): array
+    {
+        return PayrollRun::query()->where('school_id', $schoolId)->where('corrects_payroll_run_id', $runId)->where('status', 'posted')
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('payroll_run_postings as p')->whereColumn('p.payroll_run_id', 'payroll_runs.id')->where('p.posting_kind', 'reversal'))
+            ->orderBy('id')->pluck('id')->all();
     }
 
     /**

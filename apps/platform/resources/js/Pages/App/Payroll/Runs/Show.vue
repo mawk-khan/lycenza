@@ -22,6 +22,8 @@ interface Run {
     approvedAt: string | null;
     postedAt: string | null;
     isReversed: boolean;
+    correctionTargetReversed: boolean;
+    standingCorrectionRunIds: string[];
     resultsExpiredAt: string | null;
 }
 
@@ -400,6 +402,43 @@ const reversalPosting = computed(
             </p>
         </section>
 
+        <!-- HR.R1-C8 (PAY-17): a correction of a reversed run has no economic basis. -->
+        <p
+            v-if="run.correctionTargetReversed && run.status !== 'posted'"
+            class="notice-attention mt-4 text-sm"
+            role="status"
+        >
+            The run this corrects has been reversed, so this correction can never be approved or
+            posted. It stays here as a record.
+        </p>
+        <p
+            v-if="run.correctionTargetReversed && run.status === 'posted' && !run.isReversed"
+            class="notice-attention mt-4 text-sm"
+            role="status"
+        >
+            The run this corrects was reversed after this correction posted, so its amount stands in
+            the ledger on its own. Someone with authority to reverse payroll runs should decide
+            whether to reverse it.
+        </p>
+        <section
+            v-if="run.standingCorrectionRunIds.length > 0"
+            class="notice-attention mt-4 text-sm"
+            aria-labelledby="standing-corrections"
+        >
+            <h2 id="standing-corrections" class="font-medium">Corrections still standing</h2>
+            <p class="mt-1">
+                This run was reversed, but these posted corrections were not. Their amounts stand in
+                the ledger on their own, and nothing reverses them automatically.
+            </p>
+            <ul class="mt-1 list-disc pl-5">
+                <li v-for="id in run.standingCorrectionRunIds" :key="id">
+                    <a class="underline" :href="`/app/payroll/runs/${id}`"
+                        >Open the correction run</a
+                    >
+                </li>
+            </ul>
+        </section>
+
         <!-- Calculate -->
         <section v-if="canPrepare && run.status === 'draft'" class="mt-6 border-t border-line pt-4">
             <h2 class="text-sm font-medium text-ink">Calculation</h2>
@@ -657,7 +696,7 @@ const reversalPosting = computed(
 
         <!-- Post -->
         <section
-            v-if="run.status === 'approved' && !run.isReversed"
+            v-if="run.status === 'approved' && !run.isReversed && !run.correctionTargetReversed"
             class="mt-6 border-t border-line pt-4"
         >
             <h2 class="text-sm font-medium text-ink">Posting</h2>

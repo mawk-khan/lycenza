@@ -45,6 +45,7 @@ class RollbackProductionShapeTest extends TestCase
         'payroll provenance' => ['2027_02_02_090000_record_payroll_compensation_sources', 'payroll_run_calculation_sources', [], 'payroll compensation provenance is recorded'],
         'payroll attestation' => ['2027_02_06_090000_create_payroll_posting_attestations', 'payroll_posting_attestations', [], 'posting attestations are recorded'],
         'payroll reconciliation' => ['2027_02_07_090000_create_payroll_reversal_reconciliations', 'payroll_reversal_reconciliations', [], 'reconciliation obligations are recorded'],
+        'account link corrections' => ['2027_02_10_090100_require_two_people_to_correct_an_account_link', 'employee_account_link_corrections', [], 'account link correction requests are recorded'],
         'account link history' => ['2027_02_08_090000_create_employee_account_links', 'employee_account_links', ['origin' => "'recorded'"], 'account link history is recorded'],
         'payroll calculations' => ['2027_01_01_090000_record_payroll_run_calculations_and_participant_approval', 'payroll_run_calculations', [], 'payroll_run_calculations holds'],
         'leave ledger' => ['2026_11_17_090000_create_leave_foundation', 'leave_ledger_entries', [], 'Leave holds Employee evidence'],

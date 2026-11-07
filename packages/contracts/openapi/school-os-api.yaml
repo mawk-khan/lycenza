@@ -2308,16 +2308,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-  /schools/{schoolId}/employees/{employeeId}/account-links/{accountLinkId}/correct:
+  /schools/{schoolId}/employees/{employeeId}/account-links/{accountLinkId}/correction:
     post:
-      operationId: correctEmployeeAccountLink
+      operationId: requestEmployeeAccountLinkCorrection
       summary: >
-        Records that a link was never true (HR.R1-C7, OD-HR-25). The row stays,
-        marked, and Payroll stops treating that person as this Employee; a
-        decision already recorded keeps what it recorded. An ordinary unlink is
-        not this. Requires whole-School hr.employees.manage, a fresh MFA code
-        and a closed reason, and is refused for one's own link. Final, so it is
-        not retried: a second attempt is a 409.
+        Requests that a link be recorded as never true (HR.R1-C8, OD-HR-25 as
+        amended). This changes nothing: the link keeps counting for Payroll
+        until another person approves. Requires whole-School
+        hr.employees.manage, a current link to another active Employee, and no
+        link of any kind to this one. One open request per link.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/EmployeeId" }
@@ -2332,21 +2331,20 @@ paths:
           application/json:
             schema:
               type: object
-              required: [reason, mfa_code]
+              required: [reason]
               additionalProperties: false
               properties:
                 reason: { type: string, enum: [wrong_person, setup_error] }
-                mfa_code: { type: string }
       responses:
-        "200":
-          description: Corrected. The history as it now stands.
+        "201":
+          description: Requested. The history as it now stands.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/EmployeeAccountLinkList" }
         "401":
           description: Missing/invalid bearer token.
         "403":
-          description: Lacking whole-School hr.employees.manage, a fresh MFA code, or it is one's own link.
+          description: Lacking whole-School hr.employees.manage, not linked staff, or linked to this Employee.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2356,7 +2354,65 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: HR_ACCOUNT_LINK_ALREADY_CORRECTED.
+          description: HR_ACCOUNT_LINK_ALREADY_CORRECTED or HR_ACCOUNT_LINK_CORRECTION_ALREADY_REQUESTED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/employees/{employeeId}/account-link-corrections/{correctionId}/decision:
+    post:
+      operationId: decideEmployeeAccountLinkCorrection
+      summary: >
+        Approves or refuses a requested correction (HR.R1-C8). An approval
+        voids the link in the same transaction, and a current link is unlinked
+        first. The decider needs what the requester needs, a fresh MFA code,
+        and must be neither the requester nor an account known to be the same
+        person. An approval names the evidence it reviewed: a changed history
+        is a 409, and such a request can only be refused. Final.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - name: correctionId
+          in: path
+          required: true
+          description: The request's id, from the history.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, mfa_code]
+              additionalProperties: false
+              properties:
+                decision: { type: string, enum: [approve, refuse] }
+                reviewed_version: { type: string, nullable: true, description: Required to approve. }
+                mfa_code: { type: string }
+      responses:
+        "200":
+          description: Decided. The history as it now stands.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmployeeAccountLinkList" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Not qualified, not independent, or lacking a fresh MFA code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Employee or request in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: HR_ACCOUNT_LINK_CORRECTION_ALREADY_DECIDED or HR_ACCOUNT_LINK_CORRECTION_STALE.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -15506,7 +15562,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, account, state, evidence, linkedAt, endedAt, correctedAt, correctionReason, mayCorrect]
+            required: [id, account, state, evidence, linkedAt, endedAt, correctedAt, correctionReason, mayRequestCorrection, correctionRequest]
             properties:
               id: { type: string, format: uuid }
               account: { type: string, nullable: true }
@@ -15516,7 +15572,19 @@ components:
               endedAt: { type: string, format: date-time, nullable: true }
               correctedAt: { type: string, format: date-time, nullable: true }
               correctionReason: { type: string, nullable: true }
-              mayCorrect: { type: boolean }
+              mayRequestCorrection: { type: boolean }
+              correctionRequest:
+                type: object
+                nullable: true
+                required: [id, reason, requestedBy, requestedAt, evidenceVersion, stale, mayDecide]
+                properties:
+                  id: { type: string, format: uuid }
+                  reason: { type: string }
+                  requestedBy: { type: string, nullable: true }
+                  requestedAt: { type: string, format: date-time }
+                  evidenceVersion: { type: string }
+                  stale: { type: boolean }
+                  mayDecide: { type: boolean }
     ResponseMeta:
       type: object
       required: [apiVersion, requestId]

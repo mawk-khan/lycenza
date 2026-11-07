@@ -96,6 +96,12 @@ class PayrollReconciliationLargePopulationTest extends TestCase
             $admin->statement("SET LOCAL statement_timeout = '30s'");
             [$found] = $queries(fn () => $admin->select('SELECT * FROM payroll_reversal_affected_runs(?, ?)', [$sid, $rev]));
             $this->assertCount(2, $found, 'both dependent runs, with no truncation');
+            // HR.R1-C8: asking about one run answers for that run, and the guard asks only that (72 s against 550 s at 48 runs).
+            foreach ($found as $row) {
+                $this->assertCount(1, $admin->select('SELECT * FROM payroll_reversal_affected_runs(?, ?, ?)', [$sid, $rev, $row->payroll_run_id]));
+            }
+            $this->assertCount(0, $admin->select('SELECT * FROM payroll_reversal_affected_runs(?, ?, ?)', [$sid, $rev, $ids['a']]), 'the reversed run itself is not affected');
+            $this->assertStringContainsString('payroll_reversal_affected_runs(NEW.school_id, NEW.reversal_posting_id, NEW.payroll_run_id)', (string) $admin->selectOne("select prosrc from pg_proc where proname = 'payroll_reversal_reconciliations_guard'")->prosrc);
 
             [$count, $recording] = $queries(fn () => app(PayrollPostingIndependence::class)->recordAffectedBy($a, $posting, $prep));
             $this->assertSame(2, $count);

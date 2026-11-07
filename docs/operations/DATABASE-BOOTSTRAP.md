@@ -147,9 +147,11 @@ set `retention_recorded_at` explicitly, from the migration/owner login only
 does from the audit ledger. The runtime and retention logins can never set
 it.
 
-`platform:verify-database` also checks `employee_account_links_guarded` (HR.R1-C7):
-both history triggers enabled, both functions security-definer with a pinned search
-path, and no write privilege on the table for the runtime role.
+`platform:verify-database` also checks `employee_account_links_guarded` (HR.R1-C7,
+HR.R1-C8): the history and correction triggers enabled, the writing functions
+security-definer with a pinned search path, no `employee_account_link_void()`, the
+guard's lock, one-person and evidence checks in place, and no write on the history or
+DELETE on correction decisions for the runtime role.
 
 ## Rollback safety
 

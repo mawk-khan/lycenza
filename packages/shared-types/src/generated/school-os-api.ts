@@ -1085,7 +1085,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/schools/{schoolId}/employees/{employeeId}/account-links/{accountLinkId}/correct": {
+    "/schools/{schoolId}/employees/{employeeId}/account-links/{accountLinkId}/correction": {
         parameters: {
             query?: never;
             header?: never;
@@ -1094,8 +1094,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records that a link was never true (HR.R1-C7, OD-HR-25). The row stays, marked, and Payroll stops treating that person as this Employee; a decision already recorded keeps what it recorded. An ordinary unlink is not this. Requires whole-School hr.employees.manage, a fresh MFA code and a closed reason, and is refused for one's own link. Final, so it is not retried: a second attempt is a 409. */
-        post: operations["correctEmployeeAccountLink"];
+        /** Requests that a link be recorded as never true (HR.R1-C8, OD-HR-25 as amended). This changes nothing: the link keeps counting for Payroll until another person approves. Requires whole-School hr.employees.manage, a current link to another active Employee, and no link of any kind to this one. One open request per link. */
+        post: operations["requestEmployeeAccountLinkCorrection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}/account-link-corrections/{correctionId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approves or refuses a requested correction (HR.R1-C8). An approval voids the link in the same transaction, and a current link is unlinked first. The decider needs what the requester needs, a fresh MFA code, and must be neither the requester nor an account known to be the same person. An approval names the evidence it reviewed: a changed history is a 409, and such a request can only be refused. Final. */
+        post: operations["decideEmployeeAccountLinkCorrection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6462,7 +6479,18 @@ export interface components {
                 /** Format: date-time */
                 correctedAt: string | null;
                 correctionReason: string | null;
-                mayCorrect: boolean;
+                mayRequestCorrection: boolean;
+                correctionRequest: {
+                    /** Format: uuid */
+                    id: string;
+                    reason: string;
+                    requestedBy: string | null;
+                    /** Format: date-time */
+                    requestedAt: string;
+                    evidenceVersion: string;
+                    stale: boolean;
+                    mayDecide: boolean;
+                } | null;
             }[];
         };
         ResponseMeta: {
@@ -14950,7 +14978,7 @@ export interface operations {
             };
         };
     };
-    correctEmployeeAccountLink: {
+    requestEmployeeAccountLinkCorrection: {
         parameters: {
             query?: never;
             header?: never;
@@ -14968,13 +14996,12 @@ export interface operations {
                 "application/json": {
                     /** @enum {string} */
                     reason: "wrong_person" | "setup_error";
-                    mfa_code: string;
                 };
             };
         };
         responses: {
-            /** @description Corrected. The history as it now stands. */
-            200: {
+            /** @description Requested. The history as it now stands. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14989,7 +15016,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking whole-School hr.employees.manage, a fresh MFA code, or it is one's own link. */
+            /** @description Lacking whole-School hr.employees.manage, not linked staff, or linked to this Employee. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -15007,7 +15034,86 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description HR_ACCOUNT_LINK_ALREADY_CORRECTED. */
+            /** @description HR_ACCOUNT_LINK_ALREADY_CORRECTED or HR_ACCOUNT_LINK_CORRECTION_ALREADY_REQUESTED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    decideEmployeeAccountLinkCorrection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+                /** @description The request's id, from the history. */
+                correctionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "approve" | "refuse";
+                    /** @description Required to approve. */
+                    reviewed_version?: string | null;
+                    mfa_code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Decided. The history as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeAccountLinkList"];
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not qualified, not independent, or lacking a fresh MFA code. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Employee or request in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description HR_ACCOUNT_LINK_CORRECTION_ALREADY_DECIDED or HR_ACCOUNT_LINK_CORRECTION_STALE. */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -4,10 +4,12 @@ namespace App\Http\Controllers\App\Payroll;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CorrectionDeltaInput;
+use App\Domain\Payroll\Application\CorrectionTargetGuard;
 use App\Domain\Payroll\Application\Exceptions\PayrollException;
 use App\Domain\Payroll\Application\PayrollApprovalReviewService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\Payroll\Application\PayrollPostingIndependence;
+use App\Domain\Payroll\Application\PayrollPostingService;
 use App\Domain\Payroll\Application\PayrollReversalReconciliationReadService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunReadService;
@@ -346,6 +348,13 @@ class PayrollRunController extends Controller
                 'approvedAt' => $summary->approvedAt?->toIso8601String(),
                 'postedAt' => $summary->postedAt?->toIso8601String(),
                 'isReversed' => $isReversed,
+                // HR.R1-C8 (PAY-17): a correction of a reversed run can never post; shown, never decided here.
+                'correctionTargetReversed' => $summary->correctsPayrollRunId !== null
+                    && $context->withSchool($school, fn () => app(CorrectionTargetGuard::class)->reversed($school->id, $summary->correctsPayrollRunId)),
+                // HR.R1-C8: posted corrections that outlived this run's reversal, for an authorized person to decide.
+                'standingCorrectionRunIds' => $isReversed && $summary->runKind === 'regular'
+                    ? $context->withSchool($school, fn () => app(PayrollPostingService::class)->standingCorrections($school->id, $run->id))
+                    : [],
                 'resultsExpiredAt' => $summary->resultsExpiredAt?->toIso8601String(),
             ],
             'postings' => $postings->map(fn (PayrollRunPosting $p) => [

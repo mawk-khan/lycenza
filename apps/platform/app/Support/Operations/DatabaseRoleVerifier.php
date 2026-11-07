@@ -89,8 +89,8 @@ class DatabaseRoleVerifier
         'payroll_posting_attestations',
         // HR.R1-C6: reconciliation evidence leaves with its run.
         'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
-        // HR.R1-C7: account link history leaves with its Employee (FK cascade).
-        'employee_account_links',
+        // HR.R1-C7/C8: account link history and its correction decisions leave with their Employee (FK cascade).
+        'employee_account_links', 'employee_account_link_corrections',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
@@ -126,7 +126,7 @@ class DatabaseRoleVerifier
         'payroll_posting_attestations',
         // HR.R1-C6: an obligation and its review never change; there is no status to update.
         'payroll_reversal_reconciliations', 'payroll_reversal_reconciliation_reviews',
-        // HR.R1-C7: written only by the trigger on employees.user_id and the correction function.
+        // HR.R1-C7: written only by the trigger on employees.user_id and the correction trigger.
         'employee_account_links',
         // ORG.8E (ADR 0076 §63): evidence rows are never rewritten.
         'student_lifecycle_events', 'attendance_record_corrections',
@@ -662,14 +662,15 @@ class DatabaseRoleVerifier
      */
     private function employeeAccountLinkCheck(): CheckResult
     {
-        $triggers = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in ('trg_employees_record_account_link_insert', 'trg_employees_record_account_link_update')")->c;
-        $definer = (int) DB::selectOne("select count(*) as c from pg_proc where pronamespace = 'public'::regnamespace and proname in ('employees_record_account_link', 'employee_account_link_void') and prosecdef and proconfig is not null")->c;
-        $writes = (bool) DB::selectOne("select has_table_privilege('school_os_app', 'employee_account_links', 'INSERT') or has_table_privilege('school_os_app', 'employee_account_links', 'UPDATE') or has_table_privilege('school_os_app', 'employee_account_links', 'DELETE') as w")->w;
+        $triggers = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname in ('trg_employees_record_account_link_insert', 'trg_employees_record_account_link_update', 'trg_employee_account_link_corrections_guard', 'trg_employee_account_link_corrections_apply')")->c;
+        $definer = (int) DB::selectOne("select count(*) as c from pg_proc where pronamespace = 'public'::regnamespace and proname in ('employees_record_account_link', 'employee_account_link_corrections_apply') and prosecdef and proconfig is not null")->c;
+        // HR.R1-C8: nothing but an approved correction voids a link, so no other way to do it may exist.
+        $direct = (int) DB::selectOne("select count(*) as c from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_void'")->c;
+        $writes = (bool) DB::selectOne("select has_table_privilege('school_os_app', 'employee_account_links', 'INSERT') or has_table_privilege('school_os_app', 'employee_account_links', 'UPDATE') or has_table_privilege('school_os_app', 'employee_account_links', 'DELETE') or has_table_privilege('school_os_app', 'employee_account_link_corrections', 'DELETE') as w")->w;
+        $guard = (string) DB::selectOne("select coalesce((select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_corrections_guard'), '') as src")->src;
+        $pinned = str_contains($guard, 'pg_advisory_xact_lock') && str_contains($guard, 'known to be one person') && str_contains($guard, 'an approval binds the current history');
 
-        $void = (string) DB::selectOne("select coalesce((select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_void'), '') as src")->src;
-        $pinned = str_contains($void, 'pg_advisory_xact_lock') && str_contains($void, 'l.user_id = p_actor) THEN') && str_contains($void, 'hr.employees.manage');
-
-        return CheckResult::of('employee_account_links_guarded', $triggers === 2 && $definer === 2 && ! $writes && $pinned);
+        return CheckResult::of('employee_account_links_guarded', $triggers === 4 && $definer === 2 && $direct === 0 && ! $writes && $pinned);
     }
 
     /**

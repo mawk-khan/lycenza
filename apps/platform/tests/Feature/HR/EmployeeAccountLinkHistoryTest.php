@@ -2,37 +2,27 @@
 
 namespace Tests\Feature\HR;
 
-use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService;
 use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkHistory;
-use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeeService;
-use App\Domain\HR\Application\Exceptions\EmployeeAccountLinkAlreadyCorrectedException;
-use App\Domain\HR\Application\Exceptions\HrSelfAdministrationException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAccountLink;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
-use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
-use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
  * HR.R1-C7 (OD-HR-25): `employees.user_id` stays the one current link; its history is
- * written by a trigger, so no path changes the link without leaving a record, and a
- * correction marks a row instead of removing it.
+ * written by a trigger, so no path changes the link without leaving a record.
+ * Corrections are EmployeeAccountLinkCorrectionTest.
  */
 class EmployeeAccountLinkHistoryTest extends TestCase
 {
-    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+    use CreatesTenancyFixtures;
 
     private School $school;
 
@@ -75,18 +65,6 @@ class EmployeeAccountLinkHistoryTest extends TestCase
     private function links(?Employee $employee = null): array
     {
         return $this->in(fn () => EmployeeAccountLink::query()->where('employee_id', ($employee ?? $this->employee)->id)->orderByDesc('linked_at')->get()->all());
-    }
-
-    private function proof(User $user): FreshMfaProof
-    {
-        return new FreshMfaProof($user->id, CarbonImmutable::now());
-    }
-
-    private function correct(EmployeeAccountLink $link, ?User $as = null, EmployeeAccountLinkVoidReason $reason = EmployeeAccountLinkVoidReason::WrongPerson): EmployeeAccountLink
-    {
-        $as ??= $this->hr;
-
-        return $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->correct($this->employee->fresh(), $link->id, $reason, $as, $this->proof($as)));
     }
 
     #[Test]
@@ -198,48 +176,8 @@ class EmployeeAccountLinkHistoryTest extends TestCase
         $history = $this->in(fn () => app(EmployeeAccountLinkHistory::class)->forEmployee($this->employee->fresh(), $this->hr));
 
         $this->assertSame(['current', 'ended'], array_column($history, 'state'));
-        $this->assertSame(['id', 'account', 'state', 'evidence', 'linkedAt', 'endedAt', 'correctedAt', 'correctionReason', 'mayCorrect'], array_keys($history[0]));
+        $this->assertSame(['id', 'account', 'state', 'evidence', 'linkedAt', 'endedAt', 'correctedAt', 'correctionReason', 'mayRequestCorrection', 'correctionRequest'], array_keys($history[0]));
         $this->assertStringNotContainsString($second->email, json_encode($history));
-    }
-
-    #[Test]
-    public function a_correction_marks_the_row_and_keeps_it(): void
-    {
-        $user = $this->member();
-        $this->linkTo($user);
-        $this->unlink();
-
-        $this->correct($this->links()[0], reason: EmployeeAccountLinkVoidReason::SetupError);
-
-        $link = $this->links()[0];
-        $this->assertNotNull($link->voided_at);
-        $this->assertSame($this->hr->id, $link->voided_by_user_id);
-        $this->assertSame('setup_error', $link->void_reason);
-        $this->assertSame($user->id, $link->user_id, 'the history stays');
-        $history = $this->in(fn () => app(EmployeeAccountLinkHistory::class)->forEmployee($this->employee->fresh(), $this->hr));
-        $this->assertSame('corrected', $history[0]['state']);
-        $this->assertFalse($history[0]['mayCorrect'], 'a correction is final');
-    }
-
-    #[Test]
-    public function correcting_the_current_link_unlinks_it_in_the_same_transaction_and_audits_once(): void
-    {
-        $user = $this->member();
-        $this->linkTo($user);
-
-        $this->correct($this->links()[0]);
-
-        $this->assertNull($this->in(fn () => $this->employee->fresh()->user_id));
-        $link = $this->links()[0];
-        $this->assertNotNull($link->ended_at);
-        $this->assertSame($this->hr->id, $link->ended_by_user_id);
-        $this->assertNotNull($link->voided_at);
-
-        $audits = $this->in(fn () => SchoolAuditEvent::query()->where('event_type', 'employee.user_link_corrected')->where('subject_id', $this->employee->id)->get());
-        $this->assertCount(1, $audits);
-        $this->assertEqualsCanonicalizing(['employeeId', 'linkId', 'userId', 'wasCurrent', 'reason'], array_keys($audits[0]->metadata));
-        $this->assertSame($this->hr->id, $audits[0]->actor_user_id);
-        $this->assertTrue($audits[0]->metadata['wasCurrent']);
     }
 
     #[Test]
@@ -257,176 +195,6 @@ class EmployeeAccountLinkHistoryTest extends TestCase
     }
 
     #[Test]
-    public function a_second_correction_changes_nothing(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-        $link = $this->links()[0];
-        $this->correct($link);
-        $before = $this->links()[0]->voided_at;
-
-        $this->expectException(EmployeeAccountLinkAlreadyCorrectedException::class);
-        try {
-            $this->correct($link);
-        } finally {
-            $this->assertEquals($before, $this->links()[0]->voided_at);
-        }
-    }
-
-    #[Test]
-    public function nobody_corrects_their_own_link(): void
-    {
-        $this->linkTo($this->hr2 = $this->fullHrActor($this->school));
-        $this->unlink();
-
-        $this->expectException(HrSelfAdministrationException::class);
-        $this->correct($this->links()[0], $this->hr2);
-    }
-
-    private User $hr2;
-
-    #[Test]
-    public function one_person_with_two_accounts_cannot_clear_one_with_the_other(): void
-    {
-        $second = $this->member();
-        $this->linkTo($second);
-        $this->unlink();
-        $this->linkTo($this->hr2 = $this->fullHrActor($this->school));
-        $link = collect($this->links())->firstWhere('user_id', $second->id);
-
-        $history = $this->in(fn () => app(EmployeeAccountLinkHistory::class)->forEmployee($this->employee->fresh(), $this->hr2));
-        $this->assertSame([false, false], array_column($history, 'mayCorrect'), 'they are this Employee, under another account');
-
-        try {
-            $this->correct($link, $this->hr2);
-            $this->fail('corrected a link of their own Employee');
-        } catch (HrSelfAdministrationException) {
-            $this->assertNull(collect($this->links())->firstWhere('user_id', $second->id)->voided_at);
-        }
-
-        // The database says the same to a caller that skipped the service.
-        $this->expectExceptionMessage('nobody corrects a link of an Employee they are linked to');
-        $this->in(fn () => DB::select('SELECT employee_account_link_void(?, ?, ?, ?)', [$this->school->id, $link->id, 'wrong_person', $this->hr2->id]));
-    }
-
-    #[Test]
-    public function an_account_whose_own_link_was_corrected_still_corrects_nothing_on_that_employee(): void
-    {
-        $this->linkTo($this->hr2 = $this->fullHrActor($this->school));
-        $this->unlink();
-        $this->correct($this->links()[0]);
-        $other = $this->member();
-        $this->linkTo($other);
-        $this->unlink();
-
-        $this->expectException(HrSelfAdministrationException::class);
-        $this->correct($this->links()[0], $this->hr2);
-    }
-
-    #[Test]
-    public function someone_else_may_correct_that_link(): void
-    {
-        $second = $this->member();
-        $this->linkTo($second);
-        $this->unlink();
-        $this->linkTo($this->fullHrActor($this->school));
-
-        $this->correct(collect($this->links())->firstWhere('user_id', $second->id));
-
-        $this->assertNotNull(collect($this->links())->firstWhere('user_id', $second->id)->voided_at);
-    }
-
-    #[Test]
-    public function an_mfa_proof_is_the_actors_own(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-
-        $this->expectException(\LogicException::class);
-        $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->correct($this->employee->fresh(), $this->links()[0]->id, EmployeeAccountLinkVoidReason::WrongPerson, $this->hr, $this->proof($this->member())));
-    }
-
-    #[Test]
-    public function correction_needs_whole_school_hr_authority(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-        $payroll = $this->createUserWithCapabilities($this->school, ['payroll.runs.approve', 'payroll.compensation.sensitive.view', 'payroll.runs.reverse', 'payroll.runs.post']);
-
-        $this->expectException(AuthorizationException::class);
-        $this->correct($this->links()[0], $payroll);
-    }
-
-    #[Test]
-    public function the_employee_page_shows_the_history_to_hr_only_and_corrects_with_a_fresh_code(): void
-    {
-        $this->mfaEnrolled($this->hr);
-        $user = $this->member();
-        $this->linkTo($user);
-        $this->unlink();
-        $link = $this->links()[0];
-        $this->actingAs($this->hr)->post("/app/schools/{$this->school->id}/activate");
-
-        $this->get("/app/hr/employees/{$this->employee->id}")->assertOk()->assertInertia(fn ($page) => $page->has('accountLinkHistory', 1)->where('accountLinkHistory.0.state', 'ended'));
-
-        $url = "/app/hr/employees/{$this->employee->id}/account-link/{$link->id}/correct";
-        $this->post($url, ['reason' => 'wrong_person', 'confirm' => true])->assertSessionHasErrors('mfa_code');
-        $this->post($url, ['reason' => 'anything', 'confirm' => true, 'mfa_code' => $this->freshMfaCode($this->hr)])->assertSessionHasErrors('reason');
-        $this->post($url, ['reason' => 'wrong_person', 'mfa_code' => $this->freshMfaCode($this->hr)])->assertSessionHasErrors('confirm');
-        $this->assertNull($this->links()[0]->voided_at);
-
-        $this->post($url, ['reason' => 'wrong_person', 'confirm' => true, 'mfa_code' => $this->freshMfaCode($this->hr)])
-            ->assertRedirect("/app/hr/employees/{$this->employee->id}")->assertSessionHasNoErrors()->assertSessionHas('flash', 'Account link corrected.');
-        $this->assertSame('wrong_person', $this->links()[0]->void_reason);
-    }
-
-    #[Test]
-    public function a_payroll_user_cannot_reach_the_correction_route(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-        $payroll = $this->createUserWithCapabilities($this->school, ['payroll.runs.approve', 'hr.employees.view']);
-        $this->actingAs($payroll)->post("/app/schools/{$this->school->id}/activate");
-
-        $this->post("/app/hr/employees/{$this->employee->id}/account-link/{$this->links()[0]->id}/correct", ['reason' => 'wrong_person', 'confirm' => true, 'mfa_code' => '000000'])->assertForbidden();
-        $this->assertNull($this->links()[0]->voided_at);
-    }
-
-    #[Test]
-    public function the_api_lists_and_corrects_under_the_same_contract(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-        $link = $this->links()[0];
-        $base = "/api/v1/schools/{$this->school->id}/employees/{$this->employee->id}/account-links";
-        $this->mfaEnrolled($this->hr);
-        $token = $this->mfaToken($this->hr);
-        $api = fn () => $this->withHeader('Authorization', "Bearer {$token}");
-
-        $api()->getJson($base)->assertOk()->assertJsonPath('data.0.id', $link->id);
-        $api()->postJson("{$base}/{$link->id}/correct", ['reason' => 'nonsense', 'mfa_code' => $this->freshMfaCode($this->hr)])->assertUnprocessable();
-        $api()->postJson("{$base}/{$link->id}/correct", ['reason' => 'wrong_person', 'mfa_code' => $this->freshMfaCode($this->hr)])->assertOk()->assertJsonPath('data.0.state', 'corrected');
-        $api()->postJson("{$base}/{$link->id}/correct", ['reason' => 'wrong_person', 'mfa_code' => $this->freshMfaCode($this->hr)])->assertStatus(409)->assertJsonPath('error.code', 'HR_ACCOUNT_LINK_ALREADY_CORRECTED');
-    }
-
-    #[Test]
-    public function another_school_reaches_nothing_through_the_api(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-        $other = $this->createSchool();
-        $outsider = $this->fullHrActor($other);
-        $this->mfaEnrolled($outsider);
-        $token = $this->mfaToken($outsider);
-        $foreign = $this->createEmployee($other, ['user_id' => null]);
-
-        $api = fn () => $this->withHeader('Authorization', "Bearer {$token}");
-        $api()->getJson("/api/v1/schools/{$other->id}/employees/{$this->employee->id}/account-links")->assertNotFound();
-        $api()->postJson("/api/v1/schools/{$other->id}/employees/{$foreign->id}/account-links/{$this->links()[0]->id}/correct", ['reason' => 'wrong_person', 'mfa_code' => $this->freshMfaCode($outsider)])->assertNotFound();
-        $this->assertNull($this->links()[0]->voided_at);
-    }
-
-    #[Test]
     public function a_user_being_disabled_changes_neither_the_link_nor_its_history(): void
     {
         $user = $this->member();
@@ -435,33 +203,5 @@ class EmployeeAccountLinkHistoryTest extends TestCase
 
         $this->assertSame($user->id, $this->in(fn () => $this->employee->fresh()->user_id));
         $this->assertNull($this->links()[0]->ended_at, 'no access comes from this, and no history goes');
-    }
-
-    #[Test]
-    public function the_correction_function_refuses_an_actor_without_hr_authority_even_called_raw(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-        $nobody = $this->member();
-
-        $this->expectExceptionMessage('holds no whole-School HR authority');
-        $this->in(fn () => DB::select('SELECT employee_account_link_void(?, ?, ?, ?)', [$this->school->id, $this->links()[0]->id, 'wrong_person', $nobody->id]));
-    }
-
-    #[Test]
-    public function a_correction_can_never_be_a_new_or_unknown_reason_even_with_a_valid_actor(): void
-    {
-        $this->linkTo($this->member());
-        $this->unlink();
-
-        $this->expectExceptionMessage('employee_account_links_void_check');
-        $this->in(fn () => DB::select('SELECT employee_account_link_void(?, ?, ?, ?)', [$this->school->id, $this->links()[0]->id, 'because', $this->hr->id]));
-    }
-
-    #[Test]
-    public function an_unknown_link_id_is_not_found(): void
-    {
-        $this->expectException(ModelNotFoundException::class);
-        $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->correct($this->employee->fresh(), (string) Str::uuid(), EmployeeAccountLinkVoidReason::WrongPerson, $this->hr, $this->proof($this->hr)));
     }
 }

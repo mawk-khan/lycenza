@@ -172,6 +172,8 @@ final class UserReferenceCatalog
         'payroll_posting_attestations' => ['attested_by_user_id' => self::RETAIN_REFERENCE],
         // HR.R1-C7: a past association and who changed it. History: it never blocks minimizing a User.
         'employee_account_links' => ['user_id' => self::RETAIN_REFERENCE, 'linked_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE, 'voided_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.R1-C8: who requested and who decided a correction. History: it never blocks minimizing a User.
+        'employee_account_link_corrections' => ['requested_by_user_id' => self::RETAIN_REFERENCE, 'decided_by_user_id' => self::RETAIN_REFERENCE],
         // HR.R1-C6: who independently reviewed a post-posting reversal.
         'payroll_reversal_reconciliation_reviews' => ['reviewed_by_user_id' => self::RETAIN_REFERENCE],
         // HR.R1-C6: who executed the reversal, kept once that run's own retention takes the posting.

@@ -65,7 +65,7 @@ class HrSelfAdministrationGuard
     /**
      * HR.R1-C7 (OD-HR-25): whether $actor ever had a link to this Employee, corrected
      * or not. Stricter than hasUncorrectedLink(), for one purpose: nobody tied to an
-     * Employee's identity in any way corrects that Employee's links.
+     * Employee's identity in any way requests or decides a correction of its links.
      */
     public function hasAnyLink(User $actor, string $schoolId, string $employeeId): bool
     {

@@ -4,6 +4,7 @@ namespace Tests\Feature\Payroll;
 
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAccountLinkCorrection;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CompensationService;
 use App\Domain\Payroll\Application\FixedComponentValueInput;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\Concerns\ProvidesSensitiveActionMfa;
+use Tests\Feature\HR\Concerns\CreatesLinkedHrStaff;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
 
@@ -36,7 +38,7 @@ use Tests\TestCase;
  */
 class PayrollAccountLinkConcurrencyTest extends TestCase
 {
-    use CreatesPayrollRetentionFixtures, ForcesConcurrentOverlap, ProvidesSensitiveActionMfa;
+    use CreatesLinkedHrStaff, CreatesPayrollRetentionFixtures, ForcesConcurrentOverlap, ProvidesSensitiveActionMfa;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -411,18 +413,34 @@ class PayrollAccountLinkConcurrencyTest extends TestCase
         }
     }
 
-    // A correction against a reader.
+    // A correction against every reader of the link.
+
+    /** @return array{0: EmployeeAccountLinkCorrection, 1: string} a pending correction of the reviewer's link, and who may decide it */
+    private function pendingCorrection(): array
+    {
+        $this->linkNow($this->reviewer);
+        $link = $this->links()[0];
+        $correction = $this->requestCorrection($this->employee, $link->id, $this->linkedHrStaff($this->school));
+
+        return [$correction, $this->linkedHrStaff($this->school)->id];
+    }
+
+    /** @return list<string> */
+    private function approveCorrectionOp(EmployeeAccountLinkCorrection $correction, string $by): array
+    {
+        return $this->op('approve-correction', $correction->id, $correction->evidence_version, $by);
+    }
 
     #[Test]
     public function a_reader_sees_a_correction_only_once_it_commits(): void
     {
-        $this->linkNow($this->reviewer);
+        [$correction, $by] = $this->pendingCorrection();
         $december = $this->decemberPayingANewChange();
         $link = $this->links()[0];
         $during = null;
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->op('correct', $this->employee->id, $link->id, $this->hr->id),
+            $this->approveCorrectionOp($correction, $by),
             $this->approveCommand($december, $this->reviewer),
             function () use ($link, &$during): void {
                 $during = DB::connection('pgsql_admin')->table('employee_account_links')->where('id', $link->id)->value('voided_at');
@@ -438,11 +456,10 @@ class PayrollAccountLinkConcurrencyTest extends TestCase
     #[Test]
     public function a_decision_held_open_is_ordered_before_a_waiting_correction_and_keeps_what_it_read(): void
     {
-        $this->linkNow($this->reviewer);
+        [$correction, $by] = $this->pendingCorrection();
         $december = $this->decemberPayingANewChange();
-        $link = $this->links()[0];
 
-        [$holder, $contender] = $this->raceWithHeldHolder($this->approveCommand($december, $this->checker), $this->op('correct', $this->employee->id, $link->id, $this->hr->id));
+        [$holder, $contender] = $this->raceWithHeldHolder($this->approveCommand($december, $this->checker), $this->approveCorrectionOp($correction, $by));
 
         $this->assertSame(['approved', 'ok'], [$holder, $contender]);
         $this->assertSame('approved', $this->runStatus($december));
@@ -450,18 +467,100 @@ class PayrollAccountLinkConcurrencyTest extends TestCase
     }
 
     #[Test]
-    public function two_corrections_of_one_link_record_once(): void
+    public function a_correction_approval_held_open_lets_a_waiting_attestation_act_on_its_result(): void
+    {
+        $this->reverse($this->october);
+        [$correction, $by] = $this->pendingCorrection();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->approveCorrectionOp($correction, $by), $this->attestCommand($this->november, $this->reviewer));
+
+        $this->assertSame('ok', $holder);
+        $this->assertStringStartsWith('posted:', $contender, 'the link was never true by the time it read it');
+        $this->assertSame(1, $this->attestations($this->november));
+    }
+
+    #[Test]
+    public function a_correction_approval_held_open_lets_a_waiting_review_act_on_its_result(): void
+    {
+        [$correction, $by] = $this->pendingCorrection();
+        $o = $this->postedThenReversed();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->approveCorrectionOp($correction, $by), $this->op('review', $o->id, $this->reviewer->id, $this->version($o)));
+
+        $this->assertSame('ok', $holder);
+        $this->assertStringStartsWith('rejected:', $contender, 'the version it was given changed with the correction, so it reviews again');
+        $this->assertSame(0, $this->reviews());
+    }
+
+    #[Test]
+    public function a_correction_approval_held_open_changes_nothing_a_waiting_calculation_records(): void
+    {
+        [$correction, $by] = $this->pendingCorrection();
+        $december = $this->decemberPayingANewChange();
+        $before = $this->calculationEvidence($december);
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->approveCorrectionOp($correction, $by), $this->calculateCommand($december));
+
+        $this->assertSame(['ok', 'calculated'], [$holder, $contender]);
+        $this->assertSame($before, $this->calculationEvidence($december));
+    }
+
+    #[Test]
+    public function a_correction_requested_while_an_unlink_is_held_open_records_its_history(): void
     {
         $this->linkNow($this->reviewer);
         $link = $this->links()[0];
+        $requester = $this->linkedHrStaff($this->school);
 
+        [$holder, $contender] = $this->raceWithHeldHolder($this->unlinkOp(), $this->op('request-correction', $this->employee->id, $link->id, $requester->id));
+
+        $this->assertSame(['ok', 'ok'], [$holder, $contender]);
+        $this->assertSame(1, $this->inSchool($this->school, fn () => EmployeeAccountLinkCorrection::query()->where('account_link_id', $link->id)->count()));
+    }
+
+    #[Test]
+    public function a_relink_held_open_makes_a_waiting_approval_stale(): void
+    {
+        [$correction, $by] = $this->pendingCorrection();
+        $this->inSchool($this->school, fn () => app(EmployeeService::class)->unlinkUser($this->employee->fresh(), $this->hr));
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('service-link', $this->employee->id, $this->checker->id, $this->hr->id), $this->approveCorrectionOp($correction, $by));
+
+        $this->assertSame('ok', $holder);
+        $this->assertSame('rejected:App\\Domain\\HR\\Application\\Exceptions\\EmployeeAccountLinkCorrectionStaleException', $contender);
+        $this->assertNull(collect($this->links())->firstWhere('id', $correction->account_link_id)->voided_at);
+    }
+
+    #[Test]
+    public function two_decisions_of_one_request_record_once(): void
+    {
+        [$correction, $by] = $this->pendingCorrection();
+        $second = $this->linkedHrStaff($this->school)->id;
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->approveCorrectionOp($correction, $by), $this->approveCorrectionOp($correction, $second));
+
+        $this->assertSame('ok', $holder);
+        $this->assertSame('rejected:App\\Domain\\HR\\Application\\Exceptions\\EmployeeAccountLinkCorrectionAlreadyDecidedException', $contender);
+        $this->assertSame(1, (int) $this->inSchool($this->school, fn () => DB::table('school_audit_events')->where('event_type', 'employee.user_link_corrected')->count()));
+    }
+
+    #[Test]
+    public function a_reviewer_revoked_while_a_decision_waits_is_refused(): void
+    {
+        [$correction, $by] = $this->pendingCorrection();
+        $grant = DB::connection('pgsql_admin')->table('membership_role_assignments as a')->join('school_memberships as m', 'm.id', '=', 'a.school_membership_id')->where('m.user_id', $by)->value('a.id');
+
+        // A link change holds the lock the decision needs; the revocation lands while it waits.
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->op('correct', $this->employee->id, $link->id, $this->hr->id),
-            $this->op('correct', $this->employee->id, $link->id, $this->hr->id),
+            $this->op('service-link', $this->createEmployee($this->school, ['user_id' => null])->id, $this->checker->id, $this->hr->id),
+            $this->approveCorrectionOp($correction, $by),
+            function () use ($grant): void {
+                DB::connection('pgsql_admin')->table('membership_role_assignments')->where('id', $grant)->update(['revoked_at' => now(), 'revoked_by_user_id' => $this->hr->id, 'revocation_reason' => 'revoked']);
+            },
         );
 
         $this->assertSame('ok', $holder);
-        $this->assertSame('rejected:App\\Domain\\HR\\Application\\Exceptions\\EmployeeAccountLinkAlreadyCorrectedException', $contender);
-        $this->assertSame(1, (int) $this->inSchool($this->school, fn () => DB::table('school_audit_events')->where('event_type', 'employee.user_link_corrected')->count()));
+        $this->assertStringStartsWith('rejected:', $contender, 'authority is read after the lock');
+        $this->assertNull(collect($this->links())->firstWhere('id', $correction->account_link_id)->voided_at);
     }
 }

@@ -48,7 +48,7 @@ final class WebRouteParameters
         'grant', 'group', 'guardian', 'hostel', 'house', 'hostelBed', 'hostelResidencyAssignment', 'hostelRoom', 'inventoryItem',
         'inventoryLocation', 'invitation', 'item', 'journalEntry', 'learningContent', 'leavePolicy',
         'leavePolicyAssignment', 'leaveRequest', 'leaveType', 'ledgerAccount', 'libraryCopy', 'libraryFine', 'libraryLoan',
-        'libraryTitle', 'line', 'mapping', 'membership', 'note', 'payment', 'accountLink', 'payrollPeriod', 'payrollReconciliation', 'payrollRun',
+        'libraryTitle', 'line', 'mapping', 'membership', 'note', 'payment', 'accountLink', 'accountLinkCorrection', 'payrollPeriod', 'payrollReconciliation', 'payrollRun',
         'period', 'position', 'qualification', 'referenceCode', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
         'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection', 'separationCase',
         'staffAttendanceRecord', 'staffHoliday', 'student', 'studentMark', 'studentMarkCorrection', 'subject',

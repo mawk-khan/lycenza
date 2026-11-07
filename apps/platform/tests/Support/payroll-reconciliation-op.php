@@ -5,6 +5,9 @@ use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Payroll\Application\PayrollReversalReconciliationService;
+use App\Domain\Payroll\Application\PayrollRunService;
+use App\Domain\Payroll\Infrastructure\PayrollPeriod;
+use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Auth\Mfa\FreshMfaProof;
@@ -21,7 +24,10 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php payroll-reconciliation-op.php unlink <schoolId> <employeeId>
 //   php payroll-reconciliation-op.php service-link <schoolId> <employeeId> <userId> <actorId>
 //   php payroll-reconciliation-op.php service-unlink <schoolId> <employeeId> <actorId>
-//   php payroll-reconciliation-op.php correct <schoolId> <employeeId> <linkId> <actorId>
+//   php payroll-reconciliation-op.php request-correction <schoolId> <employeeId> <linkId> <actorId>
+//   php payroll-reconciliation-op.php create-correction <schoolId> <targetRunId> <periodId> <actorId>
+//   php payroll-reconciliation-op.php approve-correction <schoolId> <correctionId> <version> <actorId>
+//   php payroll-reconciliation-op.php refuse-correction <schoolId> <correctionId> <actorId>
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -41,14 +47,33 @@ try {
                 return;
             }
             // HR.R1-C7: through the real writers, as HR does it.
-            if ($op === 'service-link' || $op === 'service-unlink' || $op === 'correct') {
+            if ($op === 'service-link' || $op === 'service-unlink' || $op === 'request-correction') {
                 $employee = Employee::query()->whereKey($argv[3])->firstOrFail();
                 $actor = User::query()->findOrFail($argv[$op === 'service-unlink' ? 4 : 5]);
                 match ($op) {
                     'service-link' => app(EmployeeService::class)->linkUser($employee, $argv[4], $actor),
                     'service-unlink' => app(EmployeeService::class)->unlinkUser($employee, $actor),
-                    'correct' => app(EmployeeAccountLinkCorrectionService::class)->correct($employee, $argv[4], EmployeeAccountLinkVoidReason::WrongPerson, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now())),
+                    'request-correction' => app(EmployeeAccountLinkCorrectionService::class)->request($employee, $argv[4], EmployeeAccountLinkVoidReason::WrongPerson, $actor),
                 };
+
+                return;
+            }
+            // HR.R1-C8 (PAY-17): a correction run of a posted run, with one delta, calculated when it is asked for.
+            if ($op === 'create-correction') {
+                $actor = User::query()->findOrFail($argv[5]);
+                app(PayrollRunService::class)->createCorrectionRun(PayrollRun::query()->findOrFail($argv[3]), PayrollPeriod::query()->findOrFail($argv[4]), $actor);
+
+                return;
+            }
+            if ($op === 'approve-correction') {
+                $actor = User::query()->findOrFail($argv[5]);
+                app(EmployeeAccountLinkCorrectionService::class)->approve($school, $argv[3], $argv[4], $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
+
+                return;
+            }
+            if ($op === 'refuse-correction') {
+                $actor = User::query()->findOrFail($argv[4]);
+                app(EmployeeAccountLinkCorrectionService::class)->refuse($school, $argv[3], $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return;
             }

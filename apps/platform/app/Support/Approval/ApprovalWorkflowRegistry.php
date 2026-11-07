@@ -70,6 +70,26 @@ final class ApprovalWorkflowRegistry
             'relationshipConflict' => 'guardian_of_student_beneficiary',
             'note' => 'ORG.8C. Reallocation, reversal and recorded refund; approval executes through PaymentCorrectionService::executeApproved() against the requested correction generation (stale otherwise); no direct human correction route.',
         ],
+        // HR.R1-C8 (OD-HR-25 as amended): two linked staff, and an approval is what voids the link. No key is listed
+        // because `hr.employees.manage` is Campus-adopted: both steps need it WHOLE-SCHOOL (requireWholeSchool, the
+        // fresh read, and `campus_id IS NULL` in the database), plus a link to another active Employee.
+        'employee_account_link_corrections' => [
+            'domain' => 'HR',
+            'tables' => ['employee_account_link_corrections'],
+            'request' => [],
+            'decide' => [],
+            'participants' => ['employee_account_link_corrections.requested_by_user_id'],
+            'decider' => 'employee_account_link_corrections.decided_by_user_id',
+            'dbBackstop' => 'employee_account_link_corrections_sod_check',
+            'makerChecker' => 'shared',
+            'service' => 'App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService',
+            'decisions' => ['approve', 'refuse'],
+            'execution' => 'immediate',
+            'drift' => 'fingerprint',
+            'freshMfa' => ['approve', 'refuse'],
+            'compatibility' => 'as_is',
+            'note' => 'Separation of duties, never proof of two people. Also refused: an account ever linked to the Employee, and an account known to be the requester (a shared uncorrected link).',
+        ],
         'communication_approvals' => [
             'domain' => 'Communications',
             'tables' => ['communication_approval_requests'],
@@ -208,12 +228,6 @@ final class ApprovalWorkflowRegistry
             'capability' => 'payroll.runs.post', 'action' => 'Payroll run posting (and its reversal, payroll.runs.reverse)',
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
             'evidence' => 'payroll_run_postings (append-only) + payroll_posting_attestations when a reversal took the approval\'s independence (HR.R1-C4) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
-        ],
-        // HR.R1-C7 (OD-HR-25): saying a link was never true. Direct, audited, one person with a fresh code.
-        'App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService' => [
-            'capability' => 'hr.employees.manage', 'action' => 'Correction of an erroneous account link',
-            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'EmployeeAccountLinkVoidReason (closed)',
-            'evidence' => 'employee_account_links (marked, never removed) + school_audit_events employee.user_link_corrected', 'relationshipConflict' => null,
         ],
         // HR.R1-C6 (PAY-18, OD-HR-23): closing an OPEN obligation is a direct review, never a second approval.
         'App\Domain\Payroll\Application\PayrollReversalReconciliationService' => [

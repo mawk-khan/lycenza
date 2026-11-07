@@ -132,7 +132,7 @@ class HrCampusArchitectureTest extends TestCase
     public function every_declared_whole_school_hr_operation_names_an_adopted_hr_key(): void
     {
         $hr = array_filter(CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS, fn (array $d) => str_starts_with($d['capability'], 'hr.'));
-        $this->assertCount(31, $hr, 'HR.R1-C7 adds the account link history and correction; ORG.7E-1 declared 24 whole-School HR operations (ADR 0076 §43); HR.1A adds the employment terms change, HR.3A the reporting-line correction and HR.2A the two reference-code operations: update the report when this changes.');
+        $this->assertCount(33, $hr, 'HR.R1-C8 splits a correction into request and decision; HR.R1-C7 adds the account link history and correction; ORG.7E-1 declared 24 whole-School HR operations (ADR 0076 §43); HR.1A adds the employment terms change, HR.3A the reporting-line correction and HR.2A the two reference-code operations: update the report when this changes.');
         foreach ($hr as $route => $declaration) {
             $this->assertSame('hr', CampusScopeCatalogue::ADOPTED[$declaration['capability']], "{$route} names an adopted HR key");
         }

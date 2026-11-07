@@ -252,6 +252,13 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 - `Tests\Feature\Payroll\PayrollAccountLinkConcurrencyTest`: two real processes with the contender observed blocked, in both orders, including link against calculation.
 - `Tests\Feature\Retention\PayrollAccountLinkRetentionTest`: through `platform:payroll-retention-prune`, `platform:employee-retention-prune` and a real User erasure case.
 
+## 2i. Implemented suites (HR.R1-C8)
+
+- `Tests\Feature\HR\EmployeeAccountLinkCorrectionTest`: the two-person contract on service, web and API.
+- `Tests\Feature\Payroll\PayrollCorrectionTargetTest`, `PayrollCorrectionTargetConcurrencyTest`: PAY-17, its ledger effect, and each order of correction against reversal in two processes.
+- `EmployeeAccountLinkRawRoleTest` and `PayrollAccountLinkConcurrencyTest` gained forged decisions and correction races. `PayrollAccountLinkRetentionTest` gained dead corrections, holds, and the pinned retention checks.
+- `PayrollReconciliationLargePopulationTest` runs discovery at 10,000 entries under a statement timeout that only a quadratic plan reaches. Latency itself is measured, not asserted: `docs/hr/PAY-REVERSAL-PERFORMANCE-EVIDENCE.md`.
+
 ## 3. Regression cadence
 
 - **Per phase:**

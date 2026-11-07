@@ -268,8 +268,12 @@ happened, or `cutover`, which says the link existed at cutover and nothing about
 before. An Employee with no row is unknown. A link that was never true is corrected
 through `EmployeeAccountLinkCorrectionService`: marked with a closed reason, never
 removed, and the current link goes with it. An ordinary unlink is not a correction.
-Only whole-School `hr.employees.manage` reads the history or corrects a link (fresh
-MFA), and never by an account ever linked to that Employee. It leaves with the Employee (`hr_evidence`). Payroll
+Only whole-School `hr.employees.manage` reads the history. A correction takes two
+linked staff (HR.R1-C8): each a current staff member linked to their own Employee,
+neither ever linked to this one. A request changes nothing. The second person
+decides with a fresh code, and their approval is the only thing that voids a link. A
+School with one such person waits. This separates duties: it does not prove two
+accounts are two people. It leaves with the Employee (`hr_evidence`). Payroll
 reads it for independence decisions and no other module reads it.
 
 **User linkage**: `unique(school_id, user_id)`, not a global

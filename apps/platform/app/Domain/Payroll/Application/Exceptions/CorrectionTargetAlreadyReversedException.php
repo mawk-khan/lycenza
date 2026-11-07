@@ -3,7 +3,8 @@
 namespace App\Domain\Payroll\Application\Exceptions;
 
 /**
- * A correction run may not be created against a regular run whose
+ * A correction run may not be created, approved or posted (HR.R1-C8,
+ * PAY-17) against a regular run whose
  * ORIGINAL posting has already been reversed -- once reversed, the
  * original's accounting effect no longer exists in Finance's ledger,
  * so there is nothing left to correct. This is the "no contradictory
@@ -22,6 +23,6 @@ class CorrectionTargetAlreadyReversedException extends PayrollException
 {
     public function __construct(public readonly string $payrollRunId)
     {
-        parent::__construct(422, 'PAYROLL_CORRECTION_TARGET_ALREADY_REVERSED', "Cannot create a correction run against payroll run '{$payrollRunId}' -- its original posting has already been reversed.");
+        parent::__construct(422, 'PAYROLL_CORRECTION_TARGET_ALREADY_REVERSED', "A correction needs a run that stands: the original posting of payroll run '{$payrollRunId}' has been reversed.");
     }
 }

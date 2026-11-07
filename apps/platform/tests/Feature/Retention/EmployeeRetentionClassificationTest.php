@@ -49,6 +49,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'employee_reference_codes' => 'D9 evidence (8 y): identity references, go with the Employee (cascade)',
             // HR.R1-C7 (OD-HR-25): the history of the account link goes with its Employee.
             'employee_account_links' => 'D9 evidence (8 y): account link history, goes with the Employee (cascade)',
+            // HR.R1-C8: so do the decisions about that history.
+            'employee_account_link_corrections' => 'D9 evidence (8 y): account link correction decisions, go with the Employee (cascade)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',
