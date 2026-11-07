@@ -6,6 +6,7 @@ use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Models\School;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -159,5 +160,50 @@ class ReportingLineEmploymentEndConcurrencyTest extends TestCase
         $this->assertSame('rejected:LEAVE_EMPLOYMENT_NOT_ELIGIBLE', $decision, 'the leave falls after the last day, and no deadlock');
         $this->assertSame('submitted', DB::connection('pgsql_admin')->table('leave_requests')->where('id', $team['request']->id)->value('status'));
         $this->assertSame(0, DB::connection('pgsql_admin')->table('leave_ledger_entries')->where('employment_record_id', $team['requester']['employment']->id)->where('kind', 'consumption')->count());
+    }
+
+    #[Test]
+    public function the_managers_approval_racing_a_placement_change_of_the_requester_never_deadlocks(): void
+    {
+        // The independent review's cycle: `holdManagerOf()` held the requester's employment without their Employee,
+        // and a placement change takes that Employee first. A gate on the leave type pauses the approval at the
+        // point where the first version of this correction had the two the wrong way round.
+        $team = $this->team();
+        $school = $team['school'];
+        $campus = $this->createCampus($school);
+        $position = $this->createPosition($school);
+        $dir = sys_get_temp_dir().'/line_'.bin2hex(random_bytes(6));
+        mkdir($dir);
+        [$decideSession, $moveSession] = ['line_dec_'.bin2hex(random_bytes(4)), 'line_mov_'.bin2hex(random_bytes(4))];
+
+        $gate = new Process($this->op('gate-type', $school->id, $team['type']->id), null, ['CONCURRENCY_HOLD_DIR' => $dir]);
+        $gate->setTimeout(120);
+        $gate->start();
+        $deadline = microtime(true) + 60;
+        while (! file_exists($dir.'/acted') && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+        $this->assertFileExists($dir.'/acted', 'the gate never held the leave type: '.$gate->getErrorOutput());
+
+        $decide = new Process($this->op('manager-approve', $school->id, $team['request']->id, $team['manager']['user']->id), null, ['CONCURRENCY_SESSION_NAME' => $decideSession]);
+        $decide->setTimeout(120);
+        $decide->start();
+        $this->waitBlocked($decideSession, $decide);
+
+        $move = new Process($this->op('transfer', $school->id, $team['requester']['assignment']->id, CarbonImmutable::parse(SchoolTimezone::today($school))->addDays(30)->toDateString(), $position->id, $campus->id, $team['hr']->id), null, ['CONCURRENCY_SESSION_NAME' => $moveSession]);
+        $move->setTimeout(120);
+        $move->start();
+        $this->waitBlocked($moveSession, $move);
+
+        touch($dir.'/release');
+        $gate->wait();
+        $decide->wait();
+        $move->wait();
+        @unlink($dir.'/acted');
+        @unlink($dir.'/release');
+        @rmdir($dir);
+
+        $this->assertSame('ok:approved', trim($decide->getOutput()));
+        $this->assertStringStartsWith('ok:', trim($move->getOutput()));
     }
 }

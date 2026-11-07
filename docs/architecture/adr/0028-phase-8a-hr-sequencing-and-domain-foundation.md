@@ -523,12 +523,20 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
    placement is the legitimate write of `setPrimary()` and `PlacementChangeService`,
    and PostgreSQL cannot tell them from a raw write. Whoever writes it is an
    application boundary (rule 102). A separate trigger, so the published guard
-   and its column pin stay as they were; the verifier pins the new one.
-3. **Reporting-line lock order.** Both employments, then the line. See rule 131.
-   The register named one cycle, a non-manager's decision against the manager's
-   end. Tracing the approval found a second it did not name: a real manager's
-   approval against the requester's end, which is the likelier one in practice.
-   Both reproduced as `40P01` before the correction.
+   and its column pin stay as they were; the verifier pins the new one. The
+   independent review added two rules: nothing is promoted on an ended employment
+   (database), and `setPrimary()` refuses a placement that is over (service),
+   because promoting one demoted the current primary and left a running employment
+   with none. "Closed" means `ends_on` is set on the row or in the statement.
+3. **Reporting-line lock order.** Both Employees, both employments, then the
+   line. See rule 131. The register named one cycle, a non-manager's decision
+   against the manager's end. Tracing the approval found a second it did not name:
+   a real manager's approval against the requester's end, which is the likelier
+   one in practice. **The first version of this correction introduced a third:**
+   it took the employments without their Employees, so an approval deadlocked with
+   a placement change of the requester. The independent review found it. All three
+   reproduced as `40P01` on the code they affected, and all three are in
+   `ReportingLineEmploymentEndConcurrencyTest`.
 4. **Leave credit.** The net of the adjustment chain (rule 134), not of
    adjustments naming the accrual directly. A correction names the entry it
    corrects, so undoing the debit names the debit.

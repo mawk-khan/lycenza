@@ -4,6 +4,7 @@ namespace Tests\Feature\HR\Workforce;
 
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmploymentService;
+use App\Domain\HR\Application\Exceptions\PlacementChangeConflictException;
 use App\Domain\HR\Application\Workforce\WorkforceAsOfReader;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -20,9 +21,10 @@ use Tests\TestCase;
  * HR.R1-C9 (HR.R1-C2 "Placement guard scope"): every write here is a raw UPDATE by
  * the runtime role, so no service stands between it and the database.
  * `employment_record_id` is frozen. `is_primary` is frozen on a placement that never
- * took effect, and a closed primary period stays primary history. On an open
- * placement `is_primary` stays writable, because setPrimary() and a named placement
- * change write it there; the positive controls prove that still works.
+ * took effect, a closed primary period stays primary history, and nothing is
+ * promoted on an ended employment. On a running employment `is_primary` stays
+ * writable, because setPrimary() and a named placement change write it there; the
+ * positive controls prove that still works.
  */
 class PlacementIdentityGuardTest extends TestCase
 {
@@ -106,6 +108,49 @@ class PlacementIdentityGuardTest extends TestCase
         $closed = $this->placement($this->employment, ['starts_on' => '2024-01-01', 'ends_on' => '2025-12-31', 'is_primary' => true]);
 
         $this->assertSame('23514', $this->write($closed->id, ['is_primary' => false]));
+    }
+
+    #[Test]
+    public function a_primary_is_not_cleared_in_the_statement_that_closes_it(): void
+    {
+        $open = $this->placement($this->employment, ['starts_on' => '2024-01-01', 'is_primary' => true]);
+
+        $this->assertSame('23514', $this->write($open->id, ['ends_on' => '2025-12-31', 'is_primary' => false]));
+    }
+
+    #[Test]
+    public function nothing_is_promoted_on_an_ended_employment(): void
+    {
+        $ended = $this->employment();
+        $closed = $this->placement($ended, ['starts_on' => '2024-01-01']);
+        app(EmploymentService::class)->end($ended, '2026-01-31', $this->hr, 'separated');
+
+        $this->assertSame('23514', $this->write($closed->id, ['is_primary' => true]));
+        $this->assertRefusedAsEnded(app(TenantContext::class)->withSchool($this->school, fn () => $closed->fresh()));
+    }
+
+    #[Test]
+    public function a_placement_that_is_over_never_takes_the_primary_from_the_current_one(): void
+    {
+        $current = $this->placement($this->employment, ['starts_on' => '2024-01-01', 'is_primary' => true]);
+        $over = $this->placement($this->employment, ['starts_on' => '2024-01-01', 'ends_on' => '2025-12-31']);
+
+        $this->assertRefusedAsEnded($over);
+
+        app(TenantContext::class)->withSchool($this->school, function () use ($current, $over): void {
+            $this->assertTrue($current->fresh()->is_primary);
+            $this->assertFalse($over->fresh()->is_primary);
+        });
+    }
+
+    private function assertRefusedAsEnded(EmployeeAssignment $assignment): void
+    {
+        try {
+            app(EmployeeAssignmentService::class)->setPrimary($assignment, $this->hr);
+            $this->fail('A placement that is over never becomes primary.');
+        } catch (PlacementChangeConflictException $e) {
+            $this->assertStringContainsString('has ended', $e->getMessage());
+        }
     }
 
     #[Test]

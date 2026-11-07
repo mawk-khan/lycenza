@@ -160,9 +160,10 @@ class ArchivedIdentityConcurrencyTest extends TestCase
 
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->op('restore'),
-            $this->prune('evidence-prune', $this->school->id, '2060-01-01'),
+            $this->prune('evidence-prune', $this->school->id, '2020-07-01'),
         );
 
+        // The cutoff is the day after the last separation, so a restoration that moved the clock would keep the Employee.
         $this->assertSame(['ok:active', 'deleted:1'], [$holder, $contender], 'the clock runs from the last separation, and an identity restored but not rehired stays eligible');
         $this->assertNull($this->recordStatus());
     }

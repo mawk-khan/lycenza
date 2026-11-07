@@ -12,13 +12,17 @@ use Illuminate\Support\Facades\DB;
  * - A placement that never took effect (`ends_on < starts_on`) is final, so its
  *   `is_primary` never changes in either direction.
  * - A closed primary period stays primary history: `is_primary` is never cleared
- *   once `ends_on` is set. `EmployeeAssignmentService::setPrimaryRecord()` demotes
- *   open rows only.
+ *   on a row that has, or is being given, an `ends_on`.
+ *   `EmployeeAssignmentService::setPrimaryRecord()` demotes open rows only.
+ * - An ended employment keeps its placement history: nothing is promoted on one.
+ *   `ends_on` alone cannot decide this, because a named placement change
+ *   legitimately promotes a new row that carries a planned end.
  *
- * `is_primary` on an OPEN placement stays writable, a deliberate narrowing of the
- * register's acceptance wording: setPrimary() and PlacementChangeService write it
- * legitimately, and `trg_employee_assignments_primary_no_overlap` keeps one
- * primary a day. Whoever writes it there is an application boundary (rule 102).
+ * `is_primary` on a placement of a running employment stays writable, a deliberate
+ * narrowing of the register's acceptance wording: setPrimary() and
+ * PlacementChangeService write it legitimately, and
+ * `trg_employee_assignments_primary_no_overlap` keeps one primary a day. Whoever
+ * writes it there is an application boundary (rule 102).
  *
  * A separate trigger, so `trg_employee_assignments_never_effective` and its
  * function stay as published. Fired alphabetically before the overlap trigger, so
@@ -47,8 +51,13 @@ return new class extends Migration
                         RAISE EXCEPTION 'employee_assignments: a placement that never took effect is final (hr_employee_assignments_placement_identity)'
                             USING ERRCODE = 'check_violation';
                     END IF;
-                    IF OLD.is_primary AND OLD.ends_on IS NOT NULL THEN
+                    IF OLD.is_primary AND (OLD.ends_on IS NOT NULL OR NEW.ends_on IS NOT NULL) THEN
                         RAISE EXCEPTION 'employee_assignments: a closed primary period stays primary history (hr_employee_assignments_placement_identity)'
+                            USING ERRCODE = 'check_violation';
+                    END IF;
+                    IF NEW.is_primary AND EXISTS (SELECT 1 FROM public.employment_records r
+                                                   WHERE r.id = OLD.employment_record_id AND r.school_id = OLD.school_id AND r.ends_on IS NOT NULL) THEN
+                        RAISE EXCEPTION 'employee_assignments: an ended employment keeps its placement history (hr_employee_assignments_placement_identity)'
                             USING ERRCODE = 'check_violation';
                     END IF;
                 END IF;

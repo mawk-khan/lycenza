@@ -95,8 +95,10 @@ class StaffAudienceTest extends TestCase
         foreach ($roles as $role) {
             $this->assignSchoolRole($membership, $role);
         }
-        $employee = $this->createEmployee($school, ['user_id' => $user->id, 'record_status' => $record]);
+        $employee = $this->createEmployee($school, ['user_id' => $user->id]);
         $this->createEmploymentRecord($employee, ['status' => $status, 'starts_on' => $starts, 'ends_on' => $ends]);
+        // HR.R1-C9 (HRC-12): employed first, archived afterwards.
+        app(TenantContext::class)->withSchool($school, fn () => $employee->forceFill(['record_status' => $record])->save());
 
         return $user;
     }

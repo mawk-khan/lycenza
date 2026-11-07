@@ -27,6 +27,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -301,6 +302,14 @@ class EmployeeAssignmentService
             throw new PlacementChangeConflictException('never_effective', 'This placement never took effect; its employment ended before it started.');
         }
         $wasPrimary = (bool) $stored?->is_primary;
+        // HR.R1-C9: promoting a placement that is over would demote the open primary and leave the employment with
+        // no current primary, and an ended employment keeps its placement history. Database-backed for the second.
+        if (! $wasPrimary) {
+            $employmentEnded = EmploymentRecord::query()->whereKey($assignment->employment_record_id)->whereNotNull('ends_on')->exists();
+            if ($employmentEnded || ($stored?->ends_on !== null && $stored->ends_on->toDateString() < SchoolTimezone::today($school))) {
+                throw new PlacementChangeConflictException('placement_ended', 'This placement has ended, so it cannot become the primary placement.');
+            }
+        }
         $otherPrimaries = EmployeeAssignment::query()
             ->where('employment_record_id', $assignment->employment_record_id)
             ->where('is_primary', true)

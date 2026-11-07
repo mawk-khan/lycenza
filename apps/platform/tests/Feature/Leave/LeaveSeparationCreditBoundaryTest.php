@@ -217,7 +217,11 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
         app(LeavePolicyAssignmentService::class)->assign($this->school, $other->id, $policy, '2026-04-01', null, $this->admin);
         app(LeaveAccrualService::class)->execute($this->school, $this->type->id, $this->year->id, '2026-12-01', $this->admin, 1000);
 
-        $this->expectException(LeaveException::class);
-        app(LeaveLedgerService::class)->adjust($this->school, $other->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $this->accrual('2026-12-01'));
+        try {
+            app(LeaveLedgerService::class)->adjust($this->school, $other->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $this->accrual('2026-12-01'));
+            $this->fail('A correction stays inside its account.');
+        } catch (LeaveException $e) {
+            $this->assertSame('LEAVE_ADJUSTMENT_SOURCE_INVALID', $e->errorCode());
+        }
     }
 }

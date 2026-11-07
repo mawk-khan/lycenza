@@ -169,4 +169,46 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Performance.** See `docs/hr/PAY-REVERSAL-PERFORMANCE-EVIDENCE.md`.
 - **Proven and published.** `28901d75`: CI gate run 42324557543, four shards, 10,960 cases, 0 failures, 1 skip (ESI-12), 456,835 assertions. Rollback and re-apply identical on the superuser proof, and the production-shaped role in CI. 4 mutations of the new controls failed 2, 5, 4 and 1 tests. A real logged-in walkthrough of 29 steps passed with axe clean on 9 pages. It ran one commit earlier; the last commit changed only an approval re-check. Screen-reader testing by a person stays an open evidence gap.
 
+**Evidence recorded (HR.R1-C9, 2026-11-07):** HRC-12 and the three HR.R1-C2 LOW findings are dispositioned. HR.R1 stays OPEN. Production stays NO-GO.
+
+| Finding | Reproduced on `d67b3b1b` | Disposition |
+|---|---|---|
+| HRC-12, archived | Service, API and raw runtime INSERT all admitted an archived identity | **CLOSED for development** under the owner's decision (gate register §2d-1, Option A) |
+| Placement guard scope | Raw UPDATE reparented open and ended placements and set `is_primary` on a never-effective one | **CLOSED for development.** Narrowed, with the reason recorded: `is_primary` on a running employment stays a service write |
+| Leave credit netting | By reading, then by test: a later credit left an accrual reading clear | **CLOSED for development.** R-HR10-1 stays **PARTIAL**: a closed year cannot be corrected |
+| Possible reporting-line deadlock | Two-process, 40P01 on each run, and a second cycle the register did not name | **CONFIRMED AND CORRECTED,** after a third cycle introduced and caught inside C9 |
+| Correction approval vs retention (C8) | Not reproduced in C9 | **Registered, separate.** Another pair of rows on another path (a Payroll correction run and its target, in `payroll_runs`, against retention), so not this root cause and untouched by this change. PostgreSQL aborts one side and it needs an approval on an emptied group eight years old |
+| Own-pay pre-lock read (C7) | Not re-examined | Unchanged, LOW |
+
+- **Why C9 is not eligible for closure.** The preflight below. It found that the HR.R1-0 audit's findings were never committed. They are now in `HR-R1-0-AUDIT-REGISTER.md`, and most of the P3 hardening is still open.
+- **Found by the independent review, and fixed.** The first candidate introduced a real `40P01` between a manager's approval and a placement change, reproduced on 2 of 2 runs before the fix. `setPrimary()` could promote a placement that was over, leaving a running employment with no current primary. A primary could be cleared in the statement that closed it. The verifier matched triggers by name only, and two tests proved less than they claimed.
+- **Found by CI, and fixed.** The first candidate failed shard 1: nine `StaffAudienceTest` cases built an already-archived Employee and then employed them. That was fixture order, not a defect. The other fixtures of this shape were corrected the same way. Archiving an Employee who is still employed stays allowed, so the state those tests need is real.
+- **Registered from the review, not fixed (LOW):**
+  - `campus_id`, `department_id` and `position_id` stay writable by the runtime role on a closed or never-effective placement, and `ends_on` can be cleared on a running employment. No application path does either. Freezing them needs care with the `ON DELETE SET NULL` keys on those columns.
+  - A Campus-scoped reporting writer takes the two Employees FOR NO KEY UPDATE in id order, while a decision holds the manager's Employee first. When the subordinate's id sorts lower they can deadlock. Pre-existing and not moved by C9. It aborts safely and returns a 500.
+- **A 500 on a deadlock.** Neither `app/Domain/HR` nor `app/Domain/Leave` translates `40P01`. The orders corrected here no longer reach it; any remaining one is an uncontrolled error with nothing written.
+- **An unexplained single failure.** `EmployeeAccountLinkCorrectionTest::the_reason_list_is_closed` failed once with a `QueryException` in a local run that was not captured. Its body touches no database, so the error came from setup or teardown. It did not recur in a full HR run or six targeted reruns. No cause is known.
+
+**Closure preflight (HR.R1-C9, 2026-11-07).** Evidence-based, not the closure audit. "Recorded" means earlier evidence that was not re-run here.
+
+| Item | State | Remaining |
+|---|---|---|
+| §2 slices | **Finding** | HR.4–HR.8 have neither publication nor an owner DEFERRED record (audit D-1) |
+| §2 fingerprint | Not evidenced | The reference pack is not in Git, so only the owner can check it |
+| §2 baseline | Not yet | No baseline SHA chosen for the final assessment |
+| R1-01 one writer | **Finding** | No writer outside the owning domain in a sample of 16 models. Inside HR, assignment and Employee have several sites and no guard pins it. What "one writer" means needs deciding |
+| R1-02 integration | **Finding** | Payroll holds 25 direct `EmploymentRecord` references with no owner-approved exception (D-2). Direct `Employee::query()` remains in Timetable, Transport and Visitor controllers |
+| R1-03 temporal | **Finding** | Calendar has no as-of answer (LVA-3, D-6). Policy has no public as-of reader. Shifts are absent by design |
+| R1-04 authorization | Recorded | Re-run on the baseline |
+| R1-05 reports | Recorded | Re-run on the baseline |
+| R1-06 isolation | **Finding** | No raw-role test names `employment_separation_cases`, its events, the clearance tables or the six `workforce_task*` tables. Forced RLS itself is checked globally |
+| R1-07 lifecycle | Recorded, except shifts | Timetable and Transport answer as obligations and are never closed by HR, by rule 137 |
+| R1-08 reconciliation | Recorded | Re-run on the baseline |
+| R1-09 offboarding | **Finding** | Library, Inventory and Finance are NOT_INTEGRATED by owner decision. Timetable substitution does not exist. §1 of this contract requires those connections, so the owner must say how the verdict reads them |
+| R1-10 gates | Intact | Refused by absence or by guard tests |
+| R1-11 retention | Mapped | 85 of 92 HR-prefixed tables are catalogued; the other 7 are platform rule tables. E21 is unratified |
+| R1-12 security | **Finding** | S-4 latent, S-7 partial, S-16 for `staff_holidays`, X-1 partial, and the owner record behind S-6 not located |
+
+**Whether legal and environment items block a development-scope verdict is not stated in §4.** The owner needs to define it.
+
 **Publication-history recommendation to the Platform owner (not built).** `lycenza-ci publication-check` proves the candidate tip. A narrow addition would run `php -l` over the PHP files each commit in `main..candidate` changes, and refuse a range containing one that does not parse. That is the whole of it: no CI redesign. Disposition is the Platform owner's.

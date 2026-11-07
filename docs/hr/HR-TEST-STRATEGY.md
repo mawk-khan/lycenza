@@ -281,5 +281,7 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 A two-party race cannot force the order that matters when a lock order is the
 defect. `ReportingLineEmploymentEndConcurrencyTest` uses a third session to hold
 the contended row, so one party queues on it first and the other queues behind.
-Releasing it forces the cycle every time. Unfixed, both orders gave `40P01` on
-each of 2 runs. Prove a lock-order correction this way, on the unfixed code first.
+Releasing it forces the cycle every time. Unfixed, each of the three orders gave
+`40P01` on each of 2 runs. Prove a lock-order correction this way, on the unfixed
+code first, and race it against every writer of the rows it newly locks: the first
+C9 correction passed against `end()` and deadlocked against a placement change.

@@ -649,11 +649,11 @@ class DatabaseRoleVerifier
         $placement = DB::selectOne("select array_length(string_to_array(t.tgattr::text, ' '), 1) as columns, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employee_assignments_never_effective'");
         $afterDeath = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname = 'trg_employment_records_after_death'")->c;
 
-        $identity = DB::selectOne("select array_length(string_to_array(t.tgattr::text, ' '), 1) as columns, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employee_assignments_placement_identity'");
-        $archived = DB::selectOne("select p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employment_records_archived_identity'");
+        $identity = DB::selectOne("select array_length(string_to_array(t.tgattr::text, ' '), 1) as columns, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employee_assignments_placement_identity' and t.tgrelid = 'public.employee_assignments'::regclass and pg_get_triggerdef(t.oid) like '%BEFORE UPDATE OF employment_record_id, is_primary%'");
+        $archived = DB::selectOne("select p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employment_records_archived_identity' and t.tgrelid = 'public.employment_records'::regclass and pg_get_triggerdef(t.oid) like '%BEFORE INSERT%'");
 
         return CheckResult::of('employment_lifecycle_admission_guarded', $identity !== null && (int) $identity->columns === 2
-            && str_contains($identity->src, 'belongs to its employment') && str_contains($identity->src, 'never took effect is final') && str_contains($identity->src, 'stays primary history')
+            && str_contains($identity->src, 'belongs to its employment') && str_contains($identity->src, 'never took effect is final') && str_contains($identity->src, 'stays primary history') && str_contains($identity->src, 'keeps its placement history')
             && $archived !== null && str_contains($archived->src, 'FOR SHARE')
             && $guard !== null && str_contains($guard->src, 'never begins with a planned end')
             && $placement !== null && (int) $placement->columns === 2 && str_contains($placement->src, 'never took effect is final') && str_contains($placement->src, 'past its end')
