@@ -113,6 +113,10 @@ final class EmployeeAccountLinkCorrectionService
 
         return $this->decide($employee, $correctionId, EmployeeAccountLinkCorrection::APPROVED, $actor, $mfa, function (EmployeeAccountLinkCorrection $correction, Employee $employee, EmployeeAccountLink $link) use ($school, $reviewedVersion, $actor): void {
             $this->assertMayDecide($school, $correction, $employee, $link, $actor);
+            // Checked at the request too, but an alias can appear while it waits. It can still be refused.
+            if ($this->knownSamePerson($school->id, $correction->requested_by_user_id, $link->user_id)) {
+                throw new EmployeeAccountLinkCorrectionNotIndependentException($correction->id);
+            }
 
             $current = $this->version($school->id, $link->id);
             if (! hash_equals($current, $correction->evidence_version) || ! hash_equals($current, $reviewedVersion)) {

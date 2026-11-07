@@ -249,6 +249,22 @@ class EmployeeAccountLinkCorrectionTest extends TestCase
     }
 
     #[Test]
+    public function a_requester_who_becomes_a_known_alias_while_it_waits_is_never_approved_but_can_be_refused(): void
+    {
+        $correction = $this->correction();
+        $this->makeAliasOf($this->requester, $this->linked);
+
+        try {
+            $this->approveCorrection($this->school, $correction, $this->reviewer);
+            $this->fail('approved a request by an alias of the corrected account');
+        } catch (EmployeeAccountLinkCorrectionNotIndependentException) {
+            $this->assertNull($this->link()->voided_at);
+        }
+
+        $this->assertSame('refused', $this->refuseCorrection($this->school, $correction, $this->reviewer)->status);
+    }
+
+    #[Test]
     public function a_decision_under_another_employee_is_not_found(): void
     {
         $correction = $this->correction();

@@ -165,6 +165,10 @@ return new class extends Migration
                     RAISE EXCEPTION 'employee_account_link_corrections_guard: the reviewer, the requester or the corrected account are known to be one person' USING ERRCODE = 'check_violation';
                 END IF;
                 IF NEW.status = 'approved' THEN
+                    -- Checked at the request too, but an alias can appear while it waits. It can still be refused.
+                    IF public.employee_account_link_correction_same_person(NEW.school_id, NEW.requested_by_user_id, v_corrected) THEN
+                        RAISE EXCEPTION 'employee_account_link_corrections_guard: the requester is known to be the corrected account' USING ERRCODE = 'check_violation';
+                    END IF;
                     IF NEW.evidence_version IS DISTINCT FROM public.employee_account_link_correction_version(NEW.school_id, NEW.account_link_id) THEN
                         RAISE EXCEPTION 'employee_account_link_corrections_guard: an approval binds the current history' USING ERRCODE = 'check_violation';
                     END IF;
