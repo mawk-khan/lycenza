@@ -1,7 +1,7 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C13 have. **Never
+started; the HR.R1-0 audit and checkpoints C1 to C14 have. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -261,3 +261,5 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Not done.** No browser walkthrough: no screen changed. `ddev demo-reset` was not run, so the local School database was left as it was. A screen-reader pass stays outstanding.
 
 **Publication-history recommendation to the Platform owner (not built).** `lycenza-ci publication-check` proves the candidate tip. A narrow addition would run `php -l` over the PHP files each commit in `main..candidate` changes, and refuse a range containing one that does not parse. That is the whole of it: no CI redesign. Disposition is the Platform owner's.
+
+**Evidence recorded (HR.R1-C14, 2026-11-07):** C11-N2, C11-N3 and C12-N3 are closed for development. C14-N1, C14-N2, C14-N4, C14-N5 (partial, MEDIUM) and C14-N6 (P3, Payroll's execution-time School check) stay open with named owners. The `php -l` proposal stays a proposal. No owner decision was taken: D-1 to D-10 and R1-01 stay pending. HR.R1 stays OPEN. Production stays NO-GO. Record: `HR-R1-C14-RESIDUAL-HARDENING.md`.

@@ -163,6 +163,14 @@ The last review noted two statutory services with no School check. Checking that
 
 **Direct service boundary.** `refuseOwnRecord` has two callers, both inside a transaction with a School in context. The generic writers are reached only from `DocumentController`, and the Employee ones only from `EmployeeDocumentService`.
 
+**Published.** Code `563bb5a0`, candidate CI run 42410127957, `main` CI run 42412289842. Four shards, 2,862 each: 11,448 cases, 461,705 assertions, 0 failed, 1 ESI-12 skip. The coverage union passed. This is the remote full-regression checkpoint, counter 0/5.
+
+**Assertions fell by 752 while cases rose by 38.** Compared per test against C13's run 42398199405: no test disappeared, and the 38 new cases add 149 assertions. 19 existing tests changed by -901 net. Most are concurrency tests whose barriers assert inside a polling loop (`ServiceAssertionReplayConcurrencyTest` -549, `CrossHostHandoffConcurrencyTest` -306). `navigation_never_names_a_role` (-180) counts once per row in `roles`, and it moved from shard 3 to shard 4. That leftover fixture roles differ by shard is an inference, not a measurement.
+
+**First candidate.** `8577daee` was pushed with a gitleaks finding: an inert UUID in a test constant, `KEY`, which the generic rule matched. Nothing real was exposed. The check that should have stopped the push read the wrong exit status. Its run was cancelled, the literal was replaced with the repository's `test-key-` convention, no allowlist was touched, and `563bb5a0` replaced it.
+
+**Reviews.** Four independent read-only passes, the last on `e0d93d19`. After it only comment and document wording and one test constant changed, and those were not reviewed again. None found a HIGH. Their MEDIUMs were corrected or, for C14-N5's open half, given an owner. The reviewer's trace of idempotent routes is static.
+
 ## 8. The C13 local anomaly
 
 **Mechanism proven.** `ddev test` keeps running inside the container after its client is killed: 35 seconds later it was still alive. It then shares `school_os_test` with the next run, and unrelated tests deadlock or leave rows behind. It happened again in this checkpoint, when a `pkill` killed its own shell before reaching PHPUnit, and it produced the same symptoms: five HR failures and one documentation guard. All passed when rerun alone. That the C13 failures had this cause is likely, not proven. `TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md` records the check to make.
