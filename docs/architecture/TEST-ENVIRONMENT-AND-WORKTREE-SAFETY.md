@@ -732,6 +732,25 @@ deploy or push):
 mirror its naming and inert test values in
 `.claude/skills/_shared/lycenza-dev.sh`.
 
+## A killed `ddev test` keeps running (HR.R1-C14, 2026-11-07)
+
+Killing the client of `ddev test` does not stop the test run inside the web
+container: it was measured still running 35 seconds later. It then shares
+`school_os_test` with the next run. The symptoms look like defects in unrelated
+code: deadlocks on `DROP TRIGGER` or `platform_role_assignments`, "the committed
+fixtures left durable rows behind", or a holder that never reached its write.
+
+Before believing such a failure, look:
+
+```bash
+ddev exec 'ps -eo pid,etimes,cmd | grep -E "vendor/phpunit|artisan test" | grep -v grep'
+```
+
+Kill by process id, never with `pkill -f` from `ddev exec`: the pattern matches
+the shell running it. Then rerun the failed classes alone. Run a long suite as a
+single tracked job, and never as a backgrounded subshell, which is what leaves
+this process behind.
+
 ## CI sharding (Option A, 2026-10-14)
 
 **Why.** The canonical suite passed 8,000 tests and each code-lane candidate

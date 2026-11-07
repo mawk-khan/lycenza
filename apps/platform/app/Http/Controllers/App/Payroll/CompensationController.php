@@ -63,15 +63,18 @@ class CompensationController extends Controller
         $this->authorizeCapability('payroll.compensation.view', $school);
 
         $validated = $request->validate(['q' => ['required', 'string', 'min:2', 'max:100']]);
+        // HR.R1-C14 (C12-N3): the term is text, and a bounded list has a stable order.
+        $like = '%'.addcslashes($validated['q'], '%_\\').'%';
 
         $records = $context->withSchool($school, fn () => EmploymentRecord::query()
             ->where('school_id', $school->id)
             ->whereHas('employee', fn ($q) => $q
                 ->where('school_id', $school->id)
                 ->where(fn ($q2) => $q2
-                    ->where('full_name', 'ilike', "%{$validated['q']}%")
-                    ->orWhere('employee_number', 'ilike', "%{$validated['q']}%")))
+                    ->where('full_name', 'ilike', $like)
+                    ->orWhere('employee_number', 'ilike', $like)))
             ->with('employee')
+            ->orderBy('id')
             ->limit(20)
             ->get());
 
@@ -90,6 +93,8 @@ class CompensationController extends Controller
     {
         $school = $context->requireSchool();
         $actor = $context->actor();
+        // HR.R1-C14 (C12-N3): the capability first. Sibling actions still look up first: C14-N1.
+        $this->authorizeCapability('payroll.compensation.view', $school);
         $holdsSensitive = $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.view', $school);
         $assured = $assurance->holds($request);
         $record = EmploymentRecord::query()->findOrFail($employmentRecord);
@@ -151,8 +156,9 @@ class CompensationController extends Controller
     public function store(Request $request, TenantContext $context, PayrollCompensationAdministrationService $service, FreshMfaRequirement $mfa, string $employmentRecord): RedirectResponse
     {
         $school = $context->requireSchool();
-        $record = EmploymentRecord::query()->findOrFail($employmentRecord);
+        // HR.R1-C14 (C12-N3): the capability first. Sibling actions still look up first: C14-N1.
         $this->authorizeCapability('payroll.compensation.sensitive.manage', $school);
+        $record = EmploymentRecord::query()->findOrFail($employmentRecord);
 
         $validated = $request->validate([
             'salary_structure_id' => ['required', 'uuid'],

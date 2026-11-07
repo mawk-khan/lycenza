@@ -53,7 +53,6 @@ use App\Domain\LMS\Application\TeacherLearningContentAccess;
 use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payroll\Application\PayrollAccountingAdministrationService;
-use App\Domain\Payroll\Application\PayrollCompensationReadService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\Payroll\Application\PayrollPeriodAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
@@ -1360,8 +1359,8 @@ final class SchoolRouteCoverage
             // HR.R1-0 GOV-5: the run page's own check is getRun (payroll.runs.view); listComponents runs only for structures.view.
             Coverage::service('app.payroll.runs.show', PayrollRunReadService::class, 'getRun'),
             Coverage::service('app.payroll.runs.calculate', PayrollRunAdministrationService::class, 'calculate'),
-            Coverage::service('app.payroll.runs.manual-overrides.store', PayrollRunAdministrationService::class, 'recordManualOverride'),
-            Coverage::service('app.payroll.runs.correction-deltas.store', PayrollRunAdministrationService::class, 'recordCorrectionDelta'),
+            Coverage::gate('app.payroll.runs.manual-overrides.store', 'payroll.runs.prepare'),
+            Coverage::gate('app.payroll.runs.correction-deltas.store', 'payroll.runs.prepare'),
             Coverage::service('app.payroll.runs.correction.store', PayrollRunAdministrationService::class, 'createCorrectionRun'),
             Coverage::service('app.payroll.runs.hrx-inputs.difference-checks', PayrollHrxInputReadService::class, 'checkDifferences'),
             // HR.R1-C1 (PAY-7): both keys are pinned -- approving needs sight of the pay it approves.
@@ -1377,7 +1376,7 @@ final class SchoolRouteCoverage
             // Http\Controllers\App\Payroll\CompensationController
             Coverage::gate('app.payroll.compensation.index', 'payroll.compensation.view'),
             Coverage::gate('app.payroll.compensation.search', 'payroll.compensation.view'),
-            Coverage::service('app.payroll.compensation.show', PayrollCompensationReadService::class, 'listAssignments'),
+            Coverage::gate('app.payroll.compensation.show', 'payroll.compensation.view'),
             Coverage::gate('app.payroll.compensation.store', 'payroll.compensation.sensitive.manage'),
             Coverage::gate('app.payroll.compensation.values', 'payroll.compensation.sensitive.view'),
 

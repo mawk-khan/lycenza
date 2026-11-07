@@ -20,6 +20,9 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ProvidesSensitiveActionMfa;
@@ -121,6 +124,137 @@ class PayrollUiTest extends TestCase
 
             return $run->id;
         });
+    }
+
+    // --- HR.R1-C14 (C12-N3): a capability refusal never depends on the record -------
+
+    /**
+     * The five web actions that looked a record up before asking the capability: a same-School member without it got
+     * 404 for an unknown id and 403 for a real one, so a known UUID could be tested for existence.
+     *
+     * @return array<string, array{0: string, 1: string, 2: string}> method, the capability, the site
+     */
+    public static function capabilityFirstSites(): array
+    {
+        return [
+            'compensation show' => ['get', 'payroll.compensation.view', 'compensation.show'],
+            'compensation store' => ['post', 'payroll.compensation.sensitive.manage', 'compensation.store'],
+            'statutory employee show' => ['get', 'payroll.statutory.view', 'statutory.show'],
+            'manual override' => ['post', 'payroll.runs.prepare', 'manual-override'],
+            'correction delta' => ['post', 'payroll.runs.prepare', 'correction-delta'],
+        ];
+    }
+
+    /** @return array{0: string, 1: array<string, mixed>} */
+    private function siteRequest(string $site, string $runId, string $employmentRecordId): array
+    {
+        return match ($site) {
+            'compensation.show', 'compensation.store' => ["/app/payroll/compensation/{$employmentRecordId}", ['salary_structure_id' => (string) Str::uuid7(), 'effective_from' => '2026-01-01', 'fixed_values' => []]],
+            'statutory.show' => ["/app/payroll/statutory/employees/{$employmentRecordId}", []],
+            'manual-override' => ["/app/payroll/runs/{$runId}/manual-overrides", ['employment_record_id' => $employmentRecordId, 'component_amounts' => ['x' => '1.00'], 'reason' => 'Why']],
+            'correction-delta' => ["/app/payroll/runs/{$runId}/correction-deltas", ['employment_record_id' => $employmentRecordId, 'lines' => [['salary_component_id' => (string) Str::uuid7(), 'amount' => '1.00', 'effect' => 'increase']], 'reason' => 'Why']],
+        };
+    }
+
+    #[Test]
+    #[DataProvider('capabilityFirstSites')]
+    public function a_member_without_the_capability_gets_the_same_403_for_a_real_id_and_an_unknown_one(string $method, string $capability, string $site): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $stranger = $this->memberWith([], $school);
+        $unknown = (string) Str::uuid7();
+
+        foreach ([[$runId, $fixtures['employmentRecordId']], [$unknown, $fixtures['employmentRecordId']], [$runId, $unknown], [$unknown, $unknown]] as [$run, $employment]) {
+            [$uri, $body] = $this->siteRequest($site, $run, $employment);
+            $response = $method === 'get' ? $this->actingAs($stranger)->get($uri) : $this->actingAs($stranger)->post($uri, $body);
+
+            $response->assertForbidden();
+            $this->assertStringNotContainsString($fixtures['employmentRecordId'], $response->getContent(), 'the refusal says nothing of the record');
+        }
+    }
+
+    #[Test]
+    #[DataProvider('capabilityFirstSites')]
+    public function a_holder_of_the_capability_still_gets_the_private_404_for_an_unknown_or_foreign_id(string $method, string $capability, string $site): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $holder = $this->memberWith([$capability, 'payroll.compensation.view'], $school);
+
+        $foreignSchool = $this->createSchool();
+        $foreign = $this->createEmploymentRecord($this->createEmployee($foreignSchool), ['starts_on' => '2025-01-01']);
+
+        foreach ([(string) Str::uuid7(), $foreign->id] as $missing) {
+            [$uri, $body] = $this->siteRequest($site, $runId, $missing);
+            $response = $method === 'get' ? $this->actingAs($holder)->get($uri) : $this->actingAs($holder)->post($uri, $body);
+
+            $response->assertNotFound();
+        }
+    }
+
+    #[Test]
+    #[DataProvider('capabilityFirstSites')]
+    public function a_suspended_school_answers_every_member_the_same_whatever_the_id(string $method, string $capability, string $site): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $stranger = $this->memberWith([], $school);
+        $holder = $this->memberWith([$capability, 'payroll.compensation.view'], $school);
+        DB::table('schools')->where('id', $school->id)->update(['status' => 'suspended']);
+
+        $statuses = [];
+        foreach ([$stranger, $holder] as $actor) {
+            foreach ([$fixtures['employmentRecordId'], (string) Str::uuid7()] as $employment) {
+                [$uri, $body] = $this->siteRequest($site, $runId, $employment);
+                $statuses[] = ($method === 'get' ? $this->actingAs($actor)->get($uri) : $this->actingAs($actor)->post($uri, $body))->getStatusCode();
+            }
+        }
+
+        $this->assertCount(1, array_unique($statuses), 'nobody can tell a suspended School\'s records apart: '.implode(',', $statuses));
+    }
+
+    #[Test]
+    public function an_unknown_employment_never_spends_a_fresh_code_on_a_compensation_write(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $writer = $this->memberWith(['payroll.compensation.sensitive.manage', 'payroll.compensation.view'], $school);
+        $code = $this->freshMfaCode($writer);
+        $unspent = fn () => DB::table('user_mfa_recovery_codes')->where('user_id', $writer->id)->whereNull('consumed_at')->count();
+        $before = $unspent();
+
+        $this->actingAs($writer)->post('/app/payroll/compensation/'.Str::uuid7(), ['salary_structure_id' => (string) Str::uuid7(), 'effective_from' => '2026-01-01', 'fixed_values' => [], 'mfa_code' => $code])->assertNotFound();
+
+        $this->assertGreaterThan(0, $before);
+        $this->assertSame($before, $unspent(), 'the code was never asked for');
+    }
+
+    #[Test]
+    public function the_search_treats_a_wildcard_as_text_and_answers_in_a_stable_order(): void
+    {
+        $school = $this->createSchool();
+        $viewer = $this->memberWith(['payroll.compensation.view', 'payroll.statutory.view'], $school);
+        foreach (['Anil Kumar', 'Anil_Kumar', '100% Anil'] as $name) {
+            $this->createEmploymentRecord($this->createEmployee($school, ['full_name' => $name]), ['starts_on' => '2025-01-01']);
+        }
+        $names = fn (string $url) => array_column($this->actingAs($viewer)->getJson($url)->assertOk()->json('data'), 'employeeFullName');
+
+        foreach (['/app/payroll/compensation/search', '/app/payroll/statutory/employees/search'] as $url) {
+            $this->assertSame(['100% Anil'], $names("{$url}?q=".urlencode('0%')), 'a percent sign matches a percent sign');
+            $this->assertSame(['Anil_Kumar'], $names("{$url}?q=".urlencode('l_K')), 'an underscore matches an underscore');
+            $this->assertCount(3, $names("{$url}?q=Anil"));
+            $ids = array_column($this->actingAs($viewer)->getJson("{$url}?q=Anil")->json('data'), 'employmentRecordId');
+            $sorted = $ids;
+            sort($sorted);
+            $this->assertSame($sorted, $ids, 'a bounded list has a defined order');
+        }
     }
 
     // --- Navigation ----------------------------------------------------
@@ -502,8 +636,11 @@ class PayrollUiTest extends TestCase
         $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
         app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId)), app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($runId))));
 
+        // HR.R1-C14 (C11-N3): the address that failed CI once. It holds `pf`, so a search of the whole page was never
+        // a statement about the payslip. Kept on purpose, so the check below can only pass by reading the payload.
         $sensitiveViewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
-        $response = $this->actingAs($sensitiveViewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}");
+        DB::table('users')->where('id', $sensitiveViewer->id)->update(['email' => 'gdapfw.varun.mistry@example.org']);
+        $response = $this->actingAs($sensitiveViewer->fresh())->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}");
 
         $response->assertInertia(fn ($page) => $page
             ->component('App/Payroll/Payslips/Show')
@@ -513,11 +650,31 @@ class PayrollUiTest extends TestCase
             ->where('payslip.statutoryDeductionsIncluded', false)
         );
 
-        // Belt-and-suspenders, matching this file's own established
-        // pattern above: the raw payload never carries a bank/statutory
-        // field, not merely a Vue template that never renders one.
+        // Belt-and-suspenders: the payload never carries a bank or statutory field, not merely a Vue template that never
+        // renders one. Keys are code and values are data, so this reads keys: `pf` may be part of a person's email.
         $raw = $response->getContent();
-        foreach (['bankAccount', 'ifsc', 'panNumber', 'pf', 'esi', 'tds'] as $forbidden) {
+        $page = $response->viewData('page');
+        $keys = [];
+        $walk = function (array $node) use (&$walk, &$keys): void {
+            foreach ($node as $key => $value) {
+                if (is_string($key)) {
+                    // `employeePfMandatory` and `employeePFAmount` are the shapes to catch: words, not substrings.
+                    $keys[] = strtolower(implode(' ', preg_split('/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=[0-9])|[^A-Za-z0-9]+/', $key) ?: []));
+                }
+                if (is_array($value)) {
+                    $walk($value);
+                }
+            }
+        };
+        $walk($page['props']);
+        $this->assertContains('netamount', array_map(fn (string $key) => str_replace(' ', '', $key), $keys), 'the check reached the payslip');
+        foreach (['bank', 'ifsc', 'pan', 'uan', 'esic', 'pf', 'epf', 'eps', 'edli', 'esi', 'tds', 'lwf', 'professional'] as $forbidden) {
+            $this->assertSame([], array_values(array_filter($keys, fn (string $key) => in_array($forbidden, explode(' ', $key), true))), "no {$forbidden} field on a payslip with no statutory deductions");
+        }
+        $this->assertNull($page['props']['payslip']['statutory']);
+        $this->assertSame(['Basic'], array_column($page['props']['payslip']['lines'], 'componentName'), 'no statutory line either');
+        // These two are distinctive enough that a value can never hold them by accident.
+        foreach (['bankAccount', 'panNumber'] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $raw);
         }
     }

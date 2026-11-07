@@ -1,7 +1,9 @@
 <?php
 
 use App\Domain\HR\Application\EmployeeAssignmentService;
+use App\Domain\HR\Application\EmployeeCertificationService;
 use App\Domain\HR\Application\EmployeeNoteService;
+use App\Domain\HR\Application\EmployeeQualificationService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Application\Reporting\ReportingChangeReason;
@@ -11,7 +13,9 @@ use App\Domain\HR\Application\Workforce\PlacementChangeReason;
 use App\Domain\HR\Application\Workforce\PlacementChangeService;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Domain\HR\Infrastructure\EmployeeNote;
+use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Timetable\Application\TimetableScheduleService;
@@ -43,6 +47,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php hr-lifecycle-op.php <schoolId> note-archive <employeeId> <noteId> <actorId>
 //   php hr-lifecycle-op.php <schoolId> task-category <actorId>
 //   php hr-lifecycle-op.php <schoolId> task-cancel <taskId> <version> <actorId>
+//   php hr-lifecycle-op.php <schoolId> qualification-verify|qualification-edit|qualification-archive|qualification-reject|certification-verify|certification-edit|certification-reject|certification-archive <employeeId> <rowId> <actorId>
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -79,6 +84,22 @@ try {
             })(),
             'task-category' => (string) $app->make(TaskCatalogueService::class)->createCategory(School::query()->findOrFail($argv[1]), 'raced', 'Raced', User::query()->findOrFail($argv[3]))->id,
             'task-cancel' => (string) $app->make(TaskWorkflowService::class)->cancel(School::query()->findOrFail($argv[1]), $argv[3], (int) $argv[4], TaskCancelReason::NO_LONGER_NEEDED, User::query()->findOrFail($argv[5]))->status,
+            'qualification-verify' => (string) $app->make(EmployeeQualificationService::class)->verify(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'qualification-edit' => (string) $app->make(EmployeeQualificationService::class)->update(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), ['qualification_name' => 'Edited in a race'], User::query()->findOrFail($argv[5]))->verification_status,
+            'certification-verify' => (string) $app->make(EmployeeCertificationService::class)->verify(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'certification-edit' => (string) $app->make(EmployeeCertificationService::class)->update(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), ['name' => 'Edited in a race'], User::query()->findOrFail($argv[5]))->verification_status,
+            'qualification-reject' => (string) $app->make(EmployeeQualificationService::class)->reject(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'certification-reject' => (string) $app->make(EmployeeCertificationService::class)->reject(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'certification-archive' => (function () use ($app, $argv): string {
+                $app->make(EmployeeCertificationService::class)->remove(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), ProfileRecordArchiveReason::NO_LONGER_CURRENT);
+
+                return 'archived';
+            })(),
+            'qualification-archive' => (function () use ($app, $argv): string {
+                $app->make(EmployeeQualificationService::class)->remove(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), ProfileRecordArchiveReason::NO_LONGER_CURRENT);
+
+                return 'archived';
+            })(),
             default => throw new InvalidArgumentException("unknown kind {$kind}"),
         };
     });

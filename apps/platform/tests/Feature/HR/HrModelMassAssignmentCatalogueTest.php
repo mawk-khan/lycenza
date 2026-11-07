@@ -23,10 +23,10 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
 {
     private const ROOTS = ['HR', 'Leave', 'StaffAttendance', 'WorkforceTasks', 'Payroll'];
 
-    private const PROTECTED = '/^(?:school_id|user_id|employee_id|employment_record_id|payroll_run_id|case_id|requirement_id|subordinate_employment_id|manager_employment_id|status|record_status|is_primary|verification_status|.*_by_user_id|author_user_id|actor_user_id|(?:verified|archived|retired|voided|ended|executed|captured|uploaded|reversed|started)_at|campus_id|parent_department_id|employee_number|document_id|archive_reason)$/';
+    private const PROTECTED = '/^(?:school_id|user_id|employee_id|employment_record_id|payroll_run_id|case_id|requirement_id|subordinate_employment_id|manager_employment_id|status|record_status|is_primary|verification_status|.*_by_user_id|author_user_id|actor_user_id|(?:verified|archived|retired|voided|ended|executed|captured|uploaded|reversed|started)_at|campus_id|department_id|position_id|staff_type|parent_department_id|employee_number|document_id|archive_reason)$/';
 
     /**
-     * Exactly what each model C13 hardened accepts. The pattern above cannot know every protected name, and a service
+     * Exactly what each hardened model accepts. The pattern above cannot know every protected name, and a service
      * strip list hides a wrong `$fillable` from a behaviour test, so these are pinned outright.
      */
     private const EXACT = [
@@ -49,6 +49,16 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
         'SeparationClearanceItem' => [],
         'SeparationClearanceRequirement' => [],
         'StaffAttendanceRecord' => [],
+        // HR.R1-C11's nine.
+        'EmployeeCompensationAssignment' => ['effective_from', 'effective_to'],
+        'EmploymentRecord' => ['probation_ends_on'],
+        'EmploymentSeparationCase' => ['reason_code', 'notified_on', 'planned_last_day'],
+        'LeaveAccrualRun' => [],
+        'LeavePolicy' => ['name', 'annual_allocation_units', 'carry_forward_allowed', 'carry_forward_cap_units', 'carry_forward_expiry_days', 'min_notice_days', 'max_backdate_days', 'max_units_per_request', 'eligibility_rule_count', 'entitlement_method', 'monthly_accrual_units', 'accrual_timing'],
+        'LeaveRequest' => [],
+        'PayrollPeriod' => ['period_month', 'starts_on', 'ends_on', 'payment_date'],
+        'PayrollRun' => [],
+        'WorkforceTask' => ['title', 'description', 'category_id', 'completion_mode', 'available_on', 'due_on', 'section_id', 'subject_offering_id'],
     ];
 
     /** Not hardened on purpose. Each states why its protected columns may stay fillable. */
@@ -122,6 +132,11 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
     public function each_hardened_model_accepts_exactly_its_own_fields(): void
     {
         $models = self::discovered();
+        $hardened = array_map(class_basename(...), LifecycleModels::HARDENED);
+        sort($hardened);
+        $exact = array_keys(self::EXACT);
+        sort($exact);
+        $this->assertSame($hardened, $exact, 'every hardened model has an exact list');
         foreach (self::EXACT as $name => $fields) {
             $this->assertSame($fields, (new $models[$name])->getFillable(), $name);
         }

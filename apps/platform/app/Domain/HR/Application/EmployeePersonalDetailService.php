@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  * The only sanctioned write path for an Employee's Restricted-tier
  * personal details (docs/modules/HR.md entity model:
  * `EmployeePersonalDetail` is 1:1). `setDetails()` creates the row if
- * absent, otherwise updates the existing one -- `updateOrCreate()`
+ * absent, otherwise updates the existing one -- a find-or-new under the Employee lock
  * keyed on `employee_id`, mirroring
  * App\Support\Settings\SchoolSettingsService's own upsert pattern --
  * with the table's `unique(employee_id)` constraint as the database-

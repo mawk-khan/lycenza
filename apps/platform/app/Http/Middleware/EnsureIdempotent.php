@@ -14,6 +14,7 @@ use App\Support\Idempotency\IdempotencyMetrics;
 use App\Support\Idempotency\IdempotencyOutcome;
 use App\Support\Idempotency\IdempotencyStatus;
 use App\Support\Idempotency\RequestFingerprint;
+use App\Support\Tenancy\SchoolNotOperationalException;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -141,6 +142,8 @@ class EnsureIdempotent
             ]);
             throw $e;
         } catch (Throwable $e) {
+            // Reached only by a direct call: on a real request the routing
+            // pipeline has already rendered the exception (see below).
             // Unclassified (transient infra, unexpected 500, ...) --
             // never poison the key over a failure we can't prove was
             // deterministic. See IdempotencyGuard::release()'s docblock.
@@ -151,11 +154,31 @@ class EnsureIdempotent
         // A self-participating controller (section 17) may already have
         // called IdempotencyGuard::completeWithin() inside its own
         // transaction -- don't clobber that with a second write.
-        if ($record->fresh()->status === IdempotencyStatus::Processing->value) {
-            $this->guard->complete($record, $response);
+        if ($record->fresh()?->status === IdempotencyStatus::Processing->value) {
+            if ($this->theSchoolRefused($response)) {
+                $this->guard->releaseIfStillClaimed($record);
+            } else {
+                $this->guard->complete($record, $response);
+            }
         }
 
         return $response;
+    }
+
+    /**
+     * HR.R1-C14 (C11-N2): the routing pipeline renders an exception into a
+     * response before it reaches this middleware, so the catch blocks above
+     * see one only on a direct call. A School that stopped being operational
+     * after the request-time check is refused before anything of the effect
+     * committed: this reaches the response after a commit on no idempotent
+     * route today (RELIABILITY.md names the routes that commit in batches). It
+     * may resume, so the refusal is not remembered. A rendered 5xx is currently remembered: a
+     * handled failure can follow a commit, and some routes have no atomic
+     * completion. Whether that should change is open (C14-N2, RELIABILITY.md).
+     */
+    private function theSchoolRefused(Response $response): bool
+    {
+        return (property_exists($response, 'exception') ? $response->exception : null) instanceof SchoolNotOperationalException;
     }
 
     private function replay(ApiIdempotencyKey $record, Request $request): Response

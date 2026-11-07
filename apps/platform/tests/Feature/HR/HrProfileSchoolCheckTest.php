@@ -329,6 +329,42 @@ class HrProfileSchoolCheckTest extends TestCase
     }
 
     #[Test]
+    public function an_actor_without_a_document_capability_learns_nothing_of_the_school_on_the_generic_route(): void
+    {
+        $this->suspend();
+        $stranger = $this->createUserWithCapabilities($this->school, ['hr.employees.view']);
+        $request = Request::create('/');
+        $request->setUserResolver(fn () => $stranger);
+
+        // Asks nothing of the School: the service's capability refusal is what they get.
+        app(EmployeeDocumentPolicy::class)->beforeUpload($request, $this->school, $this->employee->id, 'sensitive');
+
+        $this->expectException(AuthorizationException::class);
+        app(DocumentService::class)->create($this->school, new CreateDocumentData(DocumentOwner::employee($this->employee->id), 'sensitive', $this->file()), $stranger);
+    }
+
+    #[Test]
+    public function a_refused_direct_generic_upload_leaves_no_bytes_no_row_and_no_audit(): void
+    {
+        $this->suspend();
+        $disk = Storage::disk((string) config('documents.disk'));
+        $files = count($disk->allFiles());
+        $rows = DB::table('documents')->where('school_id', $this->school->id)->count();
+        $audit = $this->auditCount();
+
+        try {
+            app(DocumentService::class)->create($this->school, new CreateDocumentData(DocumentOwner::employee($this->employee->id), 'sensitive', $this->file()), $this->hr);
+            $this->fail('A suspended School took a document.');
+        } catch (SchoolNotOperationalException) {
+            // Below the policy's early check: the object was written and compensated.
+        }
+
+        $this->assertCount($files, $disk->allFiles());
+        $this->assertSame($rows, DB::table('documents')->where('school_id', $this->school->id)->count());
+        $this->assertSame($audit, $this->auditCount());
+    }
+
+    #[Test]
     public function a_suspended_school_starts_no_generation_run_and_reopens_none(): void
     {
         $generation = app(TaskGenerationService::class);

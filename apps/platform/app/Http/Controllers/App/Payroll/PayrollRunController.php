@@ -108,7 +108,8 @@ class PayrollRunController extends Controller
 
     public function manualOverride(Request $request, TenantContext $context, string $payrollRun, PayrollRunAdministrationService $service): RedirectResponse
     {
-        $context->requireSchool();
+        // HR.R1-C14 (C12-N3): the capability first. Sibling actions still look up first: C14-N1.
+        $this->authorizeCapability('payroll.runs.prepare', $context->requireSchool());
         $run = PayrollRun::query()->findOrFail($payrollRun);
 
         $validated = $request->validate([
@@ -127,7 +128,8 @@ class PayrollRunController extends Controller
 
     public function correctionDelta(Request $request, TenantContext $context, string $payrollRun, PayrollRunAdministrationService $service): RedirectResponse
     {
-        $context->requireSchool();
+        // HR.R1-C14 (C12-N3): the capability first. Sibling actions still look up first: C14-N1.
+        $this->authorizeCapability('payroll.runs.prepare', $context->requireSchool());
         $run = PayrollRun::query()->findOrFail($payrollRun);
 
         $validated = $request->validate([

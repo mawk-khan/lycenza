@@ -14,6 +14,7 @@ use App\Support\Tenancy\SchoolNotOperationalException;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * HR.R1-C10 (HRC-3): HR's answer to the generic Documents API, so that route is no
@@ -36,7 +37,7 @@ class HrEmployeeDocumentPolicy implements EmployeeDocumentPolicy
 
     public function beforeUpload(Request $request, School $school, string $employeeId, string $classificationTier): void
     {
-        $this->refuseAnUnavailableSchool($school);
+        $this->refuseAnUnavailableSchool($school, $request->user());
         if ($classificationTier !== 'highly_sensitive') {
             return;
         }
@@ -53,7 +54,7 @@ class HrEmployeeDocumentPolicy implements EmployeeDocumentPolicy
 
     public function beforeArchive(Request $request, School $school, Document $document): void
     {
-        $this->refuseAnUnavailableSchool($school);
+        $this->refuseAnUnavailableSchool($school, $request->user());
         $this->context->withSchool($school, fn () => $this->selfAdministration->refuseOwnEmployee($request->user(), (string) $document->employee_id, 'profile.document'));
         $this->stepUp->requireFor($request, $request->user(), $school, null, $document->classification_tier);
     }
@@ -70,10 +71,18 @@ class HrEmployeeDocumentPolicy implements EmployeeDocumentPolicy
         return app(EmployeeDocumentService::class)->archiveRegistered($school, $document, $actor);
     }
 
-    /** No lock to hold yet, and no effect to order: this only spares a refused School a storage write. */
-    private function refuseAnUnavailableSchool(School $school): void
+    /**
+     * No lock to hold yet, and no effect to order: this only spares a refused School a storage write. These routes
+     * carry no `capability:` middleware, so it asks only of someone who holds a document capability. Anyone else
+     * goes on to the service's own refusal, and never learns the School's state from the answer (HR.R1-C14).
+     */
+    private function refuseAnUnavailableSchool(School $school, User $actor): void
     {
-        if (! $this->operational->isOperational($school->id)) {
+        $gate = Gate::forUser($actor);
+        $holds = $gate->allows('capability', ['hr.employees.documents.manage', $school])
+            || $gate->allows('capability', ['hr.employees.sensitive.manage', $school]);
+
+        if ($holds && ! $this->operational->isOperational($school->id)) {
             throw new SchoolNotOperationalException;
         }
     }

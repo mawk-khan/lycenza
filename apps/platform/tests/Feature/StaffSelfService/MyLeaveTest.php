@@ -7,6 +7,7 @@ use App\Domain\Leave\Application\LeaveRequestService;
 use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantRls;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
@@ -195,6 +196,43 @@ class MyLeaveTest extends TestCase
         $this->submit($w, $noCapability['user'], '2026-10-12')->assertForbidden();
         $this->submit($w, $leaveAdmin, '2026-10-12')->assertForbidden();
         $this->assertSame(0, $this->inSchool($w['school'], fn () => DB::table('leave_requests')->count()));
+    }
+
+    #[Test]
+    public function a_school_refusal_after_the_request_check_is_not_replayed_once_the_school_resumes(): void
+    {
+        // HR.R1-C14 (C11-N2): the Leave half of the finding. Every self-service path asks the School before the acting
+        // Employee's hold, so the refusal is SchoolNotOperationalException, and the key does not remember it.
+        $w = $this->world();
+        $real = app(SchoolOperationalGuard::class);
+        $this->app->instance(SchoolOperationalGuard::class, new class($real) extends SchoolOperationalGuard
+        {
+            private bool $spent = false;
+
+            public function __construct(private SchoolOperationalGuard $real) {}
+
+            public function holdOperational(string $schoolId): bool
+            {
+                if (! $this->spent) {
+                    $this->spent = true;
+
+                    return false;
+                }
+
+                return $this->real->holdOperational($schoolId);
+            }
+        });
+        $key = (string) Str::uuid();
+        $requests = fn () => $this->inSchool($w['school'], fn () => DB::table('leave_requests')->count());
+        $before = $requests();
+
+        $this->submit($w, $w['me']['user'], '2026-10-12', key: $key)->assertNotFound();
+        $this->assertSame($before, $requests());
+
+        $retry = $this->submit($w, $w['me']['user'], '2026-10-12', key: $key);
+        $retry->assertCreated();
+        $this->assertNull($retry->headers->get('Idempotency-Replayed'));
+        $this->assertSame($before + 1, $requests());
     }
 
     #[Test]

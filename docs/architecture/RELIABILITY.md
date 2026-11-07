@@ -236,17 +236,31 @@ this for arbitrary future controller logic on its own.
 
 ### Failure classification
 
-- **Deterministic** (`ValidationException`, `AuthorizationException`
-  thrown from inside the wrapped action): recorded via
-  `failDeterministically()` and **replayed verbatim** on retry —
-  re-running the same logical request would deterministically reject
-  it again anyway, so replaying the stored rejection is both safe and
-  avoids repeating wasted work.
-- **Unclassified** (anything else — worker crash, DB disconnection,
-  dependency timeout, an unexpected exception): the claim is
-  **released** (the row is deleted) via `IdempotencyGuard::release()`.
-  A retry gets a genuinely fresh claim attempt. The key is never
-  permanently poisoned by an infrastructure blip.
+Laravel's routing pipeline renders an exception into a response before it
+reaches route middleware, so `EnsureIdempotent` sees a response on a real
+request, with the exception attached. Its catch blocks serve only a direct
+call. Until HR.R1-C14 nothing read that attachment.
+
+- **Remembered** (every rendered response, 5xx included): **replayed
+  verbatim** on retry, and a new key is a new attempt.
+- **Released** (`SchoolNotOperationalException`): the row is deleted via
+  `IdempotencyGuard::releaseIfStillClaimed()`, so a retry after the School
+  resumes is a real attempt. A row another request has reclaimed is left
+  alone. The release is correct because **a route where this can reach the
+  response after a commit must stay off the `idempotent` middleware**, or a
+  retry repeats what committed. `LeaveAccrualService` commits batches and can be refused, so
+  `/accrual-runs` is not idempotent (pinned). Five idempotent routes do commit
+  item by item and are safe for a different reason: rollover start and resume
+  and the two fee-selection carry-forwards never reach a School guard, and
+  `employee-imports` catches the refusal into a row result (C14-N4).
+- **A self-participating route** that called `completeWithin()` keeps its
+  record: it is no longer `processing`, so neither path touches it.
+
+**A 5xx is currently remembered, and this section used to say otherwise.** A
+handled failure can follow a commit, and some routes have no atomic completion
+(`WebhookEndpointService`, the Inventory stock API), so releasing it would let a
+retry run the effect twice. Whether that should change is a Platform decision
+(C14-N2, `docs/hr/HR-R1-C14-RESIDUAL-HARDENING.md` §2).
 
 ### Expiration and pruning
 

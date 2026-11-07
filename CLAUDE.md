@@ -277,6 +277,11 @@ docs/roadmap             MASTER-ROADMAP.md
     `docs/security/AUTHORIZATION.md` ("Idempotent replay is not an
     authorization bypass").
 
+    **A rendered failure reaches the middleware as a response, not an
+    exception (HR.R1-C14).** Read the attached exception to classify it.
+    Only `SchoolNotOperationalException` is released: a 5xx can follow a
+    commit, so it is currently remembered (C14-N2, open).
+
 33. **A feature-specific external idempotency model may still be
     required.** The generic `Idempotency-Key` middleware only
     guarantees "effectively-once under its documented in-flight
@@ -1880,6 +1885,7 @@ once several modules copy it.
      - **Self-administration.** Every profile write calls `HrSelfAdministrationGuard::refuseOwnEmployee()`.
      - **Stale-form tokens.** Identity and personal edits carry an `EmployeeProfileVersion` token: stale is a 409, missing is a 422.
      - **Experience** is derived (`ExperienceCalculator`), never stored.
+     - **A credential is decided on its locked row (HR.R1-C14).** Edit, verify and reject re-read the qualification or certification FOR UPDATE and refuse an archived one there, so an edit landing after a verification resets it. A verification attests the row as it stands when it commits, not what the verifier saw: it names no version (C14-N5, open).
      - **HR documents** are uploads through `DocumentService::createForEmployee()` with a closed `EmployeeDocumentCategory`, and reference their Document (`document_id`). Never a raw storage path, never an `other` category. An identity document is always Highly Sensitive. Every download is re-authorized by the Document's tier, and viewing an Employee never implies downloading their files.
      - **The generic Documents API answers to HR (HR.R1-C10).** `POST /employees/{id}/documents` and `POST /documents/{id}/archive` go through `EmployeeDocumentPolicy`, which Documents declares and HR implements, so Documents never names an HR Application class (rule 4). They take the same `HighlySensitiveDocumentStepUp`, refuse one's own record, take only PDF, JPEG and PNG, and a Document the HR register holds is archived by the register. The tier on that route is still the caller's word and it has no category: a known residual, not a second register. A rule 98 coverage entry proves authorization, never assurance: a new write route to a protected tier needs its own step-up test.
 133. **Leave policy rules and eligibility live on the immutable policy version; eligibility is never ambiguous and never guessed (HR.9, ADR 0065 §28).**

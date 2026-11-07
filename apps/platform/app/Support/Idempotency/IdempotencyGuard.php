@@ -155,10 +155,26 @@ class IdempotencyGuard
      * a genuinely fresh claim attempt. We would rather risk a retry
      * re-running an action whose outcome is uncertain than permanently
      * block every future retry over a transient infrastructure blip.
+     * HR.R1-C14: reached only by a direct call. A real request's failure
+     * arrives rendered, and is classified in EnsureIdempotent.
      */
     public function release(ApiIdempotencyKey $record): void
     {
         $record->delete();
+    }
+
+    /**
+     * HR.R1-C14: release() for a request that may have outlived its in-flight
+     * timeout. Another request can have reclaimed this row by then, which
+     * moves `created_at`, and its claim is not this request's to delete.
+     */
+    public function releaseIfStillClaimed(ApiIdempotencyKey $record): void
+    {
+        ApiIdempotencyKey::query()
+            ->whereKey($record->getKey())
+            ->where('status', IdempotencyStatus::Processing->value)
+            ->where('created_at', $record->getRawOriginal('created_at'))
+            ->delete();
     }
 
     private function findLive(string $schoolId, string $actorType, string $actorId, string $routeAction, string $idempotencyKey): ?ApiIdempotencyKey

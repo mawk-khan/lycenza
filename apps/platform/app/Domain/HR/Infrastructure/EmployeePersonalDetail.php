@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
  *
  * The only sanctioned write path is
  * App\Domain\HR\Application\EmployeePersonalDetailService::setDetails(),
- * which enforces the 1:1 invariant via `updateOrCreate()` -- never
+ * which enforces the 1:1 invariant via a find-or-new under the Employee lock -- never
  * create this model directly with a raw `create()` call outside a test.
  *
  * @property string $id

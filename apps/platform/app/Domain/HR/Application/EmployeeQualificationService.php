@@ -96,24 +96,28 @@ class EmployeeQualificationService
                 $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.qualification');
-                $wasVerified = $qualification->verification_status !== 'unverified';
+                // HR.R1-C14: decided on the locked row. A model read earlier cannot see a verification that committed
+                // since, and writing only the edited columns would leave the new content verified.
+                $locked = EmployeeQualification::query()->whereKey($qualification->id)->lockForUpdate()->firstOrFail();
+                $this->assertLiveRecord($locked);
+                $wasVerified = $locked->verification_status !== 'unverified';
 
-                $qualification->fill($attributes);
+                $locked->fill($attributes);
                 // HR.R1-C13 (GOV-6): verification is not fillable, so the reset is stated, and the audit still names it.
                 if ($attributes !== [] && $wasVerified) {
-                    $qualification->forceFill(['verification_status' => 'unverified', 'verified_at' => null]);
+                    $locked->forceFill(['verification_status' => 'unverified', 'verified_at' => null]);
                     $attributes = [...$attributes, 'verification_status' => 'unverified', 'verified_at' => null];
                 }
-                $qualification->save();
+                $locked->save();
 
-                $this->audit->school($employee->school, 'hr.qualification.updated', actor: $actor, subject: $qualification, metadata: [
+                $this->audit->school($employee->school, 'hr.qualification.updated', actor: $actor, subject: $locked, metadata: [
                     'employeeId' => $employee->id,
                     'qualificationId' => $qualification->id,
                     'fields' => array_keys($attributes),
                     'verificationReset' => $wasVerified && $attributes !== [],
                 ]);
 
-                return $qualification->fresh();
+                return $locked->fresh();
             });
         });
     }
@@ -141,7 +145,9 @@ class EmployeeQualificationService
                 $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.qualification');
-                $qualification->forceFill(['verification_status' => 'verified', 'verified_at' => now()])->save();
+                $locked = EmployeeQualification::query()->whereKey($qualification->id)->lockForUpdate()->firstOrFail();
+                $this->assertLiveRecord($locked);
+                $locked->forceFill(['verification_status' => 'verified', 'verified_at' => now()])->save();
 
                 $this->audit->school($employee->school, 'hr.qualification.verified', actor: $actor, subject: $qualification, metadata: [
                     'employeeId' => $employee->id,
@@ -164,7 +170,9 @@ class EmployeeQualificationService
                 $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.qualification');
-                $qualification->forceFill(['verification_status' => 'rejected', 'verified_at' => null])->save();
+                $locked = EmployeeQualification::query()->whereKey($qualification->id)->lockForUpdate()->firstOrFail();
+                $this->assertLiveRecord($locked);
+                $locked->forceFill(['verification_status' => 'rejected', 'verified_at' => null])->save();
 
                 $this->audit->school($employee->school, 'hr.qualification.rejected', actor: $actor, subject: $qualification, metadata: [
                     'employeeId' => $employee->id,
