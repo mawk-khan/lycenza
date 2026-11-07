@@ -34,7 +34,10 @@ use LogicException;
  * against an employment end on either side, because a leave approval goes on to
  * hold the subordinate's employment. Taking the employments first without the
  * Employees was a real deadlock too, against a placement change, because that
- * approval goes on to hold the subordinate's Employee as well. Which rows to lock
+ * approval goes on to hold the subordinate's Employee as well. The manager's
+ * Employee comes before the subordinate's, here and in
+ * `ReportingRelationshipService::lockParties()`, because a decider already holds
+ * its own. Which rows to lock
  * is only known from the line, so the line is read first without a lock and read
  * again, held, afterwards. `employee_id` never changes, so it needs no lock. A line
  * replaced in between is simply read again, a bounded number of times. After that
@@ -101,9 +104,12 @@ class ReportingLine
                 return null;
             }
 
-            $employments = [$employmentRecordId, $seen->manager_employment_id];
-            $employees = EmploymentRecord::query()->where('school_id', $school->id)->whereIn('id', $employments)->pluck('employee_id')->all();
-            Employee::query()->where('school_id', $school->id)->whereIn('id', $employees)->orderBy('id')->sharedLock()->get(['id']);
+            // The manager's Employee first: a decider already holds it, and a line writer takes it first too.
+            $employments = [$seen->manager_employment_id, $employmentRecordId];
+            foreach ($employments as $employment) {
+                $employee = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($employment)->value('employee_id');
+                Employee::query()->where('school_id', $school->id)->whereKey($employee)->sharedLock()->first(['id']);
+            }
             EmploymentRecord::query()->where('school_id', $school->id)->whereIn('id', $employments)->orderBy('id')->sharedLock()->get(['id']);
 
             $held = $this->lineOn($school, $employmentRecordId, $date)->sharedLock()->first();

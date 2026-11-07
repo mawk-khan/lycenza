@@ -56,11 +56,12 @@ class ReportingLineEmploymentEndConcurrencyTest extends TestCase
         return ['php', __DIR__.'/../../Support/reporting-line-op.php', ...$args];
     }
 
-    private function team(): array
+    private function team(bool $onACampus = false): array
     {
         $w = $this->leaveWorld();
         $this->schools[] = $w['school'];
         $this->workingWeek($w['school'], $w['admin']);
+        $campus = $onACampus ? $this->createCampus($w['school']) : null;
         $people = [];
         foreach (['requester' => ['staff_self_service'], 'manager' => ['teacher', 'line_manager'], 'other' => ['teacher', 'line_manager']] as $who => $roles) {
             $user = $this->createUser();
@@ -69,7 +70,7 @@ class ReportingLineEmploymentEndConcurrencyTest extends TestCase
                 $this->assignSchoolRole($membership, $role);
             }
             $employment = $this->createEmploymentRecord($this->createEmployee($w['school'], ['user_id' => $user->id]), ['status' => 'active', 'starts_on' => '2024-01-01', 'ends_on' => null]);
-            $assignment = $this->createEmployeeAssignment($employment, $this->createPosition($w['school']), ['starts_on' => '2024-01-01', 'ends_on' => null, 'is_primary' => true]);
+            $assignment = $this->createEmployeeAssignment($employment, $this->createPosition($w['school']), ['campus_id' => $campus?->id, 'starts_on' => '2024-01-01', 'ends_on' => null, 'is_primary' => true]);
             app(CapabilityResolver::class)->forgetCache($user, $w['school']);
             $people[$who] = compact('user', 'employment', 'assignment');
         }
@@ -78,7 +79,7 @@ class ReportingLineEmploymentEndConcurrencyTest extends TestCase
         $this->allocate($w, 24, null, $people['requester']['employment']);
         $request = $this->submitLeave($w, '2027-02-01', '2027-02-01', 'full', null, $people['requester']['employment']);
 
-        return $w + $people + ['request' => $request, 'hr' => $this->fullHrActor($w['school'])];
+        return $w + $people + ['campus' => $campus, 'request' => $request, 'hr' => $this->fullHrActor($w['school'])];
     }
 
     private function waitBlocked(string $session, Process $process): void
@@ -205,5 +206,58 @@ class ReportingLineEmploymentEndConcurrencyTest extends TestCase
 
         $this->assertSame('ok:approved', trim($decide->getOutput()));
         $this->assertStringStartsWith('ok:', trim($move->getOutput()));
+    }
+
+    #[Test]
+    public function a_managers_rejection_racing_a_campus_writer_of_that_line_never_deadlocks(): void
+    {
+        // The delta review's cycle. A Campus writer took the two Employees in id order, and a decider already holds the
+        // manager's. With the subordinate's id lower, each then wanted the other's. A share lock on the manager's
+        // Employee parks the writer at that Employee without stopping the decider, which forces the order.
+        $team = $this->team(onACampus: true);
+        $school = $team['school'];
+        $this->assertLessThan($team['manager']['employment']->employee_id, $team['requester']['employment']->employee_id, 'the order the cycle needs');
+        $writer = $this->createUser();
+        $this->assignSchoolRole($this->createMembership($writer, $school), 'hr_officer', $team['campus']->id);
+        $dir = sys_get_temp_dir().'/line_'.bin2hex(random_bytes(6));
+        mkdir($dir);
+        [$writeSession, $decideSession] = ['line_wri_'.bin2hex(random_bytes(4)), 'line_dec_'.bin2hex(random_bytes(4))];
+
+        $gate = new Process($this->op('gate-employee', $school->id, $team['manager']['employment']->employee_id), null, ['CONCURRENCY_HOLD_DIR' => $dir]);
+        $gate->setTimeout(120);
+        $gate->start();
+        $deadline = microtime(true) + 60;
+        while (! file_exists($dir.'/acted') && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+        $this->assertFileExists($dir.'/acted', 'the gate never held the Employee: '.$gate->getErrorOutput());
+
+        $write = new Process($this->op('line-remove', $school->id, $team['requester']['employment']->id, SchoolTimezone::today($school), $writer->id), null, ['CONCURRENCY_SESSION_NAME' => $writeSession]);
+        $write->setTimeout(120);
+        $write->start();
+        $this->waitBlocked($writeSession, $write);
+
+        $decide = new Process($this->op('manager-reject', $school->id, $team['request']->id, $team['manager']['user']->id), null, ['CONCURRENCY_SESSION_NAME' => $decideSession]);
+        $decide->setTimeout(120);
+        $decide->start();
+        $deadline = microtime(true) + 60;
+        while ($decide->isRunning() && microtime(true) < $deadline) {
+            $row = DB::connection('pgsql_admin')->selectOne('select wait_event_type from pg_stat_activity where application_name = ?', [$decideSession]);
+            if ($row !== null && $row->wait_event_type === 'Lock') {
+                break;
+            }
+            usleep(2_000);
+        }
+
+        touch($dir.'/release');
+        $gate->wait();
+        $decide->wait();
+        $write->wait();
+        @unlink($dir.'/acted');
+        @unlink($dir.'/release');
+        @rmdir($dir);
+
+        $this->assertSame('ok:rejected', trim($decide->getOutput()));
+        $this->assertStringStartsWith('ok:', trim($write->getOutput()));
     }
 }

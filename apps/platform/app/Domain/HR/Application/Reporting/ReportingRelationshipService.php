@@ -278,15 +278,17 @@ final class ReportingRelationshipService
     }
 
     /**
-     * Placement locks (sorted), self-administration, the reporting lock, then
+     * Placement locks (manager first), self-administration, the reporting lock, then
      * both employments FOR SHARE (sorted), re-read.
      *
      * @return array{0: EmploymentRecord, 1: EmploymentRecord}
      */
     private function lockParties(School $school, EmploymentRecord $subordinate, EmploymentRecord $manager, User $actor, ?HrEmployeeCampusGuard $guard): array
     {
-        $employees = array_values(array_unique([$subordinate->employee_id, $manager->employee_id]));
-        sort($employees);
+        // HR.R1-C9: the manager's Employee first, never id order. A decider on this line already holds the manager's
+        // and goes on to the subordinate's (ReportingLine::holdManagerOf()), so id order deadlocked with a Campus
+        // writer, which takes these FOR NO KEY UPDATE, whenever the subordinate's id was the lower.
+        $employees = array_values(array_unique([$manager->employee_id, $subordinate->employee_id]));
         foreach ($employees as $employeeId) {
             $guard !== null ? $this->placement->forEmployeeWrite($school, $employeeId) : $this->placement->forPlacementChange($school, $employeeId);
         }

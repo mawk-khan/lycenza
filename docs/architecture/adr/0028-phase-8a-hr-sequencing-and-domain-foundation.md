@@ -525,7 +525,7 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
    application boundary (rule 102). A separate trigger, so the published guard
    and its column pin stay as they were; the verifier pins the new one. The
    independent review added two rules: nothing is promoted on an ended employment
-   (database), and `setPrimary()` refuses a placement that is over (service),
+   (database, by terminal status), and `setPrimary()` refuses a placement that is over (service),
    because promoting one demoted the current primary and left a running employment
    with none. "Closed" means `ends_on` is set on the row or in the statement.
 3. **Reporting-line lock order.** Both Employees, both employments, then the
@@ -535,8 +535,13 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
    one in practice. **The first version of this correction introduced a third:**
    it took the employments without their Employees, so an approval deadlocked with
    a placement change of the requester. The independent review found it. All three
-   reproduced as `40P01` on the code they affected, and all three are in
-   `ReportingLineEmploymentEndConcurrencyTest`.
+   reproduced as `40P01` on the code they affected. A fourth existed already:
+   `lockParties()` took the two Employees in id order while a decider holds the
+   manager's, and the correction widened it to rejections and task decisions. The
+   delta review found that too, so both now take the manager's Employee first. The
+   one writer-against-writer order given up is two Campus writers assigning two
+   people to each other at once, which a reporting line refuses anyway. All four
+   are in `ReportingLineEmploymentEndConcurrencyTest`.
 4. **Leave credit.** The net of the adjustment chain (rule 134), not of
    adjustments naming the accrual directly. A correction names the entry it
    corrects, so undoing the debit names the debit.

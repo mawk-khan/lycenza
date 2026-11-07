@@ -4494,14 +4494,16 @@ writers serialize and the second sees the first's committed lines):
 **Readers:**
 - `ReportingLine` keeps its signatures (`managerOf`, `holdManagerOf`,
   `reportsOf`), now over dated lines.
-  - `holdManagerOf()` share-locks both Employees, both employments, then
-    the line, so a concurrent change, removal, correction or employment end
-    waits for a decision, or committed first and is seen. **Employee,
-    employment, line** (HR.R1-C9) is the order every HR writer uses. Taking
-    the line first was a real deadlock against an end on either side, because
-    a leave approval goes on to hold the requester's employment. Taking the
-    employments first was one against a placement change, because that
-    approval also holds the requester's Employee. The line is read without a
+  - `holdManagerOf()` share-locks the manager's Employee, the subordinate's,
+    both employments, then the line, so a concurrent change, removal,
+    correction or employment end waits for a decision, or committed first and
+    is seen. **Employee, employment, line** (HR.R1-C9) is the order every HR
+    writer uses. Taking the line first was a real deadlock against an end on
+    either side, because a leave approval goes on to hold the requester's
+    employment. Taking the employments first was one against a placement
+    change, because that approval also holds the requester's Employee. A line
+    writer takes the manager's Employee first, never id order, because a
+    decider already holds it. The line is read without a
     lock to learn which rows to take, then read again, held. A replaced line
     is read again, at most three times, and after that there is no held
     answer, which every caller refuses.

@@ -653,7 +653,7 @@ class DatabaseRoleVerifier
         $archived = DB::selectOne("select p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employment_records_archived_identity' and t.tgrelid = 'public.employment_records'::regclass and pg_get_triggerdef(t.oid) like '%BEFORE INSERT%'");
 
         return CheckResult::of('employment_lifecycle_admission_guarded', $identity !== null && (int) $identity->columns === 2
-            && str_contains($identity->src, 'belongs to its employment') && str_contains($identity->src, 'never took effect is final') && str_contains($identity->src, 'stays primary history') && str_contains($identity->src, 'keeps its placement history')
+            && str_contains($identity->src, 'belongs to its employment') && str_contains($identity->src, 'never took effect is final') && str_contains($identity->src, 'stays primary history') && str_contains($identity->src, 'keeps its placement history') && str_contains($identity->src, 'FOR KEY SHARE')
             && $archived !== null && str_contains($archived->src, 'FOR SHARE')
             && $guard !== null && str_contains($guard->src, 'never begins with a planned end')
             && $placement !== null && (int) $placement->columns === 2 && str_contains($placement->src, 'never took effect is final') && str_contains($placement->src, 'past its end')

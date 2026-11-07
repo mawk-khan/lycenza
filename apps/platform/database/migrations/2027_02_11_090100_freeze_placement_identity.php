@@ -15,8 +15,10 @@ use Illuminate\Support\Facades\DB;
  *   on a row that has, or is being given, an `ends_on`.
  *   `EmployeeAssignmentService::setPrimaryRecord()` demotes open rows only.
  * - An ended employment keeps its placement history: nothing is promoted on one.
- *   `ends_on` alone cannot decide this, because a named placement change
- *   legitimately promotes a new row that carries a planned end.
+ *   The placement's own `ends_on` cannot decide this, because a named placement
+ *   change legitimately promotes a new row that carries a planned end, so it reads
+ *   the employment's terminal status, FOR KEY SHARE like its sibling guard, which
+ *   waits for an end in progress.
  *
  * `is_primary` on a placement of a running employment stays writable, a deliberate
  * narrowing of the register's acceptance wording: setPrimary() and
@@ -38,6 +40,8 @@ return new class extends Migration
         DB::unprepared(<<<'SQL'
             CREATE FUNCTION public.hr_employee_assignments_placement_identity() RETURNS trigger
                 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
+            DECLARE
+                v_status text;
             BEGIN
                 IF pg_catalog.pg_has_role(current_user, (SELECT relowner FROM pg_catalog.pg_class WHERE oid = TG_RELID), 'MEMBER') THEN
                     RETURN NEW;
@@ -55,10 +59,13 @@ return new class extends Migration
                         RAISE EXCEPTION 'employee_assignments: a closed primary period stays primary history (hr_employee_assignments_placement_identity)'
                             USING ERRCODE = 'check_violation';
                     END IF;
-                    IF NEW.is_primary AND EXISTS (SELECT 1 FROM public.employment_records r
-                                                   WHERE r.id = OLD.employment_record_id AND r.school_id = OLD.school_id AND r.ends_on IS NOT NULL) THEN
-                        RAISE EXCEPTION 'employee_assignments: an ended employment keeps its placement history (hr_employee_assignments_placement_identity)'
-                            USING ERRCODE = 'check_violation';
+                    IF NEW.is_primary THEN
+                        SELECT r.status INTO v_status FROM public.employment_records r
+                         WHERE r.id = OLD.employment_record_id AND r.school_id = OLD.school_id FOR KEY SHARE;
+                        IF v_status IN ('separated', 'terminated', 'retired', 'deceased') THEN
+                            RAISE EXCEPTION 'employee_assignments: an ended employment keeps its placement history (hr_employee_assignments_placement_identity)'
+                                USING ERRCODE = 'check_violation';
+                        END IF;
                     END IF;
                 END IF;
                 RETURN NEW;

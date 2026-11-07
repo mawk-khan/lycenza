@@ -59,7 +59,7 @@ class EmploymentService
      * `active`/`notice_period` are non-terminal Employment states and
      * are never a valid "ending" transition.
      */
-    private const array TERMINAL_STATUSES = ['separated', 'terminated', 'retired', 'deceased'];
+    public const array TERMINAL_STATUSES = ['separated', 'terminated', 'retired', 'deceased'];
 
     /**
      * HR.1A (S-8): the only statuses a NEW employment may start in. Terminal

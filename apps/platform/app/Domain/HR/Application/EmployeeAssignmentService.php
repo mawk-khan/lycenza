@@ -305,7 +305,7 @@ class EmployeeAssignmentService
         // HR.R1-C9: promoting a placement that is over would demote the open primary and leave the employment with
         // no current primary, and an ended employment keeps its placement history. Database-backed for the second.
         if (! $wasPrimary) {
-            $employmentEnded = EmploymentRecord::query()->whereKey($assignment->employment_record_id)->whereNotNull('ends_on')->exists();
+            $employmentEnded = EmploymentRecord::query()->whereKey($assignment->employment_record_id)->whereIn('status', EmploymentService::TERMINAL_STATUSES)->exists();
             if ($employmentEnded || ($stored?->ends_on !== null && $stored->ends_on->toDateString() < SchoolTimezone::today($school))) {
                 throw new PlacementChangeConflictException('placement_ended', 'This placement has ended, so it cannot become the primary placement.');
             }
