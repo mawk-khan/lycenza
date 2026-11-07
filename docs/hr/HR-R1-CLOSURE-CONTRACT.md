@@ -1,7 +1,7 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C12 have. **Never
+started; the HR.R1-0 audit and checkpoints C1 to C13 have. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -250,5 +250,14 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Found by applying the proposed one-writer definition to the code:** it needs named exceptions for rules 76 and 86 to work outside HR, and its point 4 fails five tables (C12-N2).
 - **Found by an independent fact-check before publication, and fixed.** My first closure matrix said "Architecture agreement: Yes" on three rows with no record behind it. C12-N1 overstated the WorkforceTasks gap, C12-N3 undercounted its sites, the D-2 moves hid a 404 body that names an HR class, and the server version and one citation were wrong. It found no invented approval.
 - **Not verified, and not verifiable here:** the reference-pack fingerprint.
+
+**Evidence recorded (HR.R1-C13, 2026-11-07):** C11-N1 and C12-N1 are closed for development, and GOV-6 stays partial with every model dispositioned. No owner decision was taken: D-1 to D-10 and R1-01 stay pending. HR.R1 stays OPEN. Production stays NO-GO. `HR-R1-C13-HARDENING.md` holds the writer inventory, the 87-model matrix and the review dispositions.
+
+- **Reproduced on `ceff7576`:** all 52 writer cases reached the write on a suspended School, and a suspended School took a document.
+- **Found by the strict handler, and fixed before review.** The first model change dropped the verification reset of an edited qualification or certification, with no error in production. Nothing on `main` ever carried it.
+- **Found by the independent reviews, and fixed.** The generic Documents route still wrote an Employee file on a suspended School (MEDIUM), closed in HR's port with no Documents file changed. The generation run row was written before its guard. Pins saw only `school_id`. No HIGH.
+- **Found by a mutation, and fixed.** A model could leave the strict list unnoticed. The lists must now partition the discovered namespace.
+- **Proven and published.** `060743c4`: CI gate run 42398199405, four shards, 11,410 cases, 0 failures, 1 skip (ESI-12), 462,457 assertions; `main` CI run 42400347210 green. 234 more cases than C11. 13 mutations each failed a test. Eight two-process races pass in both commit orders. No migration, so no rollback proof applies, and forced RLS stays 252. `platform:verify-database` read failed=0 at the start of the checkpoint. The capability map recounts to 361 with no row changed.
+- **Not done.** No browser walkthrough: no screen changed. `ddev demo-reset` was not run, so the local School database was left as it was. A screen-reader pass stays outstanding.
 
 **Publication-history recommendation to the Platform owner (not built).** `lycenza-ci publication-check` proves the candidate tip. A narrow addition would run `php -l` over the PHP files each commit in `main..candidate` changes, and refuse a range containing one that does not parse. That is the whole of it: no CI redesign. Disposition is the Platform owner's.

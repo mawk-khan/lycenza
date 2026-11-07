@@ -279,3 +279,7 @@ R1-01 stays PROPOSED and `HrWriterBoundaryTest` keeps its 13 cases, one literal 
 - **`ddev demo-reset`:** not run, so the local School database was left as it was. The demo builders ran through `tests/Feature/Demo`.
 - **Source pins** see files, not paths. A write through a dynamically named variable would escape them.
 - **The first local family run was disturbed.** Unrelated tests deadlocked and left rows behind. They passed when rerun alone, which points to a second process on the test database, most likely a run I had started and lost track of. That cause is not proven.
+
+## 9. Published
+
+`060743c4`: CI gate run 42398199405, shards 2,852, 2,853, 2,853 and 2,852, 11,410 cases, 0 failures, 1 skip (ESI-12), 462,457 assertions, coverage union green. `main` CI run 42400347210 green. The first candidate passed. HR.R1 stays OPEN, staging stays blocked, and production stays NO-GO.
