@@ -18,9 +18,10 @@ use Illuminate\Support\Facades\Schema;
  *
  * - A requester and a reviewer each need whole-School `hr.employees.manage`, a current
  *   link to a different active Employee, and no link of any kind to the affected one.
- *   They differ, and share no uncorrected link to any Employee. A never-linked account
- *   takes no part at all. Two people colluding, or a fabricated Employee, stay possible:
- *   this is separation of duties, never proof of two humans.
+ *   They differ, and neither shares an uncorrected link to any Employee with the other
+ *   or with the account being corrected. A never-linked account takes no part at all.
+ *   Two people colluding, or a fabricated Employee, stay possible: this is separation
+ *   of duties, never proof of two humans.
  * - `employee_account_link_void()` is gone. The only thing that voids a link is the
  *   trigger on an approval here, so a decision and its effect are one statement, and
  *   nothing voids a link without an approved row.
@@ -90,25 +91,40 @@ return new class extends Migration
                 SELECT EXISTS (
                            SELECT 1 FROM public.school_memberships m
                              JOIN public.users u ON u.id = m.user_id AND NOT u.is_disabled
+                             JOIN public.schools s ON s.id = m.school_id AND s.status = 'active'
                              JOIN public.membership_role_assignments a ON a.school_membership_id = m.id AND a.revoked_at IS NULL AND a.campus_id IS NULL
                              JOIN public.role_capabilities rc ON rc.role_id = a.role_id AND rc.capability_key = 'hr.employees.manage'
                             WHERE m.school_id = p_school AND m.user_id = p_user AND m.status = 'active')
                    AND EXISTS (
                            SELECT 1 FROM public.employees e
                              JOIN public.employment_records r ON r.school_id = e.school_id AND r.employee_id = e.id
+                             JOIN public.schools s ON s.id = e.school_id
                             WHERE e.school_id = p_school AND e.user_id = p_user AND e.id <> p_employee AND e.record_status = 'active'
-                              AND r.status IN ('active', 'notice_period'))
+                              AND r.status IN ('active', 'notice_period')
+                              AND r.starts_on <= (pg_catalog.now() AT TIME ZONE s.timezone)::date
+                              AND (r.ends_on IS NULL OR r.ends_on >= (pg_catalog.now() AT TIME ZONE s.timezone)::date))
                    AND NOT EXISTS (
                            SELECT 1 FROM public.employee_account_links l
                             WHERE l.school_id = p_school AND l.employee_id = p_employee AND l.user_id = p_user)
+            $$;
+
+            -- Two accounts with uncorrected links to one Employee are one person, as far as anything here can know.
+            CREATE FUNCTION public.employee_account_link_correction_same_person(p_school uuid, p_first uuid, p_second uuid) RETURNS boolean
+                LANGUAGE sql STABLE SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
+                SELECT EXISTS (SELECT 1 FROM public.employee_account_links a
+                                 JOIN public.employee_account_links b ON b.school_id = a.school_id AND b.employee_id = a.employee_id
+                                WHERE a.school_id = p_school AND a.user_id = p_first AND b.user_id = p_second
+                                  AND a.voided_at IS NULL AND b.voided_at IS NULL)
             $$;
 
             CREATE FUNCTION public.employee_account_link_corrections_guard() RETURNS trigger
                 LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog, public, pg_temp AS $$
             DECLARE
                 v_link public.employee_account_links%ROWTYPE;
+                v_corrected uuid;
             BEGIN
                 IF TG_OP = 'INSERT' THEN
+                    NEW.requested_at := pg_catalog.clock_timestamp();
                     IF NEW.status IS DISTINCT FROM 'requested' THEN
                         RAISE EXCEPTION 'employee_account_link_corrections_guard: a correction is born requested' USING ERRCODE = 'check_violation';
                     END IF;
@@ -118,6 +134,9 @@ return new class extends Migration
                     END IF;
                     IF NOT public.employee_account_link_correction_qualified(NEW.school_id, NEW.employee_id, NEW.requested_by_user_id) THEN
                         RAISE EXCEPTION 'employee_account_link_corrections_guard: the requester is linked staff, independent of this Employee' USING ERRCODE = 'check_violation';
+                    END IF;
+                    IF public.employee_account_link_correction_same_person(NEW.school_id, NEW.requested_by_user_id, v_link.user_id) THEN
+                        RAISE EXCEPTION 'employee_account_link_corrections_guard: the requester is known to be the corrected account' USING ERRCODE = 'check_violation';
                     END IF;
                     IF NEW.evidence_version IS DISTINCT FROM public.employee_account_link_correction_version(NEW.school_id, NEW.account_link_id) THEN
                         RAISE EXCEPTION 'employee_account_link_corrections_guard: a correction binds the current history' USING ERRCODE = 'check_violation';
@@ -134,15 +153,16 @@ return new class extends Migration
                 END IF;
                 -- A decision changes what Payroll reads, so it is ordered against Payroll decisions like any link change.
                 PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('payroll.compensation:' || NEW.school_id::text, 0));
+                -- The database's clock, never a writer's: what a past decision saw is read from these times.
+                NEW.decided_at := pg_catalog.clock_timestamp();
 
                 IF NOT public.employee_account_link_correction_qualified(NEW.school_id, NEW.employee_id, NEW.decided_by_user_id) THEN
                     RAISE EXCEPTION 'employee_account_link_corrections_guard: the reviewer is linked staff, independent of this Employee' USING ERRCODE = 'check_violation';
                 END IF;
-                IF EXISTS (SELECT 1 FROM public.employee_account_links a
-                             JOIN public.employee_account_links b ON b.school_id = a.school_id AND b.employee_id = a.employee_id
-                            WHERE a.school_id = NEW.school_id AND a.user_id = NEW.requested_by_user_id AND b.user_id = NEW.decided_by_user_id
-                              AND a.voided_at IS NULL AND b.voided_at IS NULL) THEN
-                    RAISE EXCEPTION 'employee_account_link_corrections_guard: the requester and reviewer are known to be one person' USING ERRCODE = 'check_violation';
+                SELECT user_id INTO v_corrected FROM public.employee_account_links WHERE school_id = NEW.school_id AND id = NEW.account_link_id;
+                IF public.employee_account_link_correction_same_person(NEW.school_id, NEW.requested_by_user_id, NEW.decided_by_user_id)
+                   OR public.employee_account_link_correction_same_person(NEW.school_id, NEW.decided_by_user_id, v_corrected) THEN
+                    RAISE EXCEPTION 'employee_account_link_corrections_guard: the reviewer, the requester or the corrected account are known to be one person' USING ERRCODE = 'check_violation';
                 END IF;
                 IF NEW.status = 'approved' THEN
                     IF NEW.evidence_version IS DISTINCT FROM public.employee_account_link_correction_version(NEW.school_id, NEW.account_link_id) THEN
@@ -181,10 +201,12 @@ return new class extends Migration
 
             REVOKE ALL ON FUNCTION public.employee_account_link_correction_version(uuid, uuid) FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.employee_account_link_correction_qualified(uuid, uuid, uuid) FROM PUBLIC;
+            REVOKE ALL ON FUNCTION public.employee_account_link_correction_same_person(uuid, uuid, uuid) FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.employee_account_link_corrections_guard() FROM PUBLIC;
             REVOKE ALL ON FUNCTION public.employee_account_link_corrections_apply() FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION public.employee_account_link_correction_version(uuid, uuid) TO school_os_app;
             GRANT EXECUTE ON FUNCTION public.employee_account_link_correction_qualified(uuid, uuid, uuid) TO school_os_app;
+            GRANT EXECUTE ON FUNCTION public.employee_account_link_correction_same_person(uuid, uuid, uuid) TO school_os_app;
             GRANT EXECUTE ON FUNCTION public.employee_account_link_corrections_guard() TO school_os_app;
             SQL);
     }
@@ -202,6 +224,7 @@ return new class extends Migration
             DROP TRIGGER trg_employee_account_link_corrections_guard ON employee_account_link_corrections;
             DROP FUNCTION public.employee_account_link_corrections_apply();
             DROP FUNCTION public.employee_account_link_corrections_guard();
+            DROP FUNCTION public.employee_account_link_correction_same_person(uuid, uuid, uuid);
             DROP FUNCTION public.employee_account_link_correction_qualified(uuid, uuid, uuid);
             DROP FUNCTION public.employee_account_link_correction_version(uuid, uuid);
 

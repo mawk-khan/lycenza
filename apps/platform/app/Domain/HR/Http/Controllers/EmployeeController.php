@@ -129,9 +129,9 @@ class EmployeeController extends Controller
         $validated = $request->validate(['decision' => ['required', Rule::in(['approve', 'refuse'])], 'reviewed_version' => ['required_if:decision,approve', 'nullable', 'string', 'size:64']]);
         $proof = $mfa->requireForAction($request, $request->user());
         if ($validated['decision'] === 'approve') {
-            $corrections->approve($school, $accountLinkCorrection, $validated['reviewed_version'], $request->user(), $proof);
+            $corrections->approve($model, $accountLinkCorrection, $validated['reviewed_version'], $request->user(), $proof);
         } else {
-            $corrections->refuse($school, $accountLinkCorrection, $request->user(), $proof);
+            $corrections->refuse($model, $accountLinkCorrection, $request->user(), $proof);
         }
 
         return response()->json(['data' => $history->forEmployee($model, $request->user())]);

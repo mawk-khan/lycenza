@@ -107,7 +107,7 @@ class HrEmployeeAccountLinkController extends Controller
     /** The route's floor, then a fresh code; the service re-reads authority under its locks. */
     public function decideCorrection(Request $request, TenantContext $context, EmployeeAccountLinkCorrectionService $corrections, FreshMfaRequirement $mfa, string $employee, string $accountLinkCorrection): RedirectResponse
     {
-        $school = $context->requireSchool();
+        $context->requireSchool();
         $model = $this->employee($employee);
         $validated = $request->validate([
             'decision' => ['required', Rule::in(['approve', 'refuse'])],
@@ -118,9 +118,9 @@ class HrEmployeeAccountLinkController extends Controller
         $proof = $mfa->requireForAction($request, $context->actor());
         try {
             if ($validated['decision'] === 'approve') {
-                $corrections->approve($school, $accountLinkCorrection, $validated['reviewed_version'], $context->actor(), $proof);
+                $corrections->approve($model, $accountLinkCorrection, $validated['reviewed_version'], $context->actor(), $proof);
             } else {
-                $corrections->refuse($school, $accountLinkCorrection, $context->actor(), $proof);
+                $corrections->refuse($model, $accountLinkCorrection, $context->actor(), $proof);
             }
         } catch (HrException $e) {
             throw ValidationException::withMessages(['account' => [$e->getMessage()]]);

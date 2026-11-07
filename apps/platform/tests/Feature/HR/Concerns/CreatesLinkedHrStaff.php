@@ -32,12 +32,12 @@ trait CreatesLinkedHrStaff
 
     protected function approveCorrection(School $school, EmployeeAccountLinkCorrection $correction, User $reviewer, ?string $version = null): EmployeeAccountLinkCorrection
     {
-        return app(TenantContext::class)->withSchool($school, fn () => app(EmployeeAccountLinkCorrectionService::class)->approve($school, $correction->id, $version ?? app(EmployeeAccountLinkCorrectionService::class)->version($school->id, $correction->account_link_id), $reviewer, new FreshMfaProof($reviewer->id, CarbonImmutable::now())));
+        return app(TenantContext::class)->withSchool($school, fn () => app(EmployeeAccountLinkCorrectionService::class)->approve(Employee::query()->findOrFail($correction->employee_id), $correction->id, $version ?? app(EmployeeAccountLinkCorrectionService::class)->version($school->id, $correction->account_link_id), $reviewer, new FreshMfaProof($reviewer->id, CarbonImmutable::now())));
     }
 
     protected function refuseCorrection(School $school, EmployeeAccountLinkCorrection $correction, User $reviewer): EmployeeAccountLinkCorrection
     {
-        return app(TenantContext::class)->withSchool($school, fn () => app(EmployeeAccountLinkCorrectionService::class)->refuse($school, $correction->id, $reviewer, new FreshMfaProof($reviewer->id, CarbonImmutable::now())));
+        return app(TenantContext::class)->withSchool($school, fn () => app(EmployeeAccountLinkCorrectionService::class)->refuse(Employee::query()->findOrFail($correction->employee_id), $correction->id, $reviewer, new FreshMfaProof($reviewer->id, CarbonImmutable::now())));
     }
 
     /** Two fresh linked staff, end to end. */

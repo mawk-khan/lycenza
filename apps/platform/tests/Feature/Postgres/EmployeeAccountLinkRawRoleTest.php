@@ -163,7 +163,7 @@ class EmployeeAccountLinkRawRoleTest extends TestCase
     public function the_database_refuses_every_forged_decision(): void
     {
         [$id, $linkId, $requester, $reviewer] = $this->pending();
-        $decide = fn (string $userId, string $status = 'approved') => $this->in($this->school, fn () => DB::transaction(fn () => DB::statement('UPDATE employee_account_link_corrections SET status = ?, decided_by_user_id = ?, decided_at = now() WHERE id = ?', [$status, $userId, $id])));
+        $decide = fn (string $userId, string $status = 'approved') => $this->in($this->school, fn () => DB::transaction(fn () => DB::statement("UPDATE employee_account_link_corrections SET status = ?, decided_by_user_id = ?, decided_at = '2000-01-01' WHERE id = ?", [$status, $userId, $id])));
         $refused = function (callable $write, string $reason): void {
             try {
                 $write();
@@ -180,8 +180,11 @@ class EmployeeAccountLinkRawRoleTest extends TestCase
         $refused(fn () => $this->in($this->school, fn () => DB::transaction(fn () => DB::statement("UPDATE employee_account_link_corrections SET status = 'approved', decided_by_user_id = ?, decided_at = now(), evidence_version = ? WHERE id = ?", [$reviewer->id, str_repeat('a', 64), $id]))), 'the terms of a request are frozen');
         $this->assertNull(DB::connection('pgsql_admin')->table('employee_account_links')->where('id', $linkId)->value('voided_at'), 'nothing got through');
 
-        // Replay: a final row never moves again.
+        // The clock is the database's: a backdated decision records now.
         $decide($reviewer->id, 'refused');
+        $this->assertNotSame('2000', substr((string) DB::connection('pgsql_admin')->table('employee_account_link_corrections')->where('id', $id)->value('decided_at'), 0, 4));
+
+        // Replay: a final row never moves again.
         $refused(fn () => $decide($reviewer->id), 'a decision is final');
         $this->assertNull(DB::connection('pgsql_admin')->table('employee_account_links')->where('id', $linkId)->value('voided_at'));
     }

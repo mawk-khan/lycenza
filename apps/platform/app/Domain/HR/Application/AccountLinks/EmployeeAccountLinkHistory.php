@@ -29,13 +29,12 @@ final class EmployeeAccountLinkHistory
     {
         $school = $employee->school;
         $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
-        $qualified = $this->corrections->qualifies($actor, $school, $employee->id);
         $open = EmployeeAccountLinkCorrection::query()->where('school_id', $employee->school_id)->where('employee_id', $employee->id)
             ->where('status', EmployeeAccountLinkCorrection::REQUESTED)->get()->keyBy('account_link_id');
 
         return EmployeeAccountLink::query()->where('school_id', $employee->school_id)->where('employee_id', $employee->id)
             ->orderByDesc('linked_at')->orderByDesc('id')->get()
-            ->map(function (EmployeeAccountLink $link) use ($school, $actor, $qualified, $open): array {
+            ->map(function (EmployeeAccountLink $link) use ($school, $actor, $open): array {
                 $request = $open->get($link->id);
 
                 return [
@@ -51,7 +50,7 @@ final class EmployeeAccountLinkHistory
                     'endedAt' => $link->ended_at?->toIso8601String(),
                     'correctedAt' => $link->voided_at?->toIso8601String(),
                     'correctionReason' => $link->void_reason === null ? null : EmployeeAccountLinkVoidReason::from($link->void_reason)->label(),
-                    'mayRequestCorrection' => $qualified && $link->voided_at === null && $request === null,
+                    'mayRequestCorrection' => $link->voided_at === null && $request === null && $this->corrections->mayRequest($actor, $school, $link),
                     'correctionRequest' => $request === null ? null : [
                         'id' => $request->id,
                         'reason' => EmployeeAccountLinkVoidReason::from($request->reason)->label(),
@@ -59,7 +58,7 @@ final class EmployeeAccountLinkHistory
                         'requestedAt' => $request->requested_at->toIso8601String(),
                         'evidenceVersion' => $this->corrections->version($request->school_id, $link->id),
                         'stale' => ! hash_equals($request->evidence_version, $this->corrections->version($request->school_id, $link->id)),
-                        'mayDecide' => $this->corrections->mayDecide($actor, $school, $request),
+                        'mayDecide' => $this->corrections->mayDecide($actor, $school, $request, $link),
                     ],
                 ];
             })->all();

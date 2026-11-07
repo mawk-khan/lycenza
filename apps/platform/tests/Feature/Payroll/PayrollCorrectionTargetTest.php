@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payroll;
 
+use App\Domain\Payroll\Application\CorrectionDeltaInput;
 use App\Domain\Payroll\Application\Exceptions\CorrectionTargetAlreadyReversedException;
 use App\Domain\Payroll\Application\Exceptions\PayrollRunAlreadyReversedException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
@@ -121,6 +122,28 @@ class PayrollCorrectionTargetTest extends TestCase
 
         $this->assertSame('calculated', $this->runRow($calculated)['status']);
         $this->assertSame('approved', $this->runRow($approved)['status']);
+    }
+
+    #[Test]
+    public function a_correction_of_a_reversed_run_is_a_dead_record_nobody_can_edit(): void
+    {
+        $target = $this->postedTarget();
+        $correction = $this->calculatedCorrection($target);
+        $this->reverseRun($target);
+        $results = $this->inSchool($this->school, fn () => DB::table('payroll_run_calculations')->where('payroll_run_id', $correction->id)->count());
+
+        try {
+            $this->inSchool($this->school, fn () => app(PayrollRunService::class)->calculate($correction->fresh(), $this->preparer));
+            $this->fail('recalculated a dead correction');
+        } catch (CorrectionTargetAlreadyReversedException) {
+            $this->assertSame($results, $this->inSchool($this->school, fn () => DB::table('payroll_run_calculations')->where('payroll_run_id', $correction->id)->count()));
+        }
+
+        $this->expectException(CorrectionTargetAlreadyReversedException::class);
+        $this->inSchool($this->school, function () use ($correction): void {
+            $component = DB::table('salary_structure_components')->where('id', $this->setup['line'])->value('salary_component_id');
+            app(PayrollRunService::class)->recordCorrectionDelta($correction->fresh(), $this->record->fresh(), [new CorrectionDeltaInput($component, '100.00', 'increase')], 'late', $this->preparer);
+        });
     }
 
     #[Test]

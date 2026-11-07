@@ -668,7 +668,7 @@ class DatabaseRoleVerifier
         $direct = (int) DB::selectOne("select count(*) as c from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_void'")->c;
         $writes = (bool) DB::selectOne("select has_table_privilege('school_os_app', 'employee_account_links', 'INSERT') or has_table_privilege('school_os_app', 'employee_account_links', 'UPDATE') or has_table_privilege('school_os_app', 'employee_account_links', 'DELETE') or has_table_privilege('school_os_app', 'employee_account_link_corrections', 'DELETE') as w")->w;
         $guard = (string) DB::selectOne("select coalesce((select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'employee_account_link_corrections_guard'), '') as src")->src;
-        $pinned = str_contains($guard, 'pg_advisory_xact_lock') && str_contains($guard, 'known to be one person') && str_contains($guard, 'an approval binds the current history');
+        $pinned = str_contains($guard, 'pg_advisory_xact_lock') && str_contains($guard, 'known to be one person') && str_contains($guard, 'known to be the corrected account') && str_contains($guard, 'an approval binds the current history');
 
         return CheckResult::of('employee_account_links_guarded', $triggers === 4 && $definer === 2 && $direct === 0 && ! $writes && $pinned);
     }

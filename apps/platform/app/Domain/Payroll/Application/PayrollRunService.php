@@ -308,6 +308,10 @@ class PayrollRunService
                 // would reject anyway, but this gives a clean domain
                 // error first).
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
+                // HR.R1-C8 (PAY-17): before the compensation lock. A correction of a reversed run is a dead record.
+                if ($locked->isCorrection()) {
+                    $this->correctionTarget->hold($school->id, (string) $locked->corrects_payroll_run_id);
+                }
                 if (! in_array($locked->status, ['draft', 'calculated'], true)) {
                     throw new RunNotEditableException($run->id, $locked->status);
                 }
@@ -652,6 +656,10 @@ class PayrollRunService
         $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
         if (! in_array($locked->status, ['draft', 'calculated'], true)) {
             throw new RunNotEditableException($run->id, $locked->status);
+        }
+        // HR.R1-C8 (PAY-17): a correction of a reversed run is a dead record.
+        if ($locked->isCorrection()) {
+            $this->correctionTarget->hold($locked->school_id, (string) $locked->corrects_payroll_run_id);
         }
     }
 

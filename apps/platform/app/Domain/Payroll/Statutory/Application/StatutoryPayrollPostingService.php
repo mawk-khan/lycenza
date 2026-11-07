@@ -7,6 +7,7 @@ use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
+use App\Domain\Payroll\Application\CorrectionTargetGuard;
 use App\Domain\Payroll\Application\PayrollAccountingConfigurationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryAlreadyPostedException;
@@ -73,6 +74,7 @@ class StatutoryPayrollPostingService
         private readonly PayrollAccountingConfigurationService $payrollAccountingConfig,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly CorrectionTargetGuard $correctionTarget,
     ) {}
 
     public function post(PayrollRun $run, User $actor): PayrollStatutoryRunPosting
@@ -84,6 +86,10 @@ class StatutoryPayrollPostingService
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                 if ($locked->status !== 'posted') {
                     throw new StatutoryRunNotPostedException($run->id, $locked->status);
+                }
+                // HR.R1-C8 (PAY-17): no statutory effect is added onto a correction of a reversed run.
+                if ($locked->isCorrection()) {
+                    $this->correctionTarget->hold($school->id, (string) $locked->corrects_payroll_run_id);
                 }
 
                 if (PayrollStatutoryRunPosting::query()

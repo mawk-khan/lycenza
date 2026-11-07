@@ -4,6 +4,7 @@ use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService;
 use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkVoidReason;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAccountLinkCorrection;
 use App\Domain\Payroll\Application\PayrollReversalReconciliationService;
 use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
@@ -67,13 +68,15 @@ try {
             }
             if ($op === 'approve-correction') {
                 $actor = User::query()->findOrFail($argv[5]);
-                app(EmployeeAccountLinkCorrectionService::class)->approve($school, $argv[3], $argv[4], $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
+                $employee = Employee::query()->findOrFail(EmployeeAccountLinkCorrection::query()->findOrFail($argv[3])->employee_id);
+                app(EmployeeAccountLinkCorrectionService::class)->approve($employee, $argv[3], $argv[4], $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return;
             }
             if ($op === 'refuse-correction') {
                 $actor = User::query()->findOrFail($argv[4]);
-                app(EmployeeAccountLinkCorrectionService::class)->refuse($school, $argv[3], $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
+                $employee = Employee::query()->findOrFail(EmployeeAccountLinkCorrection::query()->findOrFail($argv[3])->employee_id);
+                app(EmployeeAccountLinkCorrectionService::class)->refuse($employee, $argv[3], $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return;
             }

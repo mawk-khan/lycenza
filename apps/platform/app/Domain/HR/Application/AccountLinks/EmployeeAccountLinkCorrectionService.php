@@ -75,6 +75,9 @@ final class EmployeeAccountLinkCorrectionService
                     throw new EmployeeAccountLinkAlreadyCorrectedException($link->id);
                 }
                 $this->requireQualified($actor, $school, $locked->id);
+                if ($this->knownSamePerson($school->id, $link->user_id, $actor->id)) {
+                    throw new EmployeeAccountLinkCorrectionNotIndependentException($link->id);
+                }
 
                 $correction = new EmployeeAccountLinkCorrection;
                 $correction->forceFill([
@@ -104,10 +107,12 @@ final class EmployeeAccountLinkCorrectionService
         }
     }
 
-    public function approve(School $school, string $correctionId, string $reviewedVersion, User $actor, FreshMfaProof $mfa): EmployeeAccountLinkCorrection
+    public function approve(Employee $employee, string $correctionId, string $reviewedVersion, User $actor, FreshMfaProof $mfa): EmployeeAccountLinkCorrection
     {
-        return $this->decide($school, $correctionId, EmployeeAccountLinkCorrection::APPROVED, $actor, $mfa, function (EmployeeAccountLinkCorrection $correction, Employee $employee, EmployeeAccountLink $link) use ($school, $reviewedVersion, $actor): void {
-            $this->assertMayDecide($school, $correction, $employee, $actor);
+        $school = $employee->school;
+
+        return $this->decide($employee, $correctionId, EmployeeAccountLinkCorrection::APPROVED, $actor, $mfa, function (EmployeeAccountLinkCorrection $correction, Employee $employee, EmployeeAccountLink $link) use ($school, $reviewedVersion, $actor): void {
+            $this->assertMayDecide($school, $correction, $employee, $link, $actor);
 
             $current = $this->version($school->id, $link->id);
             if (! hash_equals($current, $correction->evidence_version) || ! hash_equals($current, $reviewedVersion)) {
@@ -121,27 +126,30 @@ final class EmployeeAccountLinkCorrectionService
     }
 
     /** A stale request can always be refused: that is how it stops waiting. */
-    public function refuse(School $school, string $correctionId, User $actor, FreshMfaProof $mfa): EmployeeAccountLinkCorrection
+    public function refuse(Employee $employee, string $correctionId, User $actor, FreshMfaProof $mfa): EmployeeAccountLinkCorrection
     {
-        return $this->decide($school, $correctionId, EmployeeAccountLinkCorrection::REFUSED, $actor, $mfa, function (EmployeeAccountLinkCorrection $correction, Employee $employee) use ($school, $actor): void {
-            $this->assertMayDecide($school, $correction, $employee, $actor);
+        $school = $employee->school;
+
+        return $this->decide($employee, $correctionId, EmployeeAccountLinkCorrection::REFUSED, $actor, $mfa, function (EmployeeAccountLinkCorrection $correction, Employee $employee, EmployeeAccountLink $link) use ($school, $actor): void {
+            $this->assertMayDecide($school, $correction, $employee, $link, $actor);
         });
     }
 
     /** @param callable(EmployeeAccountLinkCorrection, Employee, EmployeeAccountLink): void $check under every lock */
-    private function decide(School $school, string $correctionId, string $decision, User $actor, FreshMfaProof $mfa, callable $check): EmployeeAccountLinkCorrection
+    private function decide(Employee $routeEmployee, string $correctionId, string $decision, User $actor, FreshMfaProof $mfa, callable $check): EmployeeAccountLinkCorrection
     {
+        $school = $routeEmployee->school;
         $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
         if (! $mfa->isFor($actor->id)) {
             throw new LogicException('The fresh MFA proof belongs to another User.');
         }
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $correctionId, $decision, $actor, $mfa, $check): EmployeeAccountLinkCorrection {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $routeEmployee, $correctionId, $decision, $actor, $mfa, $check): EmployeeAccountLinkCorrection {
             SchoolCompensationLock::acquire($school->id, shared: false);
             $this->authority->requireCurrent($actor, 'hr.employees.manage', $school);
-            $found = EmployeeAccountLinkCorrection::query()->where('school_id', $school->id)->whereKey($correctionId)->firstOrFail();
-            $employee = Employee::query()->where('school_id', $school->id)->whereKey($found->employee_id)->lockForUpdate()->firstOrFail();
-            $correction = EmployeeAccountLinkCorrection::query()->where('school_id', $school->id)->whereKey($correctionId)->lockForUpdate()->firstOrFail();
+            // This Employee's request or nothing: the route names both.
+            $employee = Employee::query()->where('school_id', $school->id)->whereKey($routeEmployee->id)->lockForUpdate()->firstOrFail();
+            $correction = EmployeeAccountLinkCorrection::query()->where('school_id', $school->id)->where('employee_id', $employee->id)->whereKey($correctionId)->lockForUpdate()->firstOrFail();
             $link = EmployeeAccountLink::query()->where('school_id', $school->id)->whereKey($correction->account_link_id)->firstOrFail();
             $wasCurrent = $link->ended_at === null;
 
@@ -150,6 +158,7 @@ final class EmployeeAccountLinkCorrectionService
             }
             $check($correction, $employee, $link);
 
+            // decided_at is the database's own clock (the guard sets it).
             $correction->forceFill(['status' => $decision, 'decided_by_user_id' => $actor->id, 'decided_at' => now()])->save();
 
             $approved = $decision === EmployeeAccountLinkCorrection::APPROVED;
@@ -168,25 +177,29 @@ final class EmployeeAccountLinkCorrectionService
         }));
     }
 
-    private function assertMayDecide(School $school, EmployeeAccountLinkCorrection $correction, Employee $employee, User $actor): void
+    private function assertMayDecide(School $school, EmployeeAccountLinkCorrection $correction, Employee $employee, EmployeeAccountLink $link, User $actor): void
     {
-        if (! $this->makerChecker->permits($actor, self::participants($correction)) || $this->knownSamePerson($school->id, $correction->requested_by_user_id, $actor->id)) {
+        if (! $this->makerChecker->permits($actor, self::participants($correction))
+            || $this->knownSamePerson($school->id, $correction->requested_by_user_id, $actor->id)
+            || $this->knownSamePerson($school->id, $link->user_id, $actor->id)) {
             throw new EmployeeAccountLinkCorrectionNotIndependentException($correction->id);
         }
         $this->requireQualified($actor, $school, $employee->id);
     }
 
     /** For the page. The service decides again under its locks. */
-    public function qualifies(User $actor, School $school, string $employeeId): bool
+    public function mayRequest(User $actor, School $school, EmployeeAccountLink $link): bool
     {
-        return ! $this->selfAdministration->hasAnyLink($actor, $school->id, $employeeId) && $this->staff->includes($school, $actor);
+        return ! $this->selfAdministration->hasAnyLink($actor, $school->id, $link->employee_id)
+            && $this->staff->includes($school, $actor)
+            && ! $this->knownSamePerson($school->id, $link->user_id, $actor->id);
     }
 
-    public function mayDecide(User $actor, School $school, EmployeeAccountLinkCorrection $correction): bool
+    public function mayDecide(User $actor, School $school, EmployeeAccountLinkCorrection $correction, EmployeeAccountLink $link): bool
     {
         return $correction->requested_by_user_id !== $actor->id
             && ! $this->knownSamePerson($school->id, $correction->requested_by_user_id, $actor->id)
-            && $this->qualifies($actor, $school, $correction->employee_id);
+            && $this->mayRequest($actor, $school, $link);
     }
 
     public function version(string $schoolId, string $linkId): string

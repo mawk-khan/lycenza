@@ -48,7 +48,8 @@ use Illuminate\Support\Facades\DB;
  * entry.
  *
  * Draft, calculated and approved runs are live working state: their rows
- * keep the Employee and are never aged. Payroll periods and configuration
+ * keep the Employee and are never aged. The one exception (HR.R1-C8) is a
+ * correction of a reversed run, which can never post: it ages from its own creation. Payroll periods and configuration
  * (components, structures, accounting, statutory rule versions) are
  * School configuration and are untouched.
  *

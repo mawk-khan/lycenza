@@ -211,6 +211,53 @@ class EmployeeAccountLinkCorrectionTest extends TestCase
         $this->approveCorrection($this->school, $correction, $this->reviewer);
     }
 
+    /** $account holds an uncorrected ended link to the Employee $staff is currently linked to. */
+    private function makeAliasOf(User $staff, User $account): void
+    {
+        $this->in(function () use ($staff, $account): void {
+            $own = DB::table('employees')->where('user_id', $staff->id)->value('id');
+            DB::statement('UPDATE employees SET user_id = NULL WHERE id = ?', [$own]);
+            DB::statement('UPDATE employees SET user_id = ? WHERE id = ?', [$account->id, $own]);
+            DB::statement('UPDATE employees SET user_id = NULL WHERE id = ?', [$own]);
+            DB::statement('UPDATE employees SET user_id = ? WHERE id = ?', [$staff->id, $own]);
+        });
+    }
+
+    #[Test]
+    public function a_known_alias_of_the_corrected_account_never_decides(): void
+    {
+        $correction = $this->correction();
+        $this->makeAliasOf($this->reviewer, $this->linked);
+
+        // The history changed too, so refuse is the honest test of who may act at all.
+        $this->expectException(EmployeeAccountLinkCorrectionNotIndependentException::class);
+        $this->refuseCorrection($this->school, $correction, $this->reviewer);
+    }
+
+    #[Test]
+    public function a_known_alias_of_the_corrected_account_never_requests(): void
+    {
+        $this->makeAliasOf($this->requester, $this->linked);
+
+        try {
+            $this->correction();
+            $this->fail('an alias of the corrected account requested');
+        } catch (EmployeeAccountLinkCorrectionNotIndependentException) {
+            $this->assertSame(0, $this->in(fn () => EmployeeAccountLinkCorrection::query()->count()));
+        }
+        $this->assertFalse($this->in(fn () => app(EmployeeAccountLinkHistory::class)->forEmployee($this->employee->fresh(), $this->requester))[0]['mayRequestCorrection']);
+    }
+
+    #[Test]
+    public function a_decision_under_another_employee_is_not_found(): void
+    {
+        $correction = $this->correction();
+        $other = $this->createEmployee($this->school, ['user_id' => null]);
+
+        $this->expectException(ModelNotFoundException::class);
+        $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->approve($other->fresh(), $correction->id, $correction->evidence_version, $this->reviewer, new FreshMfaProof($this->reviewer->id, CarbonImmutable::now())));
+    }
+
     #[Test]
     public function a_revoked_reviewer_cannot_finish(): void
     {
@@ -292,7 +339,7 @@ class EmployeeAccountLinkCorrectionTest extends TestCase
     {
         $correction = $this->correction();
         try {
-            $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->approve($this->school, $correction->id, $correction->evidence_version, $this->reviewer, new FreshMfaProof($this->requester->id, CarbonImmutable::now())));
+            $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->approve($this->employee->fresh(), $correction->id, $correction->evidence_version, $this->reviewer, new FreshMfaProof($this->requester->id, CarbonImmutable::now())));
             $this->fail('someone else\'s code');
         } catch (\LogicException) {
             $this->assertNull($this->link()->voided_at);
@@ -448,7 +495,7 @@ class EmployeeAccountLinkCorrectionTest extends TestCase
             $this->addToAssertionCount(1);
         }
         $this->expectException(ModelNotFoundException::class);
-        $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->refuse($this->school, (string) Str::uuid(), $this->reviewer, new FreshMfaProof($this->reviewer->id, CarbonImmutable::now())));
+        $this->in(fn () => app(EmployeeAccountLinkCorrectionService::class)->refuse($this->employee->fresh(), (string) Str::uuid(), $this->reviewer, new FreshMfaProof($this->reviewer->id, CarbonImmutable::now())));
     }
 
     #[Test]
