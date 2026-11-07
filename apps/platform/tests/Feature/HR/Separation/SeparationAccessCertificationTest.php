@@ -15,6 +15,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -87,6 +88,23 @@ class SeparationAccessCertificationTest extends TestCase
     private function caseStatus(School $school, EmploymentSeparationCase $case): string
     {
         return app(TenantContext::class)->withSchool($school, fn () => (string) EmploymentSeparationCase::query()->whereKey($case->id)->value('status'));
+    }
+
+    #[Test]
+    public function completion_waits_on_identitys_lock_before_it_touches_the_school(): void
+    {
+        // HR.R1-C11 (rules 86, 141): while completion waits for Identity's lock it holds nothing else, so the School row
+        // is free. With the School taken first, this probe would meet its FOR SHARE and fail on NOWAIT.
+        [$school, , $hr, , $case] = $this->finalizedCase();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->op('hold-lock', $school, $hr, '', ''),
+            $this->op('complete', $school, $hr, $case->id, (string) $case->version),
+            fn () => DB::connection('pgsql_admin')->transaction(fn () => DB::connection('pgsql_admin')->select('SELECT id FROM schools WHERE id = ? FOR UPDATE NOWAIT', [$school->id])),
+        );
+
+        $this->assertSame('ok:held', $holder);
+        $this->assertSame('ok:completed', $contender);
     }
 
     #[Test]

@@ -23,7 +23,7 @@ hold the evidence with file and line.
 | §2 slices | **Open** | D-1 |
 | §2 fingerprint | **Owner-held** | The pack is not on the development machine's workspace or in Git. Recorded `40ed6a83…1ac3`, 602 PNG, but the byte convention is not fully recorded. Never recomputed here |
 | §2 baseline | **Proposed**, §7 | Owner selection |
-| R1-01 one writer | **Open** | No duplicate or foreign writer found. The criterion needs a definition (inventory A §1.8) and pins |
+| R1-01 one writer | **Open** | No duplicate or foreign writer found. Pins exist since C11 (`HrWriterBoundaryTest`); the criterion still needs a definition (inventory A §1.8, `HR-R1-C11-HARDENING.md` §3) |
 | R1-02 integration | **Open** | 62 Payroll use sites, 9 foreign keys, 8 SQL functions, no approved exception (D-2). Non-Payroll reads remain (X-1, XRP-3) |
 | R1-03 temporal | **Open** | Calendar has no as-of answer, policy has no public reader (D-6) |
 | R1-04 authorization | Recorded | Re-run on the baseline. It would not have caught HRC-3: it proves a contract, never assurance |
@@ -58,12 +58,13 @@ hold the evidence with file and line.
 | D-1 | §2 record | HR owner | No DEFERRED record | Admin | None | Decide, §5 | Yes | Architecture |
 | Fingerprint | §2 | Owner | Owner-held pack | Admin | Owner's machine | Recompute, record convention | Yes | Architecture |
 | D-2 | R1-02 | Architecture | No exception | P3 | None | Decide, §5 | Yes | Architecture |
-| R1-01 | One writer | Architecture | No definition or pins | P3 | Definition | Adopt, then pin | Yes | Architecture |
+| R1-01 | One writer | Architecture | No definition | P3 | Definition | Adopt, or amend | Yes | Architecture |
 | D-3 | LVA-1 | HR owner | Choice | P2 | None | Decide, §5 | Yes | Architecture, operations |
 | D-4 | S-7 | Security | Choice | P3 | None | Decide, §5 | Yes | Architecture, production |
 | D-6 | R1-03, S-16 | HR owner | Choice | P2 | None | Decide, §5 | Yes | Architecture, production |
 | Generic Employee upload | Whether that route should take Employee uploads at all: it has no category, and its tier is the caller's word | Security, HR owner | Choice | P3 | None | Decide, with D-4 | Yes | Architecture |
-| HRC-10, HRC-11, GOV-6, C10-N1 | Rules 86, 97; `is_paid` freeze | HR, Leave | Code | P3 | None | Next checkpoint | Yes | Architecture |
+| HRC-10, HRC-11, C10-N1 | Rules 86, 97; `is_paid` freeze | HR, Leave | **Closed by C11** | P3 | None | None | Yes | Architecture |
+| GOV-6, C11-N1 | Remaining models; profile and reference-data writers without the School check | HR, Leave, Payroll | Code | P3 | None | With the next HR checkpoint | Yes | Architecture |
 | C10-N7, N8 | ECR delimiter, PAN format | Payroll | Code | P3 | Before any statutory grant | With S-4 | Yes | Production |
 | C10-N9 | No failed-code throttle | Security | Choice | P3 | None | Decide | Yes | Production |
 | C10-N2, N3, N6 | Composed move, `LeavePageSupport`, E21:490 | HR, Leave, E21 owner | Records | P3 | None | Next checkpoint; E21 by its owner | Yes | Architecture |

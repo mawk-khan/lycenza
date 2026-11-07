@@ -31,7 +31,7 @@ $context->set(School::query()->findOrFail($schoolId));
 try {
     $id = HeldTransaction::run(function () use ($kind, $argv, $schoolId): string {
         return match ($kind) {
-            'employment' => EmploymentRecord::query()->create([
+            'employment' => EmploymentRecord::query()->forceCreate([
                 'school_id' => $schoolId, 'employee_id' => $argv[3], 'employment_type' => 'permanent',
                 'staff_type' => 'teaching', 'starts_on' => $argv[4], 'ends_on' => null, 'status' => 'active',
             ])->id,

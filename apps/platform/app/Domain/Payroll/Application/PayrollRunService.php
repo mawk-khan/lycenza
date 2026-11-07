@@ -121,7 +121,7 @@ class PayrollRunService
         return $this->context->withSchool($school, function () use ($school, $period, $actor) {
             try {
                 return DB::transaction(function () use ($school, $period, $actor) {
-                    $run = PayrollRun::query()->create([
+                    $run = PayrollRun::query()->forceCreate([
                         'school_id' => $school->id,
                         'payroll_period_id' => $period->id,
                         'run_kind' => 'regular',
@@ -169,7 +169,7 @@ class PayrollRunService
                     throw new InvalidCorrectionTargetException("payroll run '{$target->id}' must be a posted regular run, got run_kind={$target->run_kind}, status={$target->status}.");
                 }
 
-                $run = PayrollRun::query()->create([
+                $run = PayrollRun::query()->forceCreate([
                     'school_id' => $school->id,
                     'payroll_period_id' => $period->id,
                     'run_kind' => 'correction',

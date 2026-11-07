@@ -15,6 +15,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -66,6 +67,7 @@ final class ReportingRelationshipService
     private const CAPABILITY = 'hr.employees.assignments.manage';
 
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
@@ -84,6 +86,7 @@ final class ReportingRelationshipService
         }
 
         return $this->context->withSchool($school, fn (): ReportingRelationship => DB::transaction(function () use ($school, $subordinate, $manager, $effectiveOn, $reason, $actor, $guard): ReportingRelationship {
+            $this->operational->requireOperational($school->id);
             [$sub, $mgr] = $this->lockParties($school, $subordinate, $manager, $actor, $guard);
             if ($sub->employee_id === $mgr->employee_id) {
                 throw new InvalidReportingChangeException('same_employee', 'An Employee cannot report to themselves.');
@@ -135,6 +138,7 @@ final class ReportingRelationshipService
         $effectiveOn = self::day($effectiveOn);
 
         return $this->context->withSchool($school, fn (): ReportingRelationship => DB::transaction(function () use ($school, $subordinate, $effectiveOn, $reason, $actor, $guard): ReportingRelationship {
+            $this->operational->requireOperational($school->id);
             $lines = $this->lockLiveLines($school, $subordinate->id, preview: true);
             $current = $this->covering($lines, $effectiveOn);
             if ($current === null) {
@@ -174,6 +178,7 @@ final class ReportingRelationshipService
         }
 
         return $this->context->withSchool($school, fn (): ?ReportingRelationship => DB::transaction(function () use ($school, $line, $manager, $reason, $actor): ?ReportingRelationship {
+            $this->operational->requireOperational($school->id);
             $subordinate = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($line->subordinate_employment_id)->firstOrFail();
             $previousManager = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($line->manager_employment_id)->firstOrFail();
             $this->selfAdministration->refuseOwnEmployee($actor, $previousManager->employee_id, 'reporting_line');

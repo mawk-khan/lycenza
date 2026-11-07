@@ -19,6 +19,7 @@ use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -61,6 +62,7 @@ final class PlacementChangeService
     use AuthorizesCampusScope;
 
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
@@ -84,6 +86,7 @@ final class PlacementChangeService
         $effectiveOn = CarbonImmutable::parse($effectiveOn)->toDateString();
 
         return $this->context->withSchool($school, fn (): EmployeeAssignment => DB::transaction(function () use ($school, $source, $kind, $effectiveOn, $reason, $position, $actor, $campus, $department, $guard): EmployeeAssignment {
+            $this->operational->requireOperational($school->id);
             $employeeId = (string) EmploymentRecord::query()->where('school_id', $school->id)->whereKey($source->employment_record_id)->value('employee_id');
             if ($employeeId === '') {
                 throw (new ModelNotFoundException)->setModel(EmployeeAssignment::class, [$source->id]);

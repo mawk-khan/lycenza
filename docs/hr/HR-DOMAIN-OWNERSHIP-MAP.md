@@ -64,6 +64,10 @@ domain events. It never reads the owner's Eloquent models or tables. HR.0A
 | Exports | **D-11 governed export** (rule 125) | HR | `StudentReportExportService` (SIS only today) | HR export needs a D-11 extension |
 | Recruitment, performance, training, discipline | owner/legal decision | — | — | outside this programme's D-map (deferred, `HR-0A-ARCHITECTURE-RECONCILIATION.md` §15) |
 
+Writer boundaries that existing contracts require are pinned by
+`HrWriterBoundaryTest` (HR.R1-C11). "One writer" itself is undefined until
+Architecture decides (`HR-R1-C11-HARDENING.md` §3).
+
 ## 2. Reference presentation concepts that are not owners
 
 | Reference concept | Lycenza treatment |

@@ -2379,7 +2379,8 @@ domain exception
 `AssignmentPositionMismatchException`) to one of a fixed, safe code
 vocabulary (`validation`, `authorization`, `duplicate_exact`,
 `duplicate_potential`, `reference_not_found`, `employment_conflict`,
-`assignment_conflict`); any unmapped exception gets a fully generic
+`assignment_conflict`, and since HR.R1-C11 `unavailable` for a School that
+stopped operating, which names no reason); any unmapped exception gets a fully generic
 `[null, 'validation', 'This row could not be processed.']` rather than
 leaking its class or message. Proven by serializing a full batch result
 to JSON and asserting neither a rejected personal-data value nor an
@@ -5351,3 +5352,16 @@ The evidence, the remediation matrix and the readiness determination are in
 - **Report errors are shown, not redirected.** A refused filter, sort,
   column or range renders the report with that parameter dropped and its
   message on the page.
+- **Lifecycle models take state from their owner (HR.R1-C11).** Nine models
+  keep state, actor and parent columns out of `$fillable`
+  (`EmploymentRecord` accepts `probation_ends_on` only), and each one's
+  writer states them with `forceCreate`/`forceFill` (rule 97).
+- **HR writers check the School when they run (HR.R1-C11, rule 86).**
+  Identity, employment, terms, placement, reporting and separation writers
+  take `SchoolOperationalGuard` first in their transaction. Onboarding,
+  import and rehire reach them, and import reports the refusal as a failed
+  row. Profile and reference-data writers rely on the request-time check
+  (C11-N1).
+- **A leave type in use keeps its rules (HR.R1-C11, C10-N1).** A policy, a
+  ledger row or a request freezes `is_paid`, `tracks_balance` and
+  `allows_half_day` (`leave_types_freeze`); a name stays editable.

@@ -20,6 +20,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 // Usage:
 //   php archived-identity-op.php <archive|restore|rehire|raw-employment> <schoolId> <employeeId> <actorId>
 //   php archived-identity-op.php placement-primary <schoolId> <assignmentId> <0|1>
+//   php archived-identity-op.php suspend <schoolId>
+//   php archived-identity-op.php leave-type-unpaid <schoolId> <leaveTypeId>
 // Prints "ok:<result>" or "rejected:<reason, SQLSTATE or class>".
 
 require __DIR__.'/../../vendor/autoload.php';
@@ -34,6 +36,12 @@ $context->set($school);
 
 try {
     echo 'ok:'.HeldTransaction::run(function () use ($app, $operation, $argv, $school): string {
+        if ($operation === 'suspend') {
+            return (string) DB::table('schools')->where('id', $school->id)->update(['status' => 'suspended']);
+        }
+        if ($operation === 'leave-type-unpaid') {
+            return (string) DB::table('leave_types')->where('id', $argv[3])->update(['is_paid' => false]);
+        }
         if ($operation === 'placement-primary') {
             return (string) DB::table('employee_assignments')->where('id', $argv[3])->update(['is_primary' => $argv[4] === '1']);
         }

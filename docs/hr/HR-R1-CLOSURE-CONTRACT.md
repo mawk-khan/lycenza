@@ -1,7 +1,7 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C9 have. **Never
+started; the HR.R1-0 audit and checkpoints C1 to C11 have. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 

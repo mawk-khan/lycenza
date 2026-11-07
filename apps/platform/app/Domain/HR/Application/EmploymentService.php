@@ -20,6 +20,7 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -74,6 +75,7 @@ class EmploymentService
     public const array TERMS_FIELDS = ['employment_type', 'staff_type', 'employee_category_id'];
 
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly ReportingRelationshipService $reportingLines,
@@ -119,6 +121,8 @@ class EmploymentService
             throw new \LogicException('EmploymentService::createRecord() runs only inside the creating transaction.');
         }
         $school = $employee->school;
+        // HR.R1-C11 (HRC-11, rule 86): every HR writer re-checks the School when it executes.
+        $this->operational->requireOperational($school->id);
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
         $categoryId = $attributes['employee_category_id'] ?? null;
@@ -180,7 +184,7 @@ class EmploymentService
         $this->assertNoOverlap($employee, $startsOn, $endsOn);
 
         try {
-            $employment = EmploymentRecord::query()->create([
+            $employment = EmploymentRecord::query()->forceCreate([
                 'school_id' => $school->id,
                 'employee_id' => $employee->id,
                 'employment_type' => $attributes['employment_type'],
@@ -239,6 +243,7 @@ class EmploymentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $actor) {
             return DB::transaction(function () use ($school, $employment, $attributes, $actor) {
+                $this->operational->requireOperational($school->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.update');
 
                 $employment->update($attributes);
@@ -303,6 +308,7 @@ class EmploymentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $endsOn, $status, $actor) {
             return DB::transaction(function () use ($school, $employment, $endsOn, $status, $actor) {
+                $this->operational->requireOperational($school->id);
                 // ORG.7E-1: the placement lock first (EmployeePlacementLock order).
                 $this->placement->forPlacementChange($school, $employment->employee_id);
                 // SR.4 (ADR 0071 §26.2): Employee FOR SHARE before the record, the ActingEmployee lock order.
@@ -324,7 +330,7 @@ class EmploymentService
                 // manager, never silently re-parented.
                 $this->reportingLines->closeForEmploymentEnd($school, $locked, $endsOn, $actor);
 
-                $locked->update(['ends_on' => $endsOn, 'status' => $status]);
+                $locked->forceFill(['ends_on' => $endsOn, 'status' => $status])->save();
 
                 // HR.R1-C2 (HRC-2): every placement ends within the employment. The employment row lock taken
                 // above is what excludes other placement writers (the whole-School placement lock is FOR SHARE on
@@ -416,7 +422,7 @@ class EmploymentService
             throw new InvalidEmploymentStatusTransitionException($locked->id, $to);
         }
 
-        $locked->update(['status' => $to]);
+        $locked->forceFill(['status' => $to])->save();
 
         $this->audit->school($school, $event, actor: $actor, subject: $locked, metadata: [
             'employeeId' => $locked->employee_id,

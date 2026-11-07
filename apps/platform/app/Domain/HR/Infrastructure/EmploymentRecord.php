@@ -66,17 +66,7 @@ class EmploymentRecord extends Model
 
     protected $table = 'employment_records';
 
-    protected $fillable = [
-        'school_id',
-        'employee_id',
-        'employment_type',
-        'staff_type',
-        'employee_category_id',
-        'starts_on',
-        'ends_on',
-        'probation_ends_on',
-        'status',
-    ];
+    protected $fillable = ['probation_ends_on'];
 
     protected function casts(): array
     {

@@ -33,7 +33,7 @@ class LeaveRequest extends Model
 
     protected $table = 'leave_requests';
 
-    protected $fillable = ['school_id', 'employment_record_id', 'leave_type_id', 'starts_on', 'start_portion', 'ends_on', 'end_portion', 'reason_code', 'submitted_units', 'status', 'submitted_by_user_id'];
+    protected $fillable = [];
 
     protected function casts(): array
     {

@@ -22,6 +22,7 @@ use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolNotOperationalException;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -270,6 +271,7 @@ class EmployeeImportService
             $e instanceof AssignmentCampusMismatchException,
             $e instanceof AssignmentDepartmentMismatchException,
             $e instanceof AssignmentPositionMismatchException => ['position_code', 'reference_not_found', 'A referenced Department/Position/Campus is not valid for this Assignment.'],
+            $e instanceof SchoolNotOperationalException => [null, 'unavailable', 'This row could not be processed right now.'],
             default => [null, 'validation', 'This row could not be processed.'],
         };
     }

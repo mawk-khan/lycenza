@@ -51,7 +51,7 @@ class EmploymentEndArchitectureGuardTest extends TestCase
         $this->assertInOrder($end, [
             'DB::transaction(',
             'EmploymentRecord::query()->where(\'id\', $employment->id)->lockForUpdate()',
-            '$locked->update([\'ends_on\' => $endsOn',
+            '$locked->forceFill([\'ends_on\' => $endsOn',
             'foreach ($this->endParticipants as $participant)',
             '$participant->employmentEnded($school, $locked->employee_id, $endsOn, $actor)',
             'event(new EmploymentEnded(',

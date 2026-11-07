@@ -52,7 +52,7 @@ class EmploymentSeparationCase extends Model
 
     protected $table = 'employment_separation_cases';
 
-    protected $fillable = ['employment_record_id', 'reason_code', 'notified_on', 'planned_last_day', 'requested_by_user_id', 'requested_at'];
+    protected $fillable = ['reason_code', 'notified_on', 'planned_last_day'];
 
     protected function casts(): array
     {

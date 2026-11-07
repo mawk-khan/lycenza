@@ -189,6 +189,20 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
     }
 
     #[Test]
+    public function hr_writers_of_employment_placement_reporting_and_separation_check_the_school_when_they_run(): void
+    {
+        // HR.R1-C11 (HRC-11): the writers the audit named, and the two dated-history writers of the same family.
+        foreach ([
+            'Domain/HR/Application/EmploymentService.php', 'Domain/HR/Application/EmployeeAssignmentService.php', 'Domain/HR/Application/EmployeeService.php',
+            'Domain/HR/Application/Workforce/PlacementChangeService.php', 'Domain/HR/Application/Workforce/EmploymentTermsService.php',
+            'Domain/HR/Application/Reporting/ReportingRelationshipService.php', 'Domain/HR/Application/Separation/SeparationCaseService.php',
+            'Domain/HR/Application/Separation/SeparationClearanceRequirementService.php', 'Domain/HR/Application/AccountLinks/EmployeeAccountLinkCorrectionService.php',
+        ] as $file) {
+            $this->assertStringContainsString('$this->operational->requireOperational(', (string) file_get_contents(app_path($file)), $file);
+        }
+    }
+
+    #[Test]
     public function there_is_no_archive_or_delete_route_and_the_surface_is_web_only_and_context_neutral(): void
     {
         $routes = app(Router::class)->getRoutes();

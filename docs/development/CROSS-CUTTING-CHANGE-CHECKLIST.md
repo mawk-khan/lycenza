@@ -157,3 +157,10 @@ Added after SIS 11.8, whose first journey run tested stale assets.
   exception (web: `refusal`; API: the error envelope).
 - **Required** on the endpoint (a missing token is a 422), and documented
   in the OpenAPI contract.
+
+## Lifecycle models and HR writers (HR.R1-C11)
+
+- A new column that holds state, an actor or a parent on a model in `Tests\Support\LifecycleModels` stays out of `$fillable`; its writer uses `forceCreate`/`forceFill`.
+- A new HR writer of identity, employment, terms, placement, reporting or separation takes `SchoolOperationalGuard` first in its transaction (rule 86).
+- A second class writing an HR-owned table is named in `HrWriterBoundaryTest`, with its operation.
+- A new caller of `DocumentService::create()` or `archive()` needs its own answer on Highly Sensitive step-up.

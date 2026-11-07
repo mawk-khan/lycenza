@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\CodeNormalizer;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ final class SeparationClearanceRequirementService
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly HrEmployeeAccess $access,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function create(School $school, string $code, string $label, ClearanceResponsibility $responsibility, bool $mandatory, ?StaffType $staffType, User $actor): SeparationClearanceRequirement
@@ -40,6 +42,7 @@ final class SeparationClearanceRequirementService
 
         return $this->context->withSchool($school, function () use ($school, $code, $label, $responsibility, $mandatory, $staffType, $actor): SeparationClearanceRequirement {
             return DB::transaction(function () use ($school, $code, $label, $responsibility, $mandatory, $staffType, $actor): SeparationClearanceRequirement {
+                $this->operational->requireOperational($school->id);
                 // Display order only (ties fall back to the code); the code is the identity.
                 $sequence = (int) SeparationClearanceRequirement::query()->where('school_id', $school->id)->max('sequence') + 1;
 
@@ -74,6 +77,7 @@ final class SeparationClearanceRequirementService
         $this->access->requireWholeSchool($actor, SeparationCapabilities::CONFIGURE, $school);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $requirementId, $actor): SeparationClearanceRequirement {
+            $this->operational->requireOperational($school->id);
             $requirement = SeparationClearanceRequirement::query()->where('school_id', $school->id)->whereKey($requirementId)->lockForUpdate()->first()
                 ?? throw SeparationException::notFound();
             if ($requirement->status === 'retired') {

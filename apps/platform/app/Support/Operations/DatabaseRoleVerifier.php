@@ -552,6 +552,11 @@ class DatabaseRoleVerifier
         $missingLeavePolicy = array_keys(array_filter(self::LEAVE_POLICY_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
             "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
         )->x === false, ARRAY_FILTER_USE_BOTH));
+        // HR.R1-C11 (C10-N1): a request puts a leave type in use, so its paid, balance and half-day rules freeze.
+        $freeze = DB::selectOne("select p.prosrc as src from pg_proc p where p.proname = 'leave_types_freeze' and p.pronamespace = 'public'::regnamespace");
+        if ($freeze === null || ! str_contains($freeze->src, 'leave_requests')) {
+            $missingLeavePolicy[] = 'leave_types_freeze:requests';
+        }
         foreach (['leave_eligibility_rules', 'leave_eligibility_runs', 'leave_accrual_runs', 'leave_accrual_run_items'] as $table) {
             $rls = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (\'public.\'||?)::regclass', [$table]);
             if ($rls === null || ! $rls->x) {

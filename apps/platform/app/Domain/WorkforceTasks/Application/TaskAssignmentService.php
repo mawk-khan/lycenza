@@ -117,7 +117,7 @@ final class TaskAssignmentService
         $placement = $this->workforce->placementOn($school, $employeeId, SchoolTimezone::today($school));
 
         try {
-            $task = DB::transaction(fn () => WorkforceTask::query()->create([...$terms,
+            $task = DB::transaction(fn () => WorkforceTask::query()->forceCreate([...$terms,
                 'employment_record_id' => $employmentRecordId, 'assignment_path' => $path, 'assigned_by_user_id' => $actor->id,
                 'staff_type' => $placement?->staffType, 'department_id' => $placement?->departmentId, 'position_id' => $placement?->positionId,
                 'campus_id' => $placement?->campusId, 'reassigned_from_task_id' => $fromTaskId,

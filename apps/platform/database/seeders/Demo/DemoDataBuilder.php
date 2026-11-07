@@ -669,7 +669,7 @@ final class DemoDataBuilder
                 ]))->forceFill(['school_id' => $this->school->id, 'record_status' => 'active']);
                 $employee->save();
 
-                $record = EmploymentRecord::query()->create([
+                $record = EmploymentRecord::query()->forceCreate([
                     'school_id' => $this->school->id,
                     'employee_id' => $employee->id,
                     'employment_type' => 'permanent',

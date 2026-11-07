@@ -36,7 +36,7 @@ class PayrollPeriodService
 
         return $this->context->withSchool($school, function () use ($school, $start, $end, $paymentDate, $actor) {
             return DB::transaction(function () use ($school, $start, $end, $paymentDate, $actor) {
-                $period = PayrollPeriod::query()->create([
+                $period = PayrollPeriod::query()->forceCreate([
                     'school_id' => $school->id,
                     'period_month' => $start->toDateString(),
                     'starts_on' => $start->toDateString(),

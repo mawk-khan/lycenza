@@ -28,14 +28,7 @@ class PayrollPeriod extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
-    protected $fillable = [
-        'school_id',
-        'period_month',
-        'starts_on',
-        'ends_on',
-        'payment_date',
-        'status',
-    ];
+    protected $fillable = ['period_month', 'starts_on', 'ends_on', 'payment_date'];
 
     protected function casts(): array
     {

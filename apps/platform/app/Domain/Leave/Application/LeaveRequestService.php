@@ -318,7 +318,7 @@ class LeaveRequestService
             $timedBy = $this->timing->enforce($school, $employmentRecordId, $type->id, $shape, $units);
 
             try {
-                $request = LeaveRequest::query()->create([
+                $request = LeaveRequest::query()->forceCreate([
                     'school_id' => $school->id, 'employment_record_id' => $employmentRecordId, 'leave_type_id' => $type->id,
                     'starts_on' => $shape->startsOn, 'start_portion' => $shape->startPortion->value, 'ends_on' => $shape->endsOn,
                     'end_portion' => $shape->endPortion->value, 'reason_code' => $reasonCode, 'submitted_units' => $units,

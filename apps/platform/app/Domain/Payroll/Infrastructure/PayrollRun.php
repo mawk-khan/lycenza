@@ -39,18 +39,7 @@ class PayrollRun extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
-    protected $fillable = [
-        'school_id',
-        'payroll_period_id',
-        'run_kind',
-        'corrects_payroll_run_id',
-        'status',
-        'prepared_by_user_id',
-        'approved_by_user_id',
-        'posted_by_user_id',
-        'approved_at',
-        'posted_at',
-    ];
+    protected $fillable = [];
 
     protected function casts(): array
     {

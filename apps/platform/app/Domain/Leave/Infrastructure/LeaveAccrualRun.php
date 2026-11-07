@@ -31,7 +31,7 @@ class LeaveAccrualRun extends Model
 
     protected $table = 'leave_accrual_runs';
 
-    protected $fillable = ['school_id', 'leave_type_id', 'leave_year_id', 'period_start', 'status', 'cursor_employment_id', 'batch_count', 'failure_code', 'started_by_user_id', 'started_at', 'completed_at'];
+    protected $fillable = [];
 
     protected function casts(): array
     {

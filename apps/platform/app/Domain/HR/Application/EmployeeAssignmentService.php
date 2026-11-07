@@ -27,6 +27,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
@@ -62,6 +63,7 @@ class EmployeeAssignmentService
     use AuthorizesCampusScope;
 
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
@@ -92,6 +94,7 @@ class EmployeeAssignmentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $position, $campus, $department, $actor, $guard) {
             return DB::transaction(function () use ($school, $employment, $attributes, $position, $campus, $department, $actor, $guard) {
+                $this->operational->requireOperational($school->id);
                 if ($guard !== null) {
                     // ORG.7E-1: the decision needs the whole current placement stable.
                     $this->placement->forEmployeeWrite($school, $employment->employee_id);
@@ -181,6 +184,7 @@ class EmployeeAssignmentService
 
         return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor, $guard) {
             return DB::transaction(function () use ($school, $assignment, $endsOn, $actor, $guard) {
+                $this->operational->requireOperational($school->id);
                 $this->placement->forPlacementChange($school, $assignment->employmentRecord->employee_id);
                 $employment = $this->holdEmployment($school, $assignment->employment_record_id);
                 if ($guard !== null) {
@@ -253,6 +257,7 @@ class EmployeeAssignmentService
 
         return $this->context->withSchool($school, function () use ($school, $assignment, $actor, $guard, $reason) {
             return DB::transaction(function () use ($school, $assignment, $actor, $guard, $reason) {
+                $this->operational->requireOperational($school->id);
                 if ($guard !== null) {
                     // ORG.7E-1: never demote an assignment outside scope. The
                     // exclusive placement lock keeps every other primary change

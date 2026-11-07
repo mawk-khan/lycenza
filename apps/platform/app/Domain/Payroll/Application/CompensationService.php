@@ -122,7 +122,7 @@ class CompensationService
                 $this->assertNoOverlap($employmentRecord->id, $effectiveFrom);
 
                 try {
-                    $assignment = EmployeeCompensationAssignment::query()->create([
+                    $assignment = EmployeeCompensationAssignment::query()->forceCreate([
                         'school_id' => $school->id,
                         'employment_record_id' => $employmentRecord->id,
                         'salary_structure_id' => $structure->id,

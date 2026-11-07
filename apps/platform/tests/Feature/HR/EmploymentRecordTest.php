@@ -78,7 +78,7 @@ class EmploymentRecordTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($employeeA, $schoolB): void {
-            EmploymentRecord::query()->create([
+            EmploymentRecord::query()->forceCreate([
                 'school_id' => $schoolB->id,
                 'employee_id' => $employeeA->id,
                 'employment_type' => 'permanent',
@@ -113,7 +113,7 @@ class EmploymentRecordTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($school, $employee): void {
-            EmploymentRecord::query()->create([
+            EmploymentRecord::query()->forceCreate([
                 'school_id' => $school->id,
                 'employee_id' => $employee->id,
                 'employment_type' => 'permanent',

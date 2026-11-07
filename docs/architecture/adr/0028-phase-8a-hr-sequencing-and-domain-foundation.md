@@ -565,3 +565,24 @@ Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
    API contract. Its tier is the caller's word, so an identity scan declared `sensitive`
    takes no code. That is a recorded residual, not a second HR document register.
 3. **Credit predicate (LVA-5).** One predicate, pinned to the database list.
+
+## HR.R1-C11 amendment (2026-11-07): lifecycle models and execution-time School checks
+
+Baseline `33ac0b6b`. The findings are HRC-10, HRC-11, GOV-6 and C10-N1. No owner
+decision was taken or needed.
+
+- **A lifecycle model takes its state from its owner only.** Nine models keep state,
+  actor and parent columns out of `$fillable`, and their owning writers state them with
+  `forceCreate`/`forceFill`. A service's own strip list stays, but it is no longer the
+  only thing protecting those columns. `TestCase` makes a dropped key on those models
+  fail, so a writer that loses its state column cannot pass silently, and it keeps
+  Eloquent's throw on every totally guarded model.
+- **HR writers check the School when they run.** Rule 86 already required it, so this
+  is enforcement, not a new contract. Identity, employment, terms, placement, reporting
+  and separation writers take `SchoolOperationalGuard` at the start of their transaction,
+  before their own rows. Separation completion keeps rule 141's order: Identity's lock,
+  then the School.
+  Profile and reference-data writers do not yet: residual C11-N1.
+- **Not added.** No database writer lock, no change to the projection guard (a catalogue
+  test now pins its single writer), and no adoption of the proposed one-writer
+  definition, which stays Architecture's decision (`docs/hr/HR-R1-C11-HARDENING.md` §3).

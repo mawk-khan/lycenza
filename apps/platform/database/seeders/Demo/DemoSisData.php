@@ -586,7 +586,7 @@ final class DemoSisData
                 'full_name' => 'Shalini Varma',
             ]))->forceFill(['school_id' => $this->school->id, 'record_status' => 'active']);
             $employee->save();
-            $record = EmploymentRecord::query()->create([
+            $record = EmploymentRecord::query()->forceCreate([
                 'school_id' => $this->school->id, 'employee_id' => $employee->id, 'employment_type' => 'permanent', 'staff_type' => 'teaching', 'starts_on' => '2024-06-01',
                 'ends_on' => null, 'probation_ends_on' => null, 'status' => 'active', 'employee_category_id' => $category->id,
             ]);

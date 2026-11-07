@@ -33,15 +33,7 @@ class EmployeeCompensationAssignment extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
-    protected $fillable = [
-        'school_id',
-        'employment_record_id',
-        'salary_structure_id',
-        'effective_from',
-        // OD-HR-2: who recorded the change (the run's maker set); NULL for rows recorded before 2026-11-05.
-        'assigned_by_user_id',
-        'effective_to',
-    ];
+    protected $fillable = ['effective_from', 'effective_to'];
 
     protected function casts(): array
     {

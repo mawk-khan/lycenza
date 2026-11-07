@@ -13,6 +13,7 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\EmploymentTerm;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -42,6 +43,7 @@ use Illuminate\Support\Facades\DB;
 final class EmploymentTermsService
 {
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
@@ -67,6 +69,7 @@ final class EmploymentTermsService
         }
 
         return $this->context->withSchool($school, fn (): EmploymentTerm => DB::transaction(function () use ($school, $employment, $effectiveFrom, $employmentType, $staffType, $employeeCategoryId, $reason, $actor): EmploymentTerm {
+            $this->operational->requireOperational($school->id);
             $this->placement->forPlacementChange($school, $employment->employee_id);
             $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.terms');
 

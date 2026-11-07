@@ -25,6 +25,7 @@ use App\Support\Approval\MakerCheckerPolicy;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Concurrency\SchoolCompensationLock;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,7 @@ final class EmployeeAccountLinkCorrectionService
         private readonly CurrentStaffMembers $staff,
         private readonly MakerCheckerPolicy $makerChecker,
         private readonly AuditRecorder $audit,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     public function request(Employee $employee, string $linkId, EmployeeAccountLinkVoidReason $reason, User $actor): EmployeeAccountLinkCorrection
@@ -69,6 +71,7 @@ final class EmployeeAccountLinkCorrectionService
 
         try {
             return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employee, $linkId, $reason, $actor): EmployeeAccountLinkCorrection {
+                $this->operational->requireOperational($school->id);
                 $locked = Employee::query()->where('school_id', $school->id)->whereKey($employee->id)->sharedLock()->firstOrFail();
                 $link = EmployeeAccountLink::query()->where('school_id', $school->id)->where('employee_id', $locked->id)->whereKey($linkId)->firstOrFail();
                 if ($link->voided_at !== null) {

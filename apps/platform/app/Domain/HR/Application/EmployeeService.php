@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Concurrency\SchoolCompensationLock;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -55,6 +56,7 @@ class EmployeeService
     use AuthorizesCampusScope;
 
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly EmployeeNumberAllocator $allocator,
         private readonly EmployeeNumberFormatter $formatter,
         private readonly AuditRecorder $audit,
@@ -106,6 +108,8 @@ class EmployeeService
         if (DB::transactionLevel() === 0) {
             throw new \LogicException('EmployeeService::createRecord() runs only inside the creating transaction.');
         }
+        // HR.R1-C11 (HRC-11, rule 86): every HR writer re-checks the School when it executes.
+        $this->operational->requireOperational($school->id);
         $workEmail = $attributes['work_email'] ?? null;
 
         $sequenceValue = $this->allocator->allocate($school);
@@ -178,6 +182,7 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $actor, $guard, $expectedVersion) {
             return DB::transaction(function () use ($school, $employee, $attributes, $actor, $guard, $expectedVersion) {
+                $this->operational->requireOperational($school->id);
                 $locked = $this->placement->forEmployeeWrite($school, $employee->id);
                 $guard?->beforeEmployeeWrite($locked);
                 // HR.2A (S-3): nobody edits their own HR identity record.
@@ -226,6 +231,7 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->operational->requireOperational($school->id);
                 // HR.R1-C9: the state comes from the locked row, so a racing second request records nothing twice.
                 $locked = $this->placement->forEmployeeWrite($school, $employee->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'archive');
@@ -261,6 +267,7 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->operational->requireOperational($school->id);
                 $locked = $this->placement->forEmployeeWrite($school, $employee->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'restore');
 
@@ -294,6 +301,7 @@ class EmployeeService
 
         return $this->translatingUserLinkConflict($userId, fn () => $this->context->withSchool($school, function () use ($school, $employee, $userId, $actor) {
             return DB::transaction(function () use ($school, $employee, $userId, $actor) {
+                $this->operational->requireOperational($school->id);
                 $this->link($school, $employee, $userId, $actor);
 
                 event(new EmployeeUpdated($school->id, $employee->id, ['user_id']));
@@ -321,6 +329,7 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->operational->requireOperational($school->id);
                 // HR.R1-C6: before the row. A payroll decision read this link under the same lock.
                 SchoolCompensationLock::acquire($school->id, shared: false);
                 $locked = Employee::query()->where('school_id', $school->id)->whereKey($employee->id)->lockForUpdate()->firstOrFail();

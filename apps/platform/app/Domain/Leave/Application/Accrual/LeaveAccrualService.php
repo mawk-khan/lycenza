@@ -158,7 +158,7 @@ class LeaveAccrualService
                 return $open;
             }
 
-            $run = LeaveAccrualRun::query()->create([
+            $run = LeaveAccrualRun::query()->forceCreate([
                 'school_id' => $school->id, 'leave_type_id' => $type->id, 'leave_year_id' => $year->id, 'period_start' => $period['start'],
                 'status' => 'processing', 'started_by_user_id' => $actor->id, 'started_at' => now(),
             ]);

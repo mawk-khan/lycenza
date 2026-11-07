@@ -104,7 +104,7 @@ class LeavePolicyService
             if ($superseded !== null) {
                 $this->retireLocked($school, $superseded, $actor);
             }
-            $policy = LeavePolicy::query()->create([
+            $policy = LeavePolicy::query()->forceCreate([
                 'school_id' => $school->id, 'leave_type_id' => $type->id, 'name' => trim($terms['name']),
                 'annual_allocation_units' => $terms['annual_allocation_units'],
                 'carry_forward_allowed' => $terms['carry_forward_allowed'],

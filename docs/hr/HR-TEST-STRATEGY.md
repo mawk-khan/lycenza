@@ -285,3 +285,16 @@ Releasing it forces the cycle every time. Unfixed, each of the four orders gave
 `40P01` on each of 2 runs. Prove a lock-order correction this way, on the unfixed
 code first, and race it against every writer of the rows it newly locks: the first
 C9 correction passed against `end()` and deadlocked against a placement change.
+
+## Lifecycle models and writers (HR.R1-C11)
+
+- **A dropped key fails.** Eloquent silently drops a non-fillable key. `TestCase` turns
+  that into a failure for `Tests\Support\LifecycleModels::HARDENED` only: the wider
+  setting hits unrelated fixtures and hides real results.
+- **An admin read cannot see this class's fixtures.** In a transacting test class, a read
+  through `pgsql_admin` sees nothing, so an `assertNull` there passes for the wrong
+  reason. Read under the School's context, or use a committed-data class.
+- **A new HR writer** goes through `SchoolOperationalGuard` and belongs in
+  `HrExecutionTimeSchoolCheckTest`; a second writing class goes in
+  `HrWriterBoundaryTest::NAMED_WRITERS`. Those pins scan source, so they show where the
+  code writes, and the privilege assertions beside them are the runtime boundary.

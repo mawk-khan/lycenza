@@ -26,6 +26,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //
 // Usage:
 //   php hr-lifecycle-op.php <schoolId> end <employmentId> <endsOn> <actorId>
+//   php hr-lifecycle-op.php <schoolId> update <employmentId> <probationEndsOn> <actorId>
 //   php hr-lifecycle-op.php <schoolId> transfer <sourceAssignmentId> <effectiveOn> <positionId> <campusId> <actorId>
 //   php hr-lifecycle-op.php <schoolId> activate <timetableEntryId> <actorId>
 //   php hr-lifecycle-op.php <schoolId> assign <employmentId> <startsOn> <positionId> <campusId> <actorId>
@@ -45,6 +46,7 @@ try {
     $result = HeldTransaction::run(function () use ($app, $kind, $argv): string {
         return match ($kind) {
             'end' => (string) $app->make(EmploymentService::class)->end(EmploymentRecord::query()->findOrFail($argv[3]), $argv[4], User::query()->findOrFail($argv[5]))->status,
+            'update' => (string) $app->make(EmploymentService::class)->update(EmploymentRecord::query()->findOrFail($argv[3]), ['probation_ends_on' => $argv[4]], User::query()->findOrFail($argv[5]))->status,
             'transfer' => (string) $app->make(PlacementChangeService::class)->change(
                 EmployeeAssignment::query()->findOrFail($argv[3]), PlacementChangeKind::TRANSFER, $argv[4], PlacementChangeReason::CAREER_PROGRESSION,
                 Position::query()->findOrFail($argv[5]), User::query()->findOrFail($argv[7]), campus: Campus::query()->findOrFail($argv[6]),

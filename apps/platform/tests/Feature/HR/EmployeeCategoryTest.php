@@ -292,7 +292,7 @@ class EmployeeCategoryTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::transaction(function () use ($schoolA, $employee, $foreignCategory): void {
-            EmploymentRecord::query()->create([
+            EmploymentRecord::query()->forceCreate([
                 'school_id' => $schoolA->id,
                 'employee_id' => $employee->id,
                 'employee_category_id' => $foreignCategory->id,

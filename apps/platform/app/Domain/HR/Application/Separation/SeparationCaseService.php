@@ -20,6 +20,7 @@ use App\Support\Approval\ApprovalProvenance;
 use App\Support\Approval\MakerCheckerPolicy;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -53,6 +54,7 @@ final class SeparationCaseService
     public const string WORKFLOW = 'employment_separation_cases';
 
     public function __construct(
+        private readonly SchoolOperationalGuard $operational,
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly HrEmployeeAccess $access,
@@ -90,7 +92,7 @@ final class SeparationCaseService
 
             try {
                 $case = DB::transaction(function () use ($employment, $reason, $notifiedOn, $plannedLastDay, $actor): EmploymentSeparationCase {
-                    return EmploymentSeparationCase::query()->create([
+                    return EmploymentSeparationCase::query()->forceCreate([
                         'employment_record_id' => $employment->id,
                         'reason_code' => $reason->value,
                         'notified_on' => $notifiedOn,
@@ -333,10 +335,6 @@ final class SeparationCaseService
         $this->access->requireWholeSchool($actor, SeparationCapabilities::MANAGE, $school);
 
         return $this->inSchool($school, function () use ($school, $caseId, $expectedVersion, $actor): EmploymentSeparationCase {
-            // HR.16B (R-HR15-1): School access is CERTIFIED here, so no grant,
-            // revocation or off-boarding may interleave: Identity's School access
-            // lock first (its own rule), then the case locks.
-            $this->staffAccess->holdForCertification($school);
             [$case] = $this->lockCase($school, $caseId, $expectedVersion, $actor, 'separation.complete', ['finalized']);
 
             // The items are locked so a concurrent clear either committed (and is seen) or waits.
@@ -355,7 +353,7 @@ final class SeparationCaseService
             $this->audit->school($school, 'hr.separation.completed', actor: $actor, subject: $case, metadata: ['employmentRecordId' => $case->employment_record_id]);
 
             return $case->refresh();
-        });
+        }, certifiesAccess: true);
     }
 
     private function assertMayDecide(School $school, EmploymentSeparationCase $case, User $actor): void
@@ -454,9 +452,19 @@ final class SeparationCaseService
      * @param  callable(): T  $work
      * @return T
      */
-    private function inSchool(School $school, callable $work): mixed
+    private function inSchool(School $school, callable $work, bool $certifiesAccess = false): mixed
     {
-        return $this->context->withSchool($school, fn () => DB::transaction($work));
+        // HR.R1-C11 (HRC-11, rule 86): every separation write re-checks the School when it executes.
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $work, $certifiesAccess): mixed {
+            // HR.16B (R-HR15-1, rule 141): School access is CERTIFIED, so no grant, revocation or off-boarding may
+            // interleave: Identity's School access lock comes first of all, as its own rule says.
+            if ($certifiesAccess) {
+                $this->staffAccess->holdForCertification($school);
+            }
+            $this->operational->requireOperational($school->id);
+
+            return $work();
+        }));
     }
 
     private static function date(string $value): string

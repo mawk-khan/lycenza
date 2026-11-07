@@ -141,6 +141,41 @@ class LeaveRequestConcurrencyTest extends TestCase
     }
 
     #[Test]
+    public function a_change_of_a_leave_types_rules_waiting_on_a_submission_is_refused(): void
+    {
+        // HR.R1-C11 (C10-N1): submitting holds the type FOR SHARE, so the update waits, then the freeze sees the request.
+        $w = $this->world();
+        $type = $this->leaveType($w['school'], $w['admin'], 'UNT', true, false);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('submit', $w['school']->id, $w['employment']->id, $type->id, '2027-02-01', '2027-02-01', $this->leaveClerk($w['school'])->id),
+            ['php', __DIR__.'/../../Support/archived-identity-op.php', 'leave-type-unpaid', $w['school']->id, $type->id],
+        );
+
+        $this->assertStringStartsWith('ok', $holder);
+        $this->assertSame('rejected:P0001', $contender);
+        $this->assertTrue((bool) DB::connection('pgsql_admin')->table('leave_types')->where('id', $type->id)->value('is_paid'));
+    }
+
+    #[Test]
+    public function a_submission_waiting_on_a_change_of_rules_runs_under_the_new_rules(): void
+    {
+        // The other commit order: nothing was in use when the change committed, so it stands, and from then on the type is in use.
+        $w = $this->world();
+        $type = $this->leaveType($w['school'], $w['admin'], 'UNT', true, false);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            ['php', __DIR__.'/../../Support/archived-identity-op.php', 'leave-type-unpaid', $w['school']->id, $type->id],
+            $this->script('submit', $w['school']->id, $w['employment']->id, $type->id, '2027-02-01', '2027-02-01', $this->leaveClerk($w['school'])->id),
+        );
+
+        $this->assertSame('ok:1', $holder);
+        $this->assertStringStartsWith('ok', $contender);
+        $this->assertFalse((bool) DB::connection('pgsql_admin')->table('leave_types')->where('id', $type->id)->value('is_paid'));
+        $this->assertSame(1, $this->rows($w, 'leave_requests'));
+    }
+
+    #[Test]
     public function two_overlapping_submissions_cannot_both_succeed(): void
     {
         $w = $this->world();

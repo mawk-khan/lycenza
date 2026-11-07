@@ -1,7 +1,7 @@
 # HR.R1-0 audit register (recovered)
 
 **Recovered by HR.R1-C9, 2026-11-07. Rebuilt and re-verified by HR.R1-C10 against
-`82e70a8a` plus the C10 candidate.**
+`82e70a8a`. Updated by HR.R1-C11.**
 
 **Why this file exists.** The HR.R1-0 audit of 2026-11-05 (verdict: PARTIALLY READY,
 REMEDIATION REQUIRED) was delivered as a session report and never committed. Only a
@@ -32,8 +32,8 @@ by the C10 brief has no Transport finding in it.
 | HRC-7 | P3, P3 | Recorded design | HR | `EmployeeAssignmentService.php` in-place demotion | DOCUMENTED | None | Residual; see `HR.md` "Rehire strategy" neighbours |
 | HRC-8 | P3, P3 | Owner-decision dependency, verified | HR | `EmploymentController.php:43`, `EmployeeLifecycleController.php:78`, `SeparationCaseService.php:428-430` | OPEN | Owner | Require it on the API, or show "unclassified" on the case |
 | HRC-9 | P3, P3 | Incorrect comment | HR | `WorkforceAsOfReader::primaryOnSql` | **CLOSED** | None | None |
-| HRC-10 | P3, P3 | Verified active defect, mitigated | HR | `EmploymentRecord::$fillable`; triggers | OPEN | None | Rule 97/118 hardening with GOV-6 |
-| HRC-11 | P3, P3 | Architecture-contract gap | HR | grep: only `ActingEmployeeResolver`; rule 86 | OPEN | None | Add `SchoolOperationalGuard` to HR writers, with a lock-order review |
+| HRC-10 | P3, P3 | Verified structural weakness; not reachable from a request | HR | `HrLifecycleModelIntegrityTest`; `only_the_terms_trigger_writes_the_projection` | **CLOSED, C11** | None | None |
+| HRC-11 | P3, P3 | Contract gap, reproduced: with the guards removed, all 24 writer cases fail against a suspended School; 22 write, and 2 prove the School is checked first | HR | `HrExecutionTimeSchoolCheckTest`, `HrExecutionTimeSchoolRaceTest` | **CLOSED, C11, for what it named** (employment, placement, separation) and for terms, reporting and identity | None | C11-N1 keeps the rest |
 | LVA-4 | P3, P3 | Owner-decision dependency | Security | `LeaveLedgerController.php` (`allocate`, `executeRun`) | OPEN | D-4 | Decide, then step up |
 | LVA-5 | P3, P3 | Verified defect, corrected | Leave | `LeaveLedgerEntry::isCreditSql()`, `LeaveArchitectureGuardTest` | **CLOSED** | None | None |
 | LVA-6 | P3, P3 | Verified defect, corrected | Leave | `LeaveAdminController`, `the_default_leave_year_follows_the_schools_day_not_the_servers` | **CLOSED** | None | None |
@@ -46,7 +46,7 @@ by the C10 brief has no Transport finding in it.
 | TRR-7 | P3, P3 | Missing test evidence, added | Tasks | `a_run_interrupted_by_a_failed_batch_resumes_from_its_cursor` | **CLOSED** | None | None |
 | TRR-8 | P3, P3 | Owner-decision dependency | Tasks, HR | Reading | OPEN | Owner | Accept as documented, or show it on the completed case |
 
-**Totals:** 7 closed in C10, 1 documented, 9 open. No P0 and no P1. TRR-1 moves from P2 to P3
+**Totals:** 9 closed (7 in C10, 2 in C11), 1 documented, 7 open. No P0 and no P1. TRR-1 moves from P2 to P3
 only because its fix is in; the audit's reasoning stands. None of the 17 needs another
 **legal** decision. 2 need another domain owner (XRP-3, XRP-4) and 4 need a product
 or security decision (HRC-4, HRC-8, LVA-4, TRR-8), and TRR-6 needs an architecture one.
@@ -80,7 +80,7 @@ the bypass it reproduced, not for that question.**
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| C10-N1 | P3 | `leave_types_freeze` checks policies and ledger rows only, so `is_paid` can change on an untracked type with approved requests, and `LeaveCoverageReader` reads it live. See `HR-R1-C10-EVIDENCE-INVENTORY.md` M7 | Reproduced in C10; OPEN |
+| C10-N1 | P3 | `leave_types_freeze` checks policies and ledger rows only, so `is_paid` can change on an untracked type with approved requests, and `LeaveCoverageReader` reads it live. See `HR-R1-C10-EVIDENCE-INVENTORY.md` M7. `is_paid` is a leave classification, not a payment state | **CLOSED, C11:** a request now freezes the type. Historic leave was never rewritten |
 | C10-N2 | P3 | `EmployeeAssignmentService::end()` + `create()` + `setPrimary()` composes a move outside rule 130's named path | By reading; OPEN |
 | C10-N3 | P3 | `LeavePageSupport.php:47` has the XRP-3 shape: `limit(1000)` with no order | By reading; OPEN |
 | C10-N4 | P3 | The rule 98 coverage guard proves a contract, never assurance. That is why it could not see HRC-3 | Recorded limit |
@@ -90,6 +90,15 @@ the bypass it reproduced, not for that question.**
 | C10-N9 | P3 | A failed fresh-MFA code has no route-specific throttle: `documents-writes` allows 30 a minute. Systemic | By reading; OPEN, Security |
 | C10-N10 | LOW, development only | A Document archived through the old bypass leaves an active record that neither path can archive | By reading; no production data exists |
 | C10-N6 | Docs | `E21-RETENTION-DETERMINATION.md:490` says the link has no separate history table; `employee_account_links` exists since C7. A determination record, so left for its owner | OPEN |
+
+## New findings from C11
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| C11-N1 | P3 | HR's profile and reference-data writers (addresses, contacts, personal details, notes, qualifications, experience, certifications, documents, Departments, Positions, Categories, reference codes) rely on the request-time School check, with no execution-time recheck. Rule 86 says every School business effect. HRC-11 named employment, placement and separation, so these are outside it | OPEN, independent |
+| C11-N2 | LOW | An idempotent HR API write that reaches the guard in the gap after the request-time check stores its 404 under the key, so a retry with that key after the School resumes replays the 404. Read, not executed. The generic middleware does this for Leave too | OPEN, independent. A new key succeeds |
+| C11-N3 | LOW, test | `PayrollUiTest::the_payslip_page_renders_the_expected_props_for_an_approved_run` looks for `pf`, `esi` and `tds` in the whole page, which holds a random email. It failed once in CI on `gdapfw.varun.mistry@example.org`. Not caused by C11, and left alone | OPEN, Payroll owner |
+| C11-N4 | Owner note | A rejected or cancelled leave request also freezes its type, because any request is use. Wider than the approved-leave defect it closes. Renames stay open, and a School can add a new type | Recorded; the owner may narrow it |
 
 ## Backlog as the audit grouped it
 
@@ -123,8 +132,8 @@ the bypass it reproduced, not for that question.**
 | HRC-7 | P3 / **`setPrimary` rewrites history.** It demotes an open primary in place, which changes as-of answers for past dates. Only `primary_correction` records it. / `EmployeeAssignmentService.php:308-345` / Recorded design; document the as-of effect in HR.md. | DOCUMENTED, C10: the as-of effect is in HR.md, as the audit disposed. Residual |
 | HRC-8 | P3 / **Unclassified staff type and clearance.** `staff_type` NULL is still creatable through the API, import and rehire, not only on legacy rows. Clearance requirements scoped to a staff type silently skip those employments. / `SeparationCaseService.php:428-430`; `EmploymentController.php:43` / Show "unclassified" on the case, or require staff type on the API. | OPEN, owner decision (`EmploymentController.php:43`, `EmployeeLifecycleController.php:78`) |
 | HRC-9 | P3 / **`primaryOnSql` does not match its comment.** It omits the `ends_on` check, yet claims to answer "the same question primariesFor() answers". It is used by the movement report. / `WorkforceAsOfReader.php:259-262` vs `:318-329`; `Reports/StaffMovementReport.php:157-158` / Align the code or the comment. | CLOSED, C10: comment corrected to the behaviour |
-| HRC-10 | P3 / **Mass-assignment and DB backstops.** `EmploymentRecord::$fillable` includes `school_id`, `status` and the terms columns, mitigated by DB triggers. The projection guard depends on trigger depth, so any future trigger that cascades an UPDATE could bypass it. / `Infrastructure/EmploymentRecord.php:69-79`; workforce migration `:209` / Harden (remove from `$fillable`). | OPEN, verified defect, independent |
-| HRC-11 | P3 / **No execution-time School check.** HR synchronous writers (employment, placement, separation) do not call `SchoolOperationalGuard`; Leave and Identity do. HR relies on request-time `school-context`. / grep: only `ActingEmployeeResolver` in HR / Confirm against the rule 86 scope, or add the check. | OPEN, contract gap against rule 86, independent |
+| HRC-10 | P3 / **Mass-assignment and DB backstops.** `EmploymentRecord::$fillable` includes `school_id`, `status` and the terms columns, mitigated by DB triggers. The projection guard depends on trigger depth, so any future trigger that cascades an UPDATE could bypass it. / `Infrastructure/EmploymentRecord.php:69-79`; workforce migration `:209` / Harden (remove from `$fillable`). | **CLOSED, C11:** `EmploymentRecord` accepts only `probation_ends_on`, and a pin refuses a second writer of the projection |
+| HRC-11 | P3 / **No execution-time School check.** HR synchronous writers (employment, placement, separation) do not call `SchoolOperationalGuard`; Leave and Identity do. HR relies on request-time `school-context`. / grep: only `ActingEmployeeResolver` in HR / Confirm against the rule 86 scope, or add the check. | **CLOSED, C11,** for the writers it names, plus terms, reporting and identity. Rule 86 reaches further: C11-N1 |
 | HRC-12 | P3 / Archived/deceased Employee rehire / Existing lifecycle admission | CLOSED, C9 |
 | LVA-1 | **P2** / CONTRADICTED / `HR-16-READINESS.md` §5 "Monitoring" says scheduled-task heartbeats and alerts exist for accrual. `HR-OPERATIONS.md` §1.2 tells operators to check heartbeats for "the leave accrual and eligibility runs". Neither exists. Accrual is a manual web or API action by a User: 20 batches per web request, `max_batches` on the API, `started_by_user_id` required. Nothing detects a month that was never run; the grid only shows `null`. / Correct both docs now (doc-only). Owner decision whether accrual should be scheduled. That would need a system-actor design, because the services take a User. | OPEN: the false claims are corrected in C10; the choice is D-3 |
 | LVA-2 | P3 / PARTIAL / The R-HR10-1 detection (`LeaveSeparationObligations.php:36-38`) flags only `accrual_period > lastDay`. A credited month that contains the last day is never flagged, although HR.10 requires the employment to span the whole month. That happens with a backdated mid-month end, or with `period_start` timing credited before the end was recorded. Already-corrected credits are still counted. ATTENTION never blocks (`SeparationObligation.php:12`). No test asserts ATTENTION for `leave_accrual_after_last_day` or `leave_approved_after_last_day`; the tests only check `leave_pending_requests`. / Small fix: compare the month's end with the last day. Add tests. | CLOSED, C2 and C9 |
@@ -169,7 +178,7 @@ the bypass it reproduced, not for that question.**
 | GOV-3 | **GOV-3 (P3, CONTRADICTED): R-HR16-2 says leave approval, attendance correction and task review need fresh MFA.** The code requires none (§4 line references). - *Disposition:* correct the register. Or, if leave decisions should count as rule 95 "consequential" (they feed Payroll's HRX evidence), get an owner decision. | CORRECTED, C10: R-HR16-2 now says which writes need MFA |
 | GOV-4 | **GOV-4 (P3, VERIFIED): documentation drift.** - S-7 is listed as "open", but adjust and opening now require MFA; allocate still does not. - Register §3a still says "S-1 stays OPEN". - "17 roles" appears in register line 40, CLAUDE.md rule 93 and `DDEV-DEMO-REVIEW.md:272,355`. - `DDEV-DEMO-REVIEW.md:272` says payroll amounts are 403 for School Admin, but the demo grants her `payroll_approval_reviewer`. - The `HR-EXPANSION-ROADMAP.md` §5 owner-decision table does not mark OD-HR-1, 2, 5 or 13 as decided. - `MASTER-ROADMAP.md` (last changed 2026-11-04) has no row for the HR programme. | CORRECTED, C10 |
 | GOV-5 | **GOV-5 (P3, VERIFIED): `app.payroll.runs.show` names the wrong evidence.** - The coverage entry names `PayrollStructureReadService::listComponents` (`SchoolRouteCoverage.php:1358`), which only runs when the actor holds structures.view (`App/Payroll/PayrollRunController.php:216-218`). - The real check is `PayrollRunReadService::getRun` (runs.view, `PayrollRunReadService.php:51`). Authorization works; the rule 98 evidence is misattributed. - *Disposition:* correct the entry. | CLOSED, `852fb06a`. **My C9 register listed it open and its text unrecoverable. Both were wrong** |
-| GOV-6 | **GOV-6 (P3, VERIFIED): many HR, Leave and Payroll models leave `school_id`, `status` or actor columns fillable.** Examples: `PayrollRun.php:42-47` (status, approved_by_user_id, approved_at), `LeaveRequest.php:36`, `EmploymentRecord`. No controller passes raw input (grep is empty), and database triggers guard the state graphs. - *Disposition:* hardening, applying the rule 97/118 pattern. | OPEN, verified, same family as HRC-10 |
+| GOV-6 | **GOV-6 (P3, VERIFIED): many HR, Leave and Payroll models leave `school_id`, `status` or actor columns fillable.** Examples: `PayrollRun.php:42-47` (status, approved_by_user_id, approved_at), `LeaveRequest.php:36`, `EmploymentRecord`. No controller passes raw input (grep is empty), and database triggers guard the state graphs. - *Disposition:* hardening, applying the rule 97/118 pattern. | **PARTIAL, C11:** nine lifecycle models hardened (`Tests\Support\LifecycleModels`), including the three it named. Reference-data and append-only models keep `school_id` or actor columns fillable. They have one writer each, and append-only rows have no runtime UPDATE |
 | GOV-7 | **GOV-7 (P3, VERIFIED): the SR-L1/E47 question does not mention line_manager, team_task_manager or payroll_approval_reviewer.** - *Disposition:* extend it before sending. | OPEN, owner decision D-10 |
 | GOV-8 | **GOV-8 (P2, VERIFIED): schedule risk from E16.** Any HR.R1 correction must publish by 2026-11-28 or wait for a successor decision. - *Disposition:* start the successor review around 2026-11-20. | Valid through 2026-11-28; successor review about 2026-11-20 |
 | GOV-9 | **GOV-9 (P2, VERIFIED): there is no staging infrastructure, backup/restore, encryption or legacy-document evidence.** - *Disposition:* owner authorization for R-00a. Production stays NO-GO. | OPEN, operational |

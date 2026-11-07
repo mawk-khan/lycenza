@@ -855,7 +855,13 @@ docs/roadmap             MASTER-ROADMAP.md
     (FOR SHARE inside its claim transaction) -- never a blanket check in
     `SetTenantContextForJob` -- and a new queued job or School-walking
     command must decide its suspended-School behaviour
-    (`SchoolLifecycleArchitectureGuardTest`, ADR 0047).
+    (`SchoolLifecycleArchitectureGuardTest`, ADR 0047). HR's writers of
+    identity, employment, terms, placement, reporting lines and separation
+    do this at the start of their transaction, before their own rows
+    (HR.R1-C11, HRC-11). Onboarding has already taken the Campus by then, and
+    separation completion takes Identity's lock first (rule 141). HR's profile
+    and reference-data writers still rely on the request-time check: a
+    recorded residual, C11-N1.
 
 87. **A release is one immutable, verified image digest; the repository
     reaches VERIFIED, never PUBLISHED or PROMOTED (ADR 0052).** Production
@@ -1199,6 +1205,13 @@ once several modules copy it.
     - **`schools.status` is not mass assignable.** Only the lifecycle
       services write it, explicitly (`forceFill`). Never add it back to
       `School::$fillable`.
+    - **Lifecycle models take state from their owner only (HR.R1-C11, HRC-10,
+      GOV-6).** The nine in `Tests\Support\LifecycleModels` keep state, actor
+      and parent columns out of `$fillable`; their owning writers use
+      `forceCreate`/`forceFill`. Eloquent silently drops a non-fillable key
+      unless the model is totally guarded (that throws), so `TestCase` makes
+      a dropped key fail on those models and keeps the throw on every totally
+      guarded model: never turn that off.
     - **Platform-role grant and revoke re-verify a fresh MFA code** inside
       `PlatformRoleGovernanceService`.
     - **History fails closed.** Audit, accounting, settlement and grant
@@ -1869,6 +1882,7 @@ once several modules copy it.
        - dimensions are only staff type, Employee Category and primary Department; NULL = any, including none;
        - facts come from HR.1A on the evaluation date (`EmploymentRoster`, `WorkforceAsOfReader`), never a duplicated column, role, Position or name;
        - never gender, marital status, family or health (HR-L8; `LeaveArchitectureGuardTest`).
+     - **A leave type in use keeps its rules (HR.R1-C11, C10-N1).** A policy, a ledger row or a request freezes `is_paid`, `tracks_balance` and `allows_half_day` (`leave_types_freeze`). `is_paid` is a leave classification, never a payment state, and `LeaveCoverageReader` reads it live.
      - **Rules belong to the version.** They are created with it (`eligibility_rule_count`, deferred completeness check) and never updated, added later or deleted. A change is a new superseding version.
      - **No ambiguity, no precedence.** Rules overlapping another ACTIVE version of the leave type are refused (service + `trg_leave_eligibility_rules_guard`, under `LeaveLocks::eligibility()`, taken right after the School). Never add an ordering or "most specific wins".
      - **The run only adds** (`LeaveEligibilityService::executeRun()`, `hr.leave.manage`):

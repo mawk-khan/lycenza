@@ -8,12 +8,15 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\MassAssignmentException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\Concerns\AssertsNavigation;
+use Tests\Support\LifecycleModels;
 
 /**
  * DatabaseTransactions, not RefreshDatabase -- see
@@ -87,6 +90,15 @@ abstract class TestCase extends BaseTestCase
 
     protected function setUp(): void
     {
+        // HR.R1-C11 (HRC-10, GOV-6): these models keep their lifecycle and actor columns out of `$fillable`, and Eloquent
+        // silently drops what is not fillable. Here a dropped key fails loudly, so a write can never quietly become a no-op.
+        // A callback replaces Eloquent's own throw, so a totally guarded model has to throw here too, or this hides it.
+        Model::preventSilentlyDiscardingAttributes(true);
+        Model::handleDiscardedAttributeViolationUsing(function (Model $model, array $keys): void {
+            if (in_array($model::class, LifecycleModels::HARDENED, true) || $model->totallyGuarded()) {
+                throw new MassAssignmentException(sprintf('[%s] was asked to mass-assign %s.', $model::class, implode(', ', $keys)));
+            }
+        });
         parent::setUp();
 
         $this->testStartedAt = CarbonImmutable::now()->subSecond();
