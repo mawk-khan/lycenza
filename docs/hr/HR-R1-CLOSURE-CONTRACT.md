@@ -1,7 +1,7 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C11 have. **Never
+started; the HR.R1-0 audit and checkpoints C1 to C12 have. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -242,5 +242,13 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 
 - **Proven and published.** `eec7bb26`: CI gate run 42370545237, four shards, 11,176 cases, 0 failures, 1 skip (ESI-12), 461,795 assertions. 66 more cases than C10, and 3,839 more assertions. 16 valid mutations each failed a test, one only after the proof above was added; a 17th was invalid, because it weakened nothing. Rollback and re-apply identical on the superuser proof, and the production-shaped role in CI; `platform:verify-database` failed=0; forced RLS 252, with no new table. `ddev demo-reset` rebuilt the demo with every lifecycle state correct and no missing actor. The capability map recounts to 361 with no row changed.
 - **Publication.** The reviewed work was published as one commit with an identical tree, so `2f56d46c`, whose architecture test failed, never reached `main`.
+
+**Evidence recorded (HR.R1-C12, 2026-11-07):** the decision packages are ready and **no decision is approved**. HR.R1 stays OPEN, final assessment is not eligible, staging stays blocked, and production stays NO-GO. `HR-R1-C12-DECISION-DOCKET.md` holds the docket, `HR-R1-C12-HR4-8-DISPOSITION.md` the 82 rows, and `HR-R1-C12-EVIDENCE-APPENDIX.md` every Payroll reference, all 87 models and the runtime privileges. No code, schema, test or capability row changed.
+
+- **Recounted, unchanged:** 361 capability rows, 61 audit identifiers, 82 HR.4–8 rows, 62 Payroll sites, 9 foreign keys, 8 Payroll SQL functions (from the live catalogue), 47 direct reads.
+- **Corrected against the source:** the HR.4–8 rows were not the whole of §2 (C12-N5), and Option B would not satisfy §2 on approval alone, because four rows stay ACTIVE. HR-011 and HR-004 are located, in `docs/product/reference-parity/functions.csv`. The "25 non-Payroll files" is 24. Four HR tables need a writer register entry, not five. `0b77270c`'s green `CI gate` ran no suite: the last full suite is `eec7bb26`, which §2 will need answered when a baseline is chosen.
+- **Found by applying the proposed one-writer definition to the code:** it needs named exceptions for rules 76 and 86 to work outside HR, and its point 4 fails five tables (C12-N2).
+- **Found by an independent fact-check before publication, and fixed.** My first closure matrix said "Architecture agreement: Yes" on three rows with no record behind it. C12-N1 overstated the WorkforceTasks gap, C12-N3 undercounted its sites, the D-2 moves hid a 404 body that names an HR class, and the server version and one citation were wrong. It found no invented approval.
+- **Not verified, and not verifiable here:** the reference-pack fingerprint.
 
 **Publication-history recommendation to the Platform owner (not built).** `lycenza-ci publication-check` proves the candidate tip. A narrow addition would run `php -l` over the PHP files each commit in `main..candidate` changes, and refuse a range containing one that does not parse. That is the whole of it: no CI redesign. Disposition is the Platform owner's.

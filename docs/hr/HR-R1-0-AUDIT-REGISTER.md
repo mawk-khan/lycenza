@@ -1,7 +1,7 @@
 # HR.R1-0 audit register (recovered)
 
 **Recovered by HR.R1-C9, 2026-11-07. Rebuilt and re-verified by HR.R1-C10 against
-`82e70a8a`. Updated by HR.R1-C11.**
+`82e70a8a`. Updated by HR.R1-C11 and HR.R1-C12.**
 
 **Why this file exists.** The HR.R1-0 audit of 2026-11-05 (verdict: PARTIALLY READY,
 REMEDIATION REQUIRED) was delivered as a session report and never committed. Only a
@@ -99,6 +99,18 @@ the bypass it reproduced, not for that question.**
 | C11-N2 | LOW | An idempotent HR API write that reaches the guard in the gap after the request-time check stores its 404 under the key, so a retry with that key after the School resumes replays the 404. Read, not executed. The generic middleware does this for Leave too | OPEN, independent. A new key succeeds |
 | C11-N3 | LOW, test | `PayrollUiTest::the_payslip_page_renders_the_expected_props_for_an_approved_run` looks for `pf`, `esi` and `tds` in the whole page, which holds a random email. It failed once in CI on `gdapfw.varun.mistry@example.org`. Not caused by C11, and left alone | OPEN, Payroll owner |
 | C11-N4 | Owner note | A rejected or cancelled leave request also freezes its type, because any request is use. Wider than the approved-leave defect it closes. Renames stay open, and a School can add a new type | Recorded; the owner may narrow it |
+
+## New findings from C12
+
+C12 moved no status of any earlier finding. These are additions, found while preparing the decision docket.
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| C12-N1 | P3 | C11-N1 does not name `ArchivesProfileRecords`, the archive path of six profile services. WorkforceTasks' `TaskCatalogueService` and the `administrative` path of its assignment and workflow services also lack the check; self-service and the manager path reach it through `ActingEmployeeResolver::hold()`. By reading | OPEN, independent |
+| C12-N2 | P3 | `school_os_app` holds DELETE on `hr_departments`, `positions`, `employee_categories`, `hr_employee_number_counters` and `staff_working_weekdays`, and no code deletes from them. Catalogue read on the local database, plus a search of `app/` | OPEN, with R1-01 point 4 |
+| C12-N3 | P3 | Five web sites look up before the capability check, so a same-School member without it can tell 404 from 403 for a known UUID: `CompensationController:95,154`, `StatutoryEmployeeController:79`, App `PayrollRunController:121,142`. `CompensationController::search` and `StatutoryEmployeeController::search` leave `%` and `_` unescaped with no ORDER BY. The C10 inventory §5 named two of the sites and never registered them | OPEN, independent, Payroll |
+| C12-N4 | Docs | The C10 inventory's "25 files outside HR and Payroll" does not reproduce: 24 at `82e70a8a` and at `0b77270c`. Its §1.8 lists `workforce_task_events` for a register entry, against its own point 7. `HR-DOMAIN-OWNERSHIP-MAP.md` §3 still says `7a4068fe` and "25 places" | Recorded. The map waits for D-2 |
+| C12-N5 | Contract | D-1 covers HR.4–8 only. Nine PART or MISS rows outside those phases have no gate and no deferral record (D1-07, D4-07, D18-03, D18-04, D18-17, D19-07, D19-14, D19-15, D19-16), and §2 does not say whether a partial slice counts as published | OPEN, owner decision |
 
 ## Backlog as the audit grouped it
 

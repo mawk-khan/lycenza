@@ -15,6 +15,7 @@ contract.
 | Test strategy | `HR-TEST-STRATEGY.md` | HR.0A |
 | HR.16 remediation matrix, measurements, browser and axe evidence, readiness determination | `HR-16-READINESS.md` | HR.16, 2026-11-05 |
 | HR.R1 final cross-ERP closure contract | `HR-R1-CLOSURE-CONTRACT.md` | reserved |
+| HR.R1 owner decision docket, HR.4–8 disposition and evidence | `HR-R1-C12-DECISION-DOCKET.md`, `HR-R1-C12-HR4-8-DISPOSITION.md`, `HR-R1-C12-EVIDENCE-APPENDIX.md` | HR.R1-C12, 2026-11-07; every decision pending |
 | Demo plan | `HR-DEMO-PLAN.md` | draft |
 | HR.1A workforce foundation (implemented contract) | `docs/modules/HR.md` "Workforce foundation (HR.1A)" + ADR 0028 HR.1A amendment + CLAUDE.md rule 130 | implemented 2026-11-03 |
 | HR.2A staff profile foundation (implemented contract) | `docs/modules/HR.md` "Staff profile foundation (HR.2A)" + ADR 0028 and ADR 0029 HR.2A amendments + CLAUDE.md rule 132 | implemented 2026-11-03 |
