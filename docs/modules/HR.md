@@ -443,6 +443,24 @@ suggested naming is overridden here in favor of repo consistency):
 - Prior `EmployeeAssignment` rows (including their `manager_assignment_id`
   links) are immutable history — a rehire never rewrites or reparents
   them.
+- **An archived Employee is restored first** (HR.R1-C9, HRC-12, owner
+  decision 2026-11-07). Every path to a new employment answers from the
+  Employee row it locked, and `trg_employment_records_archived_identity`
+  refuses it for the runtime role. This replaces the Phase 8A.13 rule that
+  rehire ignored `record_status`.
+  - **Restoring** (`EmployeeService::restore()`) changes `record_status`
+    and nothing else: no employment, placement, reporting line, teaching
+    assignment, User, role or Payroll right comes back. The earlier
+    `employee.archived` event stays beside `employee.restored`.
+  - **Not a retention override.** The clock runs from the last separation
+    and never reads `record_status`, so restoring moves no date. A restored
+    Employee stays eligible until a new employment makes them current.
+  - **A purged Employee has nothing to restore.** Personal data is never
+    rebuilt.
+  - **A death is never undone by restoring:** that refusal is asked first
+    and stands afterwards.
+  - **An archived Employee may still hold an open employment.** Archiving
+    never ended one, and C9 leaves that alone.
 
 ## Department and Position strategy
 
@@ -4476,9 +4494,16 @@ writers serialize and the second sees the first's committed lines):
 **Readers:**
 - `ReportingLine` keeps its signatures (`managerOf`, `holdManagerOf`,
   `reportsOf`), now over dated lines.
-  - `holdManagerOf()` share-locks the line and the manager's employment,
-    so a concurrent change, removal, correction or manager employment end
-    waits for a Leave decision, or committed first and is seen.
+  - `holdManagerOf()` share-locks both employments, then the line, so a
+    concurrent change, removal, correction or employment end waits for a
+    decision, or committed first and is seen. **Employments before the
+    line** (HR.R1-C9): the order `EmploymentService::end()` and every line
+    writer use. Taking the line first was a real deadlock against an end on
+    either side, because a leave approval goes on to hold the requester's
+    employment. The line is read without a lock to learn which employments
+    to take, then read again, held. A replaced line is read again, at most
+    three times, and after that there is no held answer, which every caller
+    refuses.
   - Leave's manager path uses the line effective on the decision date.
 - `App\Domain\HR\Application\Reporting\ReportingAsOfReader` is the
   canonical historical reader. Every method takes a constant number of
@@ -4894,13 +4919,11 @@ defects. Four are closed for development, and HRC-12 is partial:
   is deleted, and an already-ended placement is untouched. A one-day
   placement (starting on the last day) is ordinary. Rehire never revives
   either.
-- **HRC-12, rehire admission (partial).**
+- **HRC-12, rehire admission.**
   - **Deceased:** an Employee whose employment ended in death never receives
     another, through either create or rehire. Correcting an erroneous death
     record has no path; that is a separate, undecided matter.
-  - **Archived, still OPEN (owner decision):** rehire stays independent of
-    `record_status` (Phase 8A.13, `HrEmployeeRehireTest`), although coverage
-    treats an archived Employee's employment as inert.
+  - **Archived:** decided and closed by HR.R1-C9; see "Rehire strategy".
 - **XRP-1/XRP-2, Timetable.** Reactivating a weekly entry re-checks the
   teacher's current employment on the School-local today
   (`EmploymentCoverage::hold()`), exactly like create and update. A refused
@@ -4908,9 +4931,13 @@ defects. Four are closed for development, and HRC-12 is partial:
 - **LVA-2, credits at separation.** The Leave obligation flags every monthly
   credit for a month that does not END within the employment. That includes
   the month holding a mid-month last day, not only months starting after it.
-  Credits already named by a correcting adjustment are excluded. Nothing is
-  reversed or prorated (OD-HR-17). The broader R-HR10-1 reconciliation
-  stays manual.
+  A credit stops being outstanding only once the adjustments correcting it
+  net to a debit covering its units (HR.R1-C9): through the ledger's one sign
+  convention, across the whole chain, because undoing a debit names that
+  debit, not the accrual. Only `source_id` provenance counts, so an unrelated
+  debit of the same size clears nothing. Nothing is reversed or prorated
+  (OD-HR-17). The broader R-HR10-1 reconciliation stays manual, and a closed
+  year cannot be corrected, so its unearned credit stays flagged.
 
 Concurrency (two real sessions): an end held open refuses the waiting
 future transfer and the waiting Timetable reactivation, and a future

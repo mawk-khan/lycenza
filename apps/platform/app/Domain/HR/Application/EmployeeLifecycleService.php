@@ -38,11 +38,11 @@ use InvalidArgumentException;
  * `EmploymentService::end()` on an existing EmploymentRecord, and
  * `rehire()` only ever calls `EmploymentService::create()` for a NEW
  * EmploymentRecord under the SAME, already-existing Employee. Neither
- * operation reads or writes `Employee.record_status`,
- * `employees.user_id`, or any `users`/`school_memberships` row --
- * Employee-record lifecycle and account/membership lifecycle remain
- * fully independent of Employment lifecycle (docs/modules/HR.md
- * principle 2.6, "Employee lifecycle -- state responsibility matrix").
+ * operation writes `Employee.record_status`, `employees.user_id`, or any
+ * `users`/`school_memberships` row -- account and membership lifecycle
+ * stay independent of Employment lifecycle (docs/modules/HR.md principle
+ * 2.6). HR.R1-C9 (HRC-12): `create()` READS `record_status`, because an
+ * archived Employee is restored first.
  */
 class EmployeeLifecycleService
 {

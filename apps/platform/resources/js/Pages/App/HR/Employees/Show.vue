@@ -371,6 +371,7 @@ function makeContactPrimary(id: string): void {
 
 // --- Employment / lifecycle ------------------------------------------------
 
+const isArchived = computed(() => props.workspace.summary.employee_record_status === 'archived');
 const showEmploymentForm = ref(false);
 const employmentForm = useForm({
     employment_type: 'permanent',
@@ -1708,7 +1709,14 @@ function submitNote(): void {
         <section id="profile-employment" class="mt-8">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-ink-muted">Employment history</h2>
-                <div v-if="can.manageAssignments" class="flex items-center gap-3">
+                <p
+                    v-if="can.manageAssignments && isArchived"
+                    data-testid="employment-archived-note"
+                    class="text-sm text-ink-muted"
+                >
+                    Restore this Employee before recording a new employment.
+                </p>
+                <div v-else-if="can.manageAssignments" class="flex items-center gap-3">
                     <button
                         type="button"
                         class="text-sm font-medium underline"
@@ -2524,7 +2532,7 @@ function submitNote(): void {
             </ul>
 
             <form
-                v-if="showRehireForm"
+                v-if="showRehireForm && !isArchived"
                 class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitRehire"
             >
@@ -2570,8 +2578,11 @@ function submitNote(): void {
                         <p class="mt-1 text-sm text-danger">{{ rehireForm.errors.staff_type }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm text-ink-muted">Start date</label>
+                        <label class="block text-sm text-ink-muted" for="rehire-starts"
+                            >Start date</label
+                        >
                         <input
+                            id="rehire-starts"
                             v-model="rehireForm.starts_on"
                             type="date"
                             required
@@ -2589,7 +2600,7 @@ function submitNote(): void {
             </form>
 
             <form
-                v-if="showEmploymentForm"
+                v-if="showEmploymentForm && !isArchived"
                 class="mt-3 rounded-xs border border-line p-4"
                 @submit.prevent="submitEmployment"
             >

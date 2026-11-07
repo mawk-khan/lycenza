@@ -158,15 +158,20 @@ class EmploymentService
         // exist yet to lock -- serialize on this row instead of racing.
         // Mirrors EmployeeNumberAllocator/AcademicYearService's lock-then-
         // check-then-write pattern.
-        Employee::query()->where('id', $employee->id)->lockForUpdate()->firstOrFail();
+        $identity = Employee::query()->where('id', $employee->id)->lockForUpdate()->firstOrFail();
 
-        // HR.R1-C2 (HRC-12, partial): an Employee whose employment ended in death never receives another one --
-        // no contract permits it, and a new employment would not correct the death record (correcting an
-        // erroneous death record is a separate, undecided matter). The Employee's `record_status` is NOT
-        // consulted: Phase 8A.13 keeps the identity record and the employment lifecycle independent
-        // (HrEmployeeRehireTest); whether an archived identity should gate a new employment is an owner decision.
+        // HR.R1-C2 (HRC-12): an Employee whose employment ended in death never receives another one -- no contract
+        // permits it, and a new employment would not correct the death record (correcting an erroneous death record
+        // is a separate, undecided matter). Asked first: restoring the identity would not change this answer.
         if (EmploymentRecord::query()->where('school_id', $school->id)->where('employee_id', $employee->id)->where('status', 'deceased')->exists()) {
             throw new InvalidEmploymentTermsException('employee_deceased', 'A death is recorded for this Employee; a new employment cannot be recorded.');
+        }
+
+        // HR.R1-C9 (HRC-12, owner decision 2026-11-07): an archived identity is restored first. The answer comes from
+        // the row locked above, because the model passed in may be stale. Database-backed
+        // (`trg_employment_records_archived_identity`). Restoring grants nothing else (HR.md "Rehire strategy").
+        if ($identity->record_status === 'archived') {
+            throw new InvalidEmploymentTermsException('employee_archived', 'This Employee is archived. Restore the Employee first, then record the new employment.');
         }
 
         // SR.4 (ADR 0071 §26.2): never your own employment.

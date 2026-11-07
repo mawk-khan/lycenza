@@ -226,26 +226,30 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
-                $this->placement->forEmployeeWrite($school, $employee->id);
+                // HR.R1-C9: the state comes from the locked row, so a racing second request records nothing twice.
+                $locked = $this->placement->forEmployeeWrite($school, $employee->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'archive');
 
-                if ($employee->record_status === 'archived') {
-                    return $employee;
+                if ($locked->record_status === 'archived') {
+                    return $locked;
                 }
 
-                $employee->forceFill(['record_status' => 'archived'])->save();
+                $locked->forceFill(['record_status' => 'archived'])->save();
 
-                $this->audit->school($school, 'employee.archived', actor: $actor, subject: $employee);
+                $this->audit->school($school, 'employee.archived', actor: $actor, subject: $locked);
 
-                event(new EmployeeArchived($school->id, $employee->id));
+                event(new EmployeeArchived($school->id, $locked->id));
 
-                return $employee->fresh();
+                return $locked->fresh();
             });
         });
     }
 
     /**
-     * The inverse of archive() -- restores `record_status` to `active`.
+     * The inverse of archive() -- restores `record_status` to `active`, and
+     * nothing else (HR.R1-C9, HRC-12): no employment, placement, reporting line,
+     * teaching assignment, User, role or Payroll right comes back, and the
+     * earlier `employee.archived` record stays. A rehire is a separate step.
      * Not named in the original 8A.0 plan's domain-event list, so it
      * deliberately dispatches no dedicated event of its own (only
      * `EmployeeArchived` was planned); it is still audited.
@@ -257,18 +261,18 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
-                $this->placement->forEmployeeWrite($school, $employee->id);
+                $locked = $this->placement->forEmployeeWrite($school, $employee->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'restore');
 
-                if ($employee->record_status === 'active') {
-                    return $employee;
+                if ($locked->record_status === 'active') {
+                    return $locked;
                 }
 
-                $employee->forceFill(['record_status' => 'active'])->save();
+                $locked->forceFill(['record_status' => 'active'])->save();
 
-                $this->audit->school($school, 'employee.restored', actor: $actor, subject: $employee);
+                $this->audit->school($school, 'employee.restored', actor: $actor, subject: $locked);
 
-                return $employee->fresh();
+                return $locked->fresh();
             });
         });
     }

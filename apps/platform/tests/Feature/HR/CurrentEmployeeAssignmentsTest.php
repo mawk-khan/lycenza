@@ -51,8 +51,12 @@ class CurrentEmployeeAssignmentsTest extends TestCase
     /** @param  array<string, mixed>  $employment */
     private function employed(array $employment = [], array $employee = []): array
     {
-        $person = $this->createEmployee($this->school, $employee);
+        $person = $this->createEmployee($this->school, array_diff_key($employee, ['record_status' => true]));
         $record = $this->createEmploymentRecord($person, ['starts_on' => '2026-01-01', 'ends_on' => null, 'status' => 'active', ...$employment]);
+        if (isset($employee['record_status'])) {
+            // HR.R1-C9 (HRC-12): employed first, archived afterwards.
+            app(TenantContext::class)->withSchool($this->school, fn () => $person->forceFill(['record_status' => $employee['record_status']])->save());
+        }
 
         return [$person, $record];
     }

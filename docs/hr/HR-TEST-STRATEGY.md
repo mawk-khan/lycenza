@@ -275,3 +275,11 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
   separately, never skipped to make a run green.
 - **Baseline failures** are distinguished from new failures with
   evidence: the same test red on `main` at the candidate's merge base.
+
+## Lock-order proofs (HR.R1-C9)
+
+A two-party race cannot force the order that matters when a lock order is the
+defect. `ReportingLineEmploymentEndConcurrencyTest` uses a third session to hold
+the contended row, so one party queues on it first and the other queues behind.
+Releasing it forces the cycle every time. Unfixed, both orders gave `40P01` on
+each of 2 runs. Prove a lock-order correction this way, on the unfixed code first.

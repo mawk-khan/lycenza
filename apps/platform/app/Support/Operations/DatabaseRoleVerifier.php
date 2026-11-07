@@ -638,6 +638,9 @@ class DatabaseRoleVerifier
      * HR.R1-C2 (HRC-1, HRC-2): an employment never begins with a planned end
      * (the eligibility guard's INSERT branch), and only an employment end
      * records a placement as never effective (the empty-interval trigger).
+     * HR.R1-C9: an archived identity receives no employment (and the guard holds
+     * the Employee row, so it serializes with an archive in flight), and a
+     * placement stays with its employment (its trigger must watch BOTH columns).
      */
     private function employmentLifecycleAdmissionCheck(): CheckResult
     {
@@ -646,7 +649,13 @@ class DatabaseRoleVerifier
         $placement = DB::selectOne("select array_length(string_to_array(t.tgattr::text, ' '), 1) as columns, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employee_assignments_never_effective'");
         $afterDeath = (int) DB::selectOne("select count(*) as c from pg_trigger where not tgisinternal and tgenabled = 'O' and tgname = 'trg_employment_records_after_death'")->c;
 
-        return CheckResult::of('employment_lifecycle_admission_guarded', $guard !== null && str_contains($guard->src, 'never begins with a planned end')
+        $identity = DB::selectOne("select array_length(string_to_array(t.tgattr::text, ' '), 1) as columns, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employee_assignments_placement_identity'");
+        $archived = DB::selectOne("select p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and t.tgenabled = 'O' and t.tgname = 'trg_employment_records_archived_identity'");
+
+        return CheckResult::of('employment_lifecycle_admission_guarded', $identity !== null && (int) $identity->columns === 2
+            && str_contains($identity->src, 'belongs to its employment') && str_contains($identity->src, 'never took effect is final') && str_contains($identity->src, 'stays primary history')
+            && $archived !== null && str_contains($archived->src, 'FOR SHARE')
+            && $guard !== null && str_contains($guard->src, 'never begins with a planned end')
             && $placement !== null && (int) $placement->columns === 2 && str_contains($placement->src, 'never took effect is final') && str_contains($placement->src, 'past its end')
             && $afterDeath === 1);
     }

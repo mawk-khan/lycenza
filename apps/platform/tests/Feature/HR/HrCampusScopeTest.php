@@ -83,8 +83,12 @@ class HrCampusScopeTest extends TestCase
      */
     private function employee(string $name, array $placements, array $employment = [], array $assignment = [], array $person = []): EmploymentRecord
     {
-        $employee = $this->createEmployee($this->school, ['full_name' => $name, ...$person]);
+        $employee = $this->createEmployee($this->school, ['full_name' => $name, ...array_diff_key($person, ['record_status' => true])]);
         $record = $this->createEmploymentRecord($employee, ['starts_on' => '2025-01-01', 'ends_on' => null, 'status' => 'active', ...$employment]);
+        if (isset($person['record_status'])) {
+            // HR.R1-C9 (HRC-12): employed first, archived afterwards.
+            app(TenantContext::class)->withSchool($this->school, fn () => $employee->forceFill(['record_status' => $person['record_status']])->save());
+        }
         foreach ($placements as $i => $p) {
             $this->createEmployeeAssignment($record, $p[1], ['campus_id' => $p[0]?->id, 'department_id' => ($p[2] ?? null)?->id, 'is_primary' => $i === 0, 'starts_on' => '2025-01-01', 'ends_on' => null, ...$assignment]);
         }

@@ -839,8 +839,13 @@ trait CreatesTenancyFixtures
      */
     protected function createEmployedEmployee(School $school, array $attributes = []): Employee
     {
-        $employee = $this->createEmployee($school, $attributes);
+        // HR.R1-C9 (HRC-12): an archived identity receives no new employment, so an archived Employee who is still
+        // employed is reached the way the system reaches it: employed first, archived afterwards.
+        $employee = $this->createEmployee($school, array_diff_key($attributes, ['record_status' => true]));
         $this->createEmploymentRecord($employee, ['starts_on' => '2020-01-01', 'status' => 'active']);
+        if (isset($attributes['record_status'])) {
+            app(TenantContext::class)->withSchool($school, fn () => $employee->forceFill(['record_status' => $attributes['record_status']])->save());
+        }
 
         return $employee;
     }

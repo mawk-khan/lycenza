@@ -7,6 +7,7 @@ use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\AssignmentPositionMismatchException;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentTermsException;
 use App\Domain\HR\Application\Exceptions\RehireRequiresEmploymentHistoryException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -24,9 +25,11 @@ use Tests\TestCase;
  * App\Domain\HR\Application\EmployeeLifecycleService::rehire()
  * (checkpoint brief sections 23-33/49-50/63/64): same Employee identity,
  * same employee_number, a genuinely new EmploymentRecord, mandatory
- * prior-history precondition, reused overlap protection, no automatic
- * reactivation of a prior Assignment/manager, and complete independence
- * from Employee.record_status.
+ * prior-history precondition, reused overlap protection and no automatic
+ * reactivation of a prior Assignment/manager. HR.R1-C9 (HRC-12, owner
+ * decision 2026-11-07) ended the original independence from
+ * Employee.record_status: an archived identity is restored first
+ * (ArchivedEmployeeAdmissionTest).
  */
 class HrEmployeeRehireTest extends TestCase
 {
@@ -273,26 +276,25 @@ class HrEmployeeRehireTest extends TestCase
     }
 
     #[Test]
-    public function rehire_is_completely_independent_of_employee_record_status(): void
+    public function rehire_refuses_an_archived_identity_and_never_restores_it_as_a_side_effect(): void
     {
+        // HR.R1-C9 (HRC-12): this test used to pin that rehire ignored record_status. The owner decided otherwise on
+        // 2026-11-07, so the expectation is reversed deliberately; the side-effect half of the original stays.
         Carbon::setTestNow('2026-06-15');
-        [$school, $employee, $actor, $firstEmployment] = $this->separatedEmployeeWithHistory();
+        [$school, $employee, $actor] = $this->separatedEmployeeWithHistory();
 
-        // No archive()/reactivate() write path exists for
-        // Employee.record_status anywhere in this codebase (grepped:
-        // only ever set to 'active' at creation) -- this direct model
-        // write is TEST SETUP ONLY, simulating the field's only other
-        // possible value to prove rehire() never reads or reacts to it
-        // (docs/modules/HR.md principle 2.6 / "Employee lifecycle --
-        // state responsibility matrix": Employee-record lifecycle and
-        // Employment lifecycle are fully independent dimensions).
         app(TenantContext::class)->set($school);
         $employee->forceFill(['record_status' => 'archived'])->save();
 
-        $second = app(EmployeeLifecycleService::class)->rehire($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
+        try {
+            app(EmployeeLifecycleService::class)->rehire($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
+            $this->fail('An archived identity must be restored first.');
+        } catch (InvalidEmploymentTermsException $e) {
+            $this->assertSame('employee_archived', $e->reason);
+        }
 
         app(TenantContext::class)->set($school);
-        $this->assertSame('active', $second->fresh()->status, 'Rehire succeeds regardless of Employee.record_status.');
         $this->assertSame('archived', $employee->fresh()->record_status, 'rehire() never reactivates Employee.record_status as a side effect.');
+        $this->assertSame(1, EmploymentRecord::query()->where('employee_id', $employee->id)->count());
     }
 }

@@ -5,6 +5,7 @@ namespace App\Domain\Leave\Application;
 use App\Domain\HR\Application\Separation\SeparationObligation;
 use App\Domain\HR\Application\Separation\SeparationObligationSource;
 use App\Domain\HR\Application\Separation\SeparationSubject;
+use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Models\School;
 use Illuminate\Support\Facades\DB;
 
@@ -36,12 +37,22 @@ final class LeaveSeparationObligations implements SeparationObligationSource
         // OD-HR-17). HR.R1-C2 (LVA-2): a credited month is unearned when the month does not END within the
         // employment -- the month containing a mid-month last day included, not only months starting after it.
         // The posting time never decides (an accrual is identified by its month). A credit stops being outstanding
-        // only once debit adjustments naming it (`source_id`, the R-HR10-1 correction) cover its units.
+        // only once the adjustments correcting it net to a debit covering its units (`source_id`, the R-HR10-1
+        // correction). HR.R1-C9: they net through the ledger's one sign convention, across the whole chain, because a
+        // correction names the entry it corrects: a credit undoing the earlier debit names that debit, not the
+        // accrual. Only provenance counts: an unrelated debit, however equal, names nothing here. The database
+        // keeps a named entry inside its account, and adjustments are never edited, so the chain only grows.
+        $signed = LeaveLedgerEntry::signedUnitsSql('c');
         $creditsAfter = DB::table('leave_ledger_entries as l')->where('l.school_id', $school->id)
             ->where('l.employment_record_id', $subject->employmentRecordId)->where('l.kind', 'accrual')
             ->whereRaw("(l.accrual_period + interval '1 month' - interval '1 day')::date > ?::date", [$subject->lastDay])
-            ->whereRaw("COALESCE((SELECT sum(c.units) FROM leave_ledger_entries c WHERE c.school_id = l.school_id AND c.employment_record_id = l.employment_record_id
-                AND c.kind = 'adjustment' AND c.direction = 'debit' AND c.source_id = l.id), 0) < l.units")
+            ->whereRaw("COALESCE((WITH RECURSIVE correcting(id, signed) AS (
+                    SELECT c.id, {$signed} FROM leave_ledger_entries c
+                     WHERE c.school_id = l.school_id AND c.employment_record_id = l.employment_record_id AND c.kind = 'adjustment' AND c.source_id = l.id
+                    UNION
+                    SELECT c.id, {$signed} FROM correcting p JOIN leave_ledger_entries c ON c.source_id = p.id
+                     WHERE c.school_id = l.school_id AND c.employment_record_id = l.employment_record_id AND c.kind = 'adjustment'
+                ) SELECT sum(signed) FROM correcting), 0) > -l.units")
             ->count();
 
         return [

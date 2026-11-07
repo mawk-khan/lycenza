@@ -506,3 +506,29 @@ against `cc5c14a8` first.
    an end should need more than the ordinary path is OD-HR-21.
 5. **Leave credits clear only when covered.** A credit stops being outstanding
    once debit adjustments naming it cover its units, not on any adjustment.
+
+## HR.R1-C9 amendment (2026-11-07): archived admission, placement identity, line lock order
+
+Baseline `d67b3b1b`. The findings are the three HR.R1-C2 LOWs and HRC-12.
+
+1. **Archived identity (owner decision).** Option A: restore first. This
+   supersedes the Phase 8A.13 statement that rehire ignores `record_status`, and
+   only that statement. The full record is in
+   `HR-LEGAL-SECURITY-GATE-REGISTER.md` §2d-1. `EmployeeService::archive()` and
+   `restore()` now read the locked row, not the model passed in.
+2. **Placement identity.** `employment_record_id` is frozen; `is_primary` is
+   frozen on a never-effective placement; a closed primary stays primary. **A
+   deviation from the register's acceptance wording,** which asked the database
+   to refuse both columns on an open placement too. `is_primary` on an open
+   placement is the legitimate write of `setPrimary()` and `PlacementChangeService`,
+   and PostgreSQL cannot tell them from a raw write. Whoever writes it is an
+   application boundary (rule 102). A separate trigger, so the published guard
+   and its column pin stay as they were; the verifier pins the new one.
+3. **Reporting-line lock order.** Both employments, then the line. See rule 131.
+   The register named one cycle, a non-manager's decision against the manager's
+   end. Tracing the approval found a second it did not name: a real manager's
+   approval against the requester's end, which is the likelier one in practice.
+   Both reproduced as `40P01` before the correction.
+4. **Leave credit.** The net of the adjustment chain (rule 134), not of
+   adjustments naming the accrual directly. A correction names the entry it
+   corrects, so undoing the debit names the debit.

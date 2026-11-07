@@ -30,7 +30,7 @@ Owner decisions (2026-11-05):
 | R-HR13-2: recurrence ignores holidays | OWNER DECISION | **Kept** until WorkSchedule (OD-HR-14). Labelled on the catalogue page. | — |
 | R-HR13-3: missed days are not generated | VERIFY | **Kept** (no back-fill without a decision). Detection: the `workforce-tasks-generate` heartbeat alert, plus "No run" in `hr.task_generation_runs`. | HR.13 observability; `HrReportsTest`. |
 | R-HR12-3: retained School access | VERIFY | Unchanged by owner decision. RETAINED stays separate from CLEAR, and a grant after completion shows as OPEN. | `SeparationAccessCertificationTest`. |
-| R-HR10-1: backdated separation after an accrual credit | DEFERRED | Unchanged: controlled reconciliation (HR.10). | — |
+| R-HR10-1: backdated separation after an accrual credit | DEFERRED | Unchanged: controlled reconciliation (HR.10). HR.R1-C9 corrected detection only (net of the adjustment chain). A closed year still cannot be corrected. | `LeaveSeparationCreditBoundaryTest` |
 | HR.2A-1: legacy path-only documents | VERIFY | Local DDEV: **0** rows (`employee_documents` where `document_id` is null). The staging and production count is unknown and is a pre-staging inventory step. | DDEV query, 2026-11-05. |
 | HR.2A-2: rollback can lose data | VERIFY | Unchanged: forward-fix only once evidence exists. Restoring from backup is the rollback. | `BACKUP-AND-RESTORE.md` |
 | HR.2A-3: Highly Sensitive documents need MFA-assured API tokens | VERIFY | Unchanged and enforced (HR.2A tests). The API compatibility note is a pre-staging item. | HR.2A suites. |

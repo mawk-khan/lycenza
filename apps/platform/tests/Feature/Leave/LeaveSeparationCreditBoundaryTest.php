@@ -5,10 +5,12 @@ namespace Tests\Feature\Leave;
 use App\Domain\HR\Application\Separation\SeparationSubject;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Leave\Application\Accrual\LeaveAccrualService;
+use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveSeparationObligations;
+use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
 use App\Models\School;
@@ -25,8 +27,10 @@ use Tests\TestCase;
  * credited month that does not end within the employment -- the month that
  * holds a mid-month last day included -- whatever the posting time; a month
  * ending on or before the last day is earned; a credit already named by a
- * correcting adjustment is no longer outstanding. Nothing is reversed or
- * prorated (OD-HR-17). Leave year 2026-04-01..2027-03-31.
+ * correcting adjustment is no longer outstanding. HR.R1-C9: "corrected" is
+ * the net of the adjustment chain naming the credit, through the ledger's
+ * one sign convention. Nothing is reversed or prorated (OD-HR-17). Leave
+ * year 2026-04-01..2027-03-31.
  */
 class LeaveSeparationCreditBoundaryTest extends TestCase
 {
@@ -100,18 +104,120 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
         $this->assertSame(3, app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->count()), 'nothing reversed or deleted');
     }
 
-    #[Test]
-    public function lva_2_only_debits_covering_the_credit_clear_it(): void
+    private function accrual(string $month): string
     {
-        $december = (string) app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')
-            ->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->where('accrual_period', '2026-12-01')->value('id'));
-        $adjust = fn (string $direction, int $units) => app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, $direction, $units, 'administrative_correction', $this->admin, $december);
+        return (string) app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')
+            ->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->where('accrual_period', $month)->value('id'));
+    }
 
-        $adjust('credit', 2);
+    private function adjust(string $direction, int $units, ?string $corrects): string
+    {
+        return (string) app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, $direction, $units, 'administrative_correction', $this->admin, $corrects)->id;
+    }
+
+    #[Test]
+    public function lva_2_only_a_net_debit_covering_the_credit_clears_it(): void
+    {
+        // HR.R1-C9: before netting this third step read clear. A credit of 2 and debits of 3 leave a net debit of only
+        // 1 against 3 units, so the expectation is corrected deliberately: the credit is still outstanding by 2.
+        $december = $this->accrual('2026-12-01');
+
+        $this->adjust('credit', 2, $december);
         $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'a credit naming it corrects nothing');
-        $adjust('debit', 2);
+        $this->adjust('debit', 2, $december);
         $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'a partial debit leaves it outstanding');
-        $adjust('debit', 1);
-        $this->assertSame(['clear', 0], $this->accrualFlag('2026-11-30'), 'covered in full, across two adjustments');
+        $this->adjust('debit', 1, $december);
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'the credit naming it still counts');
+        $this->adjust('debit', 2, $december);
+        $this->assertSame(['clear', 0], $this->accrualFlag('2026-11-30'), 'covered in full, net, across the adjustments');
+    }
+
+    #[Test]
+    public function a_later_credit_naming_the_same_accrual_reopens_it(): void
+    {
+        $december = $this->accrual('2026-12-01');
+
+        $this->adjust('debit', 3, $december);
+        $this->assertSame(['clear', 0], $this->accrualFlag('2026-11-30'));
+
+        $this->adjust('credit', 3, $december);
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'a debit then a credit naming the same accrual: the reproduction of the registered finding');
+    }
+
+    #[Test]
+    public function a_correction_of_the_correction_counts_through_the_chain(): void
+    {
+        $december = $this->accrual('2026-12-01');
+        $debit = $this->adjust('debit', 3, $december);
+        $this->assertSame(['clear', 0], $this->accrualFlag('2026-11-30'));
+
+        $credit = $this->adjust('credit', 3, $debit);
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'undoing the debit names the debit, never the accrual');
+
+        $this->adjust('debit', 3, $credit);
+        $this->assertSame(['clear', 0], $this->accrualFlag('2026-11-30'));
+    }
+
+    #[Test]
+    public function an_unrelated_debit_clears_nothing_however_equal(): void
+    {
+        $this->adjust('debit', 3, null);
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'no provenance, no correction');
+
+        $this->adjust('debit', 3, $this->accrual('2026-10-01'));
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'), 'naming another month corrects that month only');
+    }
+
+    #[Test]
+    public function an_adjustment_posted_after_the_separation_counts_and_posting_time_never_decides(): void
+    {
+        $this->assertSame(['attention', 2], $this->accrualFlag('2026-10-31'), 'a backdated last day');
+
+        $this->travelTo('2026-12-20 06:00:00');
+        $this->adjust('debit', 3, $this->accrual('2026-11-01'));
+
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-10-31'), 'December stays outstanding');
+    }
+
+    #[Test]
+    public function reading_it_again_changes_nothing_and_writes_nothing(): void
+    {
+        $count = fn (): int => app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')->where('employment_record_id', $this->employment->id)->count());
+        $before = $count();
+
+        $first = $this->accrualFlag('2026-10-31');
+
+        $this->assertSame($first, $this->accrualFlag('2026-10-31'));
+        $this->assertSame($before, $count());
+    }
+
+    #[Test]
+    public function a_closed_year_keeps_its_unearned_credit_visible_and_refuses_the_correction(): void
+    {
+        // R-HR10-1 stays open: a closed year cannot be corrected, and the flag must not pretend otherwise.
+        $december = $this->accrual('2026-12-01');
+        $this->travelTo('2027-04-10 06:00:00');
+        $this->leaveYear($this->school, $this->admin, '2027-05-01');
+        app(LeaveYearCloseService::class)->execute($this->school, $this->year->id, $this->admin);
+
+        try {
+            $this->adjust('debit', 3, $december);
+            $this->fail('A closed year is never corrected in place.');
+        } catch (LeaveException $e) {
+            $this->assertSame('LEAVE_YEAR_CLOSED', $e->errorCode());
+        }
+        $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-30'));
+    }
+
+    #[Test]
+    public function a_correction_never_names_an_entry_of_another_account(): void
+    {
+        $other = $this->createEmploymentRecord($this->createEmployee($this->school), ['status' => 'active', 'starts_on' => '2024-01-01', 'ends_on' => null, 'staff_type' => 'teaching']);
+        $policy = app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_policy_assignments')->where('employment_record_id', $this->employment->id)->value('leave_policy_id'));
+        app(LeavePolicyAssignmentService::class)->assign($this->school, $other->id, $policy, '2026-04-01', null, $this->admin);
+        app(LeaveAccrualService::class)->execute($this->school, $this->type->id, $this->year->id, '2026-12-01', $this->admin, 1000);
+
+        $this->expectException(LeaveException::class);
+        app(LeaveLedgerService::class)->adjust($this->school, $other->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $this->accrual('2026-12-01'));
     }
 }

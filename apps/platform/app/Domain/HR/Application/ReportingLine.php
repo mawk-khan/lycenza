@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\ReportingRelationship;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -22,16 +23,26 @@ use LogicException;
  * - Assignments play no part: a transfer or promotion (a new assignment of
  *   the same employment) never changes the answer.
  *
- * `holdManagerOf()` reads the line and the manager's employment FOR SHARE in
- * the caller's transaction. A concurrent change, removal or correction of the
- * line (an UPDATE of that row) and a concurrent end of the manager's
- * employment (an UPDATE of that row) therefore either commit first or wait.
+ * `holdManagerOf()` holds both employments and the line FOR SHARE in the
+ * caller's transaction. A concurrent change, removal or correction of the line
+ * and a concurrent end of either employment therefore commit first or wait.
+ *
+ * HR.R1-C9: employments before the line, the order `EmploymentService::end()`
+ * and every line writer use. Taking the line first was a real deadlock on both
+ * sides: against the manager's end, and against the subordinate's end, because a
+ * leave approval goes on to hold the subordinate's employment. Which employment to
+ * lock is only known from the line, so the line is read first without a lock and
+ * read again, held, afterwards. A line replaced in between is simply read again, a
+ * bounded number of times. After that there is no held answer, so there is no
+ * manager, which every caller refuses.
  *
  * It identifies a relationship; it authorizes nothing. HR depends on no
  * consumer of this answer.
  */
 class ReportingLine
 {
+    private const HOLD_ATTEMPTS = 3;
+
     public function __construct(private readonly TenantContext $context) {}
 
     /** The manager Employee id, or null when the employment has no manager on the date. */
@@ -40,7 +51,7 @@ class ReportingLine
         return $this->resolve($school, $employmentRecordId, $date, lock: false);
     }
 
-    /** managerOf(), with the line and the manager's employment held FOR SHARE until the caller's transaction ends. */
+    /** managerOf(), with both employments and the line held FOR SHARE until the caller's transaction ends. */
     public function holdManagerOf(School $school, string $employmentRecordId, string $date): ?string
     {
         if (DB::transactionLevel() === 0) {
@@ -69,17 +80,49 @@ class ReportingLine
     private function resolve(School $school, string $employmentRecordId, string $date, bool $lock): ?string
     {
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $date, $lock): ?string {
-            $line = ReportingRelationship::query()->where('school_id', $school->id)
-                ->where('subordinate_employment_id', $employmentRecordId)->effectiveOn($date)
-                ->when($lock, fn ($q) => $q->sharedLock())->first();
-            if ($line === null) {
+            if ($lock) {
+                return $this->hold($school, $employmentRecordId, $date);
+            }
+            $line = $this->lineOn($school, $employmentRecordId, $date)->first();
+
+            return $line === null ? null : $this->employeeOf($school, $line->manager_employment_id);
+        });
+    }
+
+    private function hold(School $school, string $employmentRecordId, string $date): ?string
+    {
+        for ($attempt = 0; $attempt < self::HOLD_ATTEMPTS; $attempt++) {
+            $seen = $this->lineOn($school, $employmentRecordId, $date)->first();
+            if ($seen === null) {
                 return null;
             }
 
-            $managerEmployeeId = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($line->manager_employment_id)
-                ->when($lock, fn ($q) => $q->sharedLock())->value('employee_id');
+            EmploymentRecord::query()->where('school_id', $school->id)
+                ->whereIn('id', [$employmentRecordId, $seen->manager_employment_id])->orderBy('id')->sharedLock()->get(['id']);
 
-            return $managerEmployeeId === null ? null : (string) $managerEmployeeId;
-        });
+            $held = $this->lineOn($school, $employmentRecordId, $date)->sharedLock()->first();
+            if ($held === null) {
+                return null;
+            }
+            if ($held->manager_employment_id === $seen->manager_employment_id) {
+                return $this->employeeOf($school, $held->manager_employment_id);
+            }
+        }
+
+        return null;
+    }
+
+    /** @return Builder<ReportingRelationship> */
+    private function lineOn(School $school, string $employmentRecordId, string $date): Builder
+    {
+        return ReportingRelationship::query()->where('school_id', $school->id)
+            ->where('subordinate_employment_id', $employmentRecordId)->effectiveOn($date);
+    }
+
+    private function employeeOf(School $school, string $employmentRecordId): ?string
+    {
+        $employeeId = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($employmentRecordId)->value('employee_id');
+
+        return $employeeId === null ? null : (string) $employeeId;
     }
 }

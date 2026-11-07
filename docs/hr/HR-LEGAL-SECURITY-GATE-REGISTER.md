@@ -133,6 +133,38 @@ when a request is drafted.
 |---|---|---|---|
 | OD-HR-21 | A back-dated employment end over a placement that had already started on the record | The placement is disposed of as not in effect, and the audit keeps its replaced end. A wrong last day cannot be undone, and a death is a single-actor path. | Decide whether such an end stays as is, needs a second person, or needs a placement correction path first. Refusing it outright would restore the HRC-2 dead end, because no path corrects such a placement |
 
+## 2d-1. HRC-12 archived-Employee admission (decided, HR.R1-C9)
+
+The authoritative register has assigned **no identifier** to this decision, and
+none is invented here. It is recorded under the finding, HRC-12.
+
+| # | Field | Record |
+|---|---|---|
+| 1 | Identifier | None assigned. Recorded as "HRC-12 owner decision, 2026-11-07" |
+| 2 | Restriction before | None. Rehire ignored `record_status` (Phase 8A.13), so an archived identity received a new employment on every path |
+| 3 | Meaning of archived | The Employee record's existence state only. It never ended an employment and is no separation signal |
+| 4 | Eligible actors | Whoever already may restore and rehire. Nobody on their own record |
+| 5 | Restoration authority | Whole-School `hr.employees.manage`. A Campus grant, platform, elevation, Group or Network authority opens nothing |
+| 6 | E21 | Unchanged. The clock runs from the last separation and never reads `record_status`. Restoring moves no date, overrides no hold and creates no retained record |
+| 7 | Privacy | Restoring reads and rebuilds nothing. A purged Employee answers not found |
+| 8 | Historical employments | Untouched. A rehire is a new row with its own dates |
+| 9 | User identity | Untouched. No User is enabled, no membership reactivated, no link changed |
+| 10 | School scope | The Employee's own School, under RLS and the route's School context |
+| 11 | Role and capability | Restore: `hr.employees.manage`. Rehire: `hr.employees.assignments.manage`. Unchanged |
+| 12 | MFA | **Unchanged, by decision.** Restoring needs no fresh MFA, because it grants nothing by itself. Audited, never one's own |
+| 13 | Rehire admission | **Option A, restore first.** `EmploymentService::createRecord()` refuses on the locked row, and `trg_employment_records_archived_identity` refuses the runtime role, holding the row FOR SHARE. A deceased Employee stays refused either way |
+| 14 | Audit | `employee.archived` and `employee.restored` both stay; the rehire records its own employment event. No reason code exists on restore, by the decision in row 12 |
+| 15 | Rollback and correction | An archive made in error is corrected by restoring. The two migrations are reversible and change no row |
+| 16 | Development effect | In force from the HR.R1-C9 publication |
+| 17 | Staging effect | The same. Nothing environment-specific |
+| 18 | Production effect | None of its own. Production stays NO-GO on its other gates |
+| 19 | Approving authority | The product owner, as engineering direction. **Not legal approval** |
+| 20 | Determination date | 2026-11-07 |
+| 21 | Re-review trigger | A statutory or legal employment-history requirement, or before real staff data is connected |
+
+**Also decided at that gate, 2026-11-07:** the 5-second proposal for a Payroll
+reversal is deferred to staging, so there is no approved target.
+
 ## 2e. Owner decision raised by HR.R1-C3 (2026-11-06)
 
 | Id | Subject | Current behaviour | Options |
@@ -379,7 +411,7 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 |---|---|---|---|---|
 | R-HR12-1 | LOW | X-1 pickers (Timetable teacher search, Transport driver and Visitor host selects) still list separated, non-archived Employees by name; any choice is refused at write time | **CLOSED (HR.15A, 2026-11-04)**: all four searches use `DutyCandidateReader` (the read form of `EmploymentCoverage::hold()`) | — |
 | R-HR12-2 | MEDIUM | Library, Inventory and Finance record no staff obligation, so their clearance is NOT_INTEGRATED (never shown as clear, never blocking) | **DEFERRED by owner decision (HR.15, 2026-11-04)**: custody, staff borrowing and staff dues are not built; Schools use an administrative clearance item | Inventory / Library / Finance owners |
-| R-HR10-1 | LOW | a backdated end may leave monthly credits for months after the last day | **detected** on the separation case (Leave obligation, ATTENTION); still corrected by an ordinary adjustment that names the credit | Leave (manual) |
+| R-HR10-1 | LOW | a backdated end may leave monthly credits for months after the last day | **detected** on the separation case (Leave obligation, ATTENTION), as the net of the adjustment chain naming the credit (HR.R1-C9); still corrected by an ordinary adjustment that names it. **PARTIAL:** a closed year refuses the correction, so its credit stays flagged with no ledger path | Leave (manual) |
 | R-HR12-3 | LOW | a separated person keeps School staff access until someone off-boards them; completion of the case is blocked meanwhile | by owner decision (flag, never automatic); HR.15E shows kept access as RETAINED, never clear | Identity (rule 92) |
 | R-HR15-1 | LOW | Identity grants are not locked by HR: a School role granted in the same instant a case completes can be missed | **CLOSED (HR.16B):** completion holds Identity's `SchoolAccessLock` first; two-process proof `SeparationAccessCertificationTest` | — |
 
