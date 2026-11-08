@@ -111,6 +111,8 @@ Neither is a WO-6 change, and neither was altered.
 
 ## 6. Current-month locking
 
+**Decided 2026-11-08 (HR.R1-C21, CM-1): Option A, ended months only, by the HR owner; it matches the code.** The text below is the state at C20.
+
 Unchanged. The confirmation package is `HR-R1-C19-RETENTION-BATCH-BOUND.md` §8. The recommendation remains Option A, ended months only, because a lock never reopens and a correction only changes an existing record. **CURRENT-MONTH LOCK POLICY: OWNER CONFIRMATION PENDING.** The implementation matches Option A.
 
 ## 7. New findings

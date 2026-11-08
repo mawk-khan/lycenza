@@ -136,6 +136,8 @@ None of these is affected by C19, and none is marked done. Each is open. **HR.R1
 
 ## 8. Current-month locking: HR-owner confirmation package
 
+**Decided 2026-11-08 (HR.R1-C21, CM-1): Option A by the HR owner.**
+
 C18 lets only an **ended** month be locked (service, page and database). C17 did not decide this; it was a conservative engineering choice, and C19 does not change it.
 
 **The question.** May a School lock the current month before it ends?

@@ -321,7 +321,7 @@ Applying the ten points to the baseline shows where they need refining.
 - **Acceptance.** Past dates keep their answer after a change; missing history reads "not recorded", never today's value; runtime DELETE revoked on `staff_holidays`.
 - **Readiness.** S-16 and R1-03 stay open until built.
 
-**Status: PENDING.**
+**Status: DECIDED 2026-11-08 (HR.R1-C21), HR owner: effective-date history; past-dated changes only into open months, with a reason and fresh MFA; history from the day WO-5 ships; effective-dated publication, no drafts; policy as-of reader in WO-5; WO-5 authorized next.** `HR-R1-C21-D6-DECISION.md`. Not built: S-16, R1-03 and D14-08/D14-09 stay open until WO-5 ships.
 
 ## 9. Secondary decision register
 

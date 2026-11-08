@@ -425,8 +425,8 @@ both mean HRX-L2.
 | D14-05 | From / to date | one row per date (a range = several rows) | ALT | H462 | range entry in the UI | WorkSchedule | HR.4 | L | — |
 | D14-06 | Description | `name` | IMP | H462 | — | Leave | — | — | — |
 | D14-07 | Optional holiday | none | DEF | H462 | D5-05 | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
-| D14-08 | Effective publication | immediate | MISS | — | draft → published, with recalculation notice | WorkSchedule | HR.4 | M | — |
-| D14-09 | Modifications | remove + add (hard delete, S-16) | PART | — | versioned change, never delete | WorkSchedule | HR.4 | M | — |
+| D14-08 | Effective publication | immediate | MISS | — | draft → published, with recalculation notice | WorkSchedule | HR.4 | M | D-6 decided (HR owner 2026-11-08, HR.R1-C21): effective-dated, schedulable, withdrawable until effective, notice, no drafts; ALT once WO-5 ships |
+| D14-09 | Modifications | remove + add (hard delete, S-16) | PART | — | versioned change, never delete | WorkSchedule | HR.4 | M | D-6 decided (HR owner 2026-11-08, HR.R1-C21): week versions and holiday lifecycle, DELETE revoked; IMP once WO-5 ships |
 | D14-10 | Attendance impact | derived at read time; conflicting writes refused | IMP | — | — | StaffAttendance | — | — | — |
 | D14-11 | Leave sandwich impact | none | DEF | — | D10-13 (OD-HR-15) | Leave | after OD-HR-15 | M | OD-HR-15 |
 | D14-12 | No silent retroactive change | request days frozen; payroll fingerprint differences | ALT | — | controlled recalculation once evaluation exists | Leave | HR.4 | M | — |
@@ -596,6 +596,8 @@ come from the status column of §4, read mechanically: one row per
 | BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
 | NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
 | **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+
+HR.R1-C21 (2026-11-08, D-6, HR owner) decided the contract for the two ACTIVE rows, D14-08 and D14-09, without changing their status: they stay ACTIVE until WO-5 ships and is verified. `HR-R1-C21-D6-DECISION.md`.
 
 HR.R1-C18 (2026-11-08, WO-6) changed two ACTIVE rows on evidence: D8-10 MISS → ALT (the month lock, no reopening by owner decision S6-1) and D8-13 PART → IMP (the lock as the window, two-person fresh-MFA locked-month corrections, a fresh authority read on open-month corrections). Two ACTIVE rows remain: D14-08 and D14-09 (WO-5, after D-6). `HR-R1-C18-WO6-MONTH-LOCK.md`.
 

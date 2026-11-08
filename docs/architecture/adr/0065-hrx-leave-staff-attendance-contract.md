@@ -2535,3 +2535,16 @@ built; HR.11B–D are blocked.
 ## 31. Amendment — HR.R1-C18 Staff Attendance month lock (2026-11-08)
 
 S-6 (decided HR.R1-C17) implemented as WO-6. A School-local calendar month that has ended is locked by `hr.staff_attendance.lock` (school_admin, principal, whole-School) with fresh MFA and is never reopened. In a locked month §24's record, register and correction are refused; a change is a request (`hr.staff_attendance.manage`) approved by another lock-key holder with fresh MFA, applied by the database from the request's own values and kept as an ordinary correction row naming the request. Open-month corrections re-read authority inside the transaction. Every write takes the School-month advisory lock SHARED after the School and before its HR rows; locking takes it EXCLUSIVELY; triggers take it too, so raw SQL serializes at READ COMMITTED; every month guard refuses any other isolation level. Payroll's evidence capture (§26.9) is unchanged and takes no month lock; whether Payroll should calculate only locked months is not decided. Requests are D9 Staff Attendance evidence (§27); lock rows are School configuration. Record: `docs/hr/HR-R1-C18-WO6-MONTH-LOCK.md`.
+
+## 32. Amendment — HR.R1-C21 D-6 staff calendar history, decided (2026-11-08)
+
+The HR owner decided D-6: the staff calendar becomes effective-dated. It gets an append-only working-week version (`effective_from`, a status of active, withdrawn or superseded, a closed reason, the actor and the database recording time) and a holiday lifecycle (withdrawn, never deleted; runtime DELETE revoked, S-16). One as-of reader answers RECORDED, NOT_RECORDED or NOT_CONFIGURED for a School-local date.
+
+- **History start:** each School's history starts on the day WO-5 ships. Earlier dates are "not recorded", never today's calendar, and nothing is backfilled.
+- **Ordinary changes** are prospective.
+- **A past-dated correction** needs a closed reason and fresh MFA, and is refused into a locked Staff Attendance month (in the service and the database).
+- **Approved leave and Payroll snapshots** never change. Differences are reported, never recalculated.
+- **Lock order:** a calendar change takes the School, then the month keys shared (past-dated only), then `LeaveLocks::calendar` exclusive.
+- **Leave policy:** a read-only as-of reader over the existing immutable versions.
+
+**Status: decided, not built (WO-5).** Contract: `docs/hr/HR-R1-C21-D6-DECISION.md` §6. §23.10's calendar lock is unchanged.
