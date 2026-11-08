@@ -5,8 +5,10 @@ namespace Tests\Feature\Payroll\Hrx;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader;
+use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Models\School;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -183,5 +185,64 @@ class PayrollHrxConcurrencyTest extends TestCase
         $this->assertSame($captured, DB::connection('pgsql_admin')->table('payroll_run_hrx_inputs')->where('payroll_run_id', $runId)->value('fingerprint'), 'the posted snapshot is the calculated one');
         $view = app(PayrollHrxInputReadService::class)->forRun($w['school'], $runId, $this->createUserWithCapabilities($w['school'], ['payroll.runs.prepare']));
         $this->assertSame(['source_changed_after_approval', 'posted'], [$view['differenceState'], $view['runStatus']]);
+    }
+
+    /**
+     * HR.R1-C20 (C18-A3): a September already locked, with a correction requested. The approval takes
+     * the employment's HRX lock shared; the capture takes it exclusively. Returns the request id.
+     */
+    private function lockedSeptemberRequest(array &$w): string
+    {
+        $keys = ['hr.staff_attendance.view', 'hr.staff_attendance.manage', 'hr.staff_attendance.lock'];
+        $w['locker'] = $this->createUserWithCapabilities($w['school'], $keys);
+        $w['approver'] = $this->createUserWithCapabilities($w['school'], $keys);
+        $record = $this->recordAttendance($w, '2026-09-14', 'absent', 'absent');
+        $service = app(StaffAttendanceService::class);
+        $service->lockMonth($w['school'], '2026-09', $w['locker'], $this->freshMfaProofFor($w['locker']));
+
+        return $service->requestLockedCorrection($w['school'], $record->id, 1, 'present', 'present', 'late_information', (string) Str::uuid(), $w['clerk'])->id;
+    }
+
+    private function captured(array $w): array
+    {
+        return DB::connection('pgsql_admin')->table('payroll_run_hrx_inputs')->where('payroll_run_id', $w['run'])->pluck('fingerprint')->all();
+    }
+
+    #[Test]
+    public function an_approval_first_makes_the_capture_wait_and_see_the_corrected_month(): void
+    {
+        $w = $this->world();
+        $request = $this->lockedSeptemberRequest($w);
+        $before = $this->fingerprintNow($w);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->attendance('approve', $w['school']->id, $request, $w['approver']->id),
+            $this->calculate($w),
+        );
+
+        $after = $this->fingerprintNow($w);
+        $this->assertSame(['ok:approved', "ok:{$after}"], [$holder, $contender], 'the capture waited for the approval and saw it');
+        $this->assertNotSame($before, $after);
+        $this->assertSame([$after], $this->captured($w));
+        $this->assertSame(0, app(PayrollHrxInputReadService::class)->checkDifferences($w['school'], $w['run'], $w['preparer'])['changed']);
+    }
+
+    #[Test]
+    public function a_capture_first_makes_the_approval_wait_and_the_change_is_detected_never_applied_to_the_snapshot(): void
+    {
+        $w = $this->world();
+        $request = $this->lockedSeptemberRequest($w);
+        $before = $this->fingerprintNow($w);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->calculate($w),
+            $this->attendance('approve', $w['school']->id, $request, $w['approver']->id),
+        );
+
+        $this->assertSame(["ok:{$before}", 'ok:approved'], [$holder, $contender], 'the approval waited for the capture, which saw version 1');
+        $this->assertNotSame($before, $this->fingerprintNow($w), 'the approval applied after the capture');
+        $this->assertSame([$before], $this->captured($w), 'the captured snapshot is unchanged: no recalculation, no partial correction');
+        $this->assertSame(1, app(PayrollHrxInputReadService::class)->checkDifferences($w['school'], $w['run'], $w['preparer'])['changed'], 'the later change is detected');
+        $this->assertSame(1, DB::connection('pgsql_admin')->table('payroll_run_calculations')->where('payroll_run_id', $w['run'])->count(), 'one calculation, nothing recalculated');
     }
 }

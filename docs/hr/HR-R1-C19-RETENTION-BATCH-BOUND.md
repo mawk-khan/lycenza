@@ -115,7 +115,7 @@ The re-review confirmed, in SQL on the reset database, that all 14 bodies read `
 
 ## 7. C18 acceptance debt (from `HR-R1-C18-WO6-MONTH-LOCK.md`)
 
-None of these is affected by C19, and none is marked done. Each is open.
+None of these is affected by C19, and none is marked done. Each is open. **HR.R1-C20 assessed all 14 (`HR-R1-C20-WO6-ACCEPTANCE.md` §1): A1-A6, A8-A10, A13 and A14 VERIFIED CLOSED; A7 and A11 CORRECTED AND VERIFIED; A12 PENDING OPERATIONAL EVIDENCE.**
 
 | Id | Item | Kind |
 |---|---|---|

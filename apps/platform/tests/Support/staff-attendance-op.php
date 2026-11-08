@@ -27,6 +27,10 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php staff-attendance-op.php approve  <schoolId> <lockedCorrectionId> <actorId>   (HR.R1-C18)
 //   php staff-attendance-op.php raw-record-rr <schoolId> <employmentId> <employeeId> <date> <actorId>  (REPEATABLE READ, must be refused)
 //   php staff-attendance-op.php raw-record <schoolId> <employmentId> <employeeId> <date> <actorId>  (runtime role, no service)
+//   php staff-attendance-op.php raw-update <schoolId> <recordId> <first>  (HR.R1-C20: runtime role, a raw version bump with no correction)
+//   php staff-attendance-op.php raw-request <schoolId> <rc|rr> <recordId> <employmentId> <YYYY-MM-01> <fromVersion> <beforeFirst> <beforeSecond> <afterFirst> <afterSecond> <actorId>  (HR.R1-C20)
+//   php staff-attendance-op.php raw-decide <schoolId> <rc|rr> <requestId> <deciderId>  (HR.R1-C20: approve, raw)
+//   php staff-attendance-op.php raw-correct <schoolId> <recordId> <employmentId> <fromVersion> <beforeFirst> <beforeSecond> <afterFirst> <afterSecond> <actorId>  (HR.R1-C20: an ordinary correction, raw)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -40,7 +44,25 @@ $half = fn (string $value): ?string => $value === '-' ? null : $value;
 try {
     $school = School::query()->findOrFail($args[0]);
     $service = $app->make(StaffAttendanceService::class);
-    echo $operation === 'raw-record-rr' ? $app->make(TenantContext::class)->withSchool($school, fn () => match ($operation) {
+    $level = fn (string $code): string => ['rc' => 'READ COMMITTED', 'rr' => 'REPEATABLE READ'][$code] ?? throw new InvalidArgumentException("unknown level {$code}");
+    echo in_array($operation, ['raw-record-rr', 'raw-request', 'raw-decide'], true) ? $app->make(TenantContext::class)->withSchool($school, fn () => match ($operation) {
+        'raw-request' => 'ok:'.DB::transaction(function () use ($school, $args, $half, $level): string {
+            DB::statement('SET TRANSACTION ISOLATION LEVEL '.$level($args[1]));
+            DB::table('staff_attendance_locked_corrections')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'staff_attendance_record_id' => $args[2], 'employment_record_id' => $args[3],
+                'month' => $args[4], 'from_version' => (int) $args[5], 'before_first_half_status' => $half($args[6]), 'before_second_half_status' => $half($args[7]),
+                'after_first_half_status' => $half($args[8]), 'after_second_half_status' => $half($args[9]), 'reason_code' => 'late_information',
+                'form_key' => (string) Str::uuid(), 'status' => 'requested', 'requested_by_user_id' => $args[10],
+            ]);
+
+            return 'requested';
+        }),
+        'raw-decide' => 'ok:'.DB::transaction(function () use ($args, $level): string {
+            DB::statement('SET TRANSACTION ISOLATION LEVEL '.$level($args[1]));
+            DB::table('staff_attendance_locked_corrections')->where('id', $args[2])->update(['status' => 'approved', 'decided_by_user_id' => $args[3], 'decided_at' => now()]);
+
+            return 'approved';
+        }),
         'raw-record-rr' => 'ok:'.DB::transaction(function () use ($school, $args): string {
             DB::statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
             DB::table('staff_attendance_records')->insert([
@@ -63,13 +85,25 @@ try {
             'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'employment_record_id' => $args[1], 'employee_id' => $args[2],
             'attendance_date' => $args[3], 'first_half_status' => 'present', 'recorded_by_user_id' => $args[4], 'created_at' => now(), 'updated_at' => now(),
         ]) ? 'inserted' : 'none'),
+        'raw-correct' => 'ok:'.DB::transaction(function () use ($school, $args, $half): string {
+            DB::table('staff_attendance_corrections')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'staff_attendance_record_id' => $args[1], 'employment_record_id' => $args[2],
+                'from_version' => (int) $args[3], 'to_version' => (int) $args[3] + 1, 'before_first_half_status' => $half($args[4]), 'before_second_half_status' => $half($args[5]),
+                'after_first_half_status' => $half($args[6]), 'after_second_half_status' => $half($args[7]), 'reason_code' => 'other', 'corrected_by_user_id' => $args[8], 'created_at' => now(),
+            ]);
+            DB::table('staff_attendance_records')->where('id', $args[1])->update(['first_half_status' => $half($args[6]), 'second_half_status' => $half($args[7]), 'version' => (int) $args[3] + 1, 'updated_at' => now()]);
+
+            return 'corrected';
+        }),
+        'raw-update' => 'ok:'.DB::table('staff_attendance_records')->where('id', $args[1])->update(['first_half_status' => $half($args[2]), 'version' => DB::raw('version + 1'), 'updated_at' => now()]),
         'correct' => 'ok:'.$service->correct($school, $args[1], (int) $args[2], $half($args[3]), $half($args[4]), 'late_information', User::query()->findOrFail($args[5]))->version,
         default => throw new InvalidArgumentException("unknown operation {$operation}"),
     }));
 } catch (StaffAttendanceException|LeaveException $e) {
     echo 'rejected:'.$e->errorCode();
 } catch (QueryException $e) {
-    echo 'rejected:'.(str_contains($e->getMessage(), 'staff_attendance_month_locked') ? 'staff_attendance_month_locked' : (str_contains($e->getMessage(), 'staff_attendance_isolation') ? 'staff_attendance_isolation' : class_basename($e)));
+    $known = ['staff_attendance_month_locked', 'staff_attendance_isolation', 'staff_attendance_correction_missing'];
+    echo 'rejected:'.(collect($known)->first(fn (string $token) => str_contains($e->getMessage(), $token)) ?? class_basename($e));
 } catch (Throwable $e) {
     echo 'rejected:'.class_basename($e);
 }

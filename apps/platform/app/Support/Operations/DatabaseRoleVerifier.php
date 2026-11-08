@@ -42,6 +42,8 @@ class DatabaseRoleVerifier
 
     /** Tables whose history the runtime role must never delete. */
     public const NO_RUNTIME_DELETE = [
+        // HR.R1-C20 (WO-6, rule 147): a month lock never goes, and a locked-month request leaves only by retention.
+        'staff_attendance_month_locks', 'staff_attendance_locked_corrections',
         'schools', 'platform_role_assignments', 'school_groups', 'api_clients', 'api_client_credentials',
         'platform_audit_events', 'school_audit_events', 'email_suppressions',
         'membership_role_assignments',
@@ -116,6 +118,8 @@ class DatabaseRoleVerifier
      * it.
      */
     public const NO_RUNTIME_UPDATE = [
+        // HR.R1-C20 (WO-6, rule 147): a month lock is never moved or reopened.
+        'staff_attendance_month_locks',
         // E21-RH.1: posted LWF annual charges are insert-once evidence.
         'payroll_lwf_annual_charges',
         // ORG.8B (ADR 0076 §60): a recorded calculation never changes.
@@ -299,6 +303,19 @@ class DatabaseRoleVerifier
         'trg_employee_certifications_archive_guard' => 'employee_certifications',
         'trg_employee_reference_codes_guard' => 'employee_reference_codes',
         'trg_employee_documents_guard' => 'employee_documents',
+    ];
+
+    /**
+     * HR.R1-C20 (WO-6, rule 147): the Staff Attendance month-lock backstops. trigger => [table, function].
+     * The four guards take the School-month key and refuse any isolation but READ COMMITTED; the apply
+     * trigger is the only path that changes a locked month.
+     */
+    public const STAFF_ATTENDANCE_MONTH_LOCK_GUARDS = [
+        'trg_staff_attendance_month_locks_guard' => ['staff_attendance_month_locks', 'staff_attendance_month_locks_guard'],
+        'trg_staff_attendance_records_month_guard' => ['staff_attendance_records', 'staff_attendance_records_month_guard'],
+        'trg_staff_attendance_corrections_month_guard' => ['staff_attendance_corrections', 'staff_attendance_corrections_month_guard'],
+        'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections', 'staff_attendance_locked_corrections_guard'],
+        'trg_staff_attendance_locked_corrections_apply' => ['staff_attendance_locked_corrections', 'staff_attendance_locked_corrections_apply'],
     ];
 
     /** HR.3A: the indexes the reporting readers rely on (bounded lookups by subordinate, manager and date). */
@@ -635,8 +652,90 @@ class DatabaseRoleVerifier
         $results[] = $this->payrollReconciliationCheck();
         $results[] = $this->employeeAccountLinkCheck();
         $results[] = $this->employmentLifecycleAdmissionCheck();
+        $results[] = $this->staffAttendanceMonthLockCheck();
 
         return $results;
+    }
+
+    /**
+     * HR.R1-C20 (WO-6, C18-A7): each month-lock trigger is present, enabled and defined exactly as
+     * shipped (timing, events, table, function, and the apply trigger's WHEN); each guard, with its
+     * comments stripped, refuses any isolation but READ COMMITTED and takes the School-month key in its
+     * own mode (exclusive to lock, shared to write); the three helpers still do what the guards rely on;
+     * the apply function is a pinned definer the runtime role cannot call; both tables force RLS; the
+     * one-lock-per-month and apply-once unique indexes keep their predicates. Privileges are in the
+     * destructive-privileges check.
+     */
+    private function staffAttendanceMonthLockCheck(): CheckResult
+    {
+        $strip = fn (string $src): string => (string) preg_replace(['/--[^\n]*/', '#/\*.*?\*/#s'], '', $src);
+        $timing = [
+            'trg_staff_attendance_month_locks_guard' => 'BEFORE INSERT ON public.staff_attendance_month_locks FOR EACH ROW EXECUTE FUNCTION staff_attendance_month_locks_guard()',
+            'trg_staff_attendance_records_month_guard' => 'BEFORE INSERT OR UPDATE ON public.staff_attendance_records FOR EACH ROW EXECUTE FUNCTION staff_attendance_records_month_guard()',
+            'trg_staff_attendance_corrections_month_guard' => 'BEFORE INSERT ON public.staff_attendance_corrections FOR EACH ROW EXECUTE FUNCTION staff_attendance_corrections_month_guard()',
+            'trg_staff_attendance_locked_corrections_guard' => 'BEFORE INSERT OR UPDATE ON public.staff_attendance_locked_corrections FOR EACH ROW EXECUTE FUNCTION staff_attendance_locked_corrections_guard()',
+            'trg_staff_attendance_locked_corrections_apply' => "AFTER UPDATE ON public.staff_attendance_locked_corrections FOR EACH ROW WHEN ((((new.status)::text = 'approved'::text) AND ((old.status)::text = 'requested'::text))) EXECUTE FUNCTION staff_attendance_locked_corrections_apply()",
+        ];
+        $missing = [];
+        foreach (self::STAFF_ATTENDANCE_MONTH_LOCK_GUARDS as $trigger => [$table, $function]) {
+            $row = DB::selectOne(
+                "select p.proname, p.prosrc as src, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
+                        has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec, pg_get_triggerdef(t.oid) as def
+                 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                 where t.tgrelid = ('public.'||?)::regclass and t.tgname = ? and t.tgenabled = 'O' and not t.tgisinternal",
+                [self::RUNTIME_ROLE, $table, $trigger],
+            );
+            if ($row === null || $row->proname !== $function || ! str_ends_with((string) $row->def, ' '.$timing[$trigger])) {
+                $missing[] = $trigger;
+
+                continue;
+            }
+            $src = $strip((string) $row->src);
+            $lock = $trigger === 'trg_staff_attendance_month_locks_guard' ? 'pg_advisory_xact_lock(' : 'pg_advisory_xact_lock_shared(';
+            $ok = str_ends_with($trigger, '_apply')
+                ? $row->prosecdef && str_contains($row->config, 'search_path=') && ! $row->runtime_exec
+                : str_contains($src, 'PERFORM public.staff_attendance_require_read_committed();')
+                    && str_contains($src, "PERFORM pg_catalog.{$lock}public.staff_attendance_month_key(NEW.school_id, ");
+            if (! $ok) {
+                $missing[] = "{$trigger}:body";
+            }
+        }
+        $helpers = [
+            'staff_attendance_require_read_committed' => ["IF pg_catalog.current_setting('transaction_isolation') <> 'read committed' THEN", 'RAISE EXCEPTION'],
+            'staff_attendance_month_key' => ["pg_catalog.hashtextextended('hr.staff_month:' || p_school::text || ':' || pg_catalog.to_char(p_month, 'YYYY-MM'), 0)"],
+            'staff_attendance_month_is_locked' => ['FROM public.staff_attendance_month_locks WHERE school_id = p_school AND month = p_month'],
+        ];
+        foreach ($helpers as $function => $needles) {
+            $src = $strip((string) (DB::selectOne("select prosrc as src from pg_proc where proname = ? and pronamespace = 'public'::regnamespace", [$function])->src ?? ''));
+            foreach ($needles as $needle) {
+                if (! str_contains($src, $needle)) {
+                    $missing[] = "{$function}:body";
+
+                    break;
+                }
+            }
+        }
+        foreach (['staff_attendance_month_locks', 'staff_attendance_locked_corrections'] as $table) {
+            $forced = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (?)::regclass', ["public.{$table}"]);
+            if ($forced === null || ! $forced->x) {
+                $missing[] = "{$table}:rls";
+            }
+        }
+        $unique = fn (string $table, string $columns, ?string $predicate) => (bool) DB::selectOne(
+            "select exists (select 1 from pg_index i where i.indrelid = (?)::regclass and i.indisunique and i.indisvalid
+                and (select string_agg(a.attname, ',' order by k.ord) from unnest(i.indkey) with ordinality k(attnum, ord)
+                     join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum) = ?
+                and pg_get_expr(i.indpred, i.indrelid) is not distinct from ?) as x",
+            ["public.{$table}", $columns, $predicate],
+        )->x;
+        if (! $unique('staff_attendance_month_locks', 'school_id,month', null)) {
+            $missing[] = 'staff_attendance_month_locks:unique';
+        }
+        if (! $unique('staff_attendance_corrections', 'locked_correction_id', '(locked_correction_id IS NOT NULL)')) {
+            $missing[] = 'staff_attendance_corrections:apply_once';
+        }
+
+        return CheckResult::of('staff_attendance_month_lock_invariants', $missing === [], $missing === [] ? '' : implode(', ', $missing));
     }
 
     /**

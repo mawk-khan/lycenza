@@ -268,7 +268,13 @@ function apply(): void {
             title="No employment in this month"
             description="Nobody was employed during these days."
         />
-        <div v-else class="relative mt-6 overflow-x-auto">
+        <div
+            v-else
+            class="relative mt-6 overflow-x-auto"
+            tabindex="0"
+            role="region"
+            aria-label="Staff attendance days by state, scrollable"
+        >
             <table class="w-full min-w-[44rem] text-left text-sm">
                 <caption class="sr-only">
                     Staff attendance days by state
