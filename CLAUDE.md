@@ -2031,4 +2031,3 @@ once several modules copy it.
      - **A locked month** refuses record, register and ordinary correction, in the service and in the database. A change is a request (`hr.staff_attendance.manage`, never for one's own attendance) decided by another lock-key holder with fresh MFA, never the requester, a known same person or anyone ever linked to the Employee. The database applies an approval from the request's own values, once; a decision is final; a stale request can only be refused. No reopen state, endpoint or override; a School with one lock-key holder waits.
      - **Open months** keep their corrections, but authority is re-read inside the transaction.
      - **Payroll** is unchanged: it may still calculate an unlocked month until that is decided. Requests are D9 evidence; lock rows are School configuration.
-

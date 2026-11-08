@@ -29,6 +29,7 @@ final class WebRouteParameters
         'audience',        // ORG.12F presentation audience (where [a-z0-9_-]{1,64}; the service refuses unknown audiences)
         'check',           // Data Health check code (controller 404; must not 404 before school-context)
         'identifierType',  // statutory identifier type
+        'month',           // HR.R1-C18 Staff Attendance month YYYY-MM (where; the controller re-checks)
         'module',          // ORG.5 module key (where [a-z_]{1,64}; the service refuses unknown keys)
         'report',          // SIS 11.1 Student report key (controller 404 for any key outside StudentReportRegistry; like `check`, must not 404 before school-context)
         'role',            // role key (where)
@@ -48,7 +49,7 @@ final class WebRouteParameters
         'grant', 'group', 'guardian', 'hostel', 'house', 'hostelBed', 'hostelResidencyAssignment', 'hostelRoom', 'inventoryItem',
         'inventoryLocation', 'invitation', 'item', 'journalEntry', 'learningContent', 'leavePolicy',
         'leavePolicyAssignment', 'leaveRequest', 'leaveType', 'ledgerAccount', 'libraryCopy', 'libraryFine', 'libraryLoan',
-        'libraryTitle', 'line', 'mapping', 'membership', 'note', 'payment', 'accountLink', 'accountLinkCorrection', 'payrollPeriod', 'payrollReconciliation', 'payrollRun',
+        'libraryTitle', 'line', 'lockedCorrection', 'mapping', 'membership', 'note', 'payment', 'accountLink', 'accountLinkCorrection', 'payrollPeriod', 'payrollReconciliation', 'payrollRun',
         'period', 'position', 'qualification', 'referenceCode', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
         'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection', 'separationCase',
         'staffAttendanceRecord', 'staffHoliday', 'student', 'studentMark', 'studentMarkCorrection', 'subject',

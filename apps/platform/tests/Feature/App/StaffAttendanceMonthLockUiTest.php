@@ -55,6 +55,7 @@ class StaffAttendanceMonthLockUiTest extends TestCase
 
         $this->as($this->principal)->post('/app/staff-attendance/months/2026-10/lock', ['mfa_code' => $this->freshMfaCode($this->principal)])->assertSessionHasErrors('confirm');
         $this->as($this->principal)->post('/app/staff-attendance/months/2026-10/lock', ['confirm' => '1', 'mfa_code' => 'NOT-A-CODE'])->assertSessionHasErrors('mfa_code');
+        $this->as($this->principal)->post('/app/staff-attendance/months/2026-13/lock', ['confirm' => '1', 'mfa_code' => 'X'])->assertNotFound();
         $this->assertSame(0, $this->locks());
 
         $code = $this->freshMfaCode($this->principal);
