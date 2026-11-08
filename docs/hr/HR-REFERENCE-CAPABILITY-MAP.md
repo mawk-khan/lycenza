@@ -26,6 +26,7 @@ Organisation packs.
 | Byte-distinct | 601: one exact duplicate (H431 = H432) |
 | Tall captures | 148 screens taller than 1,300 px; the tallest is 30,000 px |
 | Pack fingerprint (SIS convention: SHA-256 over each file, in sorted file-name order, of its UTF-8 name followed by its hex SHA-256) | `40ed6a836f5a99c65694118c0481bc468b1fb6ebb379a0275cc33839fa7a1ac3` |
+| Fingerprint verified (HR.R1-C16, 2026-11-08) | Recomputed from the owner-held pack: 602 PNG, no sub-folders, exactly the recorded value. The exact convention: file names in sorted order (byte, case-folded and default orders agree for this pack); for each, its UTF-8 name immediately followed by its lowercase hex SHA-256, no separator; SHA-256 over the concatenation. `HR.zip` holds the same 602 names; its own SHA-256 is `9c44d851d8a3aacfd13ab9b1ee5b985d2897a1dd2b8c716bd2fa604753c5f73b` |
 | Relation to HR.EXP-0R | The 335-file provisional set (`c21e40f7…d4d4`) was a subset still being captured. **Superseded**: this 602-file pack is the HR reference baseline |
 | Screen ids | `H001`–`H602` in sorted file-name order |
 | Inspection | every screen on 6-up top-of-page contact sheets, plus full-resolution crops for tall pages, forms, dropdowns and report grids. Five parallel read-only inspections (H001–120, 121–240, 241–360, 361–480, 481–602), one record per screen, 602/602 assigned to exactly one family |
@@ -127,7 +128,7 @@ both mean HRX-L2.
 | D1-04 | Biometric identity | none (guards) | GATE | H106, H233, H373 | an attendance identity in StaffAttendance; never on Employee | StaffAttendance | HR.8 | H | HRX-L2 (L2b) |
 | D1-05 | Active / inactive state | `record_status` + employment status | IMP | H124, H127 → `EmployeeLifecycleService` | — | HR | — | — | — |
 | D1-06 | Joining date | `employment_records.starts_on` | IMP | H117, H323 | — | HR | — | — | — |
-| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) ; HR.R1-C2 (gap closure 2026-11-05: the database bounds placements of an ended employment): an employment begins open -- no creation path accepts `ends_on` (service, API, DB), HRC-1 closed | PART | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | — |
+| D1-07 | Employment lifecycle | 8 statuses (DB CHECK); `end()` and, since HR.12, the case-driven `active` ⇄ `notice_period` (`trg_employment_records_separation_notice`) ; HR.R1-C2 (gap closure 2026-11-05: the database bounds placements of an ended employment): an employment begins open -- no creation path accepts `ends_on` (service, API, DB), HRC-1 closed | DEF | H322–H325, H483 | S-8 closed (HR.1A); HR.12 adds the notice transitions; probation confirmation (D18-03/04) remains | HR | HR.12 (probation: later) | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: an owner answer to HR-090, which stays OWNER_DECISION_REQUIRED |
 | D1-08 | Campus / School assignment | `employee_assignments.campus_id` (composite FK) | IMP | H174 → `CurrentEmployeeAssignments` | — | HR | — | — | — |
 | D1-09 | Department assignment | `employee_assignments.department_id` | IMP | H134 | — | HR | — | — | — |
 | D1-10 | Designation | `positions` via assignment | IMP | H134, H191 | — | HR | — | — | — |
@@ -198,7 +199,7 @@ both mean HRX-L2.
 | D4-04 | Reporting-manager views | directory "reports to" filter, Leave approvals queue, `hr.reporting_lines` as-of report (HR.14, `ReportingAsOfReader::depthsOn()`) | IMP | H565–H580 | — | HR | HR.14 | L | — |
 | D4-05 | Manager changes over time | `reporting_relationships`, answered for any date (`ReportingAsOfReader`, HR.3A) | IMP | H481 | — | HR | HR.3A | M | — |
 | D4-06 | Primary manager | one live line per subordinate employment per day, database-enforced (HR.3A) | IMP | — | — | HR | — | — | — |
-| D4-07 | Dotted-line manager | none | MISS | — | relationship `kind` (primary / dotted); dotted never decides | HR | HR.3 | L | — |
+| D4-07 | Dotted-line manager | none | DEF | — | relationship `kind` (primary / dotted); dotted never decides | HR | HR.3 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: a dotted-line reporting need, as an HR.3A amendment |
 | D4-08 | Temporary delegation | none | DEF | — | ADR 0065 §6 amendment (delegation of a decision, not of data) | HR + Leave | HR.3 / HR.11 | H | ADR 0065 §6 |
 | D4-09 | School / Campus scope | same-School composite keys; Campus via `HrEmployeeAccess` | IMP | — | — | HR | — | — | — |
 | D4-10 | Department scope | directory filter only, never authority | ALT | H478 | — | HR | — | — | — |
@@ -211,11 +212,11 @@ both mean HRX-L2.
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
 | D5-01 | Payroll / HR year | `leave_years` (prospective start month) + payroll periods | IMP | H321, H461 | — | Leave / Payroll | — | — | — |
-| D5-02 | Work calendars | `staff_working_weekdays` (School-wide) | PART | H285 | one calendar per School only | WorkSchedule (proposed) | HR.4 | M | — |
-| D5-03 | Branch / Campus calendars | none | MISS | H462 (branch-wise) | Campus calendar with School fallback | WorkSchedule | HR.4 | M | — |
+| D5-02 | Work calendars | `staff_working_weekdays` (School-wide) | DEF | H285 | one calendar per School only | WorkSchedule (proposed) | HR.4 | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: calendar applicability, after D-6 |
+| D5-03 | Branch / Campus calendars | none | DEF | H462 (branch-wise) | Campus calendar with School fallback | WorkSchedule | HR.4 | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
 | D5-04 | Holidays | `staff_holidays` | IMP | H462 | see D14 | Leave → WorkSchedule | — | — | — |
-| D5-05 | Optional holidays | none | MISS | H462 | flag + per-employee choice | WorkSchedule | HR.4 | L | — |
-| D5-06 | Week-offs | weekday pattern (full / first half / off) | PART | H289–H292 | nth-week-of-month patterns (2nd/4th Saturday) | WorkSchedule | HR.4 | L | — |
+| D5-05 | Optional holidays | none | DEF | H462 | flag + per-employee choice | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
+| D5-06 | Week-offs | weekday pattern (full / first half / off) | DEF | H289–H292 | nth-week-of-month patterns (2nd/4th Saturday) | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: calendar applicability, after D-6 |
 | D5-07 | Shift definitions | none | GATE | H285, H293, H296 | — | WorkSchedule | HR.4 | M | ADR 0065 §8, L2a |
 | D5-08 | Shift start / end | none | GATE | H287, H301 | — | WorkSchedule | HR.4 | M | L2a |
 | D5-09 | Cross-midnight shifts | none | GATE | — | — | WorkSchedule | HR.4 | M | L2a |
@@ -285,8 +286,8 @@ both mean HRX-L2.
 |---|---|---|---|---|---|---|---|---|---|
 | D8-01 | Manual marking | daily register (`hr.staff_attendance.manage`) | IMP | H281 | register is whole-School (no Campus or department filter) | StaffAttendance | HR.7 | L | — |
 | D8-02 | Attendance correction | `StaffAttendanceService` correct (CAS + row) | IMP | H414 | — | StaffAttendance | — | — | — |
-| D8-03 | Regularization request | none | MISS | H425 | self-service request (HR-011 owner decision) | StaffAttendance | HR.7 | M | — |
-| D8-04 | Regularization approval | none | MISS | H425 | decision on the shared approval foundation (rule 102) | StaffAttendance | HR.7 | M | — |
+| D8-03 | Regularization request | none | DEF | H425 | self-service request (HR-011 owner decision) | StaffAttendance | HR.7 | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: an owner answer to HR-011, which stays OWNER_DECISION_REQUIRED |
+| D8-04 | Regularization approval | none | DEF | H425 | decision on the shared approval foundation (rule 102) | StaffAttendance | HR.7 | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: an owner answer to HR-011, which stays OWNER_DECISION_REQUIRED |
 | D8-05 | HR correction | as D8-02 | IMP | H414–H421 | — | StaffAttendance | — | — | — |
 | D8-06 | Manager correction | none (manager recording is out of v1, ADR 0065 §7) | DEF | — | ADR 0065 reopening | StaffAttendance | HR.7 | M | ADR 0065 §7 |
 | D8-07 | Reason | closed reason codes | IMP | H421 | — | StaffAttendance | — | — | — |
@@ -418,12 +419,12 @@ both mean HRX-L2.
 | ID | Requirement | Existing implementation | Status | Evidence | Gap | Owner | Phase | Risk | Gate |
 |---|---|---|---|---|---|---|---|---|---|
 | D14-01 | Year / calendar | dated holidays (independent of year) | IMP | H462 | — | Leave | — | — | — |
-| D14-02 | School / Campus | School only | PART | H463 | Campus applicability | WorkSchedule | HR.4 | M | — |
-| D14-03 | Leave-category applicability | none | MISS | H462 | applicability by staff group | WorkSchedule | HR.4 | L | — |
-| D14-04 | Department applicability | none | MISS | H462 | as D14-03 | WorkSchedule | HR.4 | L | — |
+| D14-02 | School / Campus | School only | DEF | H463 | Campus applicability | WorkSchedule | HR.4 | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: calendar applicability, after D-6 |
+| D14-03 | Leave-category applicability | none | DEF | H462 | applicability by staff group | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
+| D14-04 | Department applicability | none | DEF | H462 | as D14-03 | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
 | D14-05 | From / to date | one row per date (a range = several rows) | ALT | H462 | range entry in the UI | WorkSchedule | HR.4 | L | — |
 | D14-06 | Description | `name` | IMP | H462 | — | Leave | — | — | — |
-| D14-07 | Optional holiday | none | MISS | H462 | D5-05 | WorkSchedule | HR.4 | L | — |
+| D14-07 | Optional holiday | none | DEF | H462 | D5-05 | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
 | D14-08 | Effective publication | immediate | MISS | — | draft → published, with recalculation notice | WorkSchedule | HR.4 | M | — |
 | D14-09 | Modifications | remove + add (hard delete, S-16) | PART | — | versioned change, never delete | WorkSchedule | HR.4 | M | — |
 | D14-10 | Attendance impact | derived at read time; conflicting writes refused | IMP | — | — | StaffAttendance | — | — | — |
@@ -483,8 +484,8 @@ both mean HRX-L2.
 |---|---|---|---|---|---|---|---|---|---|
 | D18-01 | Onboarding | `EmployeeOnboardingService` (atomic, Campus-aware) | IMP | H130–H145 | — | HR | — | — | — |
 | D18-02 | Joining | employment `starts_on` | IMP | H117 | — | HR | — | — | — |
-| D18-03 | Probation | `probation_ends_on` | PART | H175, H322 | no probation state or confirmation event (HR-090) | HR | HR.12 | L | — |
-| D18-04 | Confirmation | none | MISS | H117 | lifecycle event `confirmed` | HR | HR.12 | L | — |
+| D18-03 | Probation | `probation_ends_on` | DEF | H175, H322 | no probation state or confirmation event (HR-090) | HR | HR.12 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: an owner answer to HR-090, which stays OWNER_DECISION_REQUIRED |
+| D18-04 | Confirmation | none | DEF | H117 | lifecycle event `confirmed` | HR | HR.12 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: an owner answer to HR-090, which stays OWNER_DECISION_REQUIRED |
 | D18-05 | Transfer | named transfer (HR.1A) | IMP | H174–H178 | — | HR | — | M | — |
 | D18-06 | Promotion | named promotion (HR.1A) | IMP | — | — | HR | — | L | — |
 | D18-07 | Designation change | named designation change (HR.1A) | IMP | H225 | — | HR | — | M | — |
@@ -497,7 +498,7 @@ both mean HRX-L2.
 | D18-14 | Relieving date | `ends_on` (the ACTUAL last day; written only by `end()` / an approved separation, never at creation, HR.R1-C2) | IMP | H483 | — | HR | — | — | — |
 | D18-15 | Department-wise clearance | School-configured administrative items (closed responsibility, snapshot at approval) + owners' read-only answers (Leave, Timetable, Transport, Identity) (HR.12) | PART | H352–H353, H485 | Library, Inventory and Finance record no staff obligation: NOT_INTEGRATED (R-HR12-2, HR.15 / owners) | HR + owners | HR.15 | M | rule 105 |
 | D18-16 | Final approval | another person decides (`hr.separations.approve`, shared approval foundation, fresh MFA) (HR.12, HR-061) | IMP | H486 | single stage (ADR 0065 §6 spirit; no delegation) | HR | — | M | — |
-| D18-17 | Offboarding | case finalization through `end()`; completion gated on mandatory clearance and open owner obligations; School access flagged, off-boarded under Staff accounts (HR.12) ; HR.R1-C2: `end()` clips placements to the last day and records later-starting ones as never effective (HRC-2 closed) | PART | H351 | domain-evidence clearance for Library / Inventory / Finance; relieving / NOC documents (Documents review) | HR + Identity | HR.15 | H | — |
+| D18-17 | Offboarding | case finalization through `end()`; completion gated on mandatory clearance and open owner obligations; School access flagged, off-boarded under Staff accounts (HR.12) ; HR.R1-C2: `end()` clips placements to the last day and records later-starting ones as never effective (HRC-2 closed) | DEF | H351 | domain-evidence clearance for Library / Inventory / Finance; relieving / NOC documents (Documents review) | HR + Identity | HR.15 | H | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: a relieving-letter contract (a Documents owner type and a wording review); the clearance half stays D18-15 |
 | D18-18 | Rehire | new employment, same Employee and number ; HR.R1-C2: refused for an Employee recorded deceased; HR.R1-C9: an archived Employee is restored first (HRC-12, owner decision 2026-11-07) | IMP | H129 (reactivate) | — | HR | — | — | — |
 | D18-19 | Deactivation preserves history | no runtime DELETE; append-only evidence | IMP | — | — | HR | — | H | — |
 | D18-20 | Contract staff register | `employment_type` + `ends_on` | ALT | H124, H246 | contract amounts are Payroll; documents via HR documents | HR | HR.12 | L | — |
@@ -513,16 +514,16 @@ both mean HRX-L2.
 | D19-04 | Non-Teaching | version `applies_non_teaching` | IMP | H499 | — | WorkforceTasks | — | L | — |
 | D19-05 | Outsource | version `applies_outsourced` | IMP | H499 | — | WorkforceTasks | — | L | — |
 | D19-06 | Task category | `workforce_task_categories` (School-configured, retired never deleted) | IMP | H516 | — | WorkforceTasks | — | L | — |
-| D19-07 | Academic task (class-section / subject-wise) | optional Section / SubjectOffering reference on a one-off task (labels only, no access) | PART | H501 | not on recurring templates | WorkforceTasks | later | L | — |
+| D19-07 | Academic task (class-section / subject-wise) | optional Section / SubjectOffering reference on a one-off task (labels only, no access) | DEF | H501 | not on recurring templates | WorkforceTasks | later | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: a task-relationship contract with TeachingAssignments and Academic Structure |
 | D19-08 | Admin task | a School-configured category (no closed "admin" type) | ALT | H501 | — | WorkforceTasks | — | L | — |
 | D19-09 | General task | a School-configured category (no closed "general" type) | ALT | H501 | — | WorkforceTasks | — | L | — |
 | D19-10 | Daily frequency | `daily` on chosen weekdays (calendar-neutral) | IMP | H499 | no holidays (WorkSchedule gated) | WorkforceTasks | — | L | — |
 | D19-11 | Weekly frequency | `weekly` on one weekday | IMP | H499 | — | WorkforceTasks | — | L | — |
 | D19-12 | Monthly frequency | `monthly` on day 1-28 or the last day | IMP | H499 | — | WorkforceTasks | — | L | — |
 | D19-13 | Yearly frequency | `yearly` on an existing date or the month's last day (never 29 Feb) | IMP | H499 | — | WorkforceTasks | — | L | — |
-| D19-14 | Target / deadline | available / due dates (School-local); due offset in calendar days | PART | H504 | no numeric targets or due times | WorkforceTasks | later | L | — |
-| D19-15 | Class / section relationship | `workforce_tasks.section_id` (composite key; Academic Structure labels) | PART | H501 | one-off tasks only | WorkforceTasks | later | M | — |
-| D19-16 | Subject relationship | `workforce_tasks.subject_offering_id` (composite key) | PART | H501 | one-off tasks only | WorkforceTasks | later | M | — |
+| D19-14 | Target / deadline | available / due dates (School-local); due offset in calendar days | DEF | H504 | no numeric targets or due times | WorkforceTasks | later | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: a task-relationship contract with TeachingAssignments and Academic Structure |
+| D19-15 | Class / section relationship | `workforce_tasks.section_id` (composite key; Academic Structure labels) | DEF | H501 | one-off tasks only | WorkforceTasks | later | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: a task-relationship contract with TeachingAssignments and Academic Structure |
+| D19-16 | Subject relationship | `workforce_tasks.subject_offering_id` (composite key) | DEF | H501 | one-off tasks only | WorkforceTasks | later | M | D-1 (HR owner 2026-11-08, HR.R1-C16), was PART; re-review: a task-relationship contract with TeachingAssignments and Academic Structure |
 | D19-17 | Employee submission | `TaskWorkflowService::submit()` (assignee only) | IMP | H507 | — | WorkforceTasks | — | L | — |
 | D19-18 | Remarks | bounded remarks on the append-only timeline (500 chars) | IMP | H507 | — | WorkforceTasks | — | M | — |
 | D19-19 | Attachments | none (owner decision 2026-11-04: deferred) | DEF | H514 | a Documents owner type `workforce_task` + ADR 0012 review | WorkforceTasks + Documents | later | M | — |
@@ -584,17 +585,19 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) |
-|---|---|---|---|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | **161** (44.6 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | **20** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | **11** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) | After HR.R1-C16 D-1 (2026-11-08) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | 161 (44.6 %) | **161** (44.6 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | 20 | **10** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | 11 | **2** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 | 20 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 | 7 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 | **68** |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+
+HR.R1-C16 (2026-11-08, D-1, HR owner) changed 19 rows to DEF by owner decision, each with its earlier status and a re-review trigger in its Gate column: the 10 ungated HR.4–8 rows of D-1 Option B (D5-02, D5-03, D5-05, D5-06, D8-03, D8-04, D14-02, D14-03, D14-04, D14-07) and the nine rows outside HR.4–8 (D4-07, D1-07, D18-03, D18-04, D18-17, D19-07, D19-14, D19-15, D19-16). The 61 gated HR.4–8 rows are HELD: they stay GATE, and a deferral opens nothing. **Four rows stay ACTIVE, undecided and unbuilt:** D8-10 and D14-08 (MISS), D8-13 (S-6) and D14-09 (S-16) (PART). Nothing was built. `HR-R1-C16-D1-DECISION.md`.
 
 HR.R1-C14 (2026-11-07) changed no row's status, and recounted 361.
 
@@ -709,7 +712,7 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
   - 1 is D-11.
 - **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A; 132 (36.6 %) after HR.3A; 134 (37.1 %) after HR.2A.**
 - **Buildable without any gate, at HR.0A:** the 90 MISSING and 40 PARTIAL rows of that date, the substance of
-  HR.1–HR.3 and HR.9–HR.14. **Current counts (HR.R1-C10 recount, §5):** 11 MISS, 20 PART.
+  HR.1–HR.3 and HR.9–HR.14. **Current counts (HR.R1-C16, §5):** 2 MISS, 10 PART (HR.R1-C10 recount: 11 MISS, 20 PART).
 
 ## 6. Reference behaviours deliberately not adopted
 

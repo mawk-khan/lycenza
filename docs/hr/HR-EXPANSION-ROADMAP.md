@@ -244,6 +244,8 @@ reservation.
 
 ### HR.4 — Work calendar & shifts
 
+**D-1 amendment (HR owner, 2026-11-08, HR.R1-C16).** HR.4 is split. **HR.4a, calendar history:** D14-08 and D14-09 (S-16) stay ACTIVE, as work order WO-5, after D-6; it needs no timing data and no L2a. The ungated calendar-applicability rows (D5-02, D5-03, D5-05, D5-06, D14-02, D14-03, D14-04, D14-07) are DEFERRED by owner record. **HR.4b, shifts and everything below:** unchanged, held by its gates. Nothing here starts work: each slice still needs its own authorization.
+
 1. **Prerequisites:** **OD-HR-14 decided (L2a)**; ADR 0065 §8 reopened;
    HR-AD-05 accepted.
 2. **Scope:** D5 (all); D14-02…09/12; D2-07.
@@ -312,7 +314,9 @@ reservation.
 
 ### HR.7 — Attendance operations
 
-1. **Prerequisites:** HR.6. Manager correction needs the ADR 0065 §7
+**D-1 amendment (HR owner, 2026-11-08, HR.R1-C16).** HR.7 is split, and the lock no longer waits for HR.6. **HR.7a, the period lock:** D8-10 and D8-13 (S-6) stay ACTIVE, as work order WO-6; the lock reads day and half-day records, so it needs no evaluation and no timing data. It needs a recorded S-6 determination first, because S-6 decides what reopening a locked month requires. **HR.7b:** regularization (D8-03, D8-04) is DEFERRED by owner record until HR-011 is answered; manager correction (D8-06) stays DEF under ADR 0065 §7; D8-14 stays DEF under HR-004. Nothing here starts work.
+
+1. **Prerequisites:** HR.6, for HR.7b only. Manager correction needs the ADR 0065 §7
    reopening.
 2. **Scope:** D8-03/04/10/13/14/15; S-6.
 3. **Schema:** `attendance_regularization_requests`,

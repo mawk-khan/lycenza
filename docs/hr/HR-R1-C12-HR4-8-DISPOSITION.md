@@ -1,6 +1,6 @@
 # HR.4–8 capability disposition (HR.R1-C12, proposal)
 
-**A proposal for D-1, Option B. Nothing here is approved, and no row of `HR-REFERENCE-CAPABILITY-MAP.md` changes until the HR owner decides.** Generated from that map's §4 at `0b77270c`: every row whose Phase column names HR.4 to HR.8.
+**Approved by the HR owner on 2026-11-08 (HR.R1-C16) as proposed: Option B, with the four ACTIVE rows kept ACTIVE.** The record is `HR-R1-C16-D1-DECISION.md`; the map rows changed there. Below is the proposal as it was written, kept unchanged as history. ~~A proposal for D-1, Option B. Nothing here is approved, and no row of `HR-REFERENCE-CAPABILITY-MAP.md` changes until the HR owner decides.~~ Generated from that map's §4 at `0b77270c`: every row whose Phase column names HR.4 to HR.8.
 
 **82 rows:** 61 GATE, 20 with no gate, and 1 held by ADR 0065 §7 (D8-06). The earlier "12 ungated HR.4 rows" are all here, but they are not the only ungated rows: HR.7 has 7 and HR.6 has 1, including the high-risk D8-10.
 

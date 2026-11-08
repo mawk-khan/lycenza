@@ -75,6 +75,8 @@ Selected option, approving authority, approval date and source of authorization 
 
 **Status: PENDING.** No capability status changes before approval.
 
+**Decided 2026-11-08 (HR.R1-C16), by the HR owner:** Option B; the four ACTIVE rows stay ACTIVE (WO-5, WO-6); the nine rows outside HR.4–8 are DEFERRED by owner record; the proposed reading of "published" below is adopted. `HR-R1-C16-D1-DECISION.md`. Legal and Security stay on L2b, and no gate opened.
+
 ### D-1 alone does not satisfy §2
 
 §2 covers HR.1–HR.16, and D-1 covers HR.4–8. HR.11, HR.12 and HR.15 are recorded as PARTIAL, and HR.1A, HR.2A, HR.3A, HR.9 and HR.10 carry their own "not built" lists in the roadmap. Whether such a slice counts as "published" is not stated. **17 PART or MISS rows sit outside HR.4–8.** This was not in the C10 or C11 packages.
@@ -384,6 +386,8 @@ Two accounts do not prove two people, and no record of natural persons exists. C
 ## 12. Reference pack and baselines
 
 **Fingerprint.** `40ed6a836f5a99c65694118c0481bc468b1fb6ebb379a0275cc33839fa7a1ac3` is recorded in full in the map, over 602 PNG, and the convention is described in words: SHA-256 over each file, in sorted file-name order, of its UTF-8 name followed by its hex SHA-256.
+
+**Verified 2026-11-08 (HR.R1-C16):** the owner-held pack was found and the value recomputed exactly; the convention is pinned in the map §1. The paragraph below is kept as it was written.
 
 **It is not verified and cannot be from here.** Missing: the separator between name and hash, hex case, the collation of "sorted", any hash of `HR.zip`, a per-file inventory, a version, and the script. The pack is owner-held and not in Git or this workspace. The SIS pack uses this convention. The Organisation pack uses another, so the two must not be mixed. **No checksum is invented here.**
 
