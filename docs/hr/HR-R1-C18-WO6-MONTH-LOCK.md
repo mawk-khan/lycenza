@@ -93,6 +93,18 @@
 
 A focused re-check of those fixes found no HIGH or MEDIUM. Two of its LOWs were then fixed and **not reviewed again**: the request guard now checks the isolation level for a decision too, and a lock the database refuses in the clock-skew seconds around midnight on the 1st becomes the domain refusal, not a raw error.
 
+**Publication.** Three candidates.
+
+| Candidate | CI gate | What failed, and the fix |
+|---|---|---|
+| `1d1f6c06` | red | Shard 4: `WebRouteParametersGuardTest`, the new `{month}` and `{lockedCorrection}` parameters unclassified. Integrity: a trailing blank line in `CLAUDE.md`. Both fixed in `ce0821a9` |
+| `ce0821a9` | red | Shard 3: `ElevatedSchoolRouteDenialTest`, a route-level `{month}` constraint answered an elevation with 404, not 403. `{month}` now 404s in the controller, after school-context, the `check`/`report` precedent. Shard 4: C15-N1, second occurrence; the whole shard ran green locally |
+| `26ace7b3` | green | Shard 4 failed C15-N1 a third time, now with the real output (`Deleted 4`, held 0); its one job re-run passed. Published |
+
+Run 42480517599, four shards, **11,520 cases, 0 failures, 0 errors, 1 skip (ESI-12), 464,002 assertions**, coverage union proven; shard 4 counted from its re-run. `publication-check` publishable, E16 valid through 2026-11-28; `main` = `26ace7b3`. 32 more cases than C15.
+
+Both defects CI caught were missed locally because `tests/Feature/Routing` and `tests/Feature/Platform` were not in the focused set: a new School route needs both. The local publish gate's whitespace check compares the index with `HEAD`, so after a commit it checks nothing; `git diff --check origin/main HEAD` is the CI's check.
+
 ## 5. Limits
 
 - **The same-person Identity risk.** A second person is a second account (open MEDIUM).
@@ -108,3 +120,4 @@ A focused re-check of those fixes found no HIGH or MEDIUM. Two of its LOWs were 
   The migration's own checks and the rollback proof stand in for the last; the rest are open.
 - **Isolation.** The database guarantee holds at READ COMMITTED. Other levels are refused, not supported.
 - **No browser walkthrough** was performed. The pages are exercised through their routes and props.
+- **C15-N1** (Retention/Platform), raised to MEDIUM: the audit prune stopped one row short in CI three times. Not caused by this change; recorded in the register with its output.
