@@ -10,6 +10,7 @@ use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceCorrection;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
@@ -47,12 +48,18 @@ class StaffAttendanceAdminController extends Controller
         $validated = $request->validate(['date' => ['sometimes', 'date_format:Y-m-d'], 'page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
         $date = $validated['date'] ?? $today;
 
+        $canManage = $capabilities->canInSchool($context->actor(), StaffAttendanceCapabilities::MANAGE, $school);
+
         return Inertia::render('App/StaffAttendance/Register', [
             // HR.16C: one server page of the whole register (no population cap).
             'register' => $reads->register($school, $date, $context->actor(), (int) ($validated['page'] ?? 1)),
             'today' => $today,
             'reasons' => StaffAttendanceCorrection::REASONS,
-            'canManage' => $capabilities->canInSchool($context->actor(), StaffAttendanceCapabilities::MANAGE, $school),
+            'canManage' => $canManage,
+            // HR.R1-C18 (S-6): a locked month takes no record and no ordinary correction, only a request.
+            'monthLock' => $reads->monthLock($school, $date, $context->actor()),
+            'pendingCorrections' => $reads->pendingLockedCorrections($school, $date, $context->actor()),
+            'formKey' => $canManage ? $this->issueFormKey($request) : null,
         ]);
     }
 
@@ -61,7 +68,7 @@ class StaffAttendanceAdminController extends Controller
      * employment in half-days (present, absent, leave, holiday, off day,
      * unrecorded) -- never late, no-punch or loss of pay. Read-only.
      */
-    public function monthly(Request $request, TenantContext $context, StaffAttendanceReadService $reads): Response
+    public function monthly(Request $request, TenantContext $context, StaffAttendanceReadService $reads, StaffAttendanceService $service, CapabilityResolver $capabilities, FreshMfaRequirement $mfa): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(StaffAttendanceCapabilities::VIEW, $school);
@@ -74,9 +81,17 @@ class StaffAttendanceAdminController extends Controller
             throw ValidationException::withMessages(['month' => $e->getMessage()]);
         }
 
+        // HR.R1-C18 (S-6): the lock and the month's correction requests; what this actor may decide.
+        $requests = $reads->lockedCorrections($school, $month, $context->actor());
+        $decidable = $service->decidable($school, array_column(array_filter($requests, fn (array $r) => $r['status'] === 'requested'), 'id'), $context->actor());
+
         return Inertia::render('App/StaffAttendance/Monthly', [
             'summary' => $summary,
             'currentMonth' => substr(SchoolTimezone::today($school), 0, 7),
+            'lock' => $reads->monthLock($school, $month, $context->actor()),
+            'canLock' => $capabilities->canInSchool($context->actor(), StaffAttendanceCapabilities::LOCK, $school),
+            'hasMfaFactor' => $mfa->hasActiveFactor($context->actor()),
+            'requests' => array_map(fn (array $r) => [...$r, 'canDecide' => in_array($r['id'], $decidable, true)], $requests),
         ]);
     }
 
@@ -146,6 +161,77 @@ class StaffAttendanceAdminController extends Controller
         ]);
 
         return $this->command(fn () => $service->correct($school, $staffAttendanceRecord, (int) $validated['expected_version'], $validated['first_half'], $validated['second_half'], $validated['reason_code'], $request->user()), 'Attendance corrected.');
+    }
+
+    /**
+     * HR.R1-C18 (WO-6; S6-1 to S6-3): locks a School-local calendar month for good. The capability,
+     * the explicit confirmation, then the fresh MFA step-up OUTSIDE the business transaction (rule 95);
+     * the service re-reads the authority under its lock.
+     */
+    public function lockMonth(Request $request, TenantContext $context, StaffAttendanceService $service, FreshMfaRequirement $mfa, string $month): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability(StaffAttendanceCapabilities::LOCK, $school);
+        abort_if(preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month) !== 1, 404);
+        $request->validate(['confirm' => ['accepted']]);
+        $proof = $mfa->requireForAction($request, $context->actor());
+
+        return $this->command(fn () => $service->lockMonth($school, $month, $context->actor(), $proof), "{$month} is locked.");
+    }
+
+    /** HR.R1-C18: asks for a change to a record of a locked month. It changes nothing until someone else approves it. */
+    public function requestLockedCorrection(Request $request, TenantContext $context, StaffAttendanceService $service, string $staffAttendanceRecord): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability(StaffAttendanceCapabilities::MANAGE, $school);
+        abort_if(! Str::isUuid($staffAttendanceRecord), 404);
+        $validated = $request->validate([
+            'expected_version' => ['required', 'integer', 'min:1'],
+            ...self::halfRules(''),
+            'reason_code' => ['required', Rule::in(StaffAttendanceCorrection::REASONS)],
+            'form_key' => ['required', 'uuid'],
+        ]);
+        $this->requireIssuedFormKey($request, $validated['form_key']);
+
+        return $this->command(fn () => $service->requestLockedCorrection($school, $staffAttendanceRecord, (int) $validated['expected_version'], $validated['first_half'], $validated['second_half'], $validated['reason_code'], $validated['form_key'], $context->actor()), 'Correction requested. Someone else with the lock key decides it.');
+    }
+
+    public function approveLockedCorrection(Request $request, TenantContext $context, StaffAttendanceService $service, FreshMfaRequirement $mfa, string $lockedCorrection): RedirectResponse
+    {
+        return $this->decide($request, $context, $mfa, $lockedCorrection, fn ($school, $proof) => $service->approveLockedCorrection($school, $lockedCorrection, $context->actor(), $proof), 'Correction approved and applied. The month stays locked.');
+    }
+
+    public function refuseLockedCorrection(Request $request, TenantContext $context, StaffAttendanceService $service, FreshMfaRequirement $mfa, string $lockedCorrection): RedirectResponse
+    {
+        return $this->decide($request, $context, $mfa, $lockedCorrection, fn ($school, $proof) => $service->refuseLockedCorrection($school, $lockedCorrection, $context->actor(), $proof), 'Correction refused.');
+    }
+
+    private function decide(Request $request, TenantContext $context, FreshMfaRequirement $mfa, string $lockedCorrection, callable $decision, string $success): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability(StaffAttendanceCapabilities::LOCK, $school);
+        abort_if(! Str::isUuid($lockedCorrection), 404);
+        $request->validate(['confirm' => ['accepted']]);
+        $proof = $mfa->requireForAction($request, $context->actor());
+
+        return $this->command(fn () => $decision($school, $proof), $success);
+    }
+
+    /** A server-issued key per correction form, so a retry never files a second request (as inventory forms do). */
+    private function issueFormKey(Request $request): string
+    {
+        $key = (string) Str::uuid();
+        $keys = (array) $request->session()->get('staff_attendance.form_keys', []);
+        $request->session()->put('staff_attendance.form_keys', array_slice([...$keys, $key], -20));
+
+        return $key;
+    }
+
+    private function requireIssuedFormKey(Request $request, string $key): void
+    {
+        if (! in_array($key, (array) $request->session()->get('staff_attendance.form_keys', []), true)) {
+            throw ValidationException::withMessages(['attendance' => 'This form has expired. Reload the page and try again.']);
+        }
     }
 
     /** @return array<string, list<mixed>> */

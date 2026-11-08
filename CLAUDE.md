@@ -1220,7 +1220,7 @@ once several modules copy it.
       services write it, explicitly (`forceFill`). Never add it back to
       `School::$fillable`.
     - **Lifecycle models take state from their owner only (HR.R1-C11, HR.R1-C13,
-      HRC-10, GOV-6).** The 28 in `Tests\Support\LifecycleModels` keep state,
+      HRC-10, GOV-6).** The 30 in `Tests\Support\LifecycleModels` keep state,
       owner, actor and parent columns out of `$fillable`; their owning writers
       use `forceCreate`/`forceFill` on fixed arrays. Never `forceCreate` a
       caller's array: it goes through `fill()`, and only the owner's columns are
@@ -2025,3 +2025,10 @@ once several modules copy it.
      - **A reversal is never blocked,** and never reverses anything else. A posted correction stands, is named on `payroll.run.reversed` (`standingCorrectionRunIds`) and on the run, and an authorized person decides. Never add a reversal cascade.
      - **A correction refused this way is a dead record:** never delete or repost it. It ages from its own creation (`payroll_run_is_dead_correction`).
      - **Never restate a retention function.** Later migrations patch them in place: change one only by transforming `pg_get_functiondef`, and keep the identity, hold and anchor checks.
+147. **A Staff Attendance month, once locked, is never reopened; it changes only by another lock-key holder's approval (HR.R1-C18, S-6, ADR 0065 §31).**
+     - **One key, one writer.** Only a month that has ended is locked. Locking needs `hr.staff_attendance.lock` (school_admin, principal; whole-School, never Campus-adopted, never a grant right), a confirmation and the actor's own fresh MFA; authority is re-read under the lock. Everything goes through `StaffAttendanceService`.
+     - **The month key.** Every write of a month takes `hr.staff_month:{school}:{YYYY-MM}` SHARED, after the School and before its HR rows (`StaffAttendanceMonthLocks::holdOpen`); locking takes it EXCLUSIVELY; the triggers take it too, so raw SQL serializes at READ COMMITTED, and every month guard refuses any other isolation level. Never derive the key another way.
+     - **A locked month** refuses record, register and ordinary correction, in the service and in the database. A change is a request (`hr.staff_attendance.manage`, never for one's own attendance) decided by another lock-key holder with fresh MFA, never the requester, a known same person or anyone ever linked to the Employee. The database applies an approval from the request's own values, once; a decision is final; a stale request can only be refused. No reopen state, endpoint or override; a School with one lock-key holder waits.
+     - **Open months** keep their corrections, but authority is re-read inside the transaction.
+     - **Payroll** is unchanged: it may still calculate an unlocked month until that is decided. Requests are D9 evidence; lock rows are School configuration.
+

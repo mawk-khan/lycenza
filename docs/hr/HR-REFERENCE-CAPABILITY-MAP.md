@@ -293,10 +293,10 @@ both mean HRX-L2.
 | D8-07 | Reason | closed reason codes | IMP | H421 | — | StaffAttendance | — | — | — |
 | D8-08 | Evidence / attachment | none | GATE | — | — | — | — | H | HRX-L1 (ADR 0065 §10) |
 | D8-09 | Audit history | correction rows + audit | IMP | H422–H423 | — | StaffAttendance | — | — | — |
-| D8-10 | Locking / finalization | none (Payroll detects post-approval change) | MISS | H384–H391 (Confirm) | period lock or confirm step with controlled reopening | StaffAttendance + Payroll | HR.7 | H | — |
+| D8-10 | Locking / finalization | HR.R1-C18: a School-local month is locked by `hr.staff_attendance.lock` with fresh MFA and never reopened; a locked month changes only by a two-person, fresh-MFA correction the database applies (S-6) | ALT | H384–H391 (Confirm) | no reopening, by owner decision S6-1 (HR.R1-C17); Payroll may still calculate an unlocked month (open decision) | StaffAttendance + Payroll | HR.7a | H | — |
 | D8-11 | Payroll handoff | `payroll_run_hrx_inputs` (frozen at approval) | IMP | H380 | — | Payroll | — | — | — |
 | D8-12 | Recalculation after correction | recalculation refreshes; after approval it surfaces as `source_changed_after_approval` | ALT | — | — | Payroll | — | — | — |
-| D8-13 | Prevention of unauthorized historical edits | future refused; no window, MFA or second person (S-6) | PART | H589 | correction window + assurance | StaffAttendance | HR.7 | H | — |
+| D8-13 | Prevention of unauthorized historical edits | HR.R1-C18: future refused; the month lock is the window; a locked month changes only with another lock-key holder's fresh-MFA approval; open-month corrections re-read authority in the transaction (S6-3, S6-4) | IMP | H589 | — | StaffAttendance | HR.7a | H | — |
 | D8-14 | Work-from-home assignment and marking | none | DEF | H303–H306, H371 | owner decision HR-004 | StaffAttendance | HR.7 | L | — |
 | D8-15 | Modified-attendance report | `hr.attendance_corrections` (HR.14, D20-33) | IMP | H422–H423 | — | StaffAttendance | HR.14 | L | — |
 | D8-16 | Free-text attendance remarks / staff reason | none (closed codes) | GATE | H419–H421 | — | — | — | H | HRX-L1 |
@@ -585,17 +585,19 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) | After HR.R1-C16 D-1 (2026-11-08) |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | 161 (44.6 %) | **161** (44.6 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | 20 | **10** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | 11 | **2** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 | 20 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 | 7 |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 | **68** |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) | After HR.R1-C16 D-1 (2026-11-08) | After HR.R1-C18 WO-6 (2026-11-08) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | 161 (44.6 %) | 161 (44.6 %) | **162** (44.9 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | 20 | 10 | **9** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | 11 | 2 | **1** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 | 20 | **21** |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 | 7 | 7 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 | 68 | 68 |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+
+HR.R1-C18 (2026-11-08, WO-6) changed two ACTIVE rows on evidence: D8-10 MISS → ALT (the month lock, no reopening by owner decision S6-1) and D8-13 PART → IMP (the lock as the window, two-person fresh-MFA locked-month corrections, a fresh authority read on open-month corrections). Two ACTIVE rows remain: D14-08 and D14-09 (WO-5, after D-6). `HR-R1-C18-WO6-MONTH-LOCK.md`.
 
 HR.R1-C16 (2026-11-08, D-1, HR owner) changed 19 rows to DEF by owner decision, each with its earlier status and a re-review trigger in its Gate column: the 10 ungated HR.4–8 rows of D-1 Option B (D5-02, D5-03, D5-05, D5-06, D8-03, D8-04, D14-02, D14-03, D14-04, D14-07) and the nine rows outside HR.4–8 (D4-07, D1-07, D18-03, D18-04, D18-17, D19-07, D19-14, D19-15, D19-16). The 61 gated HR.4–8 rows are HELD: they stay GATE, and a deferral opens nothing. **Four rows stay ACTIVE, undecided and unbuilt:** D8-10 and D14-08 (MISS), D8-13 (S-6) and D14-09 (S-16) (PART). Nothing was built. `HR-R1-C16-D1-DECISION.md`.
 
@@ -712,7 +714,7 @@ the HR.11 figures for D11, D13, D15, D16 and D17.
   - 1 is D-11.
 - **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A; 132 (36.6 %) after HR.3A; 134 (37.1 %) after HR.2A.**
 - **Buildable without any gate, at HR.0A:** the 90 MISSING and 40 PARTIAL rows of that date, the substance of
-  HR.1–HR.3 and HR.9–HR.14. **Current counts (HR.R1-C16, §5):** 2 MISS, 10 PART (HR.R1-C10 recount: 11 MISS, 20 PART).
+  HR.1–HR.3 and HR.9–HR.14. **Current counts (HR.R1-C18, §5):** 1 MISS, 9 PART (HR.R1-C10 recount: 11 MISS, 20 PART).
 
 ## 6. Reference behaviours deliberately not adopted
 

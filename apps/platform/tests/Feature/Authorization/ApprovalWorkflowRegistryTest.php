@@ -103,7 +103,7 @@ class ApprovalWorkflowRegistryTest extends TestCase
     public function a_shared_workflow_decides_through_the_shared_foundation_and_only_it_does(): void
     {
         $shared = array_filter(ApprovalWorkflowRegistry::WORKFLOWS, fn (array $w) => $w['makerChecker'] === 'shared');
-        $this->assertSame(['fee_concessions', 'payment_corrections', 'employee_account_link_corrections', 'leave_requests', 'employment_separation_cases', 'payroll_runs'], array_keys($shared), 'ORG.8A pilot + ORG.8C Payment corrections + ORG.8D Leave + HR.12 separations + ORG.8B Payroll');
+        $this->assertSame(['fee_concessions', 'payment_corrections', 'employee_account_link_corrections', 'staff_attendance_locked_corrections', 'leave_requests', 'employment_separation_cases', 'payroll_runs'], array_keys($shared), 'ORG.8A pilot + ORG.8C Payment corrections + ORG.8D Leave + HR.12 separations + ORG.8B Payroll');
 
         $allowed = [];
         foreach ($shared as $key => $workflow) {

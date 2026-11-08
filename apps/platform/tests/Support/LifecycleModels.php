@@ -28,6 +28,8 @@ use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
+use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceLockedCorrection;
+use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceMonthLock;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
 use App\Domain\WorkforceTasks\Infrastructure\WorkforceTask;
 
@@ -42,5 +44,7 @@ final class LifecycleModels
         EmployeeDocument::class, EmployeeEmergencyContact::class, EmployeeExperience::class, EmployeeNote::class, EmployeePersonalDetail::class, EmployeeQualification::class,
         Position::class, ReportingRelationship::class, SeparationClearanceItem::class, SeparationClearanceRequirement::class,
         LeavePolicyAssignment::class, LeaveType::class, StaffAttendanceRecord::class,
+        // HR.R1-C18 (WO-6): written only by StaffAttendanceService on fixed arrays.
+        StaffAttendanceMonthLock::class, StaffAttendanceLockedCorrection::class,
     ];
 }

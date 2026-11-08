@@ -1192,6 +1192,11 @@ final class SchoolRouteCoverage
             Coverage::gate('app.staff-attendance.monthly', 'hr.staff_attendance.view'),
             Coverage::service('app.staff-attendance.records.store', StaffAttendanceService::class, 'record')->validatesFirst(),
             Coverage::service('app.staff-attendance.records.corrections.store', StaffAttendanceService::class, 'correct')->validatesFirst(),
+            // HR.R1-C18 (WO-6): the controller gates first (then confirmation and the fresh code, rule 95); the service re-reads under its lock.
+            Coverage::gate('app.staff-attendance.months.lock', 'hr.staff_attendance.lock'),
+            Coverage::gate('app.staff-attendance.records.locked-corrections.store', 'hr.staff_attendance.manage'),
+            Coverage::gate('app.staff-attendance.locked-corrections.approve', 'hr.staff_attendance.lock'),
+            Coverage::gate('app.staff-attendance.locked-corrections.refuse', 'hr.staff_attendance.lock'),
 
             // Http\Controllers\App\Analytics\CurriculumCoverageController
             Coverage::service('app.analytics.curriculum-coverage', AnalyticsReadGate::class, 'read'),

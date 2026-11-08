@@ -115,7 +115,8 @@ class HrxRetentionGuardTest extends TestCase
         foreach (['leave_ledger_entries', 'leave_decisions', 'leave_request_days', 'leave_year_close_items', 'leave_year_close_reconciliations', 'staff_attendance_corrections'] as $table) {
             $this->assertFalse((bool) DB::selectOne("SELECT has_table_privilege('school_os_app', ?, 'UPDATE') AS u", [$table])->u, "{$table}: append-only");
         }
-        $this->assertSame(1, $this->hrxRows($w['school'], $leaver['employeeId'])['staff_attendance_records']);
+        // June, and the two May records the locked-month fixture adds (HR.R1-C18).
+        $this->assertSame(3, $this->hrxRows($w['school'], $leaver['employeeId'])['staff_attendance_records']);
     }
 
     #[Test]
@@ -237,15 +238,16 @@ class HrxRetentionGuardTest extends TestCase
         $this->assertSame($otherBefore, $this->hrxRows($other['school'], $otherLeaver['employeeId']), 'School B is untouched');
 
         // Separated in January 2016, but the close and the cancellation were written in April: with a
-        // March cutoff that Leave unit is younger than the cutoff and kept; its attendance (2015: one record, one correction) is not.
+        // March cutoff that Leave unit is younger than the cutoff and kept; its attendance (2015's records, corrections and locked-month requests) is not.
         $this->assertStringContainsString('retention_hrx_dependency', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql('leave', true), [$w['school']->id, $early['employeeId'], '2016-03-01'])));
-        $this->assertSame(2, (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('staff_attendance', true), [$w['school']->id, $early['employeeId'], '2016-03-01'])->n));
+        // 3 records + 2 correction rows (June's, and the applied locked-month one) + 2 locked-month requests (HR.R1-C18).
+        $this->assertSame(7, (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('staff_attendance', true), [$w['school']->id, $early['employeeId'], '2016-03-01'])->n));
 
         // The proper unit is accepted: a dry run counts every row it would remove, and removes none.
         $rows = $this->hrxRows($w['school'], $old['employeeId']);
         $leave = array_sum(array_intersect_key($rows, array_flip(array_filter(self::HRX_EVIDENCE, fn ($t) => str_starts_with($t, 'leave_')))));
         $this->assertSame($leave, (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('leave', true), [$w['school']->id, $old['employeeId'], $cutoff])->n));
-        $this->assertSame($rows['staff_attendance_records'] + $rows['staff_attendance_corrections'], (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('staff_attendance', true), [$w['school']->id, $old['employeeId'], $cutoff])->n));
+        $this->assertSame($rows['staff_attendance_records'] + $rows['staff_attendance_corrections'] + $rows['staff_attendance_locked_corrections'], (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('staff_attendance', true), [$w['school']->id, $old['employeeId'], $cutoff])->n));
         $this->assertSame($rows, $this->hrxRows($w['school'], $old['employeeId']), 'a dry run deletes nothing');
     }
 

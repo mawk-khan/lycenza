@@ -1,5 +1,7 @@
 # HR.R1-C17: S-6 determination and the WO-6 period-lock contract (2026-11-08)
 
+**Implemented 2026-11-08 (HR.R1-C18, `HR-R1-C18-WO6-MONTH-LOCK.md`):** the requester rule (`hr.staff_attendance.manage`) and the one-holder rule (fail closed) were then decided by the HR owner; the writer is `StaffAttendanceService` itself, as one owner; the database applies an approval.
+
 **Completion state: S-6 APPROVED — WO-6 IMPLEMENTATION READY.** S-6 is decided and recorded, and WO-6 is specified below. **No WO-6 runtime work has started, and starting it needs its own authorization.** D8-10 and D8-13 stay ACTIVE until it ships. HR.R1 stays OPEN. Baseline `289865c3`.
 
 Four milestones, kept apart:

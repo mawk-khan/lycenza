@@ -210,7 +210,9 @@ final class TenantRetentionCatalog
         ]],
         'hr_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['employee_categories', 'hr_departments', 'positions', 'hr_employee_number_counters', 'separation_clearance_requirements',
             // HR.13: task categories, recurring templates and versions, generation-run counts (no person data).
-            'workforce_task_categories', 'workforce_task_templates', 'workforce_task_template_versions', 'workforce_task_generation_runs']],
+            'workforce_task_categories', 'workforce_task_templates', 'workforce_task_template_versions', 'workforce_task_generation_runs',
+            // HR.R1-C18 (WO-6): which School-months of Staff Attendance are locked (a month, a locker, a time; no person data).
+            'staff_attendance_month_locks']],
         'leave_configuration' => [self::TENANT_LIFETIME, 'HRX.1 (ADR 0065 §18): leave settings and prospective start-month changes, materialized leave years, leave types and policies, the staff working calendar and allocation-run headers; HR.9 (ADR 0065 §28.7): policy-version eligibility rules and eligibility-run headers -- School configuration without per-Employee amounts', [
             'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_year_closes', 'leave_types', 'leave_policies', 'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs',
             'leave_eligibility_rules', 'leave_eligibility_runs',
@@ -225,6 +227,8 @@ final class TenantRetentionCatalog
         ]],
         'staff_attendance_evidence' => [self::ADOPTED, 'HRX.3 (ADR 0065 §24.13, §27): Staff Attendance records and their append-only corrections -- D9 employment evidence, 8 y after the Employee\'s final separation; a record with its whole correction history expires through its narrow, separation-floored function in platform:employee-retention-prune before HR\'s purge (HRX.6, implemented)', [
             'staff_attendance_records', 'staff_attendance_corrections',
+            // HR.R1-C18 (WO-6): locked-month correction requests and decisions leave with their Employee.
+            'staff_attendance_locked_corrections',
         ]],
         'student_operational_modules' => [self::ADOPTED, 'E21.2G O1: D7 operational history, 7 y after the Student\'s final exit; returned loans and ended assignments expire through platform:student-retention-prune (E21.3B, implemented); an open loan or assignment keeps the Student', [
             'hostel_residency_assignments', 'library_loans', 'transport_student_assignments',

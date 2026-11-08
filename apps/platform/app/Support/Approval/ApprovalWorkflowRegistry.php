@@ -90,6 +90,27 @@ final class ApprovalWorkflowRegistry
             'compatibility' => 'as_is',
             'note' => 'Separation of duties, never proof of two people. Also refused: an account ever linked to the Employee, and an account known to be the requester (a shared uncorrected link).',
         ],
+        // HR.R1-C18 (WO-6; S-6 decided HR.R1-C17): a correction of a LOCKED Staff Attendance month. Requested by a
+        // holder of hr.staff_attendance.manage, decided by another holder of hr.staff_attendance.lock (whole-School,
+        // re-read under the lock), never the requester or the Employee. The database applies an approval from the
+        // request's own values; a stale request can only be refused. A month is never reopened.
+        'staff_attendance_locked_corrections' => [
+            'domain' => 'StaffAttendance',
+            'tables' => ['staff_attendance_locked_corrections'],
+            'request' => ['hr.staff_attendance.manage'],
+            'decide' => ['hr.staff_attendance.lock'],
+            'participants' => ['staff_attendance_locked_corrections.requested_by_user_id'],
+            'decider' => 'staff_attendance_locked_corrections.decided_by_user_id',
+            'dbBackstop' => 'staff_attendance_locked_corrections_sod_check',
+            'makerChecker' => 'shared',
+            'service' => 'App\Domain\StaffAttendance\Application\StaffAttendanceService',
+            'decisions' => ['approveLockedCorrection', 'refuseLockedCorrection'],
+            'execution' => 'immediate',
+            'drift' => 'immutable_terms',
+            'freshMfa' => ['approveLockedCorrection', 'refuseLockedCorrection'],
+            'compatibility' => 'as_is',
+            'note' => 'Separation of duties, never proof of two people (the same-person Identity MEDIUM stays open). Also refused in the database: a decider who holds no whole-School lock key, a known same person, or any account ever linked to the Employee.',
+        ],
         'communication_approvals' => [
             'domain' => 'Communications',
             'tables' => ['communication_approval_requests'],

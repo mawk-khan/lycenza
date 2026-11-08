@@ -11,6 +11,8 @@ use App\Domain\Leave\Application\LeaveCoverageReader;
 use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\StaffAttendance\Application\Exceptions\StaffAttendanceException;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceCorrection;
+use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceLockedCorrection;
+use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceMonthLock;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
 use App\Models\School;
 use App\Models\User;
@@ -291,6 +293,65 @@ class StaffAttendanceReadService
         return $this->context->withSchool($school, fn () => StaffAttendanceCorrection::query()->where('school_id', $school->id)
             ->whereIn('staff_attendance_record_id', $recordIds)->orderBy('from_version')->get()
             ->groupBy('staff_attendance_record_id')->map(fn ($rows) => $rows->map(fn (StaffAttendanceCorrection $c) => self::correction($c))->values()->all())->all());
+    }
+
+    /**
+     * HR.R1-C18 (S-6): whether a School-local month is locked, and when. A lock is never reopened.
+     *
+     * @return array{month: string, locked: bool, lockedAt: ?string}
+     */
+    public function monthLock(School $school, string $month, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
+        $lock = $this->context->withSchool($school, fn () => StaffAttendanceMonthLock::query()->where('school_id', $school->id)->where('month', substr($month, 0, 7).'-01')->first());
+
+        return ['month' => substr($month, 0, 7), 'locked' => $lock !== null, 'lockedAt' => $lock?->locked_at->toIso8601String()];
+    }
+
+    /**
+     * HR.R1-C18 (S-6): a locked month's correction requests, newest first, with directory labels only.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function lockedCorrections(School $school, string $month, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
+
+        return $this->context->withSchool($school, function () use ($school, $month, $actor): array {
+            $requests = StaffAttendanceLockedCorrection::query()->where('school_id', $school->id)->where('month', substr($month, 0, 7).'-01')
+                ->orderByRaw("status = 'requested' DESC")->orderByDesc('requested_at')->limit(200)->get();
+            if ($requests->isEmpty()) {
+                return [];
+            }
+            $dates = StaffAttendanceRecord::query()->where('school_id', $school->id)->whereIn('id', $requests->pluck('staff_attendance_record_id')->all())
+                ->pluck('attendance_date', 'id');
+            $labels = collect($this->roster->labels($school, $requests->pluck('employment_record_id')->unique()->values()->all()))->keyBy('employmentRecordId');
+
+            return $requests->map(fn (StaffAttendanceLockedCorrection $r) => [
+                'id' => $r->id, 'recordId' => $r->staff_attendance_record_id,
+                'date' => isset($dates[$r->staff_attendance_record_id]) ? substr((string) $dates[$r->staff_attendance_record_id], 0, 10) : null,
+                'employment' => isset($labels[$r->employment_record_id]) ? self::label($labels[$r->employment_record_id]) : null,
+                'before' => ['firstHalf' => $r->before_first_half_status, 'secondHalf' => $r->before_second_half_status],
+                'after' => ['firstHalf' => $r->after_first_half_status, 'secondHalf' => $r->after_second_half_status],
+                'reasonCode' => $r->reason_code, 'status' => $r->status, 'mine' => $r->requested_by_user_id === $actor->id,
+                'requestedAt' => $r->requested_at->toIso8601String(), 'decidedAt' => $r->decided_at?->toIso8601String(),
+            ])->values()->all();
+        });
+    }
+
+    /**
+     * HR.R1-C18: the records of a date whose correction is waiting for approval.
+     *
+     * @return list<string>
+     */
+    public function pendingLockedCorrections(School $school, string $date, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
+
+        return $this->context->withSchool($school, fn () => StaffAttendanceLockedCorrection::query()->where('staff_attendance_locked_corrections.school_id', $school->id)
+            ->where('status', StaffAttendanceLockedCorrection::REQUESTED)
+            ->join('staff_attendance_records as r', fn ($j) => $j->on('r.id', '=', 'staff_attendance_locked_corrections.staff_attendance_record_id')->on('r.school_id', '=', 'staff_attendance_locked_corrections.school_id'))
+            ->where('r.attendance_date', $date)->pluck('staff_attendance_locked_corrections.staff_attendance_record_id')->all());
     }
 
     /** @return array<string, mixed> the stored evidence, as written (no derived state) */

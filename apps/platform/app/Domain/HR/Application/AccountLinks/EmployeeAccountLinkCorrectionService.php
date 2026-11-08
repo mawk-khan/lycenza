@@ -227,9 +227,7 @@ final class EmployeeAccountLinkCorrectionService
     /** Two accounts with uncorrected links to one Employee are one person, as far as anything here can know. */
     private function knownSamePerson(string $schoolId, string $firstUserId, string $secondUserId): bool
     {
-        return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('user_id', $firstUserId)->whereNull('voided_at')
-            ->whereIn('employee_id', EmployeeAccountLink::query()->where('school_id', $schoolId)->where('user_id', $secondUserId)->whereNull('voided_at')->select('employee_id'))
-            ->exists();
+        return $this->selfAdministration->knownSamePerson($schoolId, $firstUserId, $secondUserId);
     }
 
     public static function participants(EmployeeAccountLinkCorrection $correction): ApprovalParticipants

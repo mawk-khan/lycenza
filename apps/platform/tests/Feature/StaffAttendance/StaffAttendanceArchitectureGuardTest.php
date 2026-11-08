@@ -128,12 +128,12 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
         }
 
         $keys = DB::table('capabilities')->where('key', 'like', 'hr.staff_attendance.%')->orderBy('key')->pluck('key')->all();
-        $this->assertSame(['hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], $keys, 'HRX.4 adds the read-only own capability');
+        $this->assertSame(['hr.staff_attendance.lock', 'hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], $keys, 'HRX.4 adds the read-only own capability; HR.R1-C18 the month lock');
         $teacher = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('r.key', 'teacher')->pluck('rc.capability_key')->sort()->values()->all();
         $this->assertSame(['attendance.teacher', 'communications.events.view', 'communications.inbox.view', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged by Staff Attendance (RES.4 adds only the owned marks key; ORG.9D-3R1 the School calendar; ORG.9D-1R1 the own inbox)');
         // school_admin also holds `.self` only so it can grant staff_self_service (HRX.4, no escalation).
-        foreach (['school_admin' => ['hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], 'principal' => ['hr.staff_attendance.manage', 'hr.staff_attendance.view']] as $role => $expected) {
+        foreach (['school_admin' => ['hr.staff_attendance.lock', 'hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], 'principal' => ['hr.staff_attendance.lock', 'hr.staff_attendance.manage', 'hr.staff_attendance.view']] as $role => $expected) {
             $granted = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', $role)->where('rc.capability_key', 'like', 'hr.staff_attendance.%')->orderBy('rc.capability_key')->pluck('rc.capability_key')->all();
             $this->assertSame($expected, $granted, "{$role}'s default Staff Attendance capabilities");
         }

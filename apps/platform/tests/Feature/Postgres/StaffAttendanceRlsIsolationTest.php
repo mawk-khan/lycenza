@@ -22,7 +22,7 @@ class StaffAttendanceRlsIsolationTest extends TestCase
 {
     use CreatesStaffAttendanceFixtures;
 
-    private const TABLES = ['staff_attendance_records', 'staff_attendance_corrections'];
+    private const TABLES = ['staff_attendance_records', 'staff_attendance_corrections', 'staff_attendance_month_locks', 'staff_attendance_locked_corrections'];
 
     protected function setUp(): void
     {

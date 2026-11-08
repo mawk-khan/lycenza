@@ -4000,6 +4000,8 @@ authorize nothing on their own.
 
 ## HRX.3 — Staff Attendance (implemented, 2026-10-03)
 
+**Month lock (HR.R1-C18, 2026-11-08):** a School-local month can be locked (`hr.staff_attendance.lock`, fresh MFA) and is never reopened; a locked month changes only by a correction another lock-key holder approves with fresh MFA, which the database applies. ADR 0065 §31; `docs/hr/HR-R1-C18-WO6-MONTH-LOCK.md`.
+
 ADR 0065 §24. `App\Domain\StaffAttendance` records daily, administrative
 presence evidence per EmploymentRecord, one half at a time. It is not
 Student class attendance (`docs/modules/ATTENDANCE.md`) and shares no

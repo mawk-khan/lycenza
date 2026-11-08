@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\DB;
 final class StaffAttendanceEvidenceRetentionService
 {
     /** The Staff Attendance tables this purge removes per Employee (HR's dry run counts them cleared). */
-    public const TABLES = ['staff_attendance_records', 'staff_attendance_corrections'];
+    public const TABLES = ['staff_attendance_records', 'staff_attendance_corrections', 'staff_attendance_locked_corrections'];
 
     /** Database refusals that mean "keep it" rather than "something failed". */
     private const KEEP = [

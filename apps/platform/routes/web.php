@@ -2124,6 +2124,11 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/monthly', [StaffAttendanceAdminController::class, 'monthly'])->name('monthly');
         Route::post('/records', [StaffAttendanceAdminController::class, 'store'])->name('records.store');
         Route::post('/records/{staffAttendanceRecord}/corrections', [StaffAttendanceAdminController::class, 'correct'])->name('records.corrections.store');
+        // HR.R1-C18 (WO-6, S-6): lock a month (never reopened); request, approve or refuse a locked-month correction.
+        Route::post('/months/{month}/lock', [StaffAttendanceAdminController::class, 'lockMonth'])->name('months.lock');
+        Route::post('/records/{staffAttendanceRecord}/locked-corrections', [StaffAttendanceAdminController::class, 'requestLockedCorrection'])->name('records.locked-corrections.store');
+        Route::post('/locked-corrections/{lockedCorrection}/approve', [StaffAttendanceAdminController::class, 'approveLockedCorrection'])->name('locked-corrections.approve');
+        Route::post('/locked-corrections/{lockedCorrection}/refuse', [StaffAttendanceAdminController::class, 'refuseLockedCorrection'])->name('locked-corrections.refuse');
     });
 
     // Phase 0L.2-1 -- Analytics (ADR 0040). One read-only report; the

@@ -68,6 +68,9 @@ final class UserReferenceCatalog
         // HRX.3 (ADR 0065 §24.13): who recorded and who corrected staff attendance.
         'staff_attendance_records' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'staff_attendance_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.R1-C18 (WO-6): who locked a month, and who requested and decided a locked-month correction.
+        'staff_attendance_month_locks' => ['locked_by_user_id' => self::RETAIN_REFERENCE],
+        'staff_attendance_locked_corrections' => ['requested_by_user_id' => self::RETAIN_REFERENCE, 'decided_by_user_id' => self::RETAIN_REFERENCE],
         // ORG.8E: who corrected a Student's attendance, and who took a high-impact lifecycle action.
         'attendance_record_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
         'student_lifecycle_events' => ['acted_by_user_id' => self::RETAIN_REFERENCE],

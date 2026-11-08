@@ -2531,3 +2531,7 @@ built; HR.11B–D are blocked.
   restriction-only "blackout" variant was offered and not chosen.
 - **Delegation, substitutes, escalation, multi-level (D13-15…17):** §6 kept;
   they need an amendment designed first.
+
+## 31. Amendment — HR.R1-C18 Staff Attendance month lock (2026-11-08)
+
+S-6 (decided HR.R1-C17) implemented as WO-6. A School-local calendar month that has ended is locked by `hr.staff_attendance.lock` (school_admin, principal, whole-School) with fresh MFA and is never reopened. In a locked month §24's record, register and correction are refused; a change is a request (`hr.staff_attendance.manage`) approved by another lock-key holder with fresh MFA, applied by the database from the request's own values and kept as an ordinary correction row naming the request. Open-month corrections re-read authority inside the transaction. Every write takes the School-month advisory lock SHARED after the School and before its HR rows; locking takes it EXCLUSIVELY; triggers take it too, so raw SQL serializes at READ COMMITTED; every month guard refuses any other isolation level. Payroll's evidence capture (§26.9) is unchanged and takes no month lock; whether Payroll should calculate only locked months is not decided. Requests are D9 Staff Attendance evidence (§27); lock rows are School configuration. Record: `docs/hr/HR-R1-C18-WO6-MONTH-LOCK.md`.

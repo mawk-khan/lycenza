@@ -49,6 +49,9 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
         'SeparationClearanceItem' => [],
         'SeparationClearanceRequirement' => [],
         'StaffAttendanceRecord' => [],
+        // HR.R1-C18 (WO-6): the month lock and the locked-month request, every column forced by their writer.
+        'StaffAttendanceMonthLock' => [],
+        'StaffAttendanceLockedCorrection' => [],
         // HR.R1-C11's nine.
         'EmployeeCompensationAssignment' => ['effective_from', 'effective_to'],
         'EmploymentRecord' => ['probation_ends_on'],
@@ -125,7 +128,7 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
     #[Test]
     public function the_inventory_is_the_whole_namespace(): void
     {
-        $this->assertCount(87, self::discovered(), 'A model was added or removed: give it a disposition here and in the C13 record.');
+        $this->assertCount(89, self::discovered(), 'A model was added or removed: give it a disposition here and in the C13 record.');
     }
 
     #[Test]

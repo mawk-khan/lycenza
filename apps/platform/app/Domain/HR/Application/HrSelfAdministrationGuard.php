@@ -63,6 +63,17 @@ class HrSelfAdministrationGuard
     }
 
     /**
+     * HR.R1-C8, shared since HR.R1-C18: two accounts with uncorrected links to one Employee are one
+     * person, as far as anything here can know. Never proof that two accounts are two people.
+     */
+    public function knownSamePerson(string $schoolId, string $firstUserId, string $secondUserId): bool
+    {
+        return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('user_id', $firstUserId)->whereNull('voided_at')
+            ->whereIn('employee_id', EmployeeAccountLink::query()->where('school_id', $schoolId)->where('user_id', $secondUserId)->whereNull('voided_at')->select('employee_id'))
+            ->exists();
+    }
+
+    /**
      * HR.R1-C7 (OD-HR-25): whether $actor ever had a link to this Employee, corrected
      * or not. Stricter than hasUncorrectedLink(), for one purpose: nobody tied to an
      * Employee's identity in any way requests or decides a correction of its links.

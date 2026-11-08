@@ -190,6 +190,7 @@ final class CapabilityClasses
         'hr.leave.view' => ['hr'],
         'hr.positions.manage' => ['hr'],
         'hr.positions.view' => ['hr'],
+        'hr.staff_attendance.lock' => ['hr'],
         'hr.staff_attendance.manage' => ['hr'],
         'hr.staff_attendance.self' => ['owned-scope'],
         'hr.staff_attendance.view' => ['hr'],

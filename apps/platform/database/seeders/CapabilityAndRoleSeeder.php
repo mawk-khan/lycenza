@@ -425,6 +425,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // (`hr.staff_attendance.self`) is HRX.4. Never on `teacher` (E33).
             ['key' => 'hr.staff_attendance.view', 'label' => 'View staff attendance (daily register, history, corrections)', 'namespace' => 'school'],
             ['key' => 'hr.staff_attendance.manage', 'label' => 'Record and correct staff attendance', 'namespace' => 'school'],
+            // HR.R1-C18 (WO-6, S-6 decided HR.R1-C17): lock a School-local calendar month (never reopened)
+            // and approve a locked-month correction. Whole-School, never Campus-adopted, never a grant right.
+            ['key' => 'hr.staff_attendance.lock', 'label' => 'Lock a staff attendance month and approve locked-month corrections', 'namespace' => 'school'],
             // HRX.4 (ADR 0065 §25.2): Staff Self-Service -- each reaches ONLY the
             // holder's own ActingEmployee data, never School-wide records; no
             // administrative, manager or Payroll capability is implied.
@@ -1463,6 +1466,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
                     // HRX.3 (ADR 0065 §24.12): default Staff Attendance administrators.
                     'hr.staff_attendance.view', 'hr.staff_attendance.manage',
+                    // HR.R1-C18 (S-6): month lock and locked-month approval, school_admin and principal only.
+                    'hr.staff_attendance.lock',
                     // HRX.4 (ADR 0065 §25.2): held so School Admin can GRANT the
                     // staff_self_service role (StaffRoleCatalog: no escalation, the
                     // TCH.3 precedent). Each reaches only the holder's OWN
@@ -1679,6 +1684,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
                     // HRX.3 (ADR 0065 §24.12): same default as school_admin.
                     'hr.staff_attendance.view', 'hr.staff_attendance.manage',
+                    // HR.R1-C18 (S-6): same as school_admin.
+                    'hr.staff_attendance.lock',
                 ],
             ],
             // TCH.3 (ADR 0063 section 12, T1): the one minimum production

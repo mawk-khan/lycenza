@@ -124,6 +124,8 @@ final class RetentionAnchors
         'leave_policy_assignments' => ['created_at', 'updated_at', 'ended_at', 'employment_record_id', 'leave_policy_id', 'leave_type_id', 'eligibility_run_id', 'eligibility_rule_id'],
         'staff_attendance_records' => ['created_at', 'updated_at', 'employee_id', 'employment_record_id'],
         'staff_attendance_corrections' => ['created_at', 'employment_record_id', 'staff_attendance_record_id'],
+        // HR.R1-C18: a decision re-stamps it.
+        'staff_attendance_locked_corrections' => ['decided_at', 'employment_record_id', 'staff_attendance_record_id', 'status'],
         // Finance (D8)
         'financial_periods' => ['status', 'closed_at'],
         'charges' => ['academic_year_id', 'cancellation_journal_entry_id', 'currency', 'journal_entry_id', 'receivable_ledger_account_id', 'revenue_ledger_account_id', 'student_id'],

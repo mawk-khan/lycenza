@@ -16,6 +16,12 @@ final class StaffAttendanceCapabilities
     public const MANAGE = 'hr.staff_attendance.manage';
 
     /**
+     * HR.R1-C18 (S-6): lock a School-local calendar month, which is never reopened, and
+     * approve a locked-month correction someone else requested. Whole-School only.
+     */
+    public const LOCK = 'hr.staff_attendance.lock';
+
+    /**
      * HRX.4: READ the acting Employee's own attendance, always together with
      * ActingEmployee ownership (ADR 0065 §25.6). Never a write.
      */

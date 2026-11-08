@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -39,6 +40,10 @@ interface Props {
     today: string;
     reasons: string[];
     canManage: boolean;
+    /** HR.R1-C18 (S-6): a locked month takes no record and no ordinary correction, only a request. */
+    monthLock: { month: string; locked: boolean; lockedAt: string | null };
+    pendingCorrections: string[];
+    formKey: string | null;
 }
 
 const props = defineProps<Props>();
@@ -59,6 +64,7 @@ for (const row of props.register.rows) {
 function recordable(row: Row): boolean {
     return (
         props.canManage &&
+        !props.monthLock.locked &&
         row.day.record === null &&
         row.employment.recordable &&
         (halfOpen(row.day.firstHalf) || halfOpen(row.day.secondHalf))
@@ -114,7 +120,18 @@ const correction = useForm<{
     first_half: HalfStatus;
     second_half: HalfStatus;
     reason_code: string;
-}>({ expected_version: 1, first_half: null, second_half: null, reason_code: '' });
+    form_key: string | null;
+}>({
+    expected_version: 1,
+    first_half: null,
+    second_half: null,
+    reason_code: '',
+    form_key: props.formKey,
+});
+
+function pending(row: Row): boolean {
+    return row.day.record !== null && props.pendingCorrections.includes(row.day.record.id);
+}
 
 function startCorrection(row: Row): void {
     correcting.value = row;
@@ -130,7 +147,8 @@ function submitCorrection(): void {
     if (!record) {
         return;
     }
-    correction.post(`/app/staff-attendance/records/${record.id}/corrections`, {
+    const path = props.monthLock.locked ? 'locked-corrections' : 'corrections';
+    correction.post(`/app/staff-attendance/records/${record.id}/${path}`, {
         preserveScroll: true,
         onSuccess: () => (correcting.value = null),
     });
@@ -172,6 +190,16 @@ const attendanceError = useAttendanceError();
                 {{ register.calendar.secondHalf }}
             </span>
         </div>
+        <p
+            v-if="monthLock.locked"
+            role="status"
+            class="mt-3 rounded-xs border border-control-line bg-ground p-3 text-sm text-ink"
+        >
+            {{ monthLock.month }} is locked<span v-if="monthLock.lockedAt">
+                since {{ formatDate(monthLock.lockedAt) }}</span
+            >. Nothing can be recorded or corrected directly. A change is a correction request that
+            someone else with the lock key approves; the month stays locked.
+        </p>
         <p
             v-if="!register.calendarConfigured"
             class="mt-3 rounded-xs border border-accent-300 bg-accent-100 p-3 text-sm text-ink"
@@ -241,13 +269,16 @@ const attendanceError = useAttendanceError();
                             >
                                 Save
                             </button>
+                            <span v-if="pending(row)" class="text-ink-muted"
+                                >Correction waiting for approval</span
+                            >
                             <button
-                                v-if="canManage && row.day.record"
+                                v-else-if="canManage && row.day.record"
                                 type="button"
                                 class="underline"
                                 @click="startCorrection(row)"
                             >
-                                Correct
+                                {{ monthLock.locked ? 'Request correction' : 'Correct' }}
                             </button>
                         </td>
                     </tr>
@@ -261,7 +292,10 @@ const attendanceError = useAttendanceError();
             :params="{ date: register.date }"
         />
 
-        <div v-if="canManage && register.rows.length > 0" class="mt-4 flex items-center gap-3">
+        <div
+            v-if="canManage && !monthLock.locked && register.rows.length > 0"
+            class="mt-4 flex items-center gap-3"
+        >
             <button
                 type="button"
                 class="btn btn-primary"
@@ -282,8 +316,13 @@ const attendanceError = useAttendanceError();
             @submit.prevent="submitCorrection"
         >
             <h2 class="text-sm font-semibold">
-                Correct {{ employmentName(correcting.employment) }} on {{ register.date }}
+                {{ monthLock.locked ? 'Request a correction of' : 'Correct' }}
+                {{ employmentName(correcting.employment) }} on {{ register.date }}
             </h2>
+            <p v-if="monthLock.locked" class="mt-1 text-xs text-ink-muted">
+                The month is locked. Nothing changes until someone else with the lock key approves
+                this request; you cannot approve it yourself.
+            </p>
             <p class="mt-1 text-xs text-ink-muted">
                 The previous values are kept as correction history. A half on approved leave cannot
                 be set to present or absent; cancel the leave first.
@@ -309,7 +348,7 @@ const attendanceError = useAttendanceError();
                     </option>
                 </select>
                 <button type="submit" class="btn btn-primary" :disabled="correction.processing">
-                    Save correction
+                    {{ monthLock.locked ? 'Request correction' : 'Save correction' }}
                 </button>
                 <button type="button" class="text-sm underline" @click="correcting = null">
                     Back

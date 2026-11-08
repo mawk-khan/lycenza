@@ -147,7 +147,7 @@ class HrxEvidenceRetentionTest extends TestCase
         $leaver = $this->pastLeaver($w);
         // 2019: a correction of the 2015 record -- younger than the cutoff.
         $this->at('2019-06-01 10:00:00');
-        $record = $this->inSchool($w['school'], fn () => StaffAttendanceRecord::query()->where('employee_id', $leaver['employeeId'])->firstOrFail());
+        $record = $this->inSchool($w['school'], fn () => StaffAttendanceRecord::query()->where('employee_id', $leaver['employeeId'])->where('attendance_date', '2015-06-15')->firstOrFail());
         $this->correctAttendance(['school' => $w['school'], 'clerk' => $w['clerk']], $record, 'present', 'present', 'late_information');
         $this->travelBack();
         $this->assertGreaterThan($this->cutoff($w['school']), '2019-06-01', 'the correction is younger than the cutoff');
@@ -158,7 +158,8 @@ class HrxEvidenceRetentionTest extends TestCase
             ->assertSuccessful();
 
         $rows = $this->hrxRows($w['school'], $leaver['employeeId']);
-        $this->assertSame([1, 2], [$rows['staff_attendance_records'], $rows['staff_attendance_corrections']], 'the record keeps its whole history');
+        // June's record with its two corrections, and May's two (locked) records with one approved and one pending request.
+        $this->assertSame([3, 3, 2], [$rows['staff_attendance_records'], $rows['staff_attendance_corrections'], $rows['staff_attendance_locked_corrections']], 'the unit keeps its whole history');
         $this->assertSame(0, $rows['leave_requests'], 'Leave is its own unit with its own (expired) clock');
         $this->assertTrue($this->employeeExists($w['school'], $leaver['employeeId']), 'unexpired HRX evidence keeps the Employee');
     }

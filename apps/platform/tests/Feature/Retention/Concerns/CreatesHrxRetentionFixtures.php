@@ -8,12 +8,14 @@ use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Application\LeaveYearService;
+use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Retention\RetentionExpiry;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Feature\StaffAttendance\Concerns\CreatesStaffAttendanceFixtures;
 
 /**
@@ -34,7 +36,7 @@ trait CreatesHrxRetentionFixtures
     /** Every per-Employee HRX evidence table, by its Employee/employment column. */
     protected const HRX_EVIDENCE = [
         'leave_policy_assignments', 'leave_ledger_entries', 'leave_requests', 'leave_request_days', 'leave_decisions',
-        'leave_year_close_items', 'leave_year_close_reconciliations', 'staff_attendance_records', 'staff_attendance_corrections',
+        'leave_year_close_items', 'leave_year_close_reconciliations', 'staff_attendance_records', 'staff_attendance_locked_corrections', 'staff_attendance_corrections',
     ];
 
     /** School-lifetime configuration the purge must never touch. */
@@ -105,6 +107,7 @@ trait CreatesHrxRetentionFixtures
         $requests = app(LeaveRequestService::class);
         $leavers = [];
         $cancel = [];
+        $lockedRecords = [];
         foreach (array_keys($separations) as $key) {
             $this->at('2015-04-06 10:00:00');
             $leaver = $this->pastStaff($w);
@@ -115,6 +118,8 @@ trait CreatesHrxRetentionFixtures
             $this->at('2015-06-20 10:00:00');
             $record = $this->recordAttendance($ctx, '2015-06-15', 'present', 'present');
             $this->correctAttendance($ctx, $record, 'absent', 'present');
+            // HR.R1-C18: two May days, later corrected through the locked month (one approved, one pending).
+            $lockedRecords[] = [$this->recordAttendance($ctx, '2015-05-11', 'present', 'present'), $this->recordAttendance($ctx, '2015-05-12', 'present', 'present')];
 
             $this->at('2015-07-01 10:00:00');
             $cancel[] = $requests->approve($w['school'], $this->submitLeave($ctx, '2015-07-06', '2015-07-07')->id, $w['admin'])->id;
@@ -124,6 +129,27 @@ trait CreatesHrxRetentionFixtures
 
             $leavers[$key] = ['employment' => $leaver['employment'], 'employeeId' => $leaver['employment']->employee_id, 'assignment' => $leaver['assignment']];
         }
+
+        // HR.R1-C18 (WO-6): May is locked, and each leaver has an approved and a pending locked-month correction.
+        $this->at('2015-07-02 10:00:00');
+        $keys = ['hr.staff_attendance.view', 'hr.staff_attendance.manage', 'hr.staff_attendance.lock'];
+        [$locker, $reviewer] = [$this->createUserWithCapabilities($w['school'], $keys), $this->createUserWithCapabilities($w['school'], $keys)];
+        $attendance = app(StaffAttendanceService::class);
+        $attendance->lockMonth($w['school'], '2015-05', $locker, $this->freshMfaProofFor($locker));
+        foreach ($lockedRecords as [$corrected, $pending]) {
+            $approved = $attendance->requestLockedCorrection($w['school'], $corrected->id, $corrected->version, 'present', 'absent', 'late_information', (string) Str::uuid(), $w['clerk']);
+            $attendance->approveLockedCorrection($w['school'], $approved->id, $reviewer, $this->freshMfaProofFor($reviewer));
+            $attendance->requestLockedCorrection($w['school'], $pending->id, $pending->version, 'absent', 'present', 'other', (string) Str::uuid(), $w['clerk']);
+        }
+        // The database stamps what it applies with its own clock (real time); the fixture lives in 2015.
+        $admin = DB::connection('pgsql_admin');
+        $admin->transaction(function () use ($admin, $w): void {
+            // Fixture setup only (as TestCase does): the record's guard refuses a timestamp change without a new version.
+            $admin->statement("SET LOCAL session_replication_role = 'replica'");
+            $admin->select("select set_config('app.current_school_id', ?, true)", [$w['school']->id]);
+            $admin->table('staff_attendance_corrections')->where('school_id', $w['school']->id)->whereNotNull('locked_correction_id')->update(['created_at' => '2015-07-02 10:00:00']);
+            $admin->table('staff_attendance_records')->where('school_id', $w['school']->id)->whereIn('attendance_date', ['2015-05-11', '2015-05-12'])->update(['updated_at' => '2015-07-02 10:00:00']);
+        });
 
         $this->at('2016-04-10 10:00:00');
         app(LeaveYearService::class)->open($w['school'], '2016-04-01', $w['admin']);
@@ -186,6 +212,7 @@ trait CreatesHrxRetentionFixtures
                 'leave_year_close_items' => count($items),
                 'leave_year_close_reconciliations' => DB::table('leave_year_close_reconciliations')->whereIn('year_close_item_id', $items)->count(),
                 'staff_attendance_records' => count($records),
+                'staff_attendance_locked_corrections' => DB::table('staff_attendance_locked_corrections')->whereIn('staff_attendance_record_id', $records)->count(),
                 'staff_attendance_corrections' => DB::table('staff_attendance_corrections')->whereIn('staff_attendance_record_id', $records)->count(),
             ];
         });
