@@ -93,6 +93,17 @@ No new exception was needed, and none was invented. Reversal on a suspended Scho
 
 **Independent review.** Three read-only passes over the actual candidate. On `676e19b1`: no HIGH, three MEDIUM (three statutory tables missing from the digest, a coverage test that missed write shapes, approval's lock order misstated in the rule text) and five LOW; all corrected. On the corrected state: no HIGH or MEDIUM, four LOW and a nit; corrected. On that: no HIGH or MEDIUM, one LOW (the authority-path classes were not method-scanned); corrected afterwards, test only, with its own mutation, and **not reviewed again**. No runtime code changed after the first review.
 
+**Published.** `8132f9c7`. Candidate CI run 42423542688, `main` CI run 42429835236. Four shards of 2,872: 11,488 cases, 462,648 assertions, 0 failed, 1 ESI-12 skip; the coverage union passed. This is the remote full-regression checkpoint, counter 0/5.
+
+**The first candidate attempt was red (C15-N1).** Shard 2 failed one test outside C15: `AuditRetentionPruneTest::dry_run_counts_batches_and_reruns_are_safe`. The dry run counted 5 old School audit events, then the real prune's output did not say `Deleted 5 School`. It did not reproduce:
+
+- the test alone and after each new C15 test, in DDEV;
+- the exact shard 2 plan for this candidate, in one process, in order, on a freshly reset test database: 2,865 passed, 5 skipped (the ESI-12 deferral and the real object-storage tests, which skip locally).
+
+The job re-run on the same SHA passed, and that is the attempt behind the green `CI gate`. The test had not failed in the previous 40 CI runs.
+
+**A mechanism, not a cause.** `retention_expire_school_audit_events` deletes rows selected `FOR UPDATE SKIP LOCKED`, while the dry run counts without locking. A row any other session held locked at that moment would be skipped and under-counted, which matches the symptom. Which session held one in CI is unknown. **OPEN, LOW, owner Retention/Platform:** the test, or the prune's reporting, should tolerate a skipped row. Not changed here.
+
 ## 8. Publication hygiene and the Platform handoff
 
 **What went wrong in C14.** A first candidate went to an integration branch, in a public repository, with a gitleaks finding (an inert UUID). The scan's exit status was read through a pipe, so the push ran anyway. `main` was never at risk: CI's `Secrets scan` covers full history, `CI gate` requires it (`lycenza_ci/gate.py`), and `publication-check` requires `CI gate`.
@@ -110,4 +121,5 @@ No new exception was needed, and none was invented. Reversal on a suspended Scho
 - **The race's suspension runs the lifecycle's own statements,** the School row FOR UPDATE and then the status, without its authority, MFA and audit, which the lifecycle test proves separately.
 - **A source scan sees files, not paths.** The behaviour and race tests prove the paths. It scans `app/Domain/Payroll` only: no class outside it writes Payroll tables today, by review, not by a test. A private helper is not judged on its own; it is reached only through a public method of its class.
 - **No browser run.** No screen changed.
+- **Local state.** DDEV was started for this checkpoint and stopped at the end; its volume was kept. A first local shard reproduction through `bin/safe-test` started the shared `school-os` Compose stack, whose test database schema is out of date, so that run proved nothing (437 schema errors). Stopping that stack was refused by the session's permission policy, so it was left running for the owner to stop. Four `phpunit` processes seen on the host belonged to another project's DDEV and were not touched.
 - **Contention was measured at fixture scale,** not at production volume. A suspension waits for in-flight School-guarded work, Payroll's and every other domain's. PostgreSQL grants a new FOR SHARE without queueing behind a waiting FOR UPDATE while only share locks are held, so a steady stream of overlapping guarded writers can delay a suspension beyond any one transaction. Neither was measured at scale.
