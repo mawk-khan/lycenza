@@ -314,7 +314,7 @@ reservation.
 
 ### HR.7 — Attendance operations
 
-**D-1 amendment (HR owner, 2026-11-08, HR.R1-C16).** HR.7 is split, and the lock no longer waits for HR.6. **HR.7a, the period lock:** D8-10 and D8-13 (S-6) stay ACTIVE, as work order WO-6; the lock reads day and half-day records, so it needs no evaluation and no timing data. It needs a recorded S-6 determination first, because S-6 decides what reopening a locked month requires. **HR.7b:** regularization (D8-03, D8-04) is DEFERRED by owner record until HR-011 is answered; manager correction (D8-06) stays DEF under ADR 0065 §7; D8-14 stays DEF under HR-004. Nothing here starts work.
+**D-1 amendment (HR owner, 2026-11-08, HR.R1-C16).** HR.7 is split, and the lock no longer waits for HR.6. **HR.7a, the period lock:** D8-10 and D8-13 (S-6) stay ACTIVE, as work order WO-6; the lock reads day and half-day records, so it needs no evaluation and no timing data. It needs a recorded S-6 determination first, because S-6 decides what reopening a locked month requires. **S-6 decided 2026-11-08 (HR.R1-C17):** no reopening; a locked month changes only by a two-person, fresh-MFA correction; the contract is `HR-R1-C17-S6-DECISION.md` §3. WO-6 is implementation-ready and needs its own authorization to start. **HR.7b:** regularization (D8-03, D8-04) is DEFERRED by owner record until HR-011 is answered; manager correction (D8-06) stays DEF under ADR 0065 §7; D8-14 stays DEF under HR-004. Nothing here starts work.
 
 1. **Prerequisites:** HR.6, for HR.7b only. Manager correction needs the ADR 0065 §7
    reopening.

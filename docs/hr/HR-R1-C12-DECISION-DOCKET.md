@@ -337,7 +337,7 @@ Pending unless the row says otherwise, and this checkpoint records no approval. 
 | TRR-6 | Task review outside the approval registry | Declare it in `ApprovalWorkflowRegistry::NOT_WORKFLOWS` with a reason, or register it | Architecture | One entry | Pending |
 | TRR-8 | Open tasks of a separated employment | Accept as documented | HR, Tasks | None | Pending |
 | LVA-4 | S-7 wording and allocation MFA | With D-4 | Security | With D-4 | Pending |
-| S-6 | Staff attendance correction: no window, MFA or second person | A real determination. Candidate: record today's controls as deliberate for development, with re-review at HRX-L4 activation. **No authority exists today.** ADR 0076 §64.25 is a handoff list, and `functions.csv` HR-010's `KEEP_EXISTING` concerns approval only | HR owner, Security | D8-13 | Pending |
+| S-6 | Staff attendance correction: no window, MFA or second person | A real determination. Candidate: record today's controls as deliberate for development, with re-review at HRX-L4 activation. **No authority exists today.** ADR 0076 §64.25 is a handoff list, and `functions.csv` HR-010's `KEEP_EXISTING` concerns approval only | HR owner, Security | D8-13 | **Decided 2026-11-08 (HR.R1-C17)**, `HR-R1-C17-S6-DECISION.md`; control not built |
 | Generic upload | `HR-R1-C11-HARDENING.md` §5 | Refuse Employee uploads there | Security, HR | API change | Pending |
 | Same-person | Two accounts are not two people | §11 | Identity, Security | Real-Payroll blocker | Pending, MEDIUM |
 | C11-N4 | §10 | Preserve the broad freeze | HR owner | None if kept | Pending |
