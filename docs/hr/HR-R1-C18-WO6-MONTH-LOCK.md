@@ -93,6 +93,12 @@
 
 A focused re-check of those fixes found no HIGH or MEDIUM. Two of its LOWs were then fixed and **not reviewed again**: the request guard now checks the isolation level for a decision too, and a lock the database refuses in the clock-skew seconds around midnight on the 1st becomes the domain refusal, not a raw error.
 
+**Delta review (after publication).** A separate reviewer read every code change after the re-checked state (`66a03b2c..26ace7b3`: those two fixes, the route-parameter classification and the test changes): **no HIGH, no MEDIUM.** Three LOWs, all open:
+
+- **Untested isolation path:** the REPEATABLE READ refusal on `staff_attendance_locked_corrections` (decision and insert) has no test; the existing one covers `staff_attendance_records`.
+- **Untested translation branch:** the database-clock branch of `lockMonth`'s translation is unreached by tests, and it matches the message text, not SQLSTATE 23514. If the message changes it fails safe (a 500), and masks nothing.
+- **Informational:** a malformed `{lockedCorrection}` under elevation is a 404 before the 403, like every other UUID parameter.
+
 **Publication.** Three candidates.
 
 | Candidate | CI gate | What failed, and the fix |
