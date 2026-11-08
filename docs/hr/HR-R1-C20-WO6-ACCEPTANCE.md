@@ -137,7 +137,11 @@ A reviewer read the final candidate: **no HIGH, four MEDIUM, six LOW.**
 
 The fixes were re-run (acceptance 7, races 11, verifier 2) and **reviewed again: all four MEDIUMs closed, no HIGH or MEDIUM.** Of its four LOWs, the raw-correction op now runs as one transaction with an open-month positive control and the scan count is corrected. Two remain as limits: a text check cannot tell live code from dead code (a deliberate change could defeat it), and the trigger check assumes `public` on the verifying connection's search_path (it fails closed otherwise).
 
-## 9. Changed
+## 9. Publication
+
+Candidate `d8ca71ae`, CI gate run 42503131458, **green on the first attempt** (every job, no re-run; C19-N2 did not recur): four shards, **11,550 cases, 0 failures, 0 errors, 1 skip (ESI-12), 464,301 assertions**, coverage union proven. 15 more cases than C19. `publication-check` publishable, fast-forward, E16 valid through 2026-11-28. `main` = `d8ca71ae`.
+
+## 10. Changed
 
 - **Verifier:** `DatabaseRoleVerifier`, the A7 pins.
 - **Month page:** `Monthly.vue`, the accessible scroll region.
