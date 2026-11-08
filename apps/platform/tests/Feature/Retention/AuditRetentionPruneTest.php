@@ -149,9 +149,10 @@ class AuditRetentionPruneTest extends TestCase
         $this->artisan('platform:audit-prune', ['--dry-run' => true])->expectsOutputToContain('Dry run: would delete 5 School')->assertSuccessful();
         $ids->each(fn ($id) => $this->assertTrue($this->schoolExists($school, $id)));
 
-        // C15-N1: this line failed twice in CI, never locally; keep the real output so a recurrence is evidence.
+        // C15-N1 (closed by HR.R1-C19, RetentionBatchBoundTest): the real output is kept, so any recurrence is evidence.
         $this->assertSame(0, Artisan::call('platform:audit-prune'));
-        $this->assertStringContainsString('Deleted 5 School', Artisan::output(), 'C15-N1 output: '.Artisan::output());
+        $output = Artisan::output();
+        $this->assertStringContainsString('Deleted 5 School', $output, $output);
         $this->artisan('platform:audit-prune')->expectsOutputToContain('Deleted 0 School')->assertSuccessful();
     }
 

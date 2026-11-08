@@ -1155,3 +1155,17 @@ includes the two anchor columns.
 - rollback: fenced (§15.1);
 - production verification and the full isolated regression: recorded in the
   E21-RH.7 completion report.
+
+## 16. Amendment (HR.R1-C19, 2026-11-08): a batch is evaluated once
+
+A batched expiry deletes at most its batch per call, which §5 and the E21
+determination already required ("a batch capped at 5000"). The 14 batched
+functions selected their batch as `x.id IN (SELECT ... LIMIT n FOR UPDATE SKIP
+LOCKED)`, which PostgreSQL may rescan per outer row; each rescan skipped the
+rows already deleted and locked more, so one call could exceed `n`, and the
+PHP loop (which continues on a full batch) then stopped with eligible rows
+left (C15-N1). They now use `x.id = ANY (ARRAY(SELECT ...))`, an InitPlan
+evaluated once (`2027_02_14_090000_evaluate_retention_batches_once`, patched in
+place). Predicates, holds, anchors, identity and periods are unchanged.
+**A new batched retention function selects its batch the same way;**
+`RetentionBatchBoundTest` pins the inventory and the shape.

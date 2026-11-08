@@ -126,4 +126,5 @@ Both defects CI caught were missed locally because `tests/Feature/Routing` and `
   The migration's own checks and the rollback proof stand in for the last; the rest are open.
 - **Isolation.** The database guarantee holds at READ COMMITTED. Other levels are refused, not supported.
 - **No browser walkthrough** was performed. The pages are exercised through their routes and props.
-- **C15-N1** (Retention/Platform), raised to MEDIUM: the audit prune stopped one row short in CI three times. Not caused by this change; recorded in the register with its output.
+- **C15-N1** (Retention/Platform), raised to MEDIUM: the audit prune stopped one row short in CI three times. Not caused by this change; recorded in the register with its output. Closed by HR.R1-C19.
+- **Acceptance debt** is tracked as C18-A1 to C18-A14 in `HR-R1-C19-RETENTION-BATCH-BOUND.md` §7, and the ended-month-only rule awaits the HR owner (§8 there).
