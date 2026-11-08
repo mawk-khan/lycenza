@@ -9,6 +9,7 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -148,7 +149,9 @@ class AuditRetentionPruneTest extends TestCase
         $this->artisan('platform:audit-prune', ['--dry-run' => true])->expectsOutputToContain('Dry run: would delete 5 School')->assertSuccessful();
         $ids->each(fn ($id) => $this->assertTrue($this->schoolExists($school, $id)));
 
-        $this->artisan('platform:audit-prune')->expectsOutputToContain('Deleted 5 School')->assertSuccessful();
+        // C15-N1: this line failed twice in CI, never locally; keep the real output so a recurrence is evidence.
+        $this->assertSame(0, Artisan::call('platform:audit-prune'));
+        $this->assertStringContainsString('Deleted 5 School', Artisan::output(), 'C15-N1 output: '.Artisan::output());
         $this->artisan('platform:audit-prune')->expectsOutputToContain('Deleted 0 School')->assertSuccessful();
     }
 

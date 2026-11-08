@@ -29,7 +29,7 @@ final class WebRouteParameters
         'audience',        // ORG.12F presentation audience (where [a-z0-9_-]{1,64}; the service refuses unknown audiences)
         'check',           // Data Health check code (controller 404; must not 404 before school-context)
         'identifierType',  // statutory identifier type
-        'month',           // HR.R1-C18 Staff Attendance month YYYY-MM (where; the controller re-checks)
+        'month',           // HR.R1-C18 Staff Attendance month YYYY-MM (controller 404; like `check`, must not 404 before school-context)
         'module',          // ORG.5 module key (where [a-z_]{1,64}; the service refuses unknown keys)
         'report',          // SIS 11.1 Student report key (controller 404 for any key outside StudentReportRegistry; like `check`, must not 404 before school-context)
         'role',            // role key (where)
