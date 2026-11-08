@@ -98,12 +98,20 @@ An uncorrelated `ARRAY(...)` sublink is an InitPlan, evaluated once per statemen
 
 The re-review confirmed, in SQL on the reset database, that all 14 bodies read `= ANY (ARRAY(SELECT` and that no public function anywhere still has an `IN (SELECT ... LIMIT`.
 
+**Publication.** Candidate `53b32960`, CI gate run 42490957488.
+
+- **First attempt, tests:** all four Laravel shards and the coverage union passed: **11,535 cases, 0 failures, 0 errors, 1 skip (ESI-12), 461,215 assertions.** That is 15 more cases than C18 (this test class); no test or assertion was removed. The assertion total moves run to run with the polling and row-dependent tests, as in earlier checkpoints.
+- **The formerly failing test** (`AuditRetentionPruneTest`) ran in shard 2 and passed first time; `RetentionBatchBoundTest` ran in shard 3.
+- **First attempt, supply chain:** failed with `python_lock_check_failed`: the containerised `pip install`/`pip-compile` step exited non-zero, and `qualify` does not surface that command's own error. C19 changes nothing in `services/ai` or the release tooling. The same `qualify init` + `inputs` passed locally on the same commit ("composer, npm and Python locks are in sync"). That job alone was re-run once (attempt 2), green. Recorded as C19-N2.
+- `publication-check`: publishable, fast-forward, E16 valid through 2026-11-28. `main` = `53b32960`.
+
 ## 6. Dispositions
 
 | Id | Disposition |
 |---|---|
 | C15-N1 | **CLOSED for development** by this correction. Its own assertion is unchanged, and now keeps the real output |
 | C19-N1 (new, LOW) | `CommunicationRetentionService` deletes `communication_deliveries` in its own PHP loop: it selects `batch` ids, locks them `SKIP LOCKED`, and continues only while the deleted count equals `batch`. It cannot overshoot, but one row locked by another session ends the run although later rows remain (`RetentionBatch` continues on the selected count instead). Not observed, not fixed here. Owner: Communications/Retention |
+| C19-N2 (new, LOW) | The supply-chain `inputs` step reports only `python_lock_check_failed` when its containerised `pip install`/`pip-compile` fails, so a network or index failure cannot be told from a real resolution failure in the CI log. One occurrence (run 42490957488 attempt 1), passed locally and on re-run. Owner: Platform. Not fixed here |
 
 ## 7. C18 acceptance debt (from `HR-R1-C18-WO6-MONTH-LOCK.md`)
 
