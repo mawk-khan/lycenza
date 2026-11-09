@@ -99,7 +99,27 @@
   - The midnight 500 cannot occur, because the reason is checked before the proof.
   - The missing API withdraw is a recorded deviation (§5).
 
-The fixes were not reviewed again by a separate reviewer.
+**Targeted review of the fixes (after publication, §63).** A separate reviewer read the fixed final code of `337631b7` (M-1, L-1 to L-4, the fixture seam, readiness and the error display). It found **no HIGH and no MEDIUM**, and confirmed all five fixes correct:
+
+- no SECURITY DEFINER function writes the calendar tables;
+- the fixture seam stays local/testing only, and the verifier fails if its schema exists elsewhere;
+- `down()` locks before it checks;
+- the CHECK rewrite is exact;
+- the registry entry meets its test.
+
+It raised four LOWs, recorded here and not fixed in this checkpoint:
+
+- **C22-N1:** the verifier does not assert that the guard functions stay SECURITY INVOKER with their shipped `proconfig`, and it hashes the function by name rather than through the trigger's `tgfoid`. A later `ALTER FUNCTION … SECURITY DEFINER` would make `current_user` the owner for every caller, allowing runtime cutover rows and backdating, and the check would still pass. Fix: assert `NOT prosecdef` and `proconfig`, and hash via `tgfoid`.
+- **C22-N2:** the body hash strips `--` comments before hashing, so deliberately crafted owner DDL hiding logic in a string literal could keep the same hash. Accidental drift is still caught. Fix: hash the raw `prosrc`, collapsing whitespace only.
+- **C22-N3:** a School with no history start (no complete pattern at cutover) can still withdraw a past legacy holiday, with a reason and fresh MFA. No answer changes, because those days are NOT_CONFIGURED, but the rule is not uniform with the insert path.
+- **C22-N4:** a calculated, unapproved Payroll run holding only v1 snapshots now shows "not compared" instead of prompting a recalculation, which is the remedy for such a run. Pay is unaffected (`pending_hrx_l4`). The CHECK still admits a raw v1 insert, which would never be compared; the only writer always uses the current version.
+
+**INFO from the same review:**
+
+- A future holiday dated before a future first week can be withdrawn only after that week is.
+- `down()` and a holiday withdrawal take their locks in opposite orders, so one could abort the other. This applies to local/testing rollback only.
+- The Access Center lists `hr.leave.configure` as MFA-assured, though only past-dated changes require MFA.
+- A withdrawal form's errors carry over to the next holiday opened.
 
 **Accessibility fix found in the browser.** A past-dated save without a reason returned a `reason_code` error the page never showed; each reason select (and the effective-from date) now shows its error, described by `aria-describedby`.
 

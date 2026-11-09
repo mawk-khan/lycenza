@@ -285,7 +285,7 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Past-dated changes** are corrections: capability, closed reason and fresh MFA, never into a locked month. Nothing is backfilled.
 - **Map:** D14-08 moved to ALT and D14-09 to IMP, so no row of the map is ACTIVE or MISSING. LVA-3 is fixed.
 - **R1-03** is answered for the calendar and the policy from each School's history start. Whether "not recorded" before it satisfies R1-03 is a closure-time reading (C21 §5).
-- **Independent review:** no HIGH. One MEDIUM (a first-week backfill) and four LOW were fixed; the fixes were not reviewed again.
+- **Independent review:** no HIGH. One MEDIUM (a first-week backfill) and four LOW were fixed. A targeted review of the fixed state found no HIGH or MEDIUM and four LOWs, C22-N1 to N4, carried in the record.
 - **Published `337631b7`:** CI gate run 42586811898, 11,592 cases, 0 failures, 1 skip (ESI-12), 466,313 assertions.
 - **DDEV:** forward-migrated, its October 2026 lock and Staff Attendance history byte-identical.
 - **Still open:** C18-A12 (screen reader) and the same-person Identity MEDIUM. No baseline is selected. HR.R1 stays OPEN. Production stays NO-GO.
