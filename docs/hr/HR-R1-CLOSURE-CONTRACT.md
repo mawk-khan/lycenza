@@ -204,7 +204,7 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 | §2 baseline | Not yet | No baseline SHA chosen for the final assessment |
 | R1-01 one writer | **Finding** | No writer outside the owning domain in a sample of 16 models. Inside HR, assignment and Employee have several sites and no guard pins it. What "one writer" means needs deciding |
 | R1-02 integration | **Finding** | Payroll holds 25 direct `EmploymentRecord` references with no owner-approved exception (D-2). Direct `Employee::query()` remains in Timetable, Transport and Visitor controllers |
-| R1-03 temporal | **Finding** | Calendar has no as-of answer (LVA-3, D-6). Policy has no public as-of reader. Shifts are absent by design |
+| R1-03 temporal | **Finding, narrowed by C22** | Calendar answers as of a date from each School's history start (WO-5); earlier dates are "not recorded" by owner decision D6-3, a closure-time reading. Policy answers through `LeavePolicyAsOf`. Shifts are absent by design |
 | R1-04 authorization | Recorded | Re-run on the baseline |
 | R1-05 reports | Recorded | Re-run on the baseline |
 | R1-06 isolation | **Finding** at C9; ten tables closed by C10 | No raw-role test named `employment_separation_cases`, its events, the clearance tables or the six `workforce_task*` tables. Forced RLS itself is checked globally |

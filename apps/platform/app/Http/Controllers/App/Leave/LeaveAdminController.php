@@ -8,6 +8,8 @@ use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\Leave\Application\Accrual\LeaveAccrualTiming;
 use App\Domain\Leave\Application\Accrual\LeaveEntitlementMethod;
 use App\Domain\Leave\Application\Accrual\LeaveStatementReader;
+use App\Domain\Leave\Application\Calendar\CalendarChangeReason;
+use App\Domain\Leave\Application\Calendar\StaffCalendarHistory;
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveCapabilities;
@@ -25,9 +27,11 @@ use App\Domain\Leave\Http\Requests\LeavePolicyInput;
 use App\Domain\Leave\Infrastructure\LeaveDecision;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Domain\Leave\Infrastructure\LeaveRequest;
+use App\Domain\Leave\Infrastructure\StaffHoliday;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -63,7 +67,7 @@ class LeaveAdminController extends Controller
 
     private const PORTIONS = ['full', 'first_half', 'second_half'];
 
-    public function configuration(TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, EmployeeCategoryReference $categories, DepartmentReference $departments): Response
+    public function configuration(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, EmployeeCategoryReference $categories, DepartmentReference $departments, FreshMfaRequirement $mfa, StaffCalendarService $calendar): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
@@ -78,6 +82,9 @@ class LeaveAdminController extends Controller
             'calendar' => $reads->calendar($school, CarbonImmutable::parse($today)->subYear()->toDateString(), CarbonImmutable::parse($today)->addYears(2)->toDateString(), $actor),
             'portions' => self::PORTIONS,
             'canConfigure' => $capabilities->canInSchool($actor, LeaveCapabilities::CONFIGURE, $school),
+            'hasMfaFactor' => $mfa->hasActiveFactor($actor),
+            // HR.R1-C22 (D6-4, D14-08): what a change would touch, asked for BEFORE saving (a partial reload only).
+            'calendarImpact' => Inertia::optional(fn () => $this->calendarImpactPreview($request, $calendar, $school, $actor)),
             // HR.9: the eligibility dimensions a version's rules may name -- the closed staff types and HR's active reference data.
             'staffTypes' => StaffType::options(),
             'employeeCategories' => $context->withSchool($school, fn () => $categories->options($school)),
@@ -149,31 +156,109 @@ class LeaveAdminController extends Controller
         return $this->command(fn () => $policies->retire($school, $leavePolicy, $request->user()), 'Leave policy retired.');
     }
 
-    public function updateWeeklyPattern(Request $request, TenantContext $context, StaffCalendarService $calendar): RedirectResponse
+    /**
+     * HR.R1-C22 (WO-5, D-6): the week in force from a date (today by default). A past date is a
+     * correction: the capability first, then a closed reason and the actor's own fresh MFA (rule 95).
+     */
+    public function updateWeeklyPattern(Request $request, TenantContext $context, StaffCalendarService $calendar, StaffCalendarHistory $history, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
-        $validated = $request->validate(['weekdays' => ['required', 'array', 'size:7'], 'weekdays.*' => ['required', Rule::in(['full', 'first_half', 'off'])]]);
+        $validated = $request->validate([
+            'weekdays' => ['required', 'array', 'size:7'], 'weekdays.*' => ['required', Rule::in(['full', 'first_half', 'off'])],
+            'effective_from' => ['nullable', 'date_format:Y-m-d'],
+        ]);
         $pattern = [];
         foreach (range(1, 7) as $day) {
             $pattern[$day] = $validated['weekdays'][$day] ?? throw ValidationException::withMessages(['weekdays' => 'Set all seven ISO weekdays (1 = Monday).']);
         }
+        $from = $validated['effective_from'] ?? $history->today($school);
+        [$reason, $proof] = $this->calendarCorrection($request, $school, $from, false, $history, $mfa);
 
-        return $this->command(fn () => $calendar->setWeeklyPattern($school, $pattern, $request->user()), 'Working week saved.');
+        $response = $this->command(fn () => $calendar->recordWeek($school, $from, $pattern, $request->user(), $reason, $proof), 'Working week saved.');
+
+        return $response->with('status', "Working week saved from {$from}.".$this->calendarNotice($calendar, $school, $from, null, $request->user()));
     }
 
-    public function storeHoliday(Request $request, TenantContext $context, StaffCalendarService $calendar): RedirectResponse
+    /** A scheduled week that has not taken effect is withdrawn. */
+    public function withdrawWeek(Request $request, TenantContext $context, StaffCalendarService $calendar, string $staffWorkingWeekVersion): RedirectResponse
+    {
+        $school = $context->requireSchool();
+
+        return $this->command(fn () => $calendar->withdrawWeek($school, $staffWorkingWeekVersion, $request->user()), 'Scheduled working week withdrawn.');
+    }
+
+    public function storeHoliday(Request $request, TenantContext $context, StaffCalendarService $calendar, StaffCalendarHistory $history, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $validated = $request->validate(['date' => ['required', 'date_format:Y-m-d'], 'portion' => ['required', Rule::enum(DayPortion::class)], 'name' => ['required', 'string', 'max:120']]);
+        [$reason, $proof] = $this->calendarCorrection($request, $school, $validated['date'], false, $history, $mfa);
 
-        return $this->command(fn () => $calendar->addHoliday($school, $validated['date'], DayPortion::from($validated['portion']), $validated['name'], $request->user()), 'Staff holiday added.');
+        $response = $this->command(fn () => $calendar->addHoliday($school, $validated['date'], DayPortion::from($validated['portion']), $validated['name'], $request->user(), $reason, $proof), 'Staff holiday added.');
+
+        return $response->with('status', 'Staff holiday added.'.$this->calendarNotice($calendar, $school, $validated['date'], $validated['date'], $request->user()));
     }
 
-    public function destroyHoliday(Request $request, TenantContext $context, StaffCalendarService $calendar, string $staffHoliday): RedirectResponse
+    /** S-16: a holiday is withdrawn, never deleted. One that has taken effect needs a reason and a fresh code. */
+    public function destroyHoliday(Request $request, TenantContext $context, StaffCalendarService $calendar, StaffCalendarHistory $history, FreshMfaRequirement $mfa, string $staffHoliday): RedirectResponse
     {
         $school = $context->requireSchool();
+        abort_if(! Str::isUuid($staffHoliday), 404);
+        // The capability before any lookup: a holiday's existence is not answered to someone who may not configure (C14-N1).
+        $this->authorizeCapabilityFor($request->user(), LeaveCapabilities::CONFIGURE, $school);
+        $holiday = $context->withSchool($school, fn () => StaffHoliday::query()->where('school_id', $school->id)->find($staffHoliday));
+        abort_if($holiday === null, 404);
+        $date = $holiday->holiday_on->toDateString();
+        [$reason, $proof] = $this->calendarCorrection($request, $school, $date, true, $history, $mfa);
 
-        return $this->command(fn () => $calendar->removeHoliday($school, $staffHoliday, $request->user()), 'Staff holiday removed.');
+        $response = $this->command(fn () => $calendar->withdrawHoliday($school, $staffHoliday, $request->user(), $reason, $proof), 'Staff holiday withdrawn.');
+
+        return $response->with('status', 'Staff holiday withdrawn.'.$this->calendarNotice($calendar, $school, $date, $date, $request->user()));
+    }
+
+    /**
+     * D6-5: a change dated before the School's today (or, for a withdrawal, on or before it) is a
+     * correction. The capability is checked first, then the reason, then the fresh code.
+     *
+     * @return array{0: ?CalendarChangeReason, 1: ?FreshMfaProof}
+     */
+    private function calendarCorrection(Request $request, School $school, string $date, bool $includingToday, StaffCalendarHistory $history, FreshMfaRequirement $mfa): array
+    {
+        $today = $history->today($school);
+        if ($includingToday ? $date > $today : $date >= $today) {
+            return [null, null];
+        }
+        $this->authorizeCapabilityFor($request->user(), LeaveCapabilities::CONFIGURE, $school);
+        $reason = $request->validate(['reason_code' => ['required', Rule::enum(CalendarChangeReason::class)]], ['reason_code.required' => 'Choose why this past date is being corrected.'])['reason_code'];
+
+        return [CalendarChangeReason::from($reason), $mfa->requireForAction($request, $request->user())];
+    }
+
+    /** D6-4 (D14-08): what the saved change touches. Counts only; nothing is recalculated. */
+    private function calendarNotice(StaffCalendarService $calendar, School $school, string $from, ?string $to, User $actor): string
+    {
+        $to ??= CarbonImmutable::parse($from)->addYear()->toDateString();
+        $touched = array_filter($calendar->impact($school, $from, $to, $actor), fn (array $i) => $i['count'] > 0);
+
+        return $touched === [] ? '' : ' It touches '.implode(', ', array_map(fn (array $i) => "{$i['count']} {$i['label']}", $touched)).'; nothing is recalculated.';
+    }
+
+    /**
+     * D6-4 (D14-08): the same counts as the saved notice, for a range the page names before saving. A week
+     * reaches a year from its date, a holiday its own day; never more than a year and a day. `impact()`
+     * authorizes `hr.leave.configure`.
+     *
+     * @return array{from: string, to: string, touched: list<array{label: string, count: int}>}
+     */
+    private function calendarImpactPreview(Request $request, StaffCalendarService $calendar, School $school, User $actor): array
+    {
+        $validated = $request->validate(['impact_from' => ['required', 'date_format:Y-m-d'], 'impact_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:impact_from']]);
+        $from = $validated['impact_from'];
+        $to = $validated['impact_to'] ?? CarbonImmutable::parse($from)->addYear()->toDateString();
+        if (CarbonImmutable::parse($from)->diffInDays(CarbonImmutable::parse($to)) > 366) {
+            throw ValidationException::withMessages(['impact_to' => 'Ask about at most a year at a time.']);
+        }
+
+        return ['from' => $from, 'to' => $to, 'touched' => $calendar->impact($school, $from, $to, $actor)];
     }
 
     public function entitlements(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, LeaveLedgerService $ledger, LeaveStatementReader $statements, FreshMfaRequirement $mfa): Response

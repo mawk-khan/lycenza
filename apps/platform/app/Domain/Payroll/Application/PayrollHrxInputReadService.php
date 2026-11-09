@@ -100,7 +100,9 @@ class PayrollHrxInputReadService
                     'periodStartsOn' => $s->period_starts_on->toDateString(), 'periodEndsOn' => $s->period_ends_on->toDateString(),
                     'coveredFrom' => $s->covered_from?->toDateString(), 'coveredTo' => $s->covered_to?->toDateString(),
                     'units' => self::units($s), 'capturedAt' => $s->captured_at->toIso8601String(),
-                    'sourceChanged' => $current->fingerprint !== $s->fingerprint,
+                    // HR.R1-C22: a snapshot of an earlier contract is never compared with today's evidence, so never "changed".
+                    'comparable' => $s->contract_version === PayrollAbsenceEvidenceReader::CONTRACT_VERSION,
+                    'sourceChanged' => $s->contract_version === PayrollAbsenceEvidenceReader::CONTRACT_VERSION && $current->fingerprint !== $s->fingerprint,
                     'current' => ['fingerprint' => $current->fingerprint, 'completeness' => $current->completeness, 'incompleteReasons' => $current->incompleteReasons, 'units' => $current->units()],
                 ];
             })->values()->all();
@@ -111,6 +113,7 @@ class PayrollHrxInputReadService
                 'frozen' => $frozen,
                 // HRX source changed after approval/posting (frozen) vs recalculation refreshes it (not frozen).
                 'differenceState' => collect($inputs)->contains('sourceChanged', true) ? ($frozen ? 'source_changed_after_approval' : 'recalculate_to_refresh') : 'none',
+                'earlierContractInputs' => collect($inputs)->where('comparable', false)->count(),
                 'inputs' => $inputs,
             ];
         });

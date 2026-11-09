@@ -3038,6 +3038,7 @@ paths:
       operationId: getStaffCalendar
       summary: >
         HRX.1: the staff weekly working pattern and the staff holidays in [from, to]. Requires hr.leave.view.
+        HR.R1-C22 (WO-5): the week in force today, every week version, holidays with their state, the history start (dates before it are "not recorded") and the School's today.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
@@ -3067,6 +3068,9 @@ paths:
       operationId: updateStaffWeeklyPattern
       summary: >
         HRX.1: sets all seven ISO weekdays (full, first_half or off). Requires hr.leave.configure.
+        HR.R1-C22 (WO-5, D-6): records the week in force from effective_from (default today); nothing is overwritten. A past
+        effective_from is a correction: reason_code and the caller's own fresh mfa_code, refused before the history start
+        (LEAVE_CALENDAR_BEFORE_HISTORY) or into a locked staff attendance month (LEAVE_CALENDAR_MONTH_LOCKED).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
       requestBody:
@@ -3099,6 +3103,7 @@ paths:
       operationId: createStaffHoliday
       summary: >
         HRX.1: adds a dated staff holiday (full day or one half). Requires hr.leave.configure. Idempotency-Key required.
+        HR.R1-C22 (WO-5): a past date is a correction (reason_code and the caller's own fresh mfa_code).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
@@ -3121,7 +3126,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: LEAVE_HOLIDAY_EXISTS.
+          description: LEAVE_HOLIDAY_EXISTS, LEAVE_CALENDAR_BEFORE_HISTORY or LEAVE_CALENDAR_MONTH_LOCKED.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3137,12 +3142,24 @@ paths:
       operationId: deleteStaffHoliday
       summary: >
         HRX.1: removes a staff holiday (configuration; audited). Requires hr.leave.configure.
+        HR.R1-C22 (WO-5, S-16): WITHDRAWS the holiday; the row is kept, never deleted. A holiday that has taken effect
+        (on or before today) is withdrawn only as a correction: reason_code and the caller's own fresh mfa_code.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: staffHolidayId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffCalendarCorrectionInput" }
       responses:
         "204":
-          description: Removed.
+          description: Withdrawn.
+        "409":
+          description: LEAVE_HOLIDAY_WITHDRAWN, LEAVE_CALENDAR_BEFORE_HISTORY or LEAVE_CALENDAR_MONTH_LOCKED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401":
           description: Missing/invalid bearer token.
         "403":
@@ -17984,11 +18001,32 @@ components:
       type: object
       required: [weeklyPattern]
       properties:
-        weeklyPattern: { type: object, additionalProperties: { type: string, enum: [full, first_half, "off"] }, description: "ISO weekday (1..7) => portion." }
+        weeklyPattern: { type: object, additionalProperties: { type: string, enum: [full, first_half, "off"] }, description: "ISO weekday (1..7) => portion, the week in force today." }
+        version: { $ref: "#/components/schemas/StaffWorkingWeekVersion" }
+    StaffWorkingWeekVersion:
+      type: object
+      required: [id, effectiveFrom, pattern, status, reasonCode, supersedesId, recordedAt]
+      properties:
+        id: { type: string, format: uuid }
+        effectiveFrom: { type: string, format: date }
+        pattern: { type: object, additionalProperties: { type: string, enum: [full, first_half, "off"] } }
+        status: { type: string, enum: [active, withdrawn, superseded] }
+        reasonCode: { type: string, nullable: true, enum: [cutover, late_declaration, entered_in_error, administrative_review] }
+        supersedesId: { type: string, format: uuid, nullable: true }
+        recordedAt: { type: string, format: date-time }
+    StaffCalendarCorrectionInput:
+      type: object
+      description: "HR.R1-C22 (WO-5, D6-5): required only for a past-dated change."
+      properties:
+        reason_code: { type: string, enum: [late_declaration, entered_in_error, administrative_review] }
+        mfa_code: { type: string }
     StaffWeeklyPatternInput:
       type: object
       required: [weekdays]
       properties:
+        effective_from: { type: string, format: date, description: "HR.R1-C22: default today; a past date is a correction." }
+        reason_code: { type: string, enum: [late_declaration, entered_in_error, administrative_review] }
+        mfa_code: { type: string }
         weekdays:
           type: array
           minItems: 7
@@ -18001,12 +18039,16 @@ components:
               portion: { type: string, enum: [full, first_half, "off"] }
     StaffHoliday:
       type: object
-      required: [id, date, portion, name]
+      required: [id, date, portion, name, status, reasonCode, withdrawnReasonCode, withdrawnAt]
       properties:
         id: { type: string, format: uuid }
         date: { type: string, format: date }
         portion: { type: string, enum: [full, first_half, second_half] }
         name: { type: string }
+        status: { type: string, enum: [active, withdrawn] }
+        reasonCode: { type: string, nullable: true }
+        withdrawnReasonCode: { type: string, nullable: true }
+        withdrawnAt: { type: string, format: date-time, nullable: true }
     StaffHolidayCreateInput:
       type: object
       required: [date, portion, name]
@@ -18014,12 +18056,17 @@ components:
         date: { type: string, format: date }
         portion: { type: string, enum: [full, first_half, second_half] }
         name: { type: string, maxLength: 120 }
+        reason_code: { type: string, enum: [late_declaration, entered_in_error, administrative_review] }
+        mfa_code: { type: string }
     StaffCalendar:
       type: object
-      required: [weeklyPattern, holidays]
+      required: [weeklyPattern, holidays, versions, historyStart, today]
       properties:
         weeklyPattern: { type: object, additionalProperties: { type: string } }
         holidays: { type: array, items: { $ref: "#/components/schemas/StaffHoliday" } }
+        versions: { type: array, items: { $ref: "#/components/schemas/StaffWorkingWeekVersion" } }
+        historyStart: { type: string, format: date, nullable: true, description: "HR.R1-C22: dates before it are not recorded." }
+        today: { type: string, format: date }
     LeavePolicyAssignment:
       type: object
       required: [id, employmentRecordId, leavePolicyId, leaveTypeId, effectiveFrom, ended]
@@ -18323,20 +18370,21 @@ components:
         unresolvedWorkingHalfUnits: { type: integer, minimum: 0 }
     PayrollRunHrxInputs:
       type: object
-      required: [payrollRunId, runKind, runStatus, contractVersion, payrollPolicy, frozen, differenceState, inputs]
+      required: [payrollRunId, runKind, runStatus, contractVersion, payrollPolicy, frozen, differenceState, earlierContractInputs, inputs]
       properties:
         payrollRunId: { type: string, format: uuid }
         runKind: { type: string, enum: [regular, correction] }
         runStatus: { type: string, enum: [draft, calculated, approved, posted] }
-        contractVersion: { type: string, enum: [hrx_payroll_input.v1] }
+        contractVersion: { type: string, enum: [hrx_payroll_input.v2], description: "The contract today's evidence is read under. HR.R1-C22 (WO-5): v2 adds the calendar_not_recorded class, a null working flag before the history start, and each half's calendar version." }
         payrollPolicy: { type: string, enum: [pending_hrx_l4], description: "No payroll policy turns HRX evidence into a non-payable quantity until HRX-L4 is qualified." }
         frozen: { type: boolean }
-        differenceState: { type: string, enum: [none, source_changed_after_approval, recalculate_to_refresh] }
+        differenceState: { type: string, enum: [none, source_changed_after_approval, recalculate_to_refresh], description: Decided from comparable inputs only. }
+        earlierContractInputs: { type: integer, minimum: 0, description: "Snapshots captured under an earlier contract version: never compared with today's evidence, never reported as changed." }
         inputs:
           type: array
           items:
             type: object
-            required: [employmentRecordId, employee, contractVersion, fingerprint, completeness, incompleteReasons, periodStartsOn, periodEndsOn, coveredFrom, coveredTo, units, capturedAt, sourceChanged, current]
+            required: [employmentRecordId, employee, contractVersion, fingerprint, completeness, incompleteReasons, periodStartsOn, periodEndsOn, coveredFrom, coveredTo, units, capturedAt, comparable, sourceChanged, current]
             properties:
               employmentRecordId: { type: string, format: uuid }
               employee:
@@ -18355,7 +18403,8 @@ components:
               coveredTo: { type: string, format: date, nullable: true }
               units: { $ref: "#/components/schemas/PayrollHrxUnits" }
               capturedAt: { type: string, format: date-time }
-              sourceChanged: { type: boolean }
+              comparable: { type: boolean, description: "False when the snapshot was captured under an earlier contract version." }
+              sourceChanged: { type: boolean, description: Only ever true for a comparable snapshot. }
               current:
                 type: object
                 required: [fingerprint, completeness, incompleteReasons, units]

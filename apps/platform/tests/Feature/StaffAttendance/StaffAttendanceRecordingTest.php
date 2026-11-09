@@ -3,7 +3,6 @@
 namespace Tests\Feature\StaffAttendance;
 
 use App\Domain\Leave\Application\DayPortion;
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\StaffAttendance\Application\Exceptions\StaffAttendanceException;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
@@ -87,7 +86,7 @@ class StaffAttendanceRecordingTest extends TestCase
     public function a_holiday_half_is_refused_and_the_other_half_stays_recordable(): void
     {
         $w = $this->attendanceWorld();
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-09-30', DayPortion::FirstHalf, 'Founders morning', $w['admin']);
+        $this->staffHoliday($w['school'], '2026-09-30', DayPortion::FirstHalf, 'Founders morning', $w['admin']);
 
         $this->assertSame('STAFF_ATTENDANCE_NOT_WORKING_TIME', $this->refusal(fn () => $this->recordAttendance($w, '2026-09-30', 'present', 'present')));
         $record = $this->recordAttendance($w, '2026-09-30', null, 'absent');

@@ -10,7 +10,7 @@ use App\Domain\Leave\Application\LeaveReadService;
 use App\Domain\Leave\Application\LeaveRequestReadService;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Leave\Application\LeaveYearService;
-use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\Leave\Infrastructure\StaffHoliday;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +54,7 @@ class LeaveRequestLifecycleTest extends TestCase
     {
         $w = $this->leaveWorld();
         $this->workingWeek($w['school'], $w['admin']);
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-10-07', DayPortion::Full, 'Staff holiday', $w['admin']);
+        $this->staffHoliday($w['school'], '2026-10-07', DayPortion::Full, 'Staff holiday', $w['admin']);
         $this->allocate($w);
 
         return $w;
@@ -184,10 +184,11 @@ class LeaveRequestLifecycleTest extends TestCase
         $before = app(LeaveRequestReadService::class)->show($w['school'], $request->id, $w['admin']);
 
         // Every input to the calculation changes afterwards.
-        app(StaffCalendarService::class)->setWeeklyPattern($w['school'], [1 => 'off', 2 => 'full', 3 => 'full', 4 => 'off', 5 => 'first_half', 6 => 'off', 7 => 'off'], $w['admin']);
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-10-06', DayPortion::Full, 'Later holiday', $w['admin']);
-        $holiday = $this->inSchool($w['school'], fn () => DB::table('staff_holidays')->where('holiday_on', '2026-10-07')->value('id'));
-        app(StaffCalendarService::class)->removeHoliday($w['school'], $holiday, $w['admin']);
+        // HR.R1-C22: a past-dated correction of the week from the start of the month, which does reach these dates.
+        $this->workingWeek($w['school'], $w['admin'], [1 => 'off', 2 => 'full', 3 => 'full', 4 => 'off', 5 => 'first_half', 6 => 'off', 7 => 'off'], '2026-10-01');
+        $this->staffHoliday($w['school'], '2026-10-06', DayPortion::Full, 'Later holiday', $w['admin']);
+        $holiday = $this->inSchool($w['school'], fn () => StaffHoliday::query()->where('holiday_on', '2026-10-07')->sole());
+        $this->withdrawStaffHoliday($w['school'], $holiday, $w['admin']);
         app(LeavePolicyService::class)->create($w['school'], $w['type']->id, ['name' => 'v2', 'annual_allocation_units' => 40, 'carry_forward_allowed' => false, 'carry_forward_cap_units' => null, 'carry_forward_expiry_days' => null], $w['policy']->id, $w['admin']);
         $assignment = $this->inSchool($w['school'], fn () => DB::table('leave_policy_assignments')->where('employment_record_id', $w['employment']->id)->value('id'));
         app(LeavePolicyAssignmentService::class)->end($w['school'], $assignment, '2026-10-31', $w['admin']);

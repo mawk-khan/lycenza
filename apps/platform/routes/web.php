@@ -2058,6 +2058,7 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/calendar/weekdays', [LeaveAdminController::class, 'updateWeeklyPattern'])->name('calendar.weekdays');
         Route::post('/calendar/holidays', [LeaveAdminController::class, 'storeHoliday'])->name('calendar.holidays.store');
         Route::post('/calendar/holidays/{staffHoliday}/remove', [LeaveAdminController::class, 'destroyHoliday'])->name('calendar.holidays.remove');
+        Route::post('/calendar/weeks/{staffWorkingWeekVersion}/withdraw', [LeaveAdminController::class, 'withdrawWeek'])->name('calendar.weeks.withdraw');
 
         Route::get('/entitlements', [LeaveAdminController::class, 'entitlements'])->name('entitlements');
         Route::post('/assignments', [LeaveAdminController::class, 'storeAssignment'])->name('assignments.store');

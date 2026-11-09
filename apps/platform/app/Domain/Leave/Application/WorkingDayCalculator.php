@@ -24,12 +24,30 @@ final class WorkingDayCalculator
      * @param  array<int, string>  $weekdays  ISO weekday (1..7) => full|first_half|off; all seven required
      * @param  array<string, string>  $holidays  Y-m-d => full|first_half|second_half
      */
-    public function __construct(private readonly array $weekdays, private readonly array $holidays) {}
+    public function __construct(private readonly array $weekdays, private readonly array $holidays, private readonly array $byDate = []) {}
+
+    /**
+     * HR.R1-C22 (WO-5): the same formula, with each date's weekday portion taken from the week version
+     * in force on that date (`StaffCalendarHistory`), so a range may span versions.
+     *
+     * @param  array<string, string>  $portions  Y-m-d => full|first_half|off, every date of the range
+     * @param  array<string, string>  $holidays  Y-m-d => full|first_half|second_half
+     */
+    public static function forDays(array $portions, array $holidays): self
+    {
+        return new self([], $holidays, $portions);
+    }
+
+    /** The weekday portion of a date: its own version's when built per date, else the single pattern's. */
+    private function portion(string $date, int $weekday): string
+    {
+        return $this->byDate[$date] ?? $this->weekdays[$weekday];
+    }
 
     public function units(string $date, DayPortion $portion): int
     {
         $weekday = CarbonImmutable::createFromFormat('!Y-m-d', $date)->dayOfWeekIso;
-        $working = self::WEEKDAY_HALVES[$this->weekdays[$weekday]];
+        $working = self::WEEKDAY_HALVES[$this->portion($date, $weekday)];
 
         if (isset($this->holidays[$date])) {
             $working = array_diff($working, DayPortion::from($this->holidays[$date])->halves());
@@ -45,7 +63,7 @@ final class WorkingDayCalculator
     public function chargeable(string $date, DayPortion $requested): ?DayPortion
     {
         $weekday = CarbonImmutable::createFromFormat('!Y-m-d', $date)->dayOfWeekIso;
-        $working = self::WEEKDAY_HALVES[$this->weekdays[$weekday]];
+        $working = self::WEEKDAY_HALVES[$this->portion($date, $weekday)];
         if (isset($this->holidays[$date])) {
             $working = array_diff($working, DayPortion::from($this->holidays[$date])->halves());
         }
@@ -65,7 +83,7 @@ final class WorkingDayCalculator
     public function halves(string $date): array
     {
         $weekday = CarbonImmutable::createFromFormat('!Y-m-d', $date)->dayOfWeekIso;
-        $working = self::WEEKDAY_HALVES[$this->weekdays[$weekday]];
+        $working = self::WEEKDAY_HALVES[$this->portion($date, $weekday)];
         $holiday = isset($this->holidays[$date]) ? DayPortion::from($this->holidays[$date])->halves() : [];
         $state = fn (int $half) => ! in_array($half, $working, true) ? 'off' : (in_array($half, $holiday, true) ? 'holiday' : 'working');
 

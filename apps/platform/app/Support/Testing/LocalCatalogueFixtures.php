@@ -31,6 +31,10 @@ use LogicException;
  * schema exists anywhere else. No application code may call it (an
  * architecture guard pins its callers: tests, the guarded demo builder and
  * the install command).
+ *
+ * HR.R1-C22 (WO-5, D6-3): it also writes a fixture School's staff-calendar history start (a `cutover` week
+ * version), which only the owner may record: at runtime a School's history starts today or later and is never
+ * backfilled, but a test needs history before the dates it records evidence on.
  */
 final class LocalCatalogueFixtures
 {
@@ -68,9 +72,9 @@ final class LocalCatalogueFixtures
             CREATE OR REPLACE FUNCTION local_fixtures.exec(p_sql text) RETURNS void
                 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS \$fn\$
             BEGIN
-                IF p_sql !~* '^\s*(insert\s+into|update|delete\s+from)\s+"?(roles|role_capabilities|capabilities|membership_role_assignments)"?[\s(]'
+                IF p_sql !~* '^\s*(insert\s+into|update|delete\s+from)\s+"?(roles|role_capabilities|capabilities|membership_role_assignments|staff_working_week_versions)"?[\s(]'
                     AND p_sql !~* '^\s*select\s+set_config\(' THEN
-                    RAISE EXCEPTION 'local_fixtures.exec: only role-catalogue and role-grant fixture statements';
+                    RAISE EXCEPTION 'local_fixtures.exec: only role-catalogue, role-grant and staff-calendar history-start fixture statements';
                 END IF;
                 EXECUTE p_sql;
             END;

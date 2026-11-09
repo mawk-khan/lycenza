@@ -14,6 +14,7 @@ import {
     type Option,
     type ReferenceOption,
 } from '../../../leave';
+import MfaCodeField from '../../../Components/MfaCodeField.vue';
 import { useLeaveError } from '../../../leave';
 import { xsrfToken } from '../../../csrf';
 
@@ -51,8 +52,27 @@ interface Props {
     policies: LeavePolicyRow[];
     calendar: {
         weeklyPattern: Record<string, string>;
-        holidays: { id: string; date: string; portion: string; name: string }[];
+        holidays: {
+            id: string;
+            date: string;
+            portion: string;
+            name: string;
+            status: 'active' | 'withdrawn';
+            reasonCode: string | null;
+            withdrawnReasonCode: string | null;
+        }[];
+        versions: {
+            id: string;
+            effectiveFrom: string;
+            pattern: Record<string, string>;
+            status: 'active' | 'withdrawn' | 'superseded';
+            reasonCode: string | null;
+        }[];
+        historyStart: string | null;
+        today: string;
     };
+    hasMfaFactor: boolean;
+    calendarImpact?: { from: string; to: string; touched: { label: string; count: number }[] };
     portions: string[];
     canConfigure: boolean;
     staffTypes: Option[];
@@ -116,8 +136,32 @@ const weekForm = useForm({
     weekdays: Object.fromEntries(
         [1, 2, 3, 4, 5, 6, 7].map((d) => [d, props.calendar.weeklyPattern[String(d)] ?? 'off']),
     ) as Record<number, string>,
+    effective_from: props.calendar.today,
+    reason_code: '',
+    mfa_code: '',
 });
-const holidayForm = useForm({ date: '', portion: 'full', name: '' });
+const holidayForm = useForm({ date: '', portion: 'full', name: '', reason_code: '', mfa_code: '' });
+// HR.R1-C22 (WO-5, D6-5): a past date is a correction -- a closed reason and a fresh code.
+const correctionReasons: Record<string, string> = {
+    late_declaration: 'Declared late',
+    entered_in_error: 'Entered in error',
+    administrative_review: 'Administrative review',
+};
+const weekIsPast = computed(
+    () => weekForm.effective_from !== '' && weekForm.effective_from < props.calendar.today,
+);
+const holidayIsPast = computed(
+    () => holidayForm.date !== '' && holidayForm.date < props.calendar.today,
+);
+const withdrawing = ref<string | null>(null);
+const withdrawForm = useForm({ reason_code: '', mfa_code: '' });
+const versionStatus: Record<string, string> = {
+    active: 'In force or scheduled',
+    withdrawn: 'Withdrawn',
+    superseded: 'Replaced by a correction',
+};
+const weekdayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const portionShort: Record<string, string> = { full: 'full', first_half: 'morning', off: 'off' };
 
 function post(form: { post: (url: string, options: object) => void }, url: string): void {
     form.post(url, { preserveScroll: true });
@@ -268,8 +312,57 @@ function retirePolicy(id: string): void {
     router.post(`/app/leave/policies/${id}/retire`, {}, { preserveScroll: true });
 }
 
-function removeHoliday(id: string): void {
-    router.post(`/app/leave/calendar/holidays/${id}/remove`, {}, { preserveScroll: true });
+/** A holiday not yet in effect is withdrawn at once; one in effect asks for a reason and a fresh code first. */
+function withdrawHoliday(holiday: { id: string; date: string }): void {
+    if (holiday.date > props.calendar.today) {
+        router.post(
+            `/app/leave/calendar/holidays/${holiday.id}/remove`,
+            {},
+            { preserveScroll: true },
+        );
+
+        return;
+    }
+    withdrawing.value = holiday.id;
+}
+
+function submitWithdrawal(id: string): void {
+    withdrawForm.post(`/app/leave/calendar/holidays/${id}/remove`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            withdrawing.value = null;
+            withdrawForm.reset();
+        },
+    });
+}
+
+const impactText = computed(() => {
+    const impact = props.calendarImpact;
+    if (!impact) {
+        return '';
+    }
+    const touched = impact.touched.filter((i) => i.count > 0);
+    const what =
+        touched.length === 0
+            ? 'nothing pending or recorded is touched.'
+            : `${touched.map((i) => `${i.count} ${i.label}`).join(', ')}. Saving recalculates none of them.`;
+
+    return `Before saving, from ${impact.from} to ${impact.to}: ${what}`;
+});
+
+/** D6-4 (D14-08): what a change would touch, asked before saving. Counts only; nothing is recalculated. */
+function checkImpact(from: string, to: string | null): void {
+    if (from === '') {
+        return;
+    }
+    router.reload({
+        only: ['calendarImpact'],
+        data: to === null ? { impact_from: from } : { impact_from: from, impact_to: to },
+    });
+}
+
+function withdrawWeek(id: string): void {
+    router.post(`/app/leave/calendar/weeks/${id}/withdraw`, {}, { preserveScroll: true });
 }
 
 const leaveError = useLeaveError();
@@ -730,10 +823,19 @@ const leaveError = useLeaveError();
             </form>
         </section>
 
-        <section class="mt-8">
-            <h2 class="text-sm font-semibold">Staff working week</h2>
+        <section class="mt-8" aria-labelledby="calendar-heading">
+            <h2 id="calendar-heading" class="text-sm font-semibold">Staff working week</h2>
+            <p class="mt-1 text-sm text-ink-muted">
+                <template v-if="calendar.historyStart">
+                    The staff calendar is recorded from {{ calendar.historyStart }}. Earlier dates
+                    read "calendar not recorded", never today's week. A change takes effect from its
+                    date; a past date is a correction that needs a reason and a fresh code, and
+                    never reaches a month whose staff attendance is locked.
+                </template>
+                <template v-else>No week is recorded yet.</template>
+            </p>
             <form
-                class="mt-2 flex flex-wrap gap-3"
+                class="mt-2 flex flex-wrap items-end gap-3"
                 @submit.prevent="post(weekForm, '/app/leave/calendar/weekdays')"
             >
                 <label v-for="(day, i) in weekdays" :key="day" class="text-sm">
@@ -748,26 +850,201 @@ const leaveError = useLeaveError();
                         <option value="off">Off</option>
                     </select>
                 </label>
-                <button v-if="canConfigure" type="submit" class="underline">Save week</button>
+                <template v-if="canConfigure">
+                    <label class="text-sm" for="week-effective-from">
+                        In force from
+                        <input
+                            id="week-effective-from"
+                            v-model="weekForm.effective_from"
+                            type="date"
+                            class="input ml-1 w-auto"
+                            :aria-describedby="
+                                weekForm.errors.effective_from ? 'week-effective-error' : undefined
+                            "
+                        />
+                    </label>
+                    <p
+                        v-if="weekForm.errors.effective_from"
+                        id="week-effective-error"
+                        class="field-error"
+                    >
+                        {{ weekForm.errors.effective_from }}
+                    </p>
+                    <template v-if="weekIsPast">
+                        <label class="text-sm" for="week-reason">
+                            Reason for the correction
+                            <select
+                                id="week-reason"
+                                v-model="weekForm.reason_code"
+                                class="input ml-1 w-auto"
+                                :aria-describedby="
+                                    weekForm.errors.reason_code ? 'week-reason-error' : undefined
+                                "
+                            >
+                                <option value="" disabled>Choose</option>
+                                <option
+                                    v-for="(label, code) in correctionReasons"
+                                    :key="code"
+                                    :value="code"
+                                >
+                                    {{ label }}
+                                </option>
+                            </select>
+                        </label>
+                        <p
+                            v-if="weekForm.errors.reason_code"
+                            id="week-reason-error"
+                            class="field-error"
+                        >
+                            {{ weekForm.errors.reason_code }}
+                        </p>
+                        <MfaCodeField
+                            id="week-mfa"
+                            v-model="weekForm.mfa_code"
+                            class="w-72"
+                            :has-mfa-factor="hasMfaFactor"
+                            action="Correcting a past staff working week"
+                            :error="weekForm.errors.mfa_code"
+                        />
+                    </template>
+                    <button
+                        type="button"
+                        class="underline"
+                        @click="checkImpact(weekForm.effective_from, null)"
+                    >
+                        Check what this touches
+                    </button>
+                    <button type="submit" class="underline" :disabled="weekForm.processing">
+                        {{ weekIsPast ? 'Save correction' : 'Save week' }}
+                    </button>
+                </template>
             </form>
+
+            <table v-if="calendar.versions.length > 0" class="data-table mt-4 w-full text-sm">
+                <caption class="sr-only">
+                    Working week versions, newest first
+                </caption>
+                <thead>
+                    <tr>
+                        <th scope="col">In force from</th>
+                        <th scope="col">Week</th>
+                        <th scope="col">State</th>
+                        <th scope="col">Reason</th>
+                        <th scope="col"><span class="sr-only">Action</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="v in calendar.versions" :key="v.id">
+                        <td>{{ v.effectiveFrom }}</td>
+                        <td>
+                            <span v-for="(label, idx) in weekdayShort" :key="label" class="mr-2">
+                                {{ label }} {{ portionShort[v.pattern[String(idx + 1)]] }}
+                            </span>
+                        </td>
+                        <td>{{ versionStatus[v.status] }}</td>
+                        <td>
+                            {{
+                                v.reasonCode === 'cutover'
+                                    ? 'History start'
+                                    : v.reasonCode
+                                      ? correctionReasons[v.reasonCode]
+                                      : '—'
+                            }}
+                        </td>
+                        <td>
+                            <button
+                                v-if="
+                                    canConfigure &&
+                                    v.status === 'active' &&
+                                    v.effectiveFrom > calendar.today
+                                "
+                                type="button"
+                                class="underline"
+                                @click="withdrawWeek(v.id)"
+                            >
+                                Withdraw
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
 
             <h3 class="mt-4 text-sm font-semibold">Staff holidays</h3>
             <ul class="mt-2 text-sm">
                 <li v-for="h in calendar.holidays" :key="h.id">
                     {{ h.date }} · {{ portionLabels[h.portion] }} · {{ h.name }}
+                    <span v-if="h.status === 'withdrawn'" class="ml-1 text-ink-muted"
+                        >(withdrawn)</span
+                    >
                     <button
-                        v-if="canConfigure"
+                        v-if="canConfigure && h.status === 'active' && withdrawing !== h.id"
                         type="button"
                         class="ml-2 underline"
-                        @click="removeHoliday(h.id)"
+                        @click="withdrawHoliday(h)"
                     >
-                        Remove
+                        Withdraw
                     </button>
+                    <form
+                        v-if="withdrawing === h.id"
+                        class="mt-2 flex flex-wrap items-end gap-2"
+                        @submit.prevent="submitWithdrawal(h.id)"
+                    >
+                        <label class="text-sm" :for="`withdraw-reason-${h.id}`">
+                            Reason for the correction
+                            <select
+                                :id="`withdraw-reason-${h.id}`"
+                                v-model="withdrawForm.reason_code"
+                                class="input ml-1 w-auto"
+                                :aria-describedby="
+                                    withdrawForm.errors.reason_code
+                                        ? `withdraw-reason-error-${h.id}`
+                                        : undefined
+                                "
+                            >
+                                <option value="" disabled>Choose</option>
+                                <option
+                                    v-for="(label, code) in correctionReasons"
+                                    :key="code"
+                                    :value="code"
+                                >
+                                    {{ label }}
+                                </option>
+                            </select>
+                        </label>
+                        <p
+                            v-if="withdrawForm.errors.reason_code"
+                            :id="`withdraw-reason-error-${h.id}`"
+                            class="field-error"
+                        >
+                            {{ withdrawForm.errors.reason_code }}
+                        </p>
+                        <MfaCodeField
+                            :id="`withdraw-mfa-${h.id}`"
+                            v-model="withdrawForm.mfa_code"
+                            class="w-72"
+                            :has-mfa-factor="hasMfaFactor"
+                            action="Withdrawing a staff holiday that has taken effect"
+                            :error="withdrawForm.errors.mfa_code"
+                        />
+                        <button
+                            type="button"
+                            class="underline"
+                            @click="checkImpact(h.date, h.date)"
+                        >
+                            Check what this touches
+                        </button>
+                        <button type="submit" class="underline" :disabled="withdrawForm.processing">
+                            Withdraw holiday
+                        </button>
+                        <button type="button" class="underline" @click="withdrawing = null">
+                            Cancel
+                        </button>
+                    </form>
                 </li>
             </ul>
             <form
                 v-if="canConfigure"
-                class="mt-2 flex flex-wrap gap-2"
+                class="mt-2 flex flex-wrap items-end gap-2"
                 @submit.prevent="post(holidayForm, '/app/leave/calendar/holidays')"
             >
                 <input
@@ -791,8 +1068,60 @@ const leaveError = useLeaveError();
                     placeholder="Name"
                     class="input w-48"
                 />
-                <button type="submit" class="underline">Add holiday</button>
+                <template v-if="holidayIsPast">
+                    <label class="text-sm" for="holiday-reason">
+                        Reason for the correction
+                        <select
+                            id="holiday-reason"
+                            v-model="holidayForm.reason_code"
+                            class="input ml-1 w-auto"
+                            :aria-describedby="
+                                holidayForm.errors.reason_code ? 'holiday-reason-error' : undefined
+                            "
+                        >
+                            <option value="" disabled>Choose</option>
+                            <option
+                                v-for="(label, code) in correctionReasons"
+                                :key="code"
+                                :value="code"
+                            >
+                                {{ label }}
+                            </option>
+                        </select>
+                    </label>
+                    <p
+                        v-if="holidayForm.errors.reason_code"
+                        id="holiday-reason-error"
+                        class="field-error"
+                    >
+                        {{ holidayForm.errors.reason_code }}
+                    </p>
+                    <MfaCodeField
+                        id="holiday-mfa"
+                        v-model="holidayForm.mfa_code"
+                        class="w-72"
+                        :has-mfa-factor="hasMfaFactor"
+                        action="Adding a staff holiday on a past date"
+                        :error="holidayForm.errors.mfa_code"
+                    />
+                </template>
+                <button
+                    type="button"
+                    class="underline"
+                    @click="checkImpact(holidayForm.date, holidayForm.date)"
+                >
+                    Check what this touches
+                </button>
+                <button type="submit" class="underline" :disabled="holidayForm.processing">
+                    Add holiday
+                </button>
             </form>
+            <div v-if="canConfigure" role="status" aria-live="polite" class="mt-3 text-sm">
+                <p v-if="calendarImpact" class="notice notice-attention">
+                    <span aria-hidden="true">!</span>
+                    <span>{{ impactText }}</span>
+                </p>
+            </div>
         </section>
     </main>
 </template>

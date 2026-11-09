@@ -4,7 +4,6 @@ namespace Tests\Feature\StaffSelfService;
 
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\LeaveRequestService;
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -51,7 +50,7 @@ class MyStaffAttendanceTest extends TestCase
         $this->recordAttendance($w, '2026-09-29', 'absent', 'absent', $me['employment']);
         $leave = $this->submitLeave($w, '2026-09-29', '2026-09-29', employment: $me['employment']);
         app(LeaveRequestService::class)->approve($w['school'], $leave->id, $w['admin']);
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-09-30', DayPortion::FirstHalf, 'Founders morning', $w['admin']);
+        $this->staffHoliday($w['school'], '2026-09-30', DayPortion::FirstHalf, 'Founders morning', $w['admin']);
 
         $days = $this->days($w, $me['user'], '2026-09-28', '2026-10-04');
         $this->assertCount(7, $days);

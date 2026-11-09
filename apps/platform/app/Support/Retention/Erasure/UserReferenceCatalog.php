@@ -52,7 +52,9 @@ final class UserReferenceCatalog
         'leave_policies' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'leave_policy_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
         'staff_working_weekdays' => ['updated_by_user_id' => self::RETAIN_REFERENCE],
-        'staff_holidays' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        'staff_holidays' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'withdrawn_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.R1-C22 (WO-5): who recorded, withdrew or superseded a working-week version: calendar provenance, kept.
+        'staff_working_week_versions' => ['recorded_by_user_id' => self::RETAIN_REFERENCE, 'status_changed_by_user_id' => self::RETAIN_REFERENCE],
         'leave_allocation_runs' => ['executed_by_user_id' => self::RETAIN_REFERENCE],
         // HR.9 (ADR 0065 §28.7): who wrote a policy version's eligibility rules / executed an eligibility run.
         'leave_eligibility_rules' => ['created_by_user_id' => self::RETAIN_REFERENCE],

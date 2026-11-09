@@ -972,7 +972,8 @@ ADR 0065 §26 and
   - EPFO NCP days (unchanged).
 - **The contract.** `calculate()` calls the one HRX contract
   (`App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader`,
-  `hrx_payroll_input.v1`) for every regular-run result, after the amounts
+  `hrx_payroll_input.v2` since HR.R1-C22; v1 snapshots stay, compared only
+  with v1) for every regular-run result, after the amounts
   are final.
   - It returns integer half-day units of approved paid and unpaid leave,
     recorded absence and presence, unresolved working time and required

@@ -11,7 +11,8 @@ import RosterPager from '../../../Components/StaffAttendance/RosterPager.vue';
 import { formatDate } from '../../../datetime';
 import { halfStatusLabel, reasonLabels } from '../../../staffAttendance';
 
-type State = 'present' | 'absent' | 'leave' | 'holiday' | 'off_day' | 'unrecorded';
+type State =
+    'present' | 'absent' | 'leave' | 'holiday' | 'off_day' | 'unrecorded' | 'calendar_not_recorded';
 
 interface Props {
     summary: {
@@ -92,6 +93,7 @@ const states: { key: State; label: string }[] = [
     { key: 'holiday', label: 'Holiday' },
     { key: 'off_day', label: 'Off day' },
     { key: 'unrecorded', label: 'Not recorded' },
+    { key: 'calendar_not_recorded', label: 'Calendar not recorded' },
 ];
 
 function days(halves: number): string {

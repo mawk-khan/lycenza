@@ -52,7 +52,7 @@ final class WebRouteParameters
         'libraryTitle', 'line', 'lockedCorrection', 'mapping', 'membership', 'note', 'payment', 'accountLink', 'accountLinkCorrection', 'payrollPeriod', 'payrollReconciliation', 'payrollRun',
         'period', 'position', 'qualification', 'referenceCode', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
         'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection', 'separationCase',
-        'staffAttendanceRecord', 'staffHoliday', 'student', 'studentMark', 'studentMarkCorrection', 'subject',
+        'staffAttendanceRecord', 'staffHoliday', 'staffWorkingWeekVersion', 'student', 'studentMark', 'studentMarkCorrection', 'subject',
         'subjectOffering', 'syllabusUnit', 'targetUser', 'task', 'teachingAssignment', 'template', 'thread',
         'timetableEntry', 'timetablePeriod', 'transportRoute', 'transportRouteAssignment', 'transportStop',
         'transportStudentAssignment', 'transportVehicle', 'visitor', 'visitorVisit', 'zone',

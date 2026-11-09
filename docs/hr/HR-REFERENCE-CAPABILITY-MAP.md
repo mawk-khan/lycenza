@@ -425,8 +425,8 @@ both mean HRX-L2.
 | D14-05 | From / to date | one row per date (a range = several rows) | ALT | H462 | range entry in the UI | WorkSchedule | HR.4 | L | — |
 | D14-06 | Description | `name` | IMP | H462 | — | Leave | — | — | — |
 | D14-07 | Optional holiday | none | DEF | H462 | D5-05 | WorkSchedule | HR.4 | L | D-1 (HR owner 2026-11-08, HR.R1-C16), was MISS; re-review: calendar applicability, after D-6 |
-| D14-08 | Effective publication | immediate | MISS | — | draft → published, with recalculation notice | WorkSchedule | HR.4 | M | D-6 decided (HR owner 2026-11-08, HR.R1-C21): effective-dated, schedulable, withdrawable until effective, notice, no drafts; ALT once WO-5 ships |
-| D14-09 | Modifications | remove + add (hard delete, S-16) | PART | — | versioned change, never delete | WorkSchedule | HR.4 | M | D-6 decided (HR owner 2026-11-08, HR.R1-C21): week versions and holiday lifecycle, DELETE revoked; IMP once WO-5 ships |
+| D14-08 | Effective publication | effective-dated week versions and holidays, schedulable, withdrawable until effective; a counts-only notice before saving; no recalculation (HR.R1-C22) | ALT | — | draft → published, with recalculation notice | WorkSchedule | HR.4 | M | MISS → ALT on evidence, HR.R1-C22 (WO-5, D6-4: effective-dated publication, no drafts) |
+| D14-09 | Modifications | append-only week versions (withdraw, supersede by correction) and a holiday lifecycle (withdraw); runtime DELETE revoked (S-16 closed) (HR.R1-C22) | IMP | — | versioned change, never delete | WorkSchedule | HR.4 | M | PART → IMP on evidence, HR.R1-C22 (WO-5) |
 | D14-10 | Attendance impact | derived at read time; conflicting writes refused | IMP | — | — | StaffAttendance | — | — | — |
 | D14-11 | Leave sandwich impact | none | DEF | — | D10-13 (OD-HR-15) | Leave | after OD-HR-15 | M | OD-HR-15 |
 | D14-12 | No silent retroactive change | request days frozen; payroll fingerprint differences | ALT | — | controlled recalculation once evaluation exists | Leave | HR.4 | M | — |
@@ -585,17 +585,19 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) | After HR.R1-C16 D-1 (2026-11-08) | After HR.R1-C18 WO-6 (2026-11-08) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | 161 (44.6 %) | 161 (44.6 %) | **162** (44.9 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | 20 | 10 | **9** |
-| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | 11 | 2 | **1** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 | 20 | **21** |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 | 7 | 7 |
-| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 | 68 | 68 |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A | After HR.3A | After HR.2A | After HR.9 | After HR.10 | After HR.11 (2026-11-04) | After HR.12 (2026-11-04) | After HR.13 (2026-11-04) | After HR.14 (2026-11-05) | After HR.R1-C16 D-1 (2026-11-08) | After HR.R1-C18 WO-6 (2026-11-08) |After HR.R1-C22 WO-5 (2026-11-09) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | 123 (34.1 %) | 128 (35.5 %) | 129 (35.7 %) | 134 (37.1 %) | 152 (42.1 %) | 161 (44.6 %) | 161 (44.6 %) | **162** (44.9 %) |**163** (45.2 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | 23 | 24 | 23 | 22 | 28 | 20 | 10 | **9** |**8** |
+| MISSING | 90 | 87 | 86 | 85 | 76 | 69 | 42 | 39 | 12 | 11 | 2 | **1** |**0** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 18 | 20 | 20 | 20 | **21** |**22** |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 | 8 | 8 | 7 | 7 | 7 | 7 | 7 |7 |
+| DEFERRED | 16 | 16 | 16 | 16 | 20 | 21 | 48 | 48 | 49 | 49 | 68 | 68 |68 |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |**361** |
+
+HR.R1-C22 (2026-11-09, WO-5) changed the last two ACTIVE rows on evidence: D14-08 MISS → ALT (effective-dated publication with no drafts, D6-4: schedulable week versions and holidays, withdrawable until effective, a counts-only notice before saving, nothing recalculated) and D14-09 PART → IMP (append-only week versions and a holiday lifecycle, runtime DELETE revoked, S-16 closed). No row is ACTIVE or MISSING. `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 
 HR.R1-C21 (2026-11-08, D-6, HR owner) decided the contract for the two ACTIVE rows, D14-08 and D14-09, without changing their status: they stay ACTIVE until WO-5 ships and is verified. `HR-R1-C21-D6-DECISION.md`.
 

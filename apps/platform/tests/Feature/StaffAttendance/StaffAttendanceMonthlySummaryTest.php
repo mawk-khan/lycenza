@@ -76,9 +76,10 @@ class StaffAttendanceMonthlySummaryTest extends TestCase
         $w = $this->world();
         $summary = $this->monthly($w);
 
-        $this->assertSame(['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded'], array_keys($summary['totals']));
+        // HR.R1-C22: `calendar_not_recorded` is a day before the calendar's history start, never a clock or pay state.
+        $this->assertSame(['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded', 'calendar_not_recorded'], array_keys($summary['totals']));
         foreach ($summary['rows'] as $row) {
-            $this->assertSame(['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded'], array_keys($row['halfDays']));
+            $this->assertSame(['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded', 'calendar_not_recorded'], array_keys($row['halfDays']));
         }
         $json = json_encode($summary);
         foreach (['late', 'early', 'punch', 'lop', 'loss', 'unpaid', 'paid', 'deduct', 'reason'] as $forbidden) {

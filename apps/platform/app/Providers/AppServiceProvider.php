@@ -18,11 +18,16 @@ use App\Domain\HR\Application\Separation\SeparationObligationSource;
 use App\Domain\HR\Http\Support\HrEmployeeDocumentPolicy;
 use App\Domain\Identity\Application\GuardianAccountOwnershipReader;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
+use App\Domain\Leave\Application\Calendar\CalendarChangeImpactSource;
+use App\Domain\Leave\Application\Calendar\LeaveCalendarChangeImpact;
+use App\Domain\Leave\Application\Calendar\PastCalendarChangeGate;
 use App\Domain\Leave\Application\LeaveSeparationObligations;
 use App\Domain\LMS\Application\AssignmentYearDateDependency;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
 use App\Domain\Payroll\Application\Retention\PayrollLedgerRetentionParticipant;
+use App\Domain\StaffAttendance\Application\Locking\StaffAttendanceCalendarGate;
+use App\Domain\StaffAttendance\Application\StaffAttendanceCalendarChangeImpact;
 use App\Domain\StaffAttendance\Application\StaffAttendancePresenceReader;
 use App\Domain\Students\Application\ElectivePlacementCancellationBlocker;
 use App\Domain\Students\Application\ElectiveTransferBlocker;
@@ -183,6 +188,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AttendancePresenceConflictReader::class, StaffAttendancePresenceReader::class);
         // HR.R1-C10: Documents states what it needs of an Employee's records; HR answers (rule 4).
         $this->app->bind(EmployeeDocumentPolicy::class, HrEmployeeDocumentPolicy::class);
+        // HR.R1-C22 (WO-5): Leave owns the staff calendar and declares these ports; Staff Attendance (which depends on
+        // Leave) answers the locked-month gate, and each owner reports what a calendar change touches.
+        $this->app->bind(PastCalendarChangeGate::class, StaffAttendanceCalendarGate::class);
+        // D6-4 names pending leave and recorded attendance. Payroll never depends on Leave (it reports a calendar difference
+        // through its own source comparison), so it registers no source here.
+        $this->app->tag([LeaveCalendarChangeImpact::class, StaffAttendanceCalendarChangeImpact::class], CalendarChangeImpactSource::TAG);
         // ORG.8A-R1 (ADR 0076 §59): Guardians' port, answered by Identity's account links (no Guardians -> Identity dependency).
         $this->app->bind(GuardianAccountOwnership::class, GuardianAccountOwnershipReader::class);
 

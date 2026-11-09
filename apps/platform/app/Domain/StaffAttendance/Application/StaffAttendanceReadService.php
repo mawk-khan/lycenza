@@ -5,10 +5,11 @@ namespace App\Domain\StaffAttendance\Application;
 use App\Domain\HR\Application\ActingEmployeeResolver;
 use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
-use App\Domain\Leave\Application\Exceptions\LeaveException;
+use App\Domain\Leave\Application\Calendar\CalendarDay;
+use App\Domain\Leave\Application\Calendar\StaffCalendarHistory;
 use App\Domain\Leave\Application\LeaveCapabilities;
 use App\Domain\Leave\Application\LeaveCoverageReader;
-use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\Leave\Application\WorkingDayCalculator;
 use App\Domain\StaffAttendance\Application\Exceptions\StaffAttendanceException;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceCorrection;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceLockedCorrection;
@@ -55,7 +56,7 @@ class StaffAttendanceReadService
     public function __construct(
         private readonly TenantContext $context,
         private readonly EmploymentRoster $roster,
-        private readonly StaffCalendarService $calendar,
+        private readonly StaffCalendarHistory $calendar,
         private readonly LeaveCoverageReader $leave,
         private readonly CapabilityResolver $capabilities,
         private readonly ActingEmployeeResolver $acting,
@@ -196,7 +197,7 @@ class StaffAttendanceReadService
         ];
     }
 
-    private const MONTH_STATES = ['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded'];
+    private const MONTH_STATES = ['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded', 'calendar_not_recorded'];
 
     /**
      * Half-day counts per employment of $labels over [from, to] (inside each employment's dates).
@@ -394,6 +395,7 @@ class StaffAttendanceReadService
             $distinct === ['absent'] => 'absent',
             $distinct === ['leave'] => 'on_leave',
             $distinct === ['unrecorded'] => 'unrecorded',
+            $distinct === ['calendar_not_recorded'] => 'calendar_not_recorded',
             $distinct === ['absent', 'present'] => 'half_day_absent',
             in_array('unrecorded', $distinct, true) => 'partially_recorded',
             default => 'mixed',
@@ -418,6 +420,7 @@ class StaffAttendanceReadService
                     $recorded !== null => $recorded,
                     $today === 'holiday' => 'holiday',
                     $today === 'off' => 'off_day',
+                    $today === 'not_recorded' => 'calendar_not_recorded',
                     default => 'unrecorded',
                 },
                 'recorded' => $recorded,
@@ -449,17 +452,26 @@ class StaffAttendanceReadService
         ];
     }
 
-    /** @return array<string, array{1: string, 2: string}> date => today's half classification; empty while the calendar is unconfigured */
+    /**
+     * Each date's half classification on the calendar in force ON THAT DATE (HR.R1-C22, WO-5), never
+     * today's: `not_recorded` before the School's history start. Empty while no week is recorded.
+     *
+     * @return array<string, array{1: string, 2: string}>
+     */
     private function calendarHalves(School $school, string $from, string $to): array
     {
-        try {
-            $calculator = $this->calendar->calculator($school, $from, $to);
-        } catch (LeaveException) {
+        $days = $this->calendar->range($school, $from, $to);
+        if (reset($days)->status === CalendarDay::NOT_CONFIGURED) {
             return [];
         }
+        $recorded = array_filter($days, fn (CalendarDay $d) => $d->recorded());
+        $calculator = WorkingDayCalculator::forDays(
+            array_map(fn (CalendarDay $d) => (string) $d->weekPortion, $recorded),
+            array_filter(array_map(fn (CalendarDay $d) => $d->holiday['portion'] ?? null, $recorded)),
+        );
         $halves = [];
-        for ($d = CarbonImmutable::createFromFormat('!Y-m-d', $from); $d->toDateString() <= $to; $d = $d->addDay()) {
-            $halves[$d->toDateString()] = $calculator->halves($d->toDateString());
+        foreach ($days as $date => $day) {
+            $halves[$date] = $day->recorded() ? $calculator->halves($date) : [1 => 'not_recorded', 2 => 'not_recorded'];
         }
 
         return $halves;

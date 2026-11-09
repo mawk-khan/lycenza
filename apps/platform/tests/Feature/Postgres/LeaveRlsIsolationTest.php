@@ -32,6 +32,8 @@ class LeaveRlsIsolationTest extends TestCase
         'leave_eligibility_rules', 'leave_eligibility_runs',
         // HR.10 (ADR 0065 §29)
         'leave_accrual_runs', 'leave_accrual_run_items',
+        // HR.R1-C22 (WO-5)
+        'staff_working_week_versions',
     ];
 
     private function context(?string $schoolId): void

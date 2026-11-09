@@ -3,6 +3,7 @@
 namespace App\Domain\Leave\Application;
 
 use App\Domain\HR\Application\ActingEmployee;
+use App\Domain\Leave\Application\Calendar\StaffCalendarHistory;
 use App\Domain\Leave\Infrastructure\LeaveAllocationRun;
 use App\Domain\Leave\Infrastructure\LeaveEligibilityRule;
 use App\Domain\Leave\Infrastructure\LeaveEligibilityRun;
@@ -12,6 +13,7 @@ use App\Domain\Leave\Infrastructure\LeavePolicyAssignment;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
 use App\Domain\Leave\Infrastructure\StaffHoliday;
+use App\Domain\Leave\Infrastructure\StaffWorkingWeekVersion;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
@@ -37,6 +39,7 @@ class LeaveReadService
         private readonly TenantContext $context,
         private readonly LeaveYearService $years,
         private readonly StaffCalendarService $calendar,
+        private readonly StaffCalendarHistory $history,
     ) {}
 
     /**
@@ -119,7 +122,12 @@ class LeaveReadService
         });
     }
 
-    /** @return array{weeklyPattern: array<int, string>, holidays: list<array<string, mixed>>} */
+    /**
+     * HR.R1-C22 (WO-5): the week in force today, every recorded week version (newest effective first), the holidays of
+     * [from, to] with their state, the School's history start and today on the database clock.
+     *
+     * @return array{weeklyPattern: array<int, string>, holidays: list<array<string, mixed>>, versions: list<array<string, mixed>>, historyStart: ?string, today: string}
+     */
     public function calendar(School $school, string $from, string $to, User $actor): array
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
@@ -127,7 +135,20 @@ class LeaveReadService
         return [
             'weeklyPattern' => $this->calendar->pattern($school),
             'holidays' => $this->read($school, fn () => StaffHoliday::query()->where('school_id', $school->id)->whereBetween('holiday_on', [$from, $to])
-                ->orderBy('holiday_on')->get()->map(fn (StaffHoliday $h) => self::holiday($h))->all()),
+                ->orderBy('holiday_on')->orderBy('recorded_at')->get()->map(fn (StaffHoliday $h) => self::holiday($h))->all()),
+            'versions' => $this->read($school, fn () => StaffWorkingWeekVersion::query()->where('school_id', $school->id)
+                ->orderByDesc('effective_from')->orderByDesc('recorded_at')->limit(100)->get()->map(fn (StaffWorkingWeekVersion $v) => self::weekVersion($v))->all()),
+            'historyStart' => $this->history->historyStart($school),
+            'today' => $this->history->today($school),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function weekVersion(StaffWorkingWeekVersion $v): array
+    {
+        return [
+            'id' => $v->id, 'effectiveFrom' => $v->effective_from->toDateString(), 'pattern' => $v->pattern(), 'status' => $v->status,
+            'reasonCode' => $v->reason_code, 'supersedesId' => $v->supersedes_id, 'recordedAt' => $v->recorded_at->toIso8601String(),
         ];
     }
 
@@ -277,7 +298,10 @@ class LeaveReadService
     /** @return array<string, mixed> */
     public static function holiday(StaffHoliday $h): array
     {
-        return ['id' => $h->id, 'date' => $h->holiday_on->toDateString(), 'portion' => $h->portion, 'name' => $h->name];
+        return [
+            'id' => $h->id, 'date' => $h->holiday_on->toDateString(), 'portion' => $h->portion, 'name' => $h->name, 'status' => $h->status,
+            'reasonCode' => $h->recorded_reason_code, 'withdrawnReasonCode' => $h->withdrawn_reason_code, 'withdrawnAt' => $h->withdrawn_at?->toIso8601String(),
+        ];
     }
 
     /** @return array<string, mixed> */

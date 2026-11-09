@@ -4,6 +4,9 @@ namespace Tests\Feature\Leave\Concerns;
 
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Leave\Application\Calendar\CalendarChangeReason;
+use App\Domain\Leave\Application\Calendar\StaffCalendarHistory;
+use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
@@ -15,10 +18,12 @@ use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeaveRequest;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
+use App\Domain\Leave\Infrastructure\StaffHoliday;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Support\StaffCalendarFixture;
 
 /**
  * HRX.1: a School with a Leave administrator, a leave type, a policy, an
@@ -62,10 +67,44 @@ trait CreatesLeaveFixtures
         return app(LeaveYearService::class)->open($school, $on, $admin);
     }
 
-    /** HRX.2: Monday-Friday full, Saturday morning only, Sunday off. */
-    protected function workingWeek(School $school, User $admin): void
+    /** Where every fixture's calendar history starts (HR.R1-C22): before any date a test records evidence on. */
+    protected const CALENDAR_HISTORY_START = StaffCalendarFixture::HISTORY_START;
+
+    /**
+     * HRX.2: Monday-Friday full, Saturday morning only, Sunday off.
+     *
+     * HR.R1-C22 (WO-5, D-6): a School without history gets its history start as the WO-5 migration gives one --
+     * a `cutover` version only the owner may write -- from CALENDAR_HISTORY_START, so the tests' past dates are
+     * recorded. At runtime nothing is backfilled (D6-3): the service and the database refuse a past first week.
+     * A School that already has history records the week through the service; a past date is a correction with
+     * a reason and the admin's fresh MFA proof.
+     */
+    protected function workingWeek(School $school, User $admin, array $pattern = [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'first_half', 7 => 'off'], string $from = self::CALENDAR_HISTORY_START): void
     {
-        app(StaffCalendarService::class)->setWeeklyPattern($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'first_half', 7 => 'off'], $admin);
+        $history = app(StaffCalendarHistory::class);
+        if ($history->historyStart($school) === null) {
+            StaffCalendarFixture::startHistory($school, $pattern, $from);
+
+            return;
+        }
+        $past = $from < $history->today($school);
+        app(StaffCalendarService::class)->recordWeek($school, $from, $pattern, $admin, $past ? CalendarChangeReason::LateDeclaration : null, $past ? $this->freshMfaProofFor($admin) : null);
+    }
+
+    /** HR.R1-C22: a staff holiday; a past date is a correction (reason and fresh MFA proof), as the service requires. */
+    protected function staffHoliday(School $school, string $date, DayPortion $portion, string $name, User $admin): StaffHoliday
+    {
+        $past = $date < app(StaffCalendarHistory::class)->today($school);
+
+        return app(StaffCalendarService::class)->addHoliday($school, $date, $portion, $name, $admin, $past ? CalendarChangeReason::LateDeclaration : null, $past ? $this->freshMfaProofFor($admin) : null);
+    }
+
+    /** HR.R1-C22: withdraws a staff holiday; one that has taken effect is a correction. */
+    protected function withdrawStaffHoliday(School $school, StaffHoliday $holiday, User $admin): StaffHoliday
+    {
+        $effective = $holiday->holiday_on->toDateString() <= app(StaffCalendarHistory::class)->today($school);
+
+        return app(StaffCalendarService::class)->withdrawHoliday($school, $holiday->id, $admin, $effective ? CalendarChangeReason::EnteredInError : null, $effective ? $this->freshMfaProofFor($admin) : null);
     }
 
     /**

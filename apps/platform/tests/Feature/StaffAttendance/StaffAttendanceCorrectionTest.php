@@ -3,7 +3,6 @@
 namespace Tests\Feature\StaffAttendance;
 
 use App\Domain\Leave\Application\DayPortion;
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\StaffAttendance\Application\Exceptions\StaffAttendanceException;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Support\Tenancy\TenantRls;
@@ -128,7 +127,7 @@ class StaffAttendanceCorrectionTest extends TestCase
 
         // A holiday added afterwards never hides or freezes existing evidence: it can still be corrected.
         $tuesday = $this->recordAttendance($w, '2026-09-29', 'present', 'present');
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-09-29', DayPortion::Full, 'Declared later', $w['admin']);
+        $this->staffHoliday($w['school'], '2026-09-29', DayPortion::Full, 'Declared later', $w['admin']);
         $day = app(StaffAttendanceReadService::class)->register($w['school'], '2026-09-29', $w['clerk'])['rows'][0]['day'];
         $this->assertSame(['present', 'holiday'], [$day['firstHalf']['state'], $day['firstHalf']['calendar']], 'recorded evidence stays visible beside today\'s calendar');
         $this->assertSame(2, $this->correctAttendance($w, $tuesday, 'absent', 'present', 'late_information')->version);

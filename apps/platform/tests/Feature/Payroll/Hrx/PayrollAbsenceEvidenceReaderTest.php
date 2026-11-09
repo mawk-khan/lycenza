@@ -5,7 +5,6 @@ namespace Tests\Feature\Payroll\Hrx;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\LeaveRequestService;
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidence;
 use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader;
@@ -76,7 +75,7 @@ class PayrollAbsenceEvidenceReaderTest extends TestCase
     public function holidays_and_coverage_are_respected_and_a_period_outside_employment_is_empty(): void
     {
         $w = $this->hrxWorld();
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-09-14', DayPortion::Full, 'Festival', $w['admin']);
+        $this->staffHoliday($w['school'], '2026-09-14', DayPortion::Full, 'Festival', $w['admin']);
         $this->assertSame(self::SEPTEMBER_WORKING_HALVES - 2, $this->evidence($w)->requiredWorkingHalfUnits, 'a holiday is not required working time');
         $this->assertSame('holiday', collect($this->evidence($w)->halves)->first(fn ($h) => $h['date'] === '2026-09-14')['class']);
 
@@ -123,7 +122,7 @@ class PayrollAbsenceEvidenceReaderTest extends TestCase
         $prints[] = $this->evidence($w)->fingerprint;                                       // absence added
         $this->correctAttendance($w, $record, 'present', null, 'late_information');
         $prints[] = $this->evidence($w)->fingerprint;                                       // correction
-        app(StaffCalendarService::class)->addHoliday($w['school'], '2026-09-29', DayPortion::FirstHalf, 'Half holiday', $w['admin']);
+        $this->staffHoliday($w['school'], '2026-09-29', DayPortion::FirstHalf, 'Half holiday', $w['admin']);
         $prints[] = $this->evidence($w)->fingerprint;                                       // calendar change affecting classification
         foreach ([1, 2, 3, 4, 5] as $i) {
             $this->assertNotSame($prints[$i - 1], $prints[$i], "change {$i} moved the fingerprint");

@@ -25,6 +25,8 @@ use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeavePolicyAssignment;
 use App\Domain\Leave\Infrastructure\LeaveRequest;
 use App\Domain\Leave\Infrastructure\LeaveType;
+use App\Domain\Leave\Infrastructure\StaffHoliday;
+use App\Domain\Leave\Infrastructure\StaffWorkingWeekVersion;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
@@ -46,5 +48,7 @@ final class LifecycleModels
         LeavePolicyAssignment::class, LeaveType::class, StaffAttendanceRecord::class,
         // HR.R1-C18 (WO-6): written only by StaffAttendanceService on fixed arrays.
         StaffAttendanceMonthLock::class, StaffAttendanceLockedCorrection::class,
+        // HR.R1-C22 (WO-5): written only by StaffCalendarService on fixed arrays.
+        StaffHoliday::class, StaffWorkingWeekVersion::class,
     ];
 }

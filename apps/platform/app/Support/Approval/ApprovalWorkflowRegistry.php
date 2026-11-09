@@ -300,6 +300,12 @@ final class ApprovalWorkflowRegistry
                 'App\Domain\Fees\Application\Sources\FeeSourceChargeService',
             ],
         ],
+        // HR.R1-C22 (WO-5, D6-5): a past-dated staff calendar change is a direct correction, never a request.
+        'App\Domain\Leave\Application\StaffCalendarService' => [
+            'capability' => 'hr.leave.configure', 'action' => 'Past-dated staff calendar correction (a week version or holiday dated before the School\'s today, or the withdrawal of a holiday in effect); today and later stay ordinary',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'CalendarChangeReason (closed: late declaration, entered in error, administrative review; no free text)',
+            'evidence' => 'staff_working_week_versions.reason_code / staff_holidays.recorded_reason_code / withdrawn_reason_code (DB-required for a past date: staff_calendar_reason_required) + school_audit_events leave.calendar.* (mfa: fresh)', 'relationshipConflict' => null,
+        ],
         // ORG.9C-2 (ADR 0076 §70): never a request/approve chain (INV-034 stays DO_NOT_BUILD).
         'App\Domain\Inventory\Application\InventoryStockService' => [
             'capability' => 'inventory.stock.manage', 'action' => 'Inventory stock write-off (writeOff(); issue, receive and transfer stay ordinary)',

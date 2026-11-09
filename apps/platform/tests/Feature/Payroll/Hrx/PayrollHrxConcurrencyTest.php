@@ -245,4 +245,57 @@ class PayrollHrxConcurrencyTest extends TestCase
         $this->assertSame(1, app(PayrollHrxInputReadService::class)->checkDifferences($w['school'], $w['run'], $w['preparer'])['changed'], 'the later change is detected');
         $this->assertSame(1, DB::connection('pgsql_admin')->table('payroll_run_calculations')->where('payroll_run_id', $w['run'])->count(), 'one calculation, nothing recalculated');
     }
+
+    /**
+     * HR.R1-C22 (C22 review L-2): WO-5 changed what a half before the history start is, so the contract is v2. A v1
+     * snapshot's fingerprint is of another contract: it is shown as not comparable, never as a changed source, and the
+     * difference check records nothing for it. The snapshot itself is never touched.
+     */
+    #[Test]
+    public function a_snapshot_of_an_earlier_contract_is_never_compared_or_reported_as_changed(): void
+    {
+        $w = $this->world();
+        $this->assertStringStartsWith('ok:', trim(\Illuminate\Support\Facades\Process::run($this->calculate($w))->output()));
+        $admin = DB::connection('pgsql_admin');
+        $admin->transaction(function () use ($admin, $w) {
+            // Stands in for a snapshot captured before WO-5 shipped.
+            $admin->statement("SET LOCAL session_replication_role = 'replica'");
+            $admin->table('payroll_run_hrx_inputs')->where('payroll_run_id', $w['run'])->update(['contract_version' => 'hrx_payroll_input.v1', 'fingerprint' => str_repeat('b', 64)]);
+        });
+
+        $view = app(PayrollHrxInputReadService::class)->forRun($w['school'], $w['run'], $w['preparer']);
+        $this->assertSame(['hrx_payroll_input.v2', 'none', 1, [false], [false]], [$view['contractVersion'], $view['differenceState'], $view['earlierContractInputs'], array_column($view['inputs'], 'comparable'), array_column($view['inputs'], 'sourceChanged')]);
+        $this->assertSame(0, app(PayrollHrxInputReadService::class)->checkDifferences($w['school'], $w['run'], $w['preparer'])['changed']);
+        $this->assertSame([str_repeat('b', 64)], $this->captured($w), 'the earlier snapshot is kept as it was');
+    }
+
+    /** HR.R1-C22 (WO-5): a capture holds the calendar shared; a correction waits for it, and the snapshot keeps what was captured. */
+    #[Test]
+    public function a_capture_first_makes_a_calendar_correction_wait_and_the_change_is_detected(): void
+    {
+        $w = $this->world();
+        $before = $this->fingerprintNow($w);
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->calculate($w), $this->leave('monday', $w['school']->id, 'off', $w['admin']->id, '2026-09-01'));
+
+        $this->assertSame(["ok:{$before}", 'ok:off'], [$holder, $contender], 'the correction waited for the capture');
+        $this->assertNotSame($before, $this->fingerprintNow($w), 'September Mondays are off now');
+        $this->assertSame([$before], $this->captured($w), 'the snapshot never changes');
+        $this->assertSame(1, app(PayrollHrxInputReadService::class)->checkDifferences($w['school'], $w['run'], $w['preparer'])['changed']);
+    }
+
+    /** HR.R1-C22 (WO-5): a correction holds the calendar exclusively; the capture waits and records the corrected calendar. */
+    #[Test]
+    public function a_calendar_correction_first_makes_the_capture_wait_and_see_it(): void
+    {
+        $w = $this->world();
+        $before = $this->fingerprintNow($w);
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->leave('monday', $w['school']->id, 'off', $w['admin']->id, '2026-09-01'), $this->calculate($w));
+
+        $after = $this->fingerprintNow($w);
+        $this->assertSame(['ok:off', "ok:{$after}"], [$holder, $contender], 'the capture waited and saw the corrected calendar');
+        $this->assertNotSame($before, $after);
+        $this->assertSame(0, app(PayrollHrxInputReadService::class)->checkDifferences($w['school'], $w['run'], $w['preparer'])['changed']);
+    }
 }

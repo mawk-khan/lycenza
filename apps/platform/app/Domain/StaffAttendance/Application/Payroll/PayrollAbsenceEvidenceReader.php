@@ -3,10 +3,11 @@
 namespace App\Domain\StaffAttendance\Application\Payroll;
 
 use App\Domain\HR\Application\EmploymentRoster;
-use App\Domain\Leave\Application\Exceptions\LeaveException;
+use App\Domain\Leave\Application\Calendar\CalendarDay;
+use App\Domain\Leave\Application\Calendar\StaffCalendarHistory;
 use App\Domain\Leave\Application\LeaveCoverageReader;
 use App\Domain\Leave\Application\LeaveLocks;
-use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\Leave\Application\WorkingDayCalculator;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
@@ -44,12 +45,17 @@ use LogicException;
  */
 class PayrollAbsenceEvidenceReader
 {
-    public const CONTRACT_VERSION = 'hrx_payroll_input.v1';
+    /**
+     * HR.R1-C22 (WO-5): v2. A half before the School's calendar history start is `calendar_not_recorded` with a
+     * null `working`, and each half names the calendar version it was read from. A v1 snapshot is never compared
+     * with v2 evidence (`PayrollHrxInputReadService`): its fingerprint is of another contract.
+     */
+    public const CONTRACT_VERSION = 'hrx_payroll_input.v2';
 
     public function __construct(
         private readonly TenantContext $context,
         private readonly EmploymentRoster $roster,
-        private readonly StaffCalendarService $calendar,
+        private readonly StaffCalendarHistory $calendar,
         private readonly LeaveCoverageReader $leave,
     ) {}
 
@@ -94,13 +100,17 @@ class PayrollAbsenceEvidenceReader
 
         $halves = [];
         $calendarConfigured = true;
+        $calendarNotRecorded = false;
         if ($covered) {
-            try {
-                $calculator = $this->calendar->calculator($school, $coveredFrom, $coveredTo);
-            } catch (LeaveException) {
-                $calculator = null;
-                $calendarConfigured = false;
-            }
+            // HR.R1-C22 (WO-5): each date on the calendar in force on that date; before the School's history start
+            // the day is `calendar_not_recorded` (never today's calendar), and the evidence is incomplete.
+            $days = $this->calendar->range($school, $coveredFrom, $coveredTo);
+            $calendarConfigured = reset($days)->status !== CalendarDay::NOT_CONFIGURED;
+            $recordedDays = array_filter($days, fn (CalendarDay $d) => $d->recorded());
+            $calculator = $calendarConfigured ? WorkingDayCalculator::forDays(
+                array_map(fn (CalendarDay $d) => (string) $d->weekPortion, $recordedDays),
+                array_filter(array_map(fn (CalendarDay $d) => $d->holiday['portion'] ?? null, $recordedDays)),
+            ) : null;
             $coverage = $this->leave->approvedCoverage($school, [$employmentRecordId], $coveredFrom, $coveredTo)[$employmentRecordId] ?? [];
             $records = $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
                 ->where('employment_record_id', $employmentRecordId)->whereBetween('attendance_date', [$coveredFrom, $coveredTo])->get()
@@ -108,7 +118,9 @@ class PayrollAbsenceEvidenceReader
 
             for ($d = CarbonImmutable::createFromFormat('!Y-m-d', $coveredFrom); $d->toDateString() <= $coveredTo; $d = $d->addDay()) {
                 $date = $d->toDateString();
-                $today = $calculator?->halves($date);
+                $recordedDay = $days[$date]->recorded();
+                $calendarNotRecorded = $calendarNotRecorded || ($calendarConfigured && ! $recordedDay);
+                $today = $recordedDay ? $calculator?->halves($date) : null;
                 $record = $records[$date] ?? null;
                 foreach ([1, 2] as $half) {
                     $leave = $coverage[$date][$half] ?? null;
@@ -120,7 +132,7 @@ class PayrollAbsenceEvidenceReader
                         'class' => match (true) {
                             $leave !== null => $leave['isPaid'] ? 'leave_paid' : 'leave_unpaid',
                             $recorded !== null => $recorded,
-                            $calendar === null => 'calendar_unknown',
+                            $calendar === null => $calendarConfigured ? 'calendar_not_recorded' : 'calendar_unknown',
                             $calendar === 'holiday' => 'holiday',
                             $calendar === 'off' => 'off_day',
                             default => 'unrecorded',
@@ -131,6 +143,8 @@ class PayrollAbsenceEvidenceReader
                         'staffAttendanceRecordId' => $recorded !== null ? $record->id : null,
                         'version' => $recorded !== null ? $record->version : null,
                         'recorded' => $recorded,
+                        // Provenance only, outside the fingerprint: the class above already changes when the calendar does.
+                        'calendarVersionId' => $days[$date]->versionId,
                     ];
                 }
             }
@@ -140,6 +154,7 @@ class PayrollAbsenceEvidenceReader
         $unresolved = $count('unrecorded');
         $reasons = array_values(array_filter([
             $covered && ! $calendarConfigured ? 'calendar_not_configured' : null,
+            $calendarNotRecorded ? 'calendar_not_recorded' : null,
             $unresolved > 0 ? 'unrecorded_working_time' : null,
         ]));
 
@@ -151,7 +166,7 @@ class PayrollAbsenceEvidenceReader
             coveredFrom: $covered ? $coveredFrom : null,
             coveredTo: $covered ? $coveredTo : null,
             calendarConfigured: $calendarConfigured,
-            requiredWorkingHalfUnits: $calendarConfigured ? count(array_filter($halves, fn (array $h) => $h['working'] === true)) : null,
+            requiredWorkingHalfUnits: $calendarConfigured && ! $calendarNotRecorded ? count(array_filter($halves, fn (array $h) => $h['working'] === true)) : null,
             approvedPaidLeaveHalfUnits: $count('leave_paid'),
             approvedUnpaidLeaveHalfUnits: $count('leave_unpaid'),
             recordedAbsenceHalfUnits: $count('absent'),

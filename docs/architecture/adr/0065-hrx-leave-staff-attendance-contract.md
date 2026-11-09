@@ -1608,7 +1608,7 @@ narrows §9, this section governs.
   - `read()`: fresh, no locks, for comparisons and screens;
   - `captureForPayroll()`: inside Payroll's transaction, under the §26.9
     locks, for snapshots.
-- **Contract version:** `hrx_payroll_input.v1`.
+- **Contract version:** `hrx_payroll_input.v1`; `hrx_payroll_input.v2` since HR.R1-C22 (§33: a half before the calendar history start is `calendar_not_recorded`; snapshots compare only within their own version).
 
 ### 26.4 Classification: one effective class per half (HRX.3 precedence)
 - **Within coverage**, each half is exactly one of:
@@ -2548,3 +2548,16 @@ The HR owner decided D-6: the staff calendar becomes effective-dated. It gets an
 - **Leave policy:** a read-only as-of reader over the existing immutable versions.
 
 **Status: decided, not built (WO-5).** Contract: `docs/hr/HR-R1-C21-D6-DECISION.md` §6. §23.10's calendar lock is unchanged.
+
+## 33. Amendment — HR.R1-C22 staff calendar history, built (WO-5, 2026-11-09)
+
+§32 is implemented as WO-5 (`docs/hr/HR-R1-C22-WO5-CALENDAR-HISTORY.md`).
+
+- **Tables:** `staff_working_week_versions` (append-only; active, withdrawn or superseded; a closed reason; recorded by and at; FORCE RLS; one active version per School and date); `staff_holidays` gains its lifecycle (active or withdrawn, recorded and withdrawal reasons, actor and time; one active holiday per date; runtime DELETE revoked). `staff_working_weekdays` is retired read-only; the migration recorded each School's complete pattern as its cutover version, effective from the School-local date it ran.
+- **Reader:** `StaffCalendarHistory` answers a date as RECORDED, NOT_RECORDED (before the history start) or NOT_CONFIGURED. Leave counting, the Staff Attendance writers, register and month view, and Payroll's HRX capture read it; the `WorkingDayCalculator` formula is unchanged. `LeavePolicyAsOf` reads the dated assignment's immutable version.
+- **Database:** guard triggers freeze terms and state, require a reason for a past date, refuse a date before the history start and runtime cutover rows, and (Staff Attendance's own guard) take the month keys shared and refuse a locked month; READ COMMITTED only. The verifier pins them.
+- **No backfill:** a past date needs a history start at or before it; a School without one starts today or later (service and database).
+- **HRX contract v2:** a half before the history start is `calendar_not_recorded` with a null working flag and names its calendar version; the capture fingerprint does not hash the version id (a changed answer already changes the hash). Snapshots are compared only within their own contract version, so a v1 snapshot is "not comparable", never a changed source; the shape CHECK admits v1 and v2.
+- **Deviations from the §32 contract:** the fingerprint as above; the change notice counts pending leave and recorded attendance only (Payroll never depends on Leave, so its differences remain `checkDifferences`); runtime UPDATE is table-level, with immutability enforced by the guard triggers for every role; no API endpoint withdraws a scheduled week.
+
+**Status: built for development.** §23.10's calendar lock is unchanged.

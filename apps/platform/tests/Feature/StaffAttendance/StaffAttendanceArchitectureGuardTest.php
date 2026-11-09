@@ -38,6 +38,12 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
         'App\\Domain\\Leave\\Application\\LeaveCoverageReader',
         'App\\Domain\\Leave\\Application\\LeaveLocks',
         'App\\Domain\\Leave\\Application\\StaffCalendarService',
+        // HR.R1-C22 (WO-5): the calendar's as-of reader and its value, the calculator, and the two ports Staff Attendance answers.
+        'App\\Domain\\Leave\\Application\\Calendar\\StaffCalendarHistory',
+        'App\\Domain\\Leave\\Application\\Calendar\\CalendarDay',
+        'App\\Domain\\Leave\\Application\\Calendar\\PastCalendarChangeGate',
+        'App\\Domain\\Leave\\Application\\Calendar\\CalendarChangeImpactSource',
+        'App\\Domain\\Leave\\Application\\WorkingDayCalculator',
     ];
 
     private function code(string $file): string

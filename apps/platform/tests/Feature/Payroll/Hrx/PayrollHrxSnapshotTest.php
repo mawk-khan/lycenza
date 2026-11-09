@@ -51,7 +51,7 @@ class PayrollHrxSnapshotTest extends TestCase
         $runId = $this->payrollRun($w['school'], [$w['employment']], '2026-09-01', 'calculated');
 
         $s = $this->snapshot($w, $runId);
-        $this->assertSame(['hrx_payroll_input.v1', 'input_incomplete', 1, 2, 48], [$s->contract_version, $s->completeness, $s->approved_unpaid_leave_half_units, $s->recorded_absence_half_units, $s->required_working_half_units]);
+        $this->assertSame(['hrx_payroll_input.v2', 'input_incomplete', 1, 2, 48], [$s->contract_version, $s->completeness, $s->approved_unpaid_leave_half_units, $s->recorded_absence_half_units, $s->required_working_half_units]);
         $this->assertSame($this->evidence($w)->fingerprint, $s->fingerprint);
         $this->assertSame(1, $this->inSchool($w['school'], fn () => DB::table('school_audit_events')->where('event_type', 'payroll.hrx_input.captured')->count()));
 

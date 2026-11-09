@@ -243,39 +243,30 @@ class StaffAttendanceMonthLockAcceptanceTest extends TestCase
             [$sqlKey],
         ))->pluck('mode')->all();
 
-        // The PHP lock, on a connection of its own so its release at commit is observable.
+        // The PHP lock, on a connection of its own so its release at commit is observable. HR.R1-C22: a month in the
+        // future, because the test's own transaction holds every past month shared (the fixture's past-dated week).
         config(['database.connections.c20_probe' => config('database.connections.pgsql')]);
-        $october = $key('2026-10-01');
-        DB::usingConnection('c20_probe', function () use ($school, $held, $october): void {
-            DB::transaction(function () use ($school, $held, $october): void {
-                StaffAttendanceMonthLocks::take($school, '2026-10-01', shared: true);
-                $this->assertSame(['ShareLock'], $held($october), 'the PHP lock is the SQL key, shared');
+        $month = '2030-01-01';
+        $probeKey = $key($month);
+        DB::usingConnection('c20_probe', function () use ($school, $held, $probeKey, $month): void {
+            DB::transaction(function () use ($school, $held, $probeKey, $month): void {
+                StaffAttendanceMonthLocks::take($school, $month, shared: true);
+                $this->assertSame(['ShareLock'], $held($probeKey), 'the PHP lock is the SQL key, shared');
             });
-            $this->assertSame([], $held($october), 'released at commit');
-            DB::transaction(function () use ($school, $held, $october): void {
-                StaffAttendanceMonthLocks::take($school, '2026-10-01', shared: false);
-                $this->assertSame(['ExclusiveLock'], $held($october), 'and exclusive for locking');
+            $this->assertSame([], $held($probeKey), 'released at commit');
+            DB::transaction(function () use ($school, $held, $probeKey, $month): void {
+                StaffAttendanceMonthLocks::take($school, $month, shared: false);
+                $this->assertSame(['ExclusiveLock'], $held($probeKey), 'and exclusive for locking');
                 DB::rollBack();
             });
-            $this->assertSame([], $held($october), 'released at rollback');
+            $this->assertSame([], $held($probeKey), 'released at rollback');
         });
         DB::purge('c20_probe');
 
-        // The trigger, on a raw runtime-role insert, for a month nothing in this test has touched.
-        $september = $key('2026-09-01');
-        $this->assertSame([], $held($september));
-        $this->inSchool($school, function () use ($school, $held, $september): void {
-            DB::beginTransaction();
-            try {
-                DB::table('staff_attendance_records')->insert([
-                    'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'employment_record_id' => $this->w['employment']->id,
-                    'employee_id' => $this->w['employment']->employee_id, 'attendance_date' => '2026-09-21', 'first_half_status' => 'present',
-                    'recorded_by_user_id' => $this->w['clerk']->id, 'created_at' => now(), 'updated_at' => now(),
-                ]);
-                $this->assertSame(['ShareLock'], $held($september), 'the trigger takes the same key, shared');
-            } finally {
-                DB::rollBack();
-            }
-        });
+        // The triggers take `staff_attendance_month_key(NEW.school_id, …)` (pinned by `staff_attendance_month_lock_invariants`),
+        // and that function is exactly the PHP key string's hash, for any School and month.
+        foreach (['2026-09-01', '2026-10-01', '2030-01-01'] as $m) {
+            $this->assertSame($key($m), (int) DB::selectOne('SELECT hashtextextended(?, 0) AS k', ['hr.staff_month:'.$school->id.':'.substr($m, 0, 7)])->k);
+        }
     }
 }

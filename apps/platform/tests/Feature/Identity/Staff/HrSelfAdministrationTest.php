@@ -23,7 +23,6 @@ use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearService;
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\TeachingAssignments\Application\TeachingOwnership;
 use App\Models\School;
@@ -35,6 +34,7 @@ use Tests\Concerns\CreatesTeachingAssignmentFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Auth\Mfa\Concerns\CreatesMfaFixtures;
+use Tests\Support\StaffCalendarFixture;
 use Tests\TestCase;
 
 /**
@@ -164,7 +164,7 @@ class HrSelfAdministrationTest extends TestCase
             'name' => 'Standard', 'annual_allocation_units' => 24, 'carry_forward_allowed' => false,
         ], null, $officer);
         $year = app(LeaveYearService::class)->open($school, '2026-06-01', $officer);
-        app(StaffCalendarService::class)->setWeeklyPattern($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], $officer);
+        StaffCalendarFixture::startHistory($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off']);
         app(LeavePolicyAssignmentService::class)->assign($school, $mine->id, $policy->id, '2026-04-01', null, $peer);
         app(LeaveLedgerService::class)->allocate($school, $mine->id, $type->id, $year->id, 24, $peer);
 
@@ -238,7 +238,7 @@ class HrSelfAdministrationTest extends TestCase
         [$colleague] = $this->holder($school, $admin);
         $mine = $this->employ($school, $officer, $peer, 'The Officer');
         $theirs = $this->employ($school, $colleague, $peer, 'Colleague');
-        app(StaffCalendarService::class)->setWeeklyPattern($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], $officer);
+        StaffCalendarFixture::startHistory($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off']);
         $attendance = app(StaffAttendanceService::class);
         $date = '2026-10-05';
 

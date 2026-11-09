@@ -5,7 +5,7 @@ namespace App\Domain\Leave\Application\Setup;
 use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
-use App\Domain\Leave\Infrastructure\StaffWorkingWeekday;
+use App\Domain\Leave\Infrastructure\StaffWorkingWeekVersion;
 use App\Models\School;
 use App\Support\Setup\SetupReadiness;
 use App\Support\Setup\SetupReadinessProvider;
@@ -32,7 +32,8 @@ class LeaveSetupReadiness implements SetupReadinessProvider
                     ->where('starts_on', '<=', $today)->where('ends_on', '>=', $today)->exists(),
                 'leave_types' => LeaveType::query()->where('school_id', $school->id)->where('status', 'active')->exists(),
                 'leave_policies' => LeavePolicy::query()->where('school_id', $school->id)->where('status', 'active')->exists(),
-                'working_week' => StaffWorkingWeekday::query()->where('school_id', $school->id)->exists(),
+                // HR.R1-C22: a week in force today, not only one scheduled for later.
+                'working_week' => StaffWorkingWeekVersion::query()->where('school_id', $school->id)->where('status', StaffWorkingWeekVersion::ACTIVE)->where('effective_from', '<=', $today)->exists(),
             ],
             configured: 'A leave year covers today, and leave types, policies and the staff working week are set up.',
             incomplete: 'Set up a leave year covering today, leave types and policies, and the staff working week.',

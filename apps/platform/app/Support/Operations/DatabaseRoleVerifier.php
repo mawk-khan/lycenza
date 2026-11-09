@@ -44,6 +44,8 @@ class DatabaseRoleVerifier
     public const NO_RUNTIME_DELETE = [
         // HR.R1-C20 (WO-6, rule 147): a month lock never goes, and a locked-month request leaves only by retention.
         'staff_attendance_month_locks', 'staff_attendance_locked_corrections',
+        // HR.R1-C22 (WO-5, S-16): the staff calendar's history is withdrawn or superseded, never deleted; the retired week is read-only.
+        'staff_working_week_versions', 'staff_holidays', 'staff_working_weekdays',
         'schools', 'platform_role_assignments', 'school_groups', 'api_clients', 'api_client_credentials',
         'platform_audit_events', 'school_audit_events', 'email_suppressions',
         'membership_role_assignments',
@@ -120,6 +122,8 @@ class DatabaseRoleVerifier
     public const NO_RUNTIME_UPDATE = [
         // HR.R1-C20 (WO-6, rule 147): a month lock is never moved or reopened.
         'staff_attendance_month_locks',
+        // HR.R1-C22 (WO-5): the retired week is read-only for the runtime role.
+        'staff_working_weekdays',
         // E21-RH.1: posted LWF annual charges are insert-once evidence.
         'payroll_lwf_annual_charges',
         // ORG.8B (ADR 0076 §60): a recorded calculation never changes.
@@ -653,8 +657,120 @@ class DatabaseRoleVerifier
         $results[] = $this->employeeAccountLinkCheck();
         $results[] = $this->employmentLifecycleAdmissionCheck();
         $results[] = $this->staffAttendanceMonthLockCheck();
+        $results[] = $this->staffCalendarHistoryCheck();
 
         return $results;
+    }
+
+    /**
+     * HR.R1-C22 (WO-5, D-6, S-16): the staff calendar's history backstops. Each trigger is defined exactly as shipped; the
+     * guards (comments stripped) check isolation, the history start, the reason for a past date, the migration-only
+     * cutover and replacement-only supersession; Staff Attendance's guard takes each reached month's key shared and
+     * refuses a locked one; the helpers do what the guards rely on; forced RLS; one active version per date and one
+     * active holiday per date; the runtime role cannot insert into the retired week (DELETE and UPDATE are in the
+     * destructive-privileges check).
+     */
+    /** HR.R1-C22 (C22 review L-3): md5 of each calendar guard's body, comments stripped and whitespace collapsed. */
+    private const STAFF_CALENDAR_GUARD_BODIES = [
+        'staff_working_week_versions_guard' => '49e359b6a086d08ccc6e5b27a4a6f9ee',
+        'staff_holidays_history_guard' => 'b262ecf991c69295e7dd090b05f1aba1',
+        'staff_attendance_calendar_month_guard' => '8e42646f24a593e676a821a4e120abf4',
+    ];
+
+    /** HR.R1-C22: md5 of each calendar CHECK constraint's `pg_get_constraintdef`. */
+    private const STAFF_CALENDAR_CHECKS = [
+        'staff_holidays_check' => '44c2a689f8e88c4e1c36695e5e0e6cb5',
+        'staff_holidays_reason_check' => '6cde663cbcbb8ddd8bdddf4ef3284a5f',
+        'staff_holidays_status_check' => '6d4e1dd9fe92120e7d778bebe4e9e9da',
+        'staff_working_week_versions_portions_check' => '1d4299fac7ae505ab6ea6216b3c6163e',
+        'staff_working_week_versions_reason_check' => '638c03ae7a0dd3faca9a9c8ed65d23af',
+        'staff_working_week_versions_recorder_check' => '142a4d316b683354aedbaa273ab12f45',
+        'staff_working_week_versions_status_change_check' => '75ac8f0200a6175143c44391fe4df128',
+        'staff_working_week_versions_status_check' => 'e38c4437f380700986e8e64f15336d76',
+    ];
+
+    private function staffCalendarHistoryCheck(): CheckResult
+    {
+        $strip = fn (string $src): string => (string) preg_replace(['/--[^\n]*/', '#/\*.*?\*/#s'], '', $src);
+        $triggers = [
+            'trg_staff_working_week_versions_guard' => ['staff_working_week_versions', 'BEFORE INSERT OR UPDATE ON public.staff_working_week_versions FOR EACH ROW EXECUTE FUNCTION staff_working_week_versions_guard()',
+                ['PERFORM public.staff_calendar_require_read_committed();', 'public.staff_calendar_history_start(NEW.school_id)', 'staff_calendar_reason_required', 'staff_calendar_cutover', 'pg_catalog.pg_trigger_depth()', 'staff_calendar_immutable']],
+            'trg_staff_holidays_history_guard' => ['staff_holidays', 'BEFORE INSERT OR UPDATE ON public.staff_holidays FOR EACH ROW EXECUTE FUNCTION staff_holidays_history_guard()',
+                ['PERFORM public.staff_calendar_require_read_committed();', 'public.staff_calendar_history_start(NEW.school_id)', 'staff_calendar_reason_required', 'staff_calendar_immutable']],
+            'trg_staff_attendance_calendar_month_guard' => ['staff_working_week_versions', 'BEFORE INSERT OR UPDATE ON public.staff_working_week_versions FOR EACH ROW EXECUTE FUNCTION staff_attendance_calendar_month_guard()',
+                ['pg_catalog.pg_advisory_xact_lock_shared(public.staff_attendance_month_key(NEW.school_id, v_month))', 'public.staff_attendance_month_is_locked(NEW.school_id, v_month)']],
+            'trg_staff_attendance_holiday_month_guard' => ['staff_holidays', 'BEFORE INSERT OR UPDATE ON public.staff_holidays FOR EACH ROW EXECUTE FUNCTION staff_attendance_calendar_month_guard()',
+                ['pg_catalog.pg_advisory_xact_lock_shared(public.staff_attendance_month_key(NEW.school_id, v_month))', 'public.staff_attendance_month_is_locked(NEW.school_id, v_month)']],
+        ];
+        $missing = [];
+        foreach ($triggers as $trigger => [$table, $definition, $needles]) {
+            $row = DB::selectOne(
+                "select p.prosrc as src, pg_get_triggerdef(t.oid) as def from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                 where t.tgrelid = ('public.'||?)::regclass and t.tgname = ? and t.tgenabled = 'O' and not t.tgisinternal",
+                [$table, $trigger],
+            );
+            if ($row === null || ! str_ends_with((string) $row->def, ' '.$definition)) {
+                $missing[] = $trigger;
+
+                continue;
+            }
+            $src = $strip((string) $row->src);
+            foreach ($needles as $needle) {
+                if (! str_contains($src, $needle)) {
+                    $missing[] = "{$trigger}:body";
+
+                    break;
+                }
+            }
+        }
+        // C22 review L-3: a needle proves a fragment is present, not that the logic around it is intact. Each guard's
+        // whole body (comments stripped, whitespace collapsed) and each CHECK is pinned exactly as shipped.
+        foreach (self::STAFF_CALENDAR_GUARD_BODIES as $function => $hash) {
+            $src = (string) (DB::selectOne("select prosrc as src from pg_proc where proname = ? and pronamespace = 'public'::regnamespace", [$function])->src ?? '');
+            if (md5(trim((string) preg_replace('/\s+/', ' ', $strip($src)))) !== $hash) {
+                $missing[] = "{$function}:shipped";
+            }
+        }
+        foreach (self::STAFF_CALENDAR_CHECKS as $constraint => $hash) {
+            $definition = DB::selectOne("select pg_get_constraintdef(oid) as d from pg_constraint where conname = ? and contype = 'c' and convalidated", [$constraint])->d ?? null;
+            if ($definition === null || md5((string) $definition) !== $hash) {
+                $missing[] = "{$constraint}:shipped";
+            }
+        }
+        $helpers = [
+            'staff_calendar_require_read_committed' => "IF pg_catalog.current_setting('transaction_isolation') <> 'read committed' THEN",
+            'staff_calendar_local_today' => 'SELECT (pg_catalog.now() AT TIME ZONE s.timezone)::date FROM public.schools s WHERE s.id = p_school',
+            'staff_calendar_history_start' => "SELECT min(effective_from) FROM public.staff_working_week_versions WHERE school_id = p_school AND status IN ('active', 'superseded')",
+        ];
+        foreach ($helpers as $function => $needle) {
+            if (! str_contains($strip((string) (DB::selectOne("select prosrc as src from pg_proc where proname = ? and pronamespace = 'public'::regnamespace", [$function])->src ?? '')), $needle)) {
+                $missing[] = "{$function}:body";
+            }
+        }
+        foreach (['staff_working_week_versions', 'staff_holidays'] as $table) {
+            $forced = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (?)::regclass', ["public.{$table}"]);
+            if ($forced === null || ! $forced->x) {
+                $missing[] = "{$table}:rls";
+            }
+        }
+        $active = "((status)::text = 'active'::text)";
+        foreach ([['staff_working_week_versions', 'school_id,effective_from'], ['staff_holidays', 'school_id,holiday_on']] as [$table, $columns]) {
+            $unique = (bool) DB::selectOne(
+                "select exists (select 1 from pg_index i where i.indrelid = (?)::regclass and i.indisunique and i.indisvalid
+                    and (select string_agg(a.attname, ',' order by k.ord) from unnest(i.indkey) with ordinality k(attnum, ord)
+                         join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum) = ?
+                    and pg_get_expr(i.indpred, i.indrelid) is not distinct from ?) as x",
+                ["public.{$table}", $columns, $active],
+            )->x;
+            if (! $unique) {
+                $missing[] = "{$table}:one_active";
+            }
+        }
+        if (DB::selectOne("select has_table_privilege(?, 'staff_working_weekdays', 'INSERT') as x", [self::RUNTIME_ROLE])->x) {
+            $missing[] = 'staff_working_weekdays:insert';
+        }
+
+        return CheckResult::of('staff_calendar_history_invariants', $missing === [], $missing === [] ? '' : implode(', ', $missing));
     }
 
     /**

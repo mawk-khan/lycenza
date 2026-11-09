@@ -52,6 +52,9 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
         // HR.R1-C18 (WO-6): the month lock and the locked-month request, every column forced by their writer.
         'StaffAttendanceMonthLock' => [],
         'StaffAttendanceLockedCorrection' => [],
+        // HR.R1-C22 (WO-5, D-6): a holiday's state, actor and reason columns are forced; a week version is forced whole.
+        'StaffHoliday' => ['holiday_on', 'portion', 'name'],
+        'StaffWorkingWeekVersion' => [],
         // HR.R1-C11's nine.
         'EmployeeCompensationAssignment' => ['effective_from', 'effective_to'],
         'EmploymentRecord' => ['probation_ends_on'],
@@ -76,7 +79,7 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
         'PayrollReversalReconciliationReview' => 'append-only', 'PayrollRunCalculation' => 'append-only', 'PayrollRunCalculationSource' => 'append-only',
         'PayrollRunHrxInput' => 'append-only', 'PayrollRunPosting' => 'append-only',
         // Configuration or operational: no caller array reaches them, and a person reviews them with their own domain.
-        'HrEmployeeNumberCounter' => 'configuration', 'LeaveSetting' => 'configuration', 'StaffHoliday' => 'decision-gated: D-6', 'StaffWorkingWeekday' => 'decision-gated: D-6',
+        'HrEmployeeNumberCounter' => 'configuration', 'LeaveSetting' => 'configuration', 'StaffWorkingWeekday' => 'retired: read-only since WO-5 (no runtime write)',
         'TaskCategory' => 'configuration', 'TaskGenerationRun' => 'operational', 'TaskTemplate' => 'configuration',
         // Payroll's own, outside WO-2's HR and Leave scope.
         'PayrollAccountingConfiguration' => 'other-domain: Payroll', 'PayrollRunResult' => 'other-domain: Payroll', 'PayrollRunResultLine' => 'other-domain: Payroll',
@@ -128,7 +131,7 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
     #[Test]
     public function the_inventory_is_the_whole_namespace(): void
     {
-        $this->assertCount(89, self::discovered(), 'A model was added or removed: give it a disposition here and in the C13 record.');
+        $this->assertCount(90, self::discovered(), 'A model was added or removed: give it a disposition here and in the C13 record.');
     }
 
     #[Test]

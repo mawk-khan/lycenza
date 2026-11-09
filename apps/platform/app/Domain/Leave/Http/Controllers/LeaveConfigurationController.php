@@ -2,6 +2,8 @@
 
 namespace App\Domain\Leave\Http\Controllers;
 
+use App\Domain\Leave\Application\Calendar\CalendarChangeReason;
+use App\Domain\Leave\Application\Calendar\StaffCalendarHistory;
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\LeaveCapabilities;
 use App\Domain\Leave\Application\LeavePolicyService;
@@ -10,10 +12,14 @@ use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearService;
 use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\Leave\Http\Requests\LeavePolicyInput;
-use App\Domain\Leave\Infrastructure\StaffWorkingWeekday;
+use App\Domain\Leave\Infrastructure\StaffHoliday;
+use App\Domain\Leave\Infrastructure\StaffWorkingWeekVersion;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\NormalizesCodeInput;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -137,34 +143,60 @@ class LeaveConfigurationController extends Controller
         return response()->json(['data' => $reads->calendar($school, $validated['from'], $validated['to'], $request->user())]);
     }
 
-    public function updateWeeklyPattern(Request $request, School $school, StaffCalendarService $calendar, LeaveReadService $reads): JsonResponse
+    /** HR.R1-C22 (WO-5, D-6): the week in force from a date (today by default); a past date is a correction (D6-5). */
+    public function updateWeeklyPattern(Request $request, School $school, StaffCalendarService $calendar, StaffCalendarHistory $history, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate([
             'weekdays' => ['required', 'array', 'size:7'],
             'weekdays.*.iso_weekday' => ['required', 'integer', 'between:1,7', 'distinct'],
-            'weekdays.*.portion' => ['required', Rule::in(StaffWorkingWeekday::PORTIONS)],
+            'weekdays.*.portion' => ['required', Rule::in(StaffWorkingWeekVersion::PORTIONS)],
+            'effective_from' => ['nullable', 'date_format:Y-m-d'],
         ]);
-        $calendar->setWeeklyPattern($school, collect($validated['weekdays'])->mapWithKeys(fn ($d) => [(int) $d['iso_weekday'] => $d['portion']])->all(), $request->user());
+        $from = $validated['effective_from'] ?? $history->today($school);
+        [$reason, $proof] = $this->correction($request, $school, $from, false, $history, $mfa);
+        $version = $calendar->recordWeek($school, $from, collect($validated['weekdays'])->mapWithKeys(fn ($d) => [(int) $d['iso_weekday'] => $d['portion']])->all(), $request->user(), $reason, $proof);
 
-        return response()->json(['data' => ['weeklyPattern' => $calendar->pattern($school)]]);
+        return response()->json(['data' => ['weeklyPattern' => $calendar->pattern($school), 'version' => LeaveReadService::weekVersion($version)]]);
     }
 
-    public function storeHoliday(Request $request, School $school, StaffCalendarService $calendar): JsonResponse
+    public function storeHoliday(Request $request, School $school, StaffCalendarService $calendar, StaffCalendarHistory $history, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'],
             'portion' => ['required', Rule::enum(DayPortion::class)],
             'name' => ['required', 'string', 'max:120'],
         ]);
+        [$reason, $proof] = $this->correction($request, $school, $validated['date'], false, $history, $mfa);
 
-        return response()->json(['data' => LeaveReadService::holiday($calendar->addHoliday($school, $validated['date'], DayPortion::from($validated['portion']), $validated['name'], $request->user()))], 201);
+        return response()->json(['data' => LeaveReadService::holiday($calendar->addHoliday($school, $validated['date'], DayPortion::from($validated['portion']), $validated['name'], $request->user(), $reason, $proof))], 201);
     }
 
-    public function destroyHoliday(Request $request, School $school, string $staffHoliday, StaffCalendarService $calendar): JsonResponse
+    /** S-16: withdraws the holiday (never deletes it). One that has taken effect needs a reason and a fresh code. */
+    public function destroyHoliday(Request $request, School $school, string $staffHoliday, StaffCalendarService $calendar, StaffCalendarHistory $history, FreshMfaRequirement $mfa, TenantContext $context): JsonResponse
     {
         abort_if(! Str::isUuid($staffHoliday), 404);
-        $calendar->removeHoliday($school, $staffHoliday, $request->user());
+        $holiday = $context->withSchool($school, fn () => StaffHoliday::query()->where('school_id', $school->id)->find($staffHoliday));
+        abort_if($holiday === null, 404);
+        [$reason, $proof] = $this->correction($request, $school, $holiday->holiday_on->toDateString(), true, $history, $mfa);
+        $calendar->withdrawHoliday($school, $staffHoliday, $request->user(), $reason, $proof);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * D6-5: a change dated before the School's today (a withdrawal: on or before it) needs a closed reason and the
+     * actor's own fresh code; the route's capability middleware has already run (rule 95).
+     *
+     * @return array{0: ?CalendarChangeReason, 1: ?FreshMfaProof}
+     */
+    private function correction(Request $request, School $school, string $date, bool $includingToday, StaffCalendarHistory $history, FreshMfaRequirement $mfa): array
+    {
+        $today = $history->today($school);
+        if ($includingToday ? $date > $today : $date >= $today) {
+            return [null, null];
+        }
+        $reason = $request->validate(['reason_code' => ['required', Rule::enum(CalendarChangeReason::class)]])['reason_code'];
+
+        return [CalendarChangeReason::from($reason), $mfa->requireForAction($request, $request->user())];
     }
 }

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Retention;
 
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Models\School;
@@ -11,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
+use Tests\Support\StaffCalendarFixture;
 use Tests\TestCase;
 
 /**
@@ -65,7 +65,7 @@ class HrxPayrollRetentionIndependenceTest extends TestCase
         // August 2015: a working week and two recorded absent halves, captured by the run.
         $this->travelTo(Carbon::parse('2015-08-05 10:00:00', 'UTC'));
         $calendarAdmin = $this->createUserWithCapabilities($school, ['hr.leave.configure']);
-        app(StaffCalendarService::class)->setWeeklyPattern($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], $calendarAdmin);
+        StaffCalendarFixture::startHistory($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off']);
         app(StaffAttendanceService::class)->record($school, $employmentId, '2015-08-03', 'absent', 'absent', $this->createUserWithCapabilities($school, ['hr.staff_attendance.manage']));
         $this->travelBack();
         $run = $this->postedRun($school, '2015-08-01', '2015-09-05');

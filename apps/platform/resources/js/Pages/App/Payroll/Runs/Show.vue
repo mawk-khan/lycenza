@@ -133,6 +133,7 @@ interface HrxInputs {
     payrollPolicy: string;
     frozen: boolean;
     differenceState: 'none' | 'source_changed_after_approval' | 'recalculate_to_refresh';
+    earlierContractInputs: number;
     inputs: Array<{
         employmentRecordId: string;
         employee: { employeeNumber: string | null; fullName: string | null };
@@ -142,6 +143,7 @@ interface HrxInputs {
         coveredFrom: string | null;
         coveredTo: string | null;
         units: HrxUnits;
+        comparable: boolean;
         sourceChanged: boolean;
         current: { fingerprint: string; units: HrxUnits };
     }>;
@@ -960,6 +962,14 @@ const reversalPosting = computed(
                 class="mt-2 rounded-xs border border-control-line bg-graphite-100 p-3 text-sm"
             >
                 HRX evidence changed since this calculation. Recalculate to refresh it.
+            </p>
+            <p
+                v-if="hrxInputs.earlierContractInputs > 0"
+                class="mt-2 rounded-xs border border-control-line bg-graphite-100 p-3 text-sm"
+            >
+                {{ hrxInputs.earlierContractInputs }} of these were captured under an earlier
+                evidence contract and are not compared with today's evidence. This run stays as it
+                is.
             </p>
             <p v-if="hrxInputs.inputs.length === 0" class="mt-2 text-sm text-ink-muted">
                 No HRX evidence has been captured yet (it is captured when results are calculated).

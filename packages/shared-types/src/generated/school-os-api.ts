@@ -1335,7 +1335,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** HRX.1: the staff weekly working pattern and the staff holidays in [from, to]. Requires hr.leave.view. */
+        /** HRX.1: the staff weekly working pattern and the staff holidays in [from, to]. Requires hr.leave.view. HR.R1-C22 (WO-5): the week in force today, every week version, holidays with their state, the history start (dates before it are "not recorded") and the School's today. */
         get: operations["getStaffCalendar"];
         put?: never;
         post?: never;
@@ -1353,7 +1353,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** HRX.1: sets all seven ISO weekdays (full, first_half or off). Requires hr.leave.configure. */
+        /** HRX.1: sets all seven ISO weekdays (full, first_half or off). Requires hr.leave.configure. HR.R1-C22 (WO-5, D-6): records the week in force from effective_from (default today); nothing is overwritten. A past effective_from is a correction: reason_code and the caller's own fresh mfa_code, refused before the history start (LEAVE_CALENDAR_BEFORE_HISTORY) or into a locked staff attendance month (LEAVE_CALENDAR_MONTH_LOCKED). */
         put: operations["updateStaffWeeklyPattern"];
         post?: never;
         delete?: never;
@@ -1371,7 +1371,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** HRX.1: adds a dated staff holiday (full day or one half). Requires hr.leave.configure. Idempotency-Key required. */
+        /** HRX.1: adds a dated staff holiday (full day or one half). Requires hr.leave.configure. Idempotency-Key required. HR.R1-C22 (WO-5): a past date is a correction (reason_code and the caller's own fresh mfa_code). */
         post: operations["createStaffHoliday"];
         delete?: never;
         options?: never;
@@ -1389,7 +1389,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** HRX.1: removes a staff holiday (configuration; audited). Requires hr.leave.configure. */
+        /** HRX.1: removes a staff holiday (configuration; audited). Requires hr.leave.configure. HR.R1-C22 (WO-5, S-16): WITHDRAWS the holiday; the row is kept, never deleted. A holiday that has taken effect (on or before today) is withdrawn only as a correction: reason_code and the caller's own fresh mfa_code. */
         delete: operations["deleteStaffHoliday"];
         options?: never;
         head?: never;
@@ -8943,12 +8943,44 @@ export interface components {
             eligibility_rules?: components["schemas"]["LeaveEligibilityRuleInput"][];
         };
         StaffWeeklyPattern: {
-            /** @description ISO weekday (1..7) => portion. */
+            /** @description ISO weekday (1..7) => portion, the week in force today. */
             weeklyPattern: {
                 [key: string]: "full" | "first_half" | "off";
             };
+            version?: components["schemas"]["StaffWorkingWeekVersion"];
+        };
+        StaffWorkingWeekVersion: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            effectiveFrom: string;
+            pattern: {
+                [key: string]: "full" | "first_half" | "off";
+            };
+            /** @enum {string} */
+            status: "active" | "withdrawn" | "superseded";
+            /** @enum {string|null} */
+            reasonCode: "cutover" | "late_declaration" | "entered_in_error" | "administrative_review" | null;
+            /** Format: uuid */
+            supersedesId: string | null;
+            /** Format: date-time */
+            recordedAt: string;
+        };
+        /** @description HR.R1-C22 (WO-5, D6-5): required only for a past-dated change. */
+        StaffCalendarCorrectionInput: {
+            /** @enum {string} */
+            reason_code?: "late_declaration" | "entered_in_error" | "administrative_review";
+            mfa_code?: string;
         };
         StaffWeeklyPatternInput: {
+            /**
+             * Format: date
+             * @description HR.R1-C22: default today; a past date is a correction.
+             */
+            effective_from?: string;
+            /** @enum {string} */
+            reason_code?: "late_declaration" | "entered_in_error" | "administrative_review";
+            mfa_code?: string;
             weekdays: {
                 iso_weekday: number;
                 /** @enum {string} */
@@ -8963,6 +8995,12 @@ export interface components {
             /** @enum {string} */
             portion: "full" | "first_half" | "second_half";
             name: string;
+            /** @enum {string} */
+            status: "active" | "withdrawn";
+            reasonCode: string | null;
+            withdrawnReasonCode: string | null;
+            /** Format: date-time */
+            withdrawnAt: string | null;
         };
         StaffHolidayCreateInput: {
             /** Format: date */
@@ -8970,12 +9008,23 @@ export interface components {
             /** @enum {string} */
             portion: "full" | "first_half" | "second_half";
             name: string;
+            /** @enum {string} */
+            reason_code?: "late_declaration" | "entered_in_error" | "administrative_review";
+            mfa_code?: string;
         };
         StaffCalendar: {
             weeklyPattern: {
                 [key: string]: string;
             };
             holidays: components["schemas"]["StaffHoliday"][];
+            versions: components["schemas"]["StaffWorkingWeekVersion"][];
+            /**
+             * Format: date
+             * @description HR.R1-C22: dates before it are not recorded.
+             */
+            historyStart: string | null;
+            /** Format: date */
+            today: string;
         };
         LeavePolicyAssignment: {
             /** Format: uuid */
@@ -9365,16 +9414,24 @@ export interface components {
             runKind: "regular" | "correction";
             /** @enum {string} */
             runStatus: "draft" | "calculated" | "approved" | "posted";
-            /** @enum {string} */
-            contractVersion: "hrx_payroll_input.v1";
+            /**
+             * @description The contract today's evidence is read under. HR.R1-C22 (WO-5): v2 adds the calendar_not_recorded class, a null working flag before the history start, and each half's calendar version.
+             * @enum {string}
+             */
+            contractVersion: "hrx_payroll_input.v2";
             /**
              * @description No payroll policy turns HRX evidence into a non-payable quantity until HRX-L4 is qualified.
              * @enum {string}
              */
             payrollPolicy: "pending_hrx_l4";
             frozen: boolean;
-            /** @enum {string} */
+            /**
+             * @description Decided from comparable inputs only.
+             * @enum {string}
+             */
             differenceState: "none" | "source_changed_after_approval" | "recalculate_to_refresh";
+            /** @description Snapshots captured under an earlier contract version: never compared with today's evidence, never reported as changed. */
+            earlierContractInputs: number;
             inputs: {
                 /** Format: uuid */
                 employmentRecordId: string;
@@ -9398,6 +9455,9 @@ export interface components {
                 units: components["schemas"]["PayrollHrxUnits"];
                 /** Format: date-time */
                 capturedAt: string;
+                /** @description False when the snapshot was captured under an earlier contract version. */
+                comparable: boolean;
+                /** @description Only ever true for a comparable snapshot. */
                 sourceChanged: boolean;
                 current: {
                     fingerprint: string;
@@ -16310,7 +16370,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description LEAVE_HOLIDAY_EXISTS. */
+            /** @description LEAVE_HOLIDAY_EXISTS, LEAVE_CALENDAR_BEFORE_HISTORY or LEAVE_CALENDAR_MONTH_LOCKED. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16341,9 +16401,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StaffCalendarCorrectionInput"];
+            };
+        };
         responses: {
-            /** @description Removed. */
+            /** @description Withdrawn. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -16368,6 +16432,15 @@ export interface operations {
             };
             /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_HOLIDAY_WITHDRAWN, LEAVE_CALENDAR_BEFORE_HISTORY or LEAVE_CALENDAR_MONTH_LOCKED. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

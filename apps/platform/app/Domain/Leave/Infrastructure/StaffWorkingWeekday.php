@@ -11,6 +11,10 @@ use Illuminate\Database\Eloquent\Model;
  * weekday (1 = Monday): `full` working day, `first_half` only, or `off`.
  * Staff calendar only; no academic calendar reads or writes it.
  *
+ * HR.R1-C22 (WO-5): retired. The runtime role writes nothing to it any more (INSERT, UPDATE and
+ * DELETE revoked); `staff_working_week_versions` is the calendar's week. Kept read-only as the
+ * source of each School's cutover version, until a forward migration retires it.
+ *
  * @property string $id
  * @property string $school_id
  */
@@ -22,7 +26,7 @@ class StaffWorkingWeekday extends Model
 
     protected $table = 'staff_working_weekdays';
 
-    protected $fillable = ['school_id', 'iso_weekday', 'portion', 'updated_by_user_id'];
+    protected $fillable = [];
 
     protected function casts(): array
     {

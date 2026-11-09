@@ -18,9 +18,16 @@ export function useAttendanceError(): ComputedRef<string | null> {
 export type HalfStatus = 'present' | 'absent' | null;
 
 export interface HalfView {
-    state: 'present' | 'absent' | 'leave' | 'holiday' | 'off_day' | 'unrecorded';
+    state:
+        | 'present'
+        | 'absent'
+        | 'leave'
+        | 'holiday'
+        | 'off_day'
+        | 'unrecorded'
+        | 'calendar_not_recorded';
     recorded: HalfStatus;
-    calendar: 'working' | 'holiday' | 'off' | null;
+    calendar: 'working' | 'holiday' | 'off' | 'not_recorded' | null;
     onLeave: boolean;
     leave: { leaveRequestId: string; leaveTypeName: string } | null;
 }
@@ -59,6 +66,8 @@ export const stateLabels: Record<string, string> = {
     holiday: 'Holiday',
     off_day: 'Off',
     unrecorded: 'Not recorded',
+    // HR.R1-C22 (WO-5): a day before the staff calendar's history start; never shown as working or off.
+    calendar_not_recorded: 'Calendar not recorded',
 };
 
 export const summaryLabels: Record<string, string> = {
@@ -70,6 +79,7 @@ export const summaryLabels: Record<string, string> = {
     off_day: 'Off',
     unrecorded: 'Not recorded',
     partially_recorded: 'Partly recorded',
+    calendar_not_recorded: 'Calendar not recorded',
     mixed: 'Leave and attendance',
 };
 

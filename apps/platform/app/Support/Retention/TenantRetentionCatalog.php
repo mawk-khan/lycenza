@@ -214,7 +214,7 @@ final class TenantRetentionCatalog
             // HR.R1-C18 (WO-6): which School-months of Staff Attendance are locked (a month, a locker, a time; no person data).
             'staff_attendance_month_locks']],
         'leave_configuration' => [self::TENANT_LIFETIME, 'HRX.1 (ADR 0065 §18): leave settings and prospective start-month changes, materialized leave years, leave types and policies, the staff working calendar and allocation-run headers; HR.9 (ADR 0065 §28.7): policy-version eligibility rules and eligibility-run headers -- School configuration without per-Employee amounts', [
-            'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_year_closes', 'leave_types', 'leave_policies', 'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs',
+            'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_year_closes', 'leave_types', 'leave_policies', 'staff_working_weekdays', 'staff_working_week_versions', 'staff_holidays', 'leave_allocation_runs',
             'leave_eligibility_rules', 'leave_eligibility_runs',
             // HR.10 (ADR 0065 §29.9): accrual-run headers (month, status, counts' cursor; no per-Employee amount).
             'leave_accrual_runs',

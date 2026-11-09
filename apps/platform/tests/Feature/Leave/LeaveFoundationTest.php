@@ -155,10 +155,10 @@ class LeaveFoundationTest extends TestCase
         $this->assertSame('LEAVE_CALENDAR_NOT_CONFIGURED', $this->code(fn () => $calendar->calculator($school, '2026-06-01', '2026-06-30')));
         $this->assertSame('LEAVE_CALENDAR_PATTERN_INVALID', $this->code(fn () => $calendar->setWeeklyPattern($school, [1 => 'full'], $admin)));
 
-        $calendar->setWeeklyPattern($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'first_half', 7 => 'off'], $admin);
-        $calendar->addHoliday($school, '2026-06-03', DayPortion::Full, 'Founders Day', $admin);
-        $calendar->addHoliday($school, '2026-06-04', DayPortion::SecondHalf, 'Half holiday', $admin);
-        $this->assertSame('LEAVE_HOLIDAY_EXISTS', $this->code(fn () => $calendar->addHoliday($school, '2026-06-03', DayPortion::Full, 'Again', $admin)));
+        $this->workingWeek($school, $admin);
+        $this->staffHoliday($school, '2026-06-03', DayPortion::Full, 'Founders Day', $admin);
+        $this->staffHoliday($school, '2026-06-04', DayPortion::SecondHalf, 'Half holiday', $admin);
+        $this->assertSame('LEAVE_HOLIDAY_EXISTS', $this->code(fn () => $this->staffHoliday($school, '2026-06-03', DayPortion::Full, 'Again', $admin)));
 
         $c = $calendar->calculator($school, '2026-06-01', '2026-06-30');
         // 2026-06-01 Monday .. 2026-06-07 Sunday

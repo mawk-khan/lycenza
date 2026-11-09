@@ -6,6 +6,7 @@ use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Leave\Application\Accrual\LeaveAccrualService;
+use App\Domain\Leave\Application\Calendar\CalendarChangeReason;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveLedgerService;
@@ -18,7 +19,9 @@ use App\Domain\Leave\Application\Policy\LeaveEligibilityCriteria;
 use App\Domain\Leave\Application\StaffCalendarService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
 
@@ -94,7 +97,8 @@ try {
         'end-employment' => 'ok:'.$app->make(EmploymentService::class)->end(EmploymentRecord::query()->findOrFail($args[1]), $args[2], User::query()->findOrFail($args[3]))->status,
         'close' => 'ok:'.$app->make(LeaveYearCloseService::class)->execute($school, $args[1], User::query()->findOrFail($args[2]))->item_count,
         'monday' => (function () use ($app, $school, $args) {
-            $app->make(StaffCalendarService::class)->setWeeklyPattern($school, [1 => $args[1], 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], User::query()->findOrFail($args[2]));
+            // HR.R1-C22: a past-dated correction of the week from 2026-10-01 (reason and the actor's own proof).
+            $app->make(StaffCalendarService::class)->recordWeek($school, $args[3] ?? '2026-10-01', [1 => $args[1], 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], User::query()->findOrFail($args[2]), CalendarChangeReason::LateDeclaration, new FreshMfaProof($args[2], CarbonImmutable::now()));
 
             return 'ok:'.$args[1];
         })(),

@@ -12,7 +12,6 @@ use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearService;
-use App\Domain\Leave\Application\StaffCalendarService;
 use App\Domain\Leave\Infrastructure\LeaveRequest;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
@@ -28,6 +27,7 @@ use Tests\Concerns\CreatesTeacherDeliveryFixtures;
 use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\Feature\Auth\Mfa\Concerns\CreatesMfaFixtures;
+use Tests\Support\StaffCalendarFixture;
 use Tests\TestCase;
 
 /**
@@ -154,7 +154,7 @@ class EmploymentChainProductionPathTest extends TestCase
         $type = app(LeaveTypeService::class)->create($school, 'CL', 'Casual leave', true, true, true, $officer);
         $policy = app(LeavePolicyService::class)->create($school, $type->id, ['name' => 'Standard', 'annual_allocation_units' => 24, 'carry_forward_allowed' => false], null, $officer);
         $year = app(LeaveYearService::class)->open($school, '2026-06-01', $officer);
-        app(StaffCalendarService::class)->setWeeklyPattern($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], $officer);
+        StaffCalendarFixture::startHistory($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off']);
         app(LeavePolicyAssignmentService::class)->assign($school, $teacherEmployment->id, $policy->id, '2026-04-01', null, $officer);
         app(LeaveLedgerService::class)->allocate($school, $teacherEmployment->id, $type->id, $year->id, 24, $officer);
 
