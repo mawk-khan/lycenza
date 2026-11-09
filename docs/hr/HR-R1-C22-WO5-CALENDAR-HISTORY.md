@@ -142,7 +142,11 @@ The fixes were not reviewed again by a separate reviewer.
 
 A manual screen-reader pass was not performed (C18-A12 stays PENDING).
 
-**Publication.** Recorded after the exact-SHA CI gate, in the evidence commit that follows this candidate.
+**Publication.** One candidate, `337631b7`.
+
+- **CI gate:** run 42586811898, green on its first attempt. Four shards of 2,898 = **11,592 cases, 0 failures, 0 errors, 1 skip (ESI-12, the legal deferral), 466,313 assertions**, with the coverage union proven. That is 42 more cases than C20.
+- **Publication:** `publication-check` publishable; E16 valid through 2026-11-28. `main` was fast-forwarded to `337631b7`.
+- **This record:** the CI figures were added in a docs-only evidence commit on top.
 
 ## 5. Deviations from the C21 contract
 
