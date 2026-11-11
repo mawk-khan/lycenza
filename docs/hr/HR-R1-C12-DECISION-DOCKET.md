@@ -270,7 +270,7 @@ Applying the ten points to the baseline shows where they need refining.
 | Each disputed writer has an outcome | Proposed; one question open |
 | Applies across HR and other domains | Ready only with refinements 5 and 6 |
 
-**Status: PROPOSED, PENDING.**
+**Status: DECIDED by Architecture, 2026-11-11 (HR.R1-C25): adopted with refinements, point 4 kept (WO-11), primary correction stays `setPrimary()`'s named operation** (`HR-R1-C25-R1-01-DECISION.md`). Enforcement is partial: WO-11 and WO-12.
 
 ## 6. D-3: leave accrual
 

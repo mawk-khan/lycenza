@@ -593,3 +593,14 @@ decision was taken or needed.
 
 - **The generic Documents route answers through its port.** `HrEmployeeDocumentPolicy` asks the School, so Documents still names no HR class and takes no new dependency (rule 4).
 - **Not decided here.** R1-01, D-1, D-2 and every other pending decision.
+
+### HR.R1-C25 amendment (2026-11-11): what "one writer" means
+
+**Status: decided by Architecture; enforcement partial.** R1-01's "exactly one writer" is the ten-point definition of `docs/hr/HR-R1-C10-ARCHITECTURE-INVENTORY.md` §1.8 with the refinements of `docs/hr/HR-R1-C12-DECISION-DOCKET.md` §5 (`docs/hr/HR-R1-C25-R1-01-DECISION.md` §2).
+
+- **Owner and operations.** Every business fact has one owning domain. Any number of entry points reach it through the owner's service. A second writing class needs a register entry naming its one operation (`HrWriterBoundaryTest::NAMED_WRITERS`, `WRITE_A_LOCKED_ROW`, or the table's own rule).
+- **Categories, not writers.** Migrations, projections and history written with their parent, retention, and local demo seeders. Trusted triggers satisfy the definition for what they write.
+- **Cross-domain writers.** Only rules 76 and 86.
+- **Privileges.** The runtime role holds only what the named operations need. Four HR tables still hold an unused DELETE (C12-N2), revoked by WO-11, not built. A privilege is never a business authorization.
+- **Primary correction.** `EmployeeAssignmentService::setPrimary()` stays the named writer of `primary_correction` (rule 130). C10-N2 is still open.
+- **Not adopted.** Module-specific database credentials. One runtime role serves every domain, so ownership is an application boundary backed by fact-level database invariants.

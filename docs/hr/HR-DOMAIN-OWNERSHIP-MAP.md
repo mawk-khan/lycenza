@@ -12,6 +12,8 @@ domain events. It never reads the owner's Eloquent models or tables. HR.0A
 **records** ownership. It fixes nothing silently: deviations are listed in
 §3 with their destination phase.
 
+**One writer (R1-01, decided HR.R1-C25).** "Exactly one writer" per row of §1 means one owning domain and its named operations, as defined in `HR-R1-C25-R1-01-DECISION.md` §2: any number of entry points through the owner's service, a second writing class only where a register names its operation, triggers, migrations, retention and local demo seeders as stated categories, and rules 76 and 86 as the only cross-domain writers.
+
 ## 1. Source of truth per function
 
 | Data / function | Owner (source of truth) | Not owned by | Contract / reader | Status |
