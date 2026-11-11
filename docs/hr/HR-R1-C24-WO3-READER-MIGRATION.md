@@ -170,3 +170,18 @@ Published through the protected exact-SHA flow (rule 96): the candidate on `inte
 - The capability map is unchanged at 361 rows (IMP 163, ALT 22, PART 8, MISS 0, XDOM 7, DEF 68, GATE 87, NR 6), and all 61 audit identifiers are preserved.
 
 **Next.** R1-01, the canonical-writer definition, is the next formal Architecture decision. It does not start without the owner's go-ahead.
+
+## 13. Publication evidence
+
+| | |
+|---|---|
+| Code commit | `ede8af12` (on `827749a7`), pushed as `integration/hr-r1-c24-wo3` |
+| Candidate `CI gate` | run 43100706287, check run 130799545769: **success on the first attempt**, no re-run. Every job green: 4 test shards, shard coverage (union = canonical suite), static checks (Pint, Larastan, frontend), secrets (full history), supply chain, production images, repository integrity |
+| Full suite on the exact SHA | 2,907 + 2,906 + 2,906 + 2,906 = **11,625 cases, 0 failures, 1 skip (ESI-12), 464,157 assertions** |
+| Against `337631b7` | +33 cases, exactly the tests this checkpoint added (19 API, 5 UI, 1 export, 6 register, 2 writer). Assertions −2,156: within the run-to-run swing recorded at earlier checkpoints (polling loops and row-dependent tests: C20 464,301, C22 466,313); no test removed |
+| Local gates | 94 + 106 focused, 541 `tests/Feature/Payroll`, 641 cross-domain and architecture, 38 repository-documents; Larastan and Pint clean; whitespace clean; gitleaks on `827749a7..ede8af12` clean; `platform:verify-database` failed=0 (one local-only operator-evidence row) |
+| `publication-check` | publishable, no problems; E16 last valid day 2026-11-28 |
+| Published | `publication-check --push`: remote `main` = `ede8af12`, fast-forward; local `main` fast-forwarded; integration branch deleted |
+| Main CI | run 43103462881 on `ede8af12`: success (the heavy lanes skip on `main` once the exact SHA's integration gate is green, by design) |
+| Regression counter | **0/5**: the green exact-SHA `CI gate` is the canonical full regression (ADR 0072 §28.8) |
+| Preserved | the historical stash, `integration/e16-r2`, the DDEV development database (read-only queries only; its October 2026 lock untouched) |
