@@ -33,7 +33,7 @@ class CompensationAssignmentController extends Controller
     public function index(School $school, string $employmentRecord, PayrollCompensationReadService $service): JsonResponse
     {
         $record = EmploymentRecord::query()->findOrFail($employmentRecord);
-        $assignments = $service->listAssignments($school, $record, request()->user());
+        $assignments = $service->listAssignments($school, $record->id, request()->user());
 
         return response()->json([
             'data' => array_map(fn (CompensationAssignmentSummary $a) => $this->presentSummary($a), $assignments),

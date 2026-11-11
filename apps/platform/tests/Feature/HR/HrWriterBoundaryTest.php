@@ -122,6 +122,58 @@ class HrWriterBoundaryTest extends TestCase
         $this->assertGreaterThan(1000, $scanned, 'the scan reached the application');
     }
 
+    /** HR.R1-C24 (WO-3, D-2): Payroll's own code. Tables Payroll may only read, whatever the runtime role holds (C23 §8). */
+    private const PAYROLL_PATHS = ['Domain/Payroll/', 'Http/Controllers/App/Payroll/'];
+
+    private const PAYROLL_READ_ONLY = ['employees', 'employment_records', 'employee_assignments', 'employee_account_links'];
+
+    /**
+     * A write through a variable holding an HR row. The model scan above cannot see `$record->update()`; inside
+     * Payroll, a mutator on a variable named for an HR row is refused by name. A heuristic: a differently named
+     * variable is still unseen, and a Payroll-owned row in a variable of one of these names would be refused too
+     * (`HR-R1-C24-WO3-READER-MIGRATION.md` §5).
+     */
+    private function payrollWritesThroughAnHrVariable(string $source): bool
+    {
+        return preg_match('/\$(?:employmentRecord|employmentRecords|record|records|er|employee|employees|emp|link)\??->(?:update\w*|save\w*|delete\w*|forceDelete\w*|forceFill|fill|increment|decrement|touch|push|restore)\(/', $source) === 1;
+    }
+
+    #[Test]
+    public function the_payroll_scan_really_sees_a_payroll_write(): void
+    {
+        // The negative controls: each of these, placed in a Payroll file, must fail the test below.
+        $this->assertSame(['EmploymentRecord'], $this->writesIn("EmploymentRecord::query()->whereKey(\$id)->update(['status' => 'separated']);", self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertSame(['employees'], $this->writesIn("DB::table('employees')->where('id', \$id)->update(['full_name' => 'x']);", self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertSame(['employee_account_links'], $this->writesIn('DB::statement("UPDATE employee_account_links SET voided_at = now()");', self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertSame(['employment_records'], $this->writesIn('DB::delete("DELETE FROM public.employment_records WHERE id = ?", [$id]);', self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertTrue($this->payrollWritesThroughAnHrVariable("\$employmentRecord->forceFill(['ends_on' => \$d])->save();"));
+        $this->assertTrue($this->payrollWritesThroughAnHrVariable('$record->delete();'));
+        // And the accepted shapes: a read, the governed reader, the D2-X08 lock, and a Payroll-owned row.
+        $this->assertSame([], $this->writesIn("EmploymentRecord::query()->where('id', \$id)->lockForUpdate()->firstOrFail();", self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertSame([], $this->writesIn('$this->roster->labels($school, $ids);', self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertSame([], $this->writesIn("PayrollRunResult::query()->create(['employee_id' => \$e]);", self::OWNED, self::PAYROLL_READ_ONLY));
+        $this->assertFalse($this->payrollWritesThroughAnHrVariable("\$run->forceFill(['status' => 'approved'])->save();"));
+    }
+
+    #[Test]
+    public function payroll_never_writes_an_hr_table(): void
+    {
+        // HR.R1-C24 (WO-3, D-2, C23 §1 D2-1): Payroll consumes HR facts and never writes them. The foreign-domain scan
+        // above covers this too; it is pinned here by name, with the link history, because one runtime role serves
+        // every domain and the database cannot tell a Payroll write from an HR one. The retention identity's
+        // SECURITY DEFINER D2-F8 is a database function, not Payroll code, and runs only as `school_os_retention`.
+        $scanned = 0;
+        foreach ($this->sources() as $path => $source) {
+            if (! str_starts_with($path, self::PAYROLL_PATHS[0]) && ! str_starts_with($path, self::PAYROLL_PATHS[1])) {
+                continue;
+            }
+            $scanned++;
+            $this->assertSame([], $this->writesIn($source, self::OWNED, [...self::OWNED_TABLES, ...self::PAYROLL_READ_ONLY]), "{$path} writes an HR table");
+            $this->assertFalse($this->payrollWritesThroughAnHrVariable($source), "{$path} writes through a variable holding an HR row");
+        }
+        $this->assertGreaterThan(100, $scanned, 'the scan reached Payroll');
+    }
+
     #[Test]
     public function only_the_step_up_routes_reach_the_generic_document_writer(): void
     {

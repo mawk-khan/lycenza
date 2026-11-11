@@ -5,6 +5,11 @@ namespace Tests\Feature\Payroll\Statutory;
 use App\Domain\Finance\Infrastructure\LedgerAccount;
 use App\Domain\Payroll\Application\PayrollPeriodService;
 use App\Domain\Payroll\Application\PayrollRunService;
+use App\Domain\Payroll\Statutory\Application\Admin\EmployeeEsiCoverageAdminService;
+use App\Domain\Payroll\Statutory\Application\Admin\EmployeePfStatusAdminService;
+use App\Domain\Payroll\Statutory\Application\Admin\EmployeeTaxProfileAdminService;
+use App\Domain\Payroll\Statutory\Application\Admin\StatutoryIdentifierAdminService;
+use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmploymentRecordNotFoundException;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeePfStatus;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeStatutoryIdentifier;
 use App\Models\School;
@@ -12,7 +17,10 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -217,6 +225,132 @@ class StatutoryAdminApiTest extends TestCase
             $this->withHeader('Authorization', 'Bearer '.$this->token($noCapabilityActor))
                 ->get("/api/v1/schools/{$school->id}/payroll-runs/{$run->id}/statutory-exports/{$export}")
                 ->assertForbidden();
+        }
+    }
+
+    // --- HR.R1-C24 (WO-3, D2-R10 to R22, D2-3): HR's reader decides existence; the 404 names nothing -----
+
+    /** @return array<string, array{0: string, 1: string, 2: string, 3: string, 4: int}> site => method, path, capability, payload, success */
+    public static function employmentSites(): array
+    {
+        return [
+            'D2-R10 pf show' => ['get', 'pf-status/{id}', 'payroll.statutory.view', '', 200],
+            'D2-R11 pf store' => ['post', 'pf-status/{id}', 'payroll.statutory.manage', 'pf', 201],
+            'D2-R12 esi index' => ['get', 'esi-coverage/{id}', 'payroll.statutory.view', '', 200],
+            'D2-R13 esi store' => ['post', 'esi-coverage/{id}', 'payroll.statutory.manage', 'esi', 201],
+            'D2-R14 tax index' => ['get', 'tax-profile/{id}', 'payroll.statutory.view', '', 200],
+            'D2-R15 tax store' => ['post', 'tax-profile/{id}', 'payroll.statutory.manage', 'tax', 201],
+            'D2-R16 identifiers index' => ['get', 'identifiers/{id}', 'payroll.statutory.view', '', 200],
+            'D2-R17 identifiers reveal' => ['get', 'identifiers/{id}/pan/reveal', 'payroll.statutory.identifiers.view', '', 200],
+            'D2-R18 identifiers store' => ['post', 'identifiers/{id}', 'payroll.statutory.identifiers.manage', 'identifier', 201],
+        ];
+    }
+
+    /** @return TestResponse<Response> */
+    private function callSite($user, School $school, string $method, string $path, string $payload, string $id)
+    {
+        Auth::forgetGuards();
+        $url = "/api/v1/schools/{$school->id}/payroll-statutory/".str_replace('{id}', $id, $path);
+        $data = match ($payload) {
+            'pf' => $this->pfPayload(),
+            'esi' => $this->esiPayload(),
+            'tax' => $this->taxProfilePayload(),
+            'identifier' => ['identifier_type' => 'pan', 'value' => 'ABCDE1234F'],
+            default => [],
+        };
+
+        return $this->withHeader('Authorization', 'Bearer '.$this->token($user))->json(strtoupper($method), $url, $data);
+    }
+
+    #[Test]
+    #[DataProvider('employmentSites')]
+    public function wo3_an_absent_or_foreign_employment_is_one_404_that_names_no_hr_class(string $method, string $path, string $capability, string $payload, int $success): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $foreign = $this->context()->withSchool($schoolB, fn () => $this->createEmploymentRecord($this->createEmployee($schoolB))->id);
+        $actor = $this->createUserWithCapabilities($schoolA, [$capability]);
+        $absent = (string) Str::uuid();
+
+        $bodies = [];
+        foreach (['absent' => $absent, 'another School' => $foreign] as $case => $id) {
+            $response = $this->callSite($actor, $schoolA, $method, $path, $payload, $id)->assertNotFound();
+            $raw = $response->getContent();
+            foreach (['App\\', 'EmploymentRecord', 'employment_records', 'Infrastructure', $id] as $leak) {
+                $this->assertStringNotContainsString($leak, $raw, "{$case}: the 404 body names {$leak}");
+            }
+            $error = $response->json('error');
+            unset($error['requestId']);
+            $bodies[$case] = $error;
+        }
+
+        $this->assertSame(['message' => 'No query results for the employment.', 'status' => 404, 'code' => null, 'errors' => null], $bodies['absent']);
+        $this->assertSame($bodies['absent'], $bodies['another School'], 'a foreign id is indistinguishable from an absent one');
+    }
+
+    #[Test]
+    #[DataProvider('employmentSites')]
+    public function wo3_the_capability_is_still_asked_first_and_every_employment_status_still_answers(string $method, string $path, string $capability, string $payload, int $success): void
+    {
+        $school = $this->createSchool();
+        [$active, $ended, $rehired] = $this->context()->withSchool($school, function () use ($school) {
+            $returning = $this->createEmployee($school);
+
+            return [
+                $this->createEmploymentRecord($this->createEmployee($school))->id,
+                $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2024-01-01', 'ends_on' => '2025-03-31'])->id,
+                [$this->createEmploymentRecord($returning, ['starts_on' => '2022-01-01', 'ends_on' => '2022-12-31'])->id, $this->createEmploymentRecord($returning, ['starts_on' => '2024-01-01'])->id],
+            ];
+        });
+
+        // Deny: the same 403 for a real id and an absent one, before any lookup.
+        $nobody = $this->createUserWithCapabilities($school, []);
+        foreach ([$active, (string) Str::uuid()] as $id) {
+            $this->callSite($nobody, $school, $method, $path, $payload, $id)->assertForbidden();
+        }
+
+        // Allow: active, ended, and both employments of a rehired Employee are found. The services' own rules still apply.
+        $holder = $this->createUserWithCapabilities($school, [$capability]);
+        if ($capability === 'payroll.statutory.identifiers.view') {
+            $this->context()->withSchool($school, function () use ($school, $active, $ended, $rehired) {
+                foreach ([$active, $ended, ...$rehired] as $id) {
+                    EmployeeStatutoryIdentifier::query()->create(['school_id' => $school->id, 'employment_record_id' => $id, 'identifier_type' => 'pan', 'encrypted_value' => 'ABCDE1234F', 'lookup_hash' => hash('sha256', $id)]);
+                }
+            });
+        }
+        $this->callSite($holder, $school, $method, $path, $payload, $active)->assertStatus($success);
+        foreach ([$ended, ...$rehired] as $id) {
+            $status = $this->callSite($holder, $school, $method, $path, $payload, $id)->status();
+            // Found: a success, or the service's own refusal of the write (a 4xx other than 404). Never a 404 or a 500.
+            $this->assertTrue($status < 500 && $status !== 404, "an ended or earlier employment still exists ({$status})");
+        }
+    }
+
+    #[Test]
+    public function wo3_the_admin_services_find_every_status_and_refuse_absent_or_foreign_ids_alike(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $ended = $this->context()->withSchool($schoolA, fn () => $this->createEmploymentRecord($this->createEmployee($schoolA), ['starts_on' => '2024-01-01', 'ends_on' => '2025-03-31'])->id);
+        $foreign = $this->context()->withSchool($schoolB, fn () => $this->createEmploymentRecord($this->createEmployee($schoolB))->id);
+        $viewer = $this->createUserWithCapabilities($schoolA, ['payroll.statutory.view']);
+
+        $reads = [
+            'D2-R19' => fn (string $id) => app(EmployeePfStatusAdminService::class)->view($schoolA, $id, $viewer),
+            'D2-R20' => fn (string $id) => app(EmployeeEsiCoverageAdminService::class)->history($schoolA, $id, $viewer),
+            'D2-R21' => fn (string $id) => app(EmployeeTaxProfileAdminService::class)->history($schoolA, $id, $viewer),
+            'D2-R22' => fn (string $id) => app(StatutoryIdentifierAdminService::class)->list($schoolA, $id, $viewer),
+        ];
+        foreach ($reads as $site => $read) {
+            $read($ended);
+            foreach ([(string) Str::uuid(), $foreign] as $id) {
+                try {
+                    $read($id);
+                    $this->fail("{$site}: {$id} was found");
+                } catch (StatutoryEmploymentRecordNotFoundException $e) {
+                    $this->assertSame(404, $e->getStatusCode(), $site);
+                }
+            }
         }
     }
 

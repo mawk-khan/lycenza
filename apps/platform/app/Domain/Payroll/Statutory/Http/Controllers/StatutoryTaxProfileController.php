@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Statutory\Http\Controllers;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Statutory\Application\Admin\EmployeeTaxProfileAdminService;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeTaxProfile;
 use App\Http\Controllers\Controller;
@@ -18,9 +17,11 @@ use Illuminate\Http\Request;
  */
 class StatutoryTaxProfileController extends Controller
 {
+    use RequiresSchoolEmployment;
+
     public function index(Request $request, School $school, string $employmentRecord, EmployeeTaxProfileAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
         $profiles = $service->history($school, $employmentRecord, $request->user());
 
         return response()->json(['data' => $profiles->map(fn (EmployeeTaxProfile $p) => $this->present($p))->all()]);
@@ -28,7 +29,7 @@ class StatutoryTaxProfileController extends Controller
 
     public function store(Request $request, School $school, string $employmentRecord, EmployeeTaxProfileAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
 
         $validated = $request->validate([
             'fiscal_year_start' => ['required', 'date'],

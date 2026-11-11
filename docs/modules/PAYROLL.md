@@ -106,8 +106,11 @@ HR's Application readers where the register says so (`EmploymentRoster::span()`,
 `labels()`, `ActingEmployeeResolver`, `HrSelfAdministrationGuard`, the retention
 readers), and directly only at the sites, foreign keys and SQL functions named in
 `docs/hr/HR-R1-C23-D2-DECISION.md` §3. A new Payroll reference to an HR model,
-table or function needs an Architecture decision first. Until WO-3 ships, the 22
-reader sites still read the HR models directly.
+table or function needs an Architecture decision first. WO-3 shipped in
+HR.R1-C24: the 22 reader sites now use `EmploymentRoster`, and
+`PayrollHrBoundaryRegisterTest` fails on any reference the register does not name
+(CLAUDE.md rule 150). The statutory API answers an absent or another School's
+employment with one 404 body that names no HR class.
 
 ## Core entities
 

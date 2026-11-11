@@ -2,7 +2,7 @@
 
 namespace App\Domain\Payroll\Statutory\Application\Admin;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmploymentRecordNotFoundException;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeTaxProfile;
 use App\Models\School;
@@ -32,6 +32,7 @@ class EmployeeTaxProfileAdminService
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly SchoolOperationalGuard $operational,
+        private readonly EmploymentRoster $roster,
     ) {}
 
     /**
@@ -94,7 +95,8 @@ class EmployeeTaxProfileAdminService
 
     private function assertEmploymentRecordExists(School $school, string $employmentRecordId): void
     {
-        $exists = EmploymentRecord::query()->where('school_id', $school->id)->where('id', $employmentRecordId)->exists();
+        // HR.R1-C24 (WO-3, D2-R21): HR's reader answers, any status, ended included; another School's id is absent.
+        $exists = $this->roster->span($school, $employmentRecordId) !== null;
 
         if (! $exists) {
             throw new StatutoryEmploymentRecordNotFoundException($employmentRecordId);

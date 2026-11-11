@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Payroll\Statutory;
 
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Statutory\Application\Admin\EmployeeEsiCoverageAdminService;
 use App\Domain\Payroll\Statutory\Application\Admin\EmployeePfStatusAdminService;
@@ -82,15 +83,17 @@ class StatutoryEmployeeController extends Controller
         // HR.R1-C14 (C12-N3): the capability first. Sibling actions still look up first: C14-N1.
         $this->authorizeCapability('payroll.statutory.view', $school);
 
-        $record = EmploymentRecord::query()->where('school_id', $school->id)->with('employee')->findOrFail($employmentRecord);
+        // HR.R1-C24 (WO-3, D2-R05): the directory-tier label, never the HR model. Absent or another School's: 404.
+        $record = app(EmploymentRoster::class)->labels($school, [$employmentRecord])[0] ?? abort(404);
+        $recordId = $record['employmentRecordId'];
 
-        $pfStatus = $pfService->view($school, $record->id, $actor);
-        $esiHistory = $esiService->history($school, $record->id, $actor);
-        $taxProfiles = $taxService->history($school, $record->id, $actor);
-        $identifiers = $identifierService->list($school, $record->id, $actor);
+        $pfStatus = $pfService->view($school, $recordId, $actor);
+        $esiHistory = $esiService->history($school, $recordId, $actor);
+        $taxProfiles = $taxService->history($school, $recordId, $actor);
+        $identifiers = $identifierService->list($school, $recordId, $actor);
 
         $results = $context->withSchool($school, fn () => PayrollStatutoryCalculationResult::query()
-            ->whereHas('payrollRunResult', fn ($q) => $q->where('employment_record_id', $record->id))
+            ->whereHas('payrollRunResult', fn ($q) => $q->where('employment_record_id', $recordId))
             ->with('payrollRunResult.run.period')
             ->orderByDesc('created_at')
             ->limit(12)
@@ -98,9 +101,9 @@ class StatutoryEmployeeController extends Controller
 
         return Inertia::render('App/Payroll/Statutory/Employee/Show', [
             'employmentRecord' => [
-                'id' => $record->id,
-                'employeeFullName' => $record->employee?->full_name,
-                'employeeNumber' => $record->employee?->employee_number,
+                'id' => $recordId,
+                'employeeFullName' => $record['fullName'],
+                'employeeNumber' => $record['employeeNumber'],
             ],
             'can' => [
                 'manage' => $capabilities->canInSchool($actor, 'payroll.statutory.manage', $school),

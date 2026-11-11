@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Payroll;
 
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CompensationAssignmentSummary;
 use App\Domain\Payroll\Application\CompensationAssignmentValueDetail;
@@ -97,9 +98,10 @@ class CompensationController extends Controller
         $this->authorizeCapability('payroll.compensation.view', $school);
         $holdsSensitive = $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.view', $school);
         $assured = $assurance->holds($request);
-        $record = EmploymentRecord::query()->findOrFail($employmentRecord);
+        // HR.R1-C24 (WO-3, D2-R04): the directory-tier label, never the HR model. Absent or another School's: 404.
+        $record = app(EmploymentRoster::class)->labels($school, [$employmentRecord])[0] ?? abort(404);
 
-        $assignments = $compensation->listAssignments($school, $record, $actor);
+        $assignments = $compensation->listAssignments($school, $record['employmentRecordId'], $actor);
 
         // Only fetched for an actor who also holds payroll.structures.view
         // -- a plain payroll.compensation.view holder must not be denied
@@ -132,10 +134,10 @@ class CompensationController extends Controller
 
         return Inertia::render('App/Payroll/Compensation/Show', [
             'employmentRecord' => [
-                'id' => $record->id,
-                'employeeId' => $record->employee_id,
-                'employeeFullName' => $record->employee?->full_name,
-                'employeeNumber' => $record->employee?->employee_number,
+                'id' => $record['employmentRecordId'],
+                'employeeId' => $record['employeeId'],
+                'employeeFullName' => $record['fullName'],
+                'employeeNumber' => $record['employeeNumber'],
             ],
             'assignments' => array_map(fn (CompensationAssignmentSummary $a) => [
                 'id' => $a->id,

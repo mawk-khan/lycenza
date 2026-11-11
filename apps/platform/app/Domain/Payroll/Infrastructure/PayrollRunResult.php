@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Infrastructure;
 
-use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
@@ -62,12 +61,6 @@ class PayrollRunResult extends Model
     public function employmentRecord(): BelongsTo
     {
         return $this->belongsTo(EmploymentRecord::class);
-    }
-
-    /** @return BelongsTo<Employee, $this> */
-    public function employee(): BelongsTo
-    {
-        return $this->belongsTo(Employee::class);
     }
 
     /** @return HasMany<PayrollRunResultLine, $this> */

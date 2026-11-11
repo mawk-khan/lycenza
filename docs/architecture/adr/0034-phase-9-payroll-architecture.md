@@ -404,3 +404,13 @@ author approving the next run, which first paid the change. Amended:
     decision first. Rejected: one blanket exception (it excuses future code), and a
     reader for every site (it touches the provenance paths for little
     minimization).
+    **Implemented by HR.R1-C24 (WO-3, 2026-11-11).** The 22 sites read through
+    `EmploymentRoster`; `listAssignments()` takes an id, so the shipped split is
+    22 moved, 26 exceptions (D2-X24 left), 12 no change (D2-N09, the unused
+    `PayrollRunResult::employee()`, removed). The nine API existence sites answer
+    one fixed 404 body, "No query results for the employment.", for an absent and
+    another School's id alike. `PayrollHrBoundaryRegisterTest` pins the register
+    per file, the nine keys and the eight functions with their security mode;
+    `HrWriterBoundaryTest::payroll_never_writes_an_hr_table()` pins the writes.
+    No calculation, approval, posting, reversal, correction, schema, grant or
+    function changed. Record: `docs/hr/HR-R1-C24-WO3-READER-MIGRATION.md`.

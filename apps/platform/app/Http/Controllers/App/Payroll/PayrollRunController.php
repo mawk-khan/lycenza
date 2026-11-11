@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Payroll;
 
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CorrectionDeltaInput;
 use App\Domain\Payroll\Application\CorrectionTargetGuard;
@@ -273,19 +274,18 @@ class PayrollRunController extends Controller
             ];
         }
 
+        // HR.R1-C24 (WO-3, D2-R01 to R03): names come from HR's directory-tier reader, never the HR model.
+        $roster = app(EmploymentRoster::class);
+
         $unresolvedEmployees = [];
         $unresolvedIds = $calculationOutcome['unresolvedEmploymentRecordIds'] ?? [];
         if ($unresolvedIds !== []) {
-            $unresolvedEmployees = $context->withSchool($school, fn () => EmploymentRecord::query()
-                ->whereIn('id', $unresolvedIds)
-                ->with('employee')
-                ->get()
-                ->map(fn (EmploymentRecord $er) => [
-                    'employmentRecordId' => $er->id,
-                    'employeeId' => $er->employee_id,
-                    'employeeFullName' => $er->employee?->full_name,
-                    'employeeNumber' => $er->employee?->employee_number,
-                ])->all());
+            $unresolvedEmployees = array_map(fn (array $label) => [
+                'employmentRecordId' => $label['employmentRecordId'],
+                'employeeId' => $label['employeeId'],
+                'employeeFullName' => $label['fullName'],
+                'employeeNumber' => $label['employeeNumber'],
+            ], $roster->labels($school, $unresolvedIds));
         }
 
         // Non-sensitive identity for every result row -- so a viewer
@@ -293,15 +293,12 @@ class PayrollRunController extends Controller
         // from a raw employmentRecordId in the results table below.
         $resultEmployeeNames = [];
         if ($resultDetails !== null && $resultDetails !== []) {
-            $resultEmployeeNames = $context->withSchool($school, fn () => EmploymentRecord::query()
-                ->whereIn('id', array_map(fn (PayrollRunResultDetail $r) => $r->employmentRecordId, $resultDetails))
-                ->with('employee')
-                ->get()
-                ->mapWithKeys(fn (EmploymentRecord $er) => [$er->id => [
-                    'employeeFullName' => $er->employee?->full_name,
-                    'employeeNumber' => $er->employee?->employee_number,
+            $resultEmployeeNames = collect($roster->labels($school, array_map(fn (PayrollRunResultDetail $r) => $r->employmentRecordId, $resultDetails)))
+                ->mapWithKeys(fn (array $label) => [$label['employmentRecordId'] => [
+                    'employeeFullName' => $label['fullName'],
+                    'employeeNumber' => $label['employeeNumber'],
                 ]])
-                ->all());
+                ->all();
         }
 
         // Same identity, drawn from the ORIGINAL run's results, for the
@@ -311,12 +308,9 @@ class PayrollRunController extends Controller
         $correctionCandidates = [];
         if ($canViewSensitive && $summary->runKind === 'correction' && $summary->correctsPayrollRunId !== null) {
             $originalResults = $results->listResults($school, $summary->correctsPayrollRunId, $actor);
-            $originalNames = $context->withSchool($school, fn () => EmploymentRecord::query()
-                ->whereIn('id', array_map(fn (PayrollRunResultDetail $r) => $r->employmentRecordId, $originalResults))
-                ->with('employee')
-                ->get()
-                ->mapWithKeys(fn (EmploymentRecord $er) => [$er->id => $er->employee?->full_name])
-                ->all());
+            $originalNames = collect($roster->labels($school, array_map(fn (PayrollRunResultDetail $r) => $r->employmentRecordId, $originalResults)))
+                ->mapWithKeys(fn (array $label) => [$label['employmentRecordId'] => $label['fullName']])
+                ->all();
             $correctionCandidates = array_map(fn (PayrollRunResultDetail $r) => [
                 'employmentRecordId' => $r->employmentRecordId,
                 'employeeFullName' => $originalNames[$r->employmentRecordId] ?? null,

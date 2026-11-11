@@ -118,7 +118,7 @@ Each exception covers its own site only, for reads of the named columns of `empl
 | D2-X21 | `PayrollRunService:210` (205) | Type hint, `id` only | 12 signatures for little minimization | None |
 | D2-X22 | `PayrollRunService:264` (258) | Same | Same | None |
 | D2-X23 | `CompensationService:74` (72) | Same | Same | None |
-| D2-X24 | `PayrollCompensationReadService:50` | Same | Same. Can leave the list (§3.5) | None |
+| D2-X24 | `PayrollCompensationReadService:50` | Same | Same. Can leave the list (§3.5). **Left, HR.R1-C24** | None |
 | D2-X25 | `PayrollCompensationAdministrationService:45` | `id` for `isEmployeeOf()` | Same | None |
 | D2-X26 – X27 | `PayrollRunAdministrationService:72, 86` | Same | Same | None |
 
@@ -127,7 +127,7 @@ Each exception covers its own site only, for reads of the named columns of `empl
 | Id | Site | Why it is already compliant |
 |---|---|---|
 | D2-N01 – N08 | `employmentRecord()` relations on `EmployeeCompensationAssignment:66`, `PayrollRunResult:64`, `PayrollAdjustment:75`, `EmployeePfStatus:56`, `EmployeeEsiCoverage:46`, `EmployeeTaxProfile:48`, `EmployeeStatutoryIdentifier:43`, `PayrollLwfAnnualCharge:27` | Unused in production; a key the FK binds |
-| D2-N09 | `PayrollRunResult:70` `employee()` | Used only by the three exports, D2-R07 to R09. Unused once they move; WO-3 may then remove it |
+| D2-N09 | `PayrollRunResult:70` `employee()` | Used only by the three exports, D2-R07 to R09. Unused once they move; WO-3 may then remove it. **Removed, HR.R1-C24** |
 | D2-N10 – N12 | `PayrollEmployeeRetentionService:54, 61, 71` | Retention identity with column grants (E21); a platform mechanism, not a business read. `:71` names HR tables, so an HR schema change can need a Payroll edit |
 | D2-N13 | `PayrollEvidenceRetentionService:90` | Same |
 
@@ -176,6 +176,8 @@ Each exception covers its own site only, for reads of the named columns of `empl
 ### 3.5 The one dependent move
 
 `CompensationController:100` (D2-R04) passes its model to `PayrollCompensationReadService::listAssignments()`. It can move only if that method takes an id. If WO-3 changes the signature, D2-X24 disappears, and D2-X19 too unless another use of the model remains. Those sites are removed, not reclassified: **22 / 26 / 13**, or **22 / 25 / 13**. If the signature stays, D2-R04 becomes an id-only exception: **21 / 28 / 13**. **Both outcomes are inside D2-1.** WO-3 records which one shipped and updates this register in the same change.
+
+**Shipped (HR.R1-C24, 2026-11-11):** `listAssignments()` takes an id. D2-X24 is gone; D2-X19 stays, because the API `index` still needs its lookup to answer 404 for an unknown id. WO-3 also removed D2-N09 (the unused `PayrollRunResult::employee()`), as §11 allowed. **Final split: 22 moved / 26 exceptions / 12 no change**, pinned by `PayrollHrBoundaryRegisterTest` (`HR-R1-C24-WO3-READER-MIGRATION.md`).
 
 ## 4. Ownership
 
@@ -279,7 +281,7 @@ D-2 is re-opened by Architecture when any of these happens:
 - a reader in §5 changing its fields, School handling or error behaviour;
 - a Payroll write to an HR table (prohibited outright).
 
-## 11. WO-3: the authorized work order (not started)
+## 11. WO-3: the authorized work order (shipped in HR.R1-C24)
 
 | Field | Content |
 |---|---|

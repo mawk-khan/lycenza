@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Statutory\Http\Controllers;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Statutory\Application\Admin\StatutoryIdentifierAdminService;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -21,9 +20,11 @@ use Illuminate\Http\Request;
  */
 class StatutoryIdentifierController extends Controller
 {
+    use RequiresSchoolEmployment;
+
     public function index(Request $request, School $school, string $employmentRecord, StatutoryIdentifierAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
         $identifiers = $service->list($school, $employmentRecord, $request->user());
 
         return response()->json(['data' => $identifiers->all()]);
@@ -31,7 +32,7 @@ class StatutoryIdentifierController extends Controller
 
     public function reveal(Request $request, School $school, string $employmentRecord, string $identifierType, StatutoryIdentifierAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
         $value = $service->reveal($school, $employmentRecord, $identifierType, $request->user());
 
         return response()->json(['data' => ['identifierType' => $identifierType, 'value' => $value]]);
@@ -39,7 +40,7 @@ class StatutoryIdentifierController extends Controller
 
     public function store(Request $request, School $school, string $employmentRecord, StatutoryIdentifierAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
 
         $validated = $request->validate([
             'identifier_type' => ['required', 'in:pan,uan,pf_member_id,esic_ip_number'],

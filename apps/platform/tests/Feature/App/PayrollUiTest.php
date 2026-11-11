@@ -731,4 +731,177 @@ class PayrollUiTest extends TestCase
         $this->actingAs($sensitiveViewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}")
             ->assertStatus(422);
     }
+
+    // --- HR.R1-C24 (WO-3, D-2): Payroll names people through HR's reader --------------
+
+    /**
+     * The name and number HR holds for each employment, read straight from the tables, so the expectation never
+     * goes through the reader under test.
+     *
+     * @return array<string, array{employeeId: string, employeeFullName: string, employeeNumber: ?string}>
+     */
+    private function hrFacts(School $school): array
+    {
+        return app(TenantContext::class)->withSchool($school, fn () => DB::table('employment_records as er')
+            ->join('employees as e', 'e.id', '=', 'er.employee_id')->where('er.school_id', $school->id)
+            ->get(['er.id', 'er.employee_id', 'e.full_name', 'e.employee_number'])
+            ->mapWithKeys(fn ($r) => [$r->id => ['employeeId' => $r->employee_id, 'employeeFullName' => $r->full_name, 'employeeNumber' => $r->employee_number]])->all());
+    }
+
+    /**
+     * A rehired Employee: an ended first employment and a running second one, compensated, with an account link.
+     *
+     * @return array{employee: string, first: string, second: string, user: User}
+     */
+    private function rehire(School $school, User $structureManager): array
+    {
+        return app(TenantContext::class)->withSchool($school, function () use ($school, $structureManager) {
+            $user = $this->createUser();
+            $employee = $this->createEmployee($school, ['full_name' => 'Rehired Person', 'user_id' => $user->id]);
+            $first = $this->createEmploymentRecord($employee, ['starts_on' => '2023-01-01', 'ends_on' => '2023-12-31']);
+            $second = $this->createEmploymentRecord($employee, ['starts_on' => '2025-01-01']);
+            $structure = SalaryStructure::query()->where('school_id', $school->id)->firstOrFail();
+            app(PayrollCompensationAdministrationService::class)->assign(
+                $school, $second, $structure, Carbon::parse('2025-01-01'),
+                [new FixedComponentValueInput($structure->components()->firstOrFail()->id, '42000.00')], $structureManager, $this->freshMfaProofFor($structureManager),
+            );
+
+            return ['employee' => $employee->id, 'first' => $first->id, 'second' => $second->id, 'user' => $user];
+        });
+    }
+
+    #[Test]
+    public function wo3_the_run_page_names_every_result_from_hr_and_a_replaced_account_changes_nothing(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $rehire = $this->rehire($school, $fixtures['structureManager']);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $viewer = $this->memberWith(['payroll.runs.view', 'payroll.compensation.sensitive.view'], $school);
+        $facts = $this->hrFacts($school);
+
+        $results = fn () => collect($this->actingAs($viewer)->get("/app/payroll/runs/{$runId}")->viewData('page')['props']['results'])
+            ->mapWithKeys(fn (array $r) => [$r['employmentRecordId'] => [$r['employeeFullName'], $r['employeeNumber']]])->sortKeys()->all();
+        $before = $results();
+
+        $expected = collect([$fixtures['employmentRecordId'], $rehire['second']])
+            ->mapWithKeys(fn (string $id) => [$id => [$facts[$id]['employeeFullName'], $facts[$id]['employeeNumber']]])->sortKeys()->all();
+        $this->assertSame($expected, $before, 'each result is named by its own employment, the rehire by the second one');
+        $this->assertArrayNotHasKey($rehire['first'], $before, 'the ended first employment is not paid in this period');
+
+        // The Employee's account is unlinked, then another account is linked: names come from the employment, never the User.
+        app(TenantContext::class)->withSchool($school, fn () => DB::table('employees')->where('id', $rehire['employee'])->update(['user_id' => null]));
+        app(TenantContext::class)->withSchool($school, fn () => DB::table('employees')->where('id', $rehire['employee'])->update(['user_id' => $this->createUser()->id]));
+        $this->assertSame($before, $results());
+    }
+
+    #[Test]
+    public function wo3_an_unresolved_employment_carries_its_hr_label(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+
+        $context = app(TenantContext::class);
+        [$run, $midPeriodHire] = $context->withSchool($school, function () use ($school, $fixtures, $preparer) {
+            $structure = SalaryStructure::query()->where('school_id', $school->id)->firstOrFail();
+            $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school, ['full_name' => 'Mid Period']), ['starts_on' => '2026-10-15']);
+            app(PayrollCompensationAdministrationService::class)->assign(
+                $school, $employmentRecord, $structure, Carbon::parse('2026-10-15'),
+                [new FixedComponentValueInput($structure->components()->firstOrFail()->id, '30000.00')], $fixtures['structureManager'], $this->freshMfaProofFor($fixtures['structureManager']),
+            );
+
+            return [app(PayrollRunAdministrationService::class)->createRun(PayrollPeriod::query()->findOrFail($fixtures['periodId']), $preparer), $employmentRecord->id];
+        });
+        $fact = $this->hrFacts($school)[$midPeriodHire];
+
+        $this->actingAs($preparer)->post("/app/payroll/runs/{$run->id}/calculate")->assertInertia(fn ($page) => $page
+            ->has('unresolvedEmployees', 1)
+            ->where('unresolvedEmployees.0', [
+                'employmentRecordId' => $midPeriodHire,
+                'employeeId' => $fact['employeeId'],
+                'employeeFullName' => 'Mid Period',
+                'employeeNumber' => $fact['employeeNumber'],
+            ])
+        );
+    }
+
+    #[Test]
+    public function wo3_correction_candidates_are_named_from_hr(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $structureManager = $fixtures['structureManager'];
+        $expense = app(TenantContext::class)->withSchool($school, fn () => LedgerAccount::factory()->for($school, 'school')->type('expense')->create());
+        $payable = app(TenantContext::class)->withSchool($school, fn () => LedgerAccount::factory()->for($school, 'school')->type('liability')->create());
+        app(PayrollAccountingAdministrationService::class)->configure($school, $expense->id, $payable->id, $structureManager);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
+        $poster = $this->memberWith(['payroll.runs.post', 'payroll.runs.view'], $school);
+        $periodManager = $this->memberWith(['payroll.periods.manage'], $school);
+
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $run = app(TenantContext::class)->withSchool($school, fn () => PayrollRun::query()->findOrFail($runId));
+        $this->actingAs($approver)->post("/app/payroll/runs/{$runId}/approve", ['calculation_id' => app(PayrollRunService::class)->latestCalculationId($run), 'attribution_version' => app(PayrollRunService::class)->latestAttributionVersion($run)])->assertRedirect();
+        $this->actingAs($poster)->post("/app/payroll/runs/{$runId}/post")->assertRedirect();
+        $openPeriod = app(TenantContext::class)->withSchool($school, fn () => app(PayrollPeriodAdministrationService::class)->open(
+            app(PayrollPeriodAdministrationService::class)->createPeriod($school, Carbon::parse('2026-11-01'), null, $periodManager), $periodManager,
+        ));
+        $this->actingAs($preparer)->post("/app/payroll/runs/{$runId}/correction", ['payroll_period_id' => $openPeriod->id])->assertRedirect();
+        $correctionId = app(TenantContext::class)->withSchool($school, fn () => PayrollRun::query()->where('corrects_payroll_run_id', $runId)->value('id'));
+
+        $viewer = $this->memberWith(['payroll.runs.view', 'payroll.compensation.sensitive.view'], $school);
+        $this->actingAs($viewer)->get("/app/payroll/runs/{$correctionId}")->assertInertia(fn ($page) => $page
+            ->where('correctionCandidates', [[
+                'employmentRecordId' => $fixtures['employmentRecordId'],
+                'employeeFullName' => $this->hrFacts($school)[$fixtures['employmentRecordId']]['employeeFullName'],
+            ]])
+        );
+    }
+
+    #[Test]
+    public function wo3_compensation_and_statutory_pages_name_ended_and_rehired_employments(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $rehire = $this->rehire($school, $fixtures['structureManager']);
+        $separated = app(TenantContext::class)->withSchool($school, fn () => $this->createEmploymentRecord(
+            $this->createEmployee($school, ['full_name' => 'Left Already']), ['starts_on' => '2024-01-01', 'ends_on' => '2025-06-30'],
+        )->id);
+        $facts = $this->hrFacts($school);
+        $viewer = $this->memberWith(['payroll.compensation.view', 'payroll.statutory.view'], $school);
+
+        foreach ([$rehire['first'], $rehire['second'], $separated, $fixtures['employmentRecordId']] as $id) {
+            $this->actingAs($viewer)->get("/app/payroll/compensation/{$id}")->assertInertia(fn ($page) => $page
+                ->where('employmentRecord', ['id' => $id] + $facts[$id])
+                ->has('assignments', $id === $rehire['second'] || $id === $fixtures['employmentRecordId'] ? 1 : 0)
+            );
+            $this->actingAs($viewer)->get("/app/payroll/statutory/employees/{$id}")->assertInertia(fn ($page) => $page
+                ->where('employmentRecord', ['id' => $id, 'employeeFullName' => $facts[$id]['employeeFullName'], 'employeeNumber' => $facts[$id]['employeeNumber']])
+            );
+        }
+        $this->assertSame($facts[$rehire['first']]['employeeId'], $facts[$rehire['second']]['employeeId'], 'one Employee, two employments');
+    }
+
+    #[Test]
+    public function wo3_the_payslip_of_a_rehired_employee_keeps_its_name_after_the_account_changes(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $rehire = $this->rehire($school, $fixtures['structureManager']);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $approver = $this->memberWith(['payroll.runs.approve', 'payroll.compensation.sensitive.view'], $school);
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver, $this->freshMfaProofFor($approver), app(PayrollRunService::class)->latestCalculationId(PayrollRun::query()->findOrFail($runId)), app(PayrollRunService::class)->latestAttributionVersion(PayrollRun::query()->findOrFail($runId))));
+        $viewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
+        $fact = $this->hrFacts($school)[$rehire['second']];
+
+        $payslip = fn () => $this->actingAs($viewer)->get("/app/payroll/runs/{$runId}/payslips/{$rehire['second']}")->viewData('page')['props']['payslip'];
+        $first = $payslip();
+        $this->assertSame(['Rehired Person', $fact['employeeNumber'], $fact['employeeId']], [$first['employeeFullName'], $first['employeeNumber'], $first['employeeId']]);
+
+        app(TenantContext::class)->withSchool($school, fn () => DB::table('employees')->where('id', $rehire['employee'])->update(['user_id' => null]));
+        $this->assertSame($first, $payslip(), 'an unlinked account changes nothing on the payslip');
+    }
 }

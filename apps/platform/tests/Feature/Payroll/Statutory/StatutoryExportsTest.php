@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payroll\Statutory;
 
+use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\AddStructureComponentData;
 use App\Domain\Payroll\Application\CompensationService;
 use App\Domain\Payroll\Application\FixedComponentValueInput;
@@ -199,6 +200,30 @@ class StatutoryExportsTest extends TestCase
         $this->assertCount(2, $lines);
         $this->assertStringContainsString('"Asha Rao"', $lines[1]);
         $this->assertStringContainsString(',false,false,28000.00,0.00,0.00,0.00', $lines[1]);
+    }
+
+    #[Test]
+    public function wo3_an_export_names_a_rehired_employee_once_from_hr_and_follows_a_rename(): void
+    {
+        // HR.R1-C24 (WO-3, D2-R07 to R09): the paid employment's Employee, read once through HR's reader. The same
+        // Employee's earlier, ended employment is not paid and adds no row; a name is current, as before.
+        $school = $this->createSchool();
+        $built = $this->context()->withSchool($school, fn () => $this->buildCalculatedAndStatutoryCalculatedRun($school));
+        $exporter = $this->createUserWithCapabilities($school, ['payroll.statutory.exports.generate', 'payroll.statutory.view']);
+        $this->context()->withSchool($school, function () use ($built) {
+            $employee = EmploymentRecord::query()->findOrFail($built['employmentRecordId'])->employee;
+            $this->createEmploymentRecord($employee, ['starts_on' => '2023-01-01', 'ends_on' => '2023-12-31']);
+        });
+
+        foreach ([StatutoryEsiContributionWorksheetExportService::class, StatutoryTdsDraftStatementExportService::class] as $service) {
+            $lines = explode("\n", $this->context()->withSchool($school, fn () => app($service)->generate($built['run'], $exporter)));
+            $this->assertCount(2, $lines, $service);
+            $this->assertStringStartsWith('"Asha Rao",', $lines[1], $service);
+        }
+
+        $this->context()->withSchool($school, fn () => DB::table('employees')->where('full_name', 'Asha Rao')->update(['full_name' => 'Asha Rao-Iyer']));
+        $content = $this->context()->withSchool($school, fn () => app(StatutoryEsiContributionWorksheetExportService::class)->generate($built['run'], $exporter));
+        $this->assertStringStartsWith('"Asha Rao-Iyer",', explode("\n", $content)[1]);
     }
 
     #[Test]

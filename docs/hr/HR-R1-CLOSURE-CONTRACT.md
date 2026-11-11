@@ -1,7 +1,7 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C23 have. **Never
+started; the HR.R1-0 audit and checkpoints C1 to C24 have. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -203,7 +203,7 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 | §2 fingerprint | Not evidenced | The reference pack is not in Git, so only the owner can check it |
 | §2 baseline | Not yet | No baseline SHA chosen for the final assessment |
 | R1-01 one writer | **Finding** | No writer outside the owning domain in a sample of 16 models. Inside HR, assignment and Employee have several sites and no guard pins it. What "one writer" means needs deciding |
-| R1-02 integration | **Finding, exception decided by C23** | Architecture approved D-2 Option B (HR.R1-C23): 22 Payroll sites move to HR readers in WO-3 (not built), 27 narrow exceptions, 13 no change, 9 structural FKs, 8 functions. Direct `Employee::query()` remains in Timetable, Transport and Visitor controllers (X-1) |
+| R1-02 integration | **Finding; Payroll part implemented by C24** | Architecture approved D-2 Option B (HR.R1-C23); WO-3 shipped it (HR.R1-C24): 22 Payroll sites read through HR readers, 26 narrow exceptions, 12 no change, 9 structural FKs, 8 functions, pinned by `PayrollHrBoundaryRegisterTest`. Still open: direct `Employee::query()` in Timetable, Transport and Visitor controllers (X-1) and the 24 non-Payroll files |
 | R1-03 temporal | **Finding, narrowed by C22** | Calendar answers as of a date from each School's history start (WO-5); earlier dates are "not recorded" by owner decision D6-3, a closure-time reading. Policy answers through `LeavePolicyAsOf`. Shifts are absent by design |
 | R1-04 authorization | Recorded | Re-run on the baseline |
 | R1-05 reports | Recorded | Re-run on the baseline |
@@ -299,3 +299,11 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Unchanged:** R1-01, R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows), the 61 audit identifiers, C18-A12, C14-N5 and the same-person Identity MEDIUM. No baseline is selected. HR.R1 stays OPEN.
 
 Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
+
+**Evidence recorded (HR.R1-C24, 2026-11-11): WO-3 implemented for development.** The Payroll part of D-2 ships (`HR-R1-C24-WO3-READER-MIGRATION.md`).
+
+- **Moved:** the 22 register sites read through `EmploymentRoster::labels()`/`span()`. `listAssignments()` takes an id (§3.5), so the split is 22 / 26 / 12, D2-N09 removed.
+- **The 404:** the nine statutory API sites answer one fixed body for an absent and another School's id; no HR class, table or id.
+- **Pinned:** `PayrollHrBoundaryRegisterTest` (register per file, 9 keys, 8 functions with security mode, raw-role isolation) and `HrWriterBoundaryTest::payroll_never_writes_an_hr_table()`. Planted violations failed both.
+- **Unchanged:** every calculation, approval, posting, reversal, correction and retention path; no migration, grant or function. Export bytes identical before and after.
+- **R1-02 stays open** for X-1 and the 24 non-Payroll files. R1-01, R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.

@@ -3,6 +3,7 @@
 namespace App\Domain\Payroll\Application;
 
 use App\Domain\HR\Application\ActingEmployeeResolver;
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\Exceptions\PayrollRunNotEligibleForPayslipException;
@@ -61,6 +62,7 @@ class PayslipReadService
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
         private readonly ActingEmployeeResolver $acting,
+        private readonly EmploymentRoster $roster,
     ) {}
 
     public function render(School $school, string $payrollRunId, string $employmentRecordId, User $actor): Payslip
@@ -175,7 +177,8 @@ class PayslipReadService
 
     private function assemble(School $school, PayrollRun $run, PayrollRunResult $result, string $employmentRecordId, bool $includeStatutory, string $auditEvent, User $actor): Payslip
     {
-        $employmentRecord = EmploymentRecord::query()->with('employee')->find($employmentRecordId);
+        // HR.R1-C24 (WO-3, D2-R06): the current name, from HR's directory-tier reader, as before.
+        $label = $this->roster->labels($school, [$employmentRecordId])[0] ?? null;
 
         $isReversed = PayrollRunPosting::query()
             ->where('school_id', $school->id)
@@ -215,8 +218,8 @@ class PayslipReadService
             paymentDate: $run->period->payment_date?->toDateString(),
             employmentRecordId: $employmentRecordId,
             employeeId: $result->employee_id,
-            employeeFullName: $employmentRecord?->employee?->full_name,
-            employeeNumber: $employmentRecord?->employee?->employee_number,
+            employeeFullName: $label['fullName'] ?? null,
+            employeeNumber: $label['employeeNumber'] ?? null,
             grossAmount: $result->gross_amount,
             totalDeductions: $result->total_deductions,
             netAmount: $result->net_amount,

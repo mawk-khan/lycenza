@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payroll\Statutory\Application\Export;
 
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryIdentifierMissingException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRuleVersionNotFoundException;
@@ -9,12 +10,15 @@ use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRunResultsExpir
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeStatutoryIdentifier;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollPfRuleVersion;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use LogicException;
 
 /**
  * Checkpoint 9.6G (ADR 0036 correction addendum §1.11, Section 9) --
@@ -77,6 +81,7 @@ class StatutoryEcrExportService
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly EmploymentRoster $roster,
     ) {}
 
     public function generate(PayrollRun $run, User $actor): string
@@ -93,13 +98,15 @@ class StatutoryEcrExportService
 
             $results = PayrollStatutoryCalculationResult::query()
                 ->whereHas('payrollRunResult', fn ($q) => $q->where('payroll_run_id', $run->id))
-                ->with('payrollRunResult.employee')
+                ->with('payrollRunResult')
                 ->get();
 
+            // HR.R1-C24 (WO-3, D2-R07): names from HR's directory-tier reader, built once before the row loop, never per row.
+            $names = $this->names($school, $results);
             $asOf = Carbon::parse($run->period->period_month)->startOfMonth();
             $pfRule = $this->activePfRule($asOf);
 
-            $rows = $results->map(fn (PayrollStatutoryCalculationResult $result) => $this->buildRow($school->id, $result, $pfRule))->all();
+            $rows = $results->map(fn (PayrollStatutoryCalculationResult $result) => $this->buildRow($school->id, $result, $pfRule, $names))->all();
 
             $this->audit->school($school, 'payroll.statutory.export.ecr_generated', actor: $actor, subject: $run, metadata: [
                 'rowCount' => count($rows),
@@ -109,7 +116,8 @@ class StatutoryEcrExportService
         });
     }
 
-    private function buildRow(string $schoolId, PayrollStatutoryCalculationResult $result, PayrollPfRuleVersion $pfRule): string
+    /** @param  array<string, ?string>  $names */
+    private function buildRow(string $schoolId, PayrollStatutoryCalculationResult $result, PayrollPfRuleVersion $pfRule, array $names): string
     {
         $runResult = $result->payrollRunResult;
         $employmentRecordId = $runResult->employment_record_id;
@@ -125,7 +133,7 @@ class StatutoryEcrExportService
 
         return implode(self::DELIMITER, [
             $uan,
-            $runResult->employee->full_name,
+            $this->nameOf($names, $employmentRecordId),
             $runResult->gross_amount,
             $result->pf_contribution_base ?? '0.00',
             $epsWages->amount(),
@@ -167,5 +175,26 @@ class StatutoryEcrExportService
     private function min(Money $a, Money $b): Money
     {
         return $a->add($b->negated())->isPositive() ? $b : $a;
+    }
+
+    /**
+     * HR.R1-C24 (WO-3, D2-R07): each result's current Employee name, keyed by employment, in one batched read. A
+     * result's Employee is its employment's (both written once, at creation and calculation). A missing name
+     * fails the export, as the eager-loaded relation did: never a filing row without a name.
+     *
+     * @param  Collection<int, PayrollStatutoryCalculationResult>  $results
+     * @return array<string, ?string>
+     */
+    private function names(School $school, Collection $results): array
+    {
+        $ids = $results->map(fn (PayrollStatutoryCalculationResult $r) => $r->payrollRunResult->employment_record_id)->unique()->values()->all();
+
+        return collect($this->roster->labels($school, $ids))->mapWithKeys(fn (array $l) => [$l['employmentRecordId'] => $l['fullName']])->all();
+    }
+
+    /** @param  array<string, ?string>  $names  a missing label or a null name fails the export, never an empty cell */
+    private function nameOf(array $names, string $employmentRecordId): string
+    {
+        return $names[$employmentRecordId] ?? throw new LogicException("No HR name for employment {$employmentRecordId}.");
     }
 }

@@ -27,6 +27,7 @@ contract.
 | HR.R1-C21 D-6 calendar history decided, WO-5 contract | `HR-R1-C21-D6-DECISION.md` | HR.R1-C21, 2026-11-08 |
 | HR.R1-C22 WO-5: staff calendar history (effective-dated week, holiday lifecycle, as-of reader) | `HR-R1-C22-WO5-CALENDAR-HISTORY.md` + ADR 0065 §33 + CLAUDE.md rule 149 | HR.R1-C22, 2026-11-09 |
 | HR.R1-C23 D-2 Payroll to HR boundary decided (register, WO-3 contract) | `HR-R1-C23-D2-DECISION.md` + ADR 0034 item 20 | HR.R1-C23, 2026-11-11 |
+| HR.R1-C24 WO-3: Payroll reads HR through the register (22 moves, register pin, 404 body) | `HR-R1-C24-WO3-READER-MIGRATION.md` + ADR 0034 item 20 + CLAUDE.md rule 150 | HR.R1-C24, 2026-11-11 |
 | Demo plan | `HR-DEMO-PLAN.md` | draft |
 | HR.1A workforce foundation (implemented contract) | `docs/modules/HR.md` "Workforce foundation (HR.1A)" + ADR 0028 HR.1A amendment + CLAUDE.md rule 130 | implemented 2026-11-03 |
 | HR.2A staff profile foundation (implemented contract) | `docs/modules/HR.md` "Staff profile foundation (HR.2A)" + ADR 0028 and ADR 0029 HR.2A amendments + CLAUDE.md rule 132 | implemented 2026-11-03 |

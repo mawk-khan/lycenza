@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Statutory\Application;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;

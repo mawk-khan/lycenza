@@ -84,7 +84,7 @@ the bypass it reproduced, not for that question.**
 | C10-N2 | P3 | `EmployeeAssignmentService::end()` + `create()` + `setPrimary()` composes a move outside rule 130's named path | By reading; OPEN |
 | C10-N3 | P3 | `LeavePageSupport.php:47` has the XRP-3 shape: `limit(1000)` with no order | By reading; OPEN |
 | C10-N4 | P3 | The rule 98 coverage guard proves a contract, never assurance. That is why it could not see HRC-3 | Recorded limit |
-| C10-N5 | Docs | ADR 0034:43 and `PAYROLL.md:97` say Payroll reads HR through its Application layer; most reads do not | Part of D-2. **Docs corrected, HR.R1-C23:** D-2 decided (Option B); ADR 0034 item 20 and `PAYROLL.md` name the exceptions. The 22 reader moves are WO-3 |
+| C10-N5 | Docs | ADR 0034:43 and `PAYROLL.md:97` say Payroll reads HR through its Application layer; most reads do not | Part of D-2. **Docs corrected, HR.R1-C23:** D-2 decided (Option B); ADR 0034 item 20 and `PAYROLL.md` name the exceptions. **The 22 reader moves shipped in HR.R1-C24 (WO-3)** |
 | C10-N7 | P3 | The ECR writes `full_name` into a `#~#` file, and a name is only `string|max:255`, so a delimiter or newline shifts fields. It is not CSV, so `CsvCell` does not apply. Statutory, unreachable until a role holds the key | By reading; OPEN, with S-4 |
 | C10-N8 | P3 | PAN format is not validated on entry; the export now keeps any value as text | By reading; OPEN, with S-4 |
 | C10-N9 | P3 | A failed fresh-MFA code has no route-specific throttle: `documents-writes` allows 30 a minute. Systemic | By reading; OPEN, Security |
@@ -127,6 +127,7 @@ C12 moved no status of any earlier finding. These are additions, found while pre
 | C19-N2 | LOW | The supply-chain `inputs` step hides the error of its containerised `pip install`/`pip-compile`; a transient failure reads like a real one (one occurrence, re-run green, passed locally) | **OPEN.** Owner: Platform. `HR-R1-C19-RETENTION-BATCH-BOUND.md` §6 |
 | C20-N1 | LOW | The School audit log's table scroll region cannot take keyboard focus (axe `scrollable-region-focusable`, serious) | **OPEN.** Owner: Compliance UI. `HR-R1-C20-WO6-ACCEPTANCE.md` §4 |
 | C20-N2 | Observation | Staff Attendance month summary about 1.4 s and a Payroll capture about 9.3 s at 1,000 employments (an approval may wait behind a capture). Not WO-6 changes; no target exists | **OPEN.** Owners: HR (Staff Attendance reads), Payroll. `HR-R1-C20-WO6-ACCEPTANCE.md` §5 |
+| C24-N1 | LOW | A malformed (non-UUID) id on a statutory API employment route reaches PostgreSQL and fails as a 500 with the generic body. The same on `main` before WO-3 (`findOrFail` hit the same cast); the web routes are UUID-constrained (`WebRouteParameters`), the API routes are not. No class name or data leaks | **OPEN.** Owner: Platform (API routing). `HR-R1-C24-WO3-READER-MIGRATION.md` §9 |
 
 ## Backlog as the audit grouped it
 

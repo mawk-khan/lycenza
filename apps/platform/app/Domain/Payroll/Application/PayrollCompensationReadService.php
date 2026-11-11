@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Application;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\Exceptions\CompensationAssignmentNotFoundException;
 use App\Domain\Payroll\Infrastructure\CompensationAssignmentValue;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
@@ -45,16 +44,19 @@ class PayrollCompensationReadService
     ) {}
 
     /**
+     * HR.R1-C24 (WO-3, D2-R04, C23 §3.5): takes the employment's id, never the HR model. The caller decides whether
+     * the employment exists; an unknown id lists nothing.
+     *
      * @return list<CompensationAssignmentSummary>
      */
-    public function listAssignments(School $school, EmploymentRecord $employmentRecord, User $actor): array
+    public function listAssignments(School $school, string $employmentRecordId, User $actor): array
     {
         $this->authorizeCapabilityFor($actor, 'payroll.compensation.view', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $employmentRecord) {
+        return $this->context->withSchool($school, function () use ($school, $employmentRecordId) {
             return EmployeeCompensationAssignment::query()
                 ->where('school_id', $school->id)
-                ->where('employment_record_id', $employmentRecord->id)
+                ->where('employment_record_id', $employmentRecordId)
                 ->orderByDesc('effective_from')
                 ->get()
                 ->map(fn (EmployeeCompensationAssignment $assignment) => CompensationAssignmentSummary::fromModel($assignment))

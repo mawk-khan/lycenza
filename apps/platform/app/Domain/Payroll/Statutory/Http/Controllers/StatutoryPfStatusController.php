@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Statutory\Http\Controllers;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Statutory\Application\Admin\EmployeePfStatusAdminService;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeePfStatus;
 use App\Http\Controllers\Controller;
@@ -19,9 +18,11 @@ use Illuminate\Http\Request;
  */
 class StatutoryPfStatusController extends Controller
 {
+    use RequiresSchoolEmployment;
+
     public function show(Request $request, School $school, string $employmentRecord, EmployeePfStatusAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
         $status = $service->view($school, $employmentRecord, $request->user());
 
         return response()->json(['data' => $status === null ? null : $this->present($status)]);
@@ -29,7 +30,7 @@ class StatutoryPfStatusController extends Controller
 
     public function store(Request $request, School $school, string $employmentRecord, EmployeePfStatusAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
 
         $validated = $request->validate([
             'has_existing_pf_membership' => ['required', 'boolean'],

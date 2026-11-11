@@ -78,7 +78,7 @@ class PayrollCompensationReadServiceTest extends TestCase
 
         $summaries = $this->context()->withSchool(
             $f['school'],
-            fn () => app(PayrollCompensationReadService::class)->listAssignments($f['school'], $employmentRecord, $actor),
+            fn () => app(PayrollCompensationReadService::class)->listAssignments($f['school'], $employmentRecord->id, $actor),
         );
 
         $this->assertCount(1, $summaries);
@@ -98,7 +98,7 @@ class PayrollCompensationReadServiceTest extends TestCase
 
         $summaries = $this->context()->withSchool(
             $f['school'],
-            fn () => app(PayrollCompensationReadService::class)->listAssignments($f['school'], $employmentRecord, $actor),
+            fn () => app(PayrollCompensationReadService::class)->listAssignments($f['school'], $employmentRecord->id, $actor),
         );
 
         $queries = DB::getQueryLog();
@@ -130,7 +130,7 @@ class PayrollCompensationReadServiceTest extends TestCase
 
         $this->context()->withSchool(
             $f['school'],
-            fn () => app(PayrollCompensationReadService::class)->listAssignments($f['school'], $employmentRecord, $actor),
+            fn () => app(PayrollCompensationReadService::class)->listAssignments($f['school'], $employmentRecord->id, $actor),
         );
     }
 

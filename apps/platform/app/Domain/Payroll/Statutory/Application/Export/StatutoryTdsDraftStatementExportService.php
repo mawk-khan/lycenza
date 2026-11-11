@@ -2,12 +2,14 @@
 
 namespace App\Domain\Payroll\Statutory\Application\Export;
 
+use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryFormNotYetEffectiveException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRunResultsExpiredException;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeStatutoryIdentifier;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeTaxProfile;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
@@ -16,7 +18,9 @@ use App\Support\Privacy\PartialValueMasker;
 use App\Support\StudentReports\Export\CsvCell;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use LogicException;
 
 /**
  * Checkpoint 9.6G (ADR 0036 correction addendum §1.4, Section 9) --
@@ -45,6 +49,7 @@ class StatutoryTdsDraftStatementExportService
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly EmploymentRoster $roster,
     ) {}
 
     public function generate(PayrollRun $run, User $actor): string
@@ -72,12 +77,14 @@ class StatutoryTdsDraftStatementExportService
 
             $results = PayrollStatutoryCalculationResult::query()
                 ->whereHas('payrollRunResult', fn ($q) => $q->where('payroll_run_id', $run->id))
-                ->with('payrollRunResult.employee')
+                ->with('payrollRunResult')
                 ->get();
 
+            // HR.R1-C24 (WO-3, D2-R09): names from HR's directory-tier reader, built once before the row loop, never per row.
+            $names = $this->names($school, $results);
             $rows = [self::HEADER];
             foreach ($results as $result) {
-                $rows[] = $this->buildRow($school->id, $result, $fiscalYearStart, $periodMonth, $canViewIdentifiers);
+                $rows[] = $this->buildRow($school->id, $result, $fiscalYearStart, $periodMonth, $canViewIdentifiers, $names);
             }
 
             $this->audit->school($school, 'payroll.statutory.export.tds_draft_statement_generated', actor: $actor, subject: $run, metadata: [
@@ -88,7 +95,8 @@ class StatutoryTdsDraftStatementExportService
         });
     }
 
-    private function buildRow(string $schoolId, PayrollStatutoryCalculationResult $result, Carbon $fiscalYearStart, Carbon $periodMonth, bool $canViewIdentifiers): string
+    /** @param  array<string, ?string>  $names */
+    private function buildRow(string $schoolId, PayrollStatutoryCalculationResult $result, Carbon $fiscalYearStart, Carbon $periodMonth, bool $canViewIdentifiers, array $names): string
     {
         $runResult = $result->payrollRunResult;
         $employmentRecordId = $runResult->employment_record_id;
@@ -110,7 +118,7 @@ class StatutoryTdsDraftStatementExportService
             ->reduce(fn (Money $carry, PayrollStatutoryCalculationResult $r) => $carry->add(Money::of($r->tds_monthly_deduction ?? '0.00', 'INR')), Money::of('0.00', 'INR'));
 
         return implode(',', [
-            '"'.str_replace('"', '""', CsvCell::safe($runResult->employee->full_name)).'"',
+            '"'.str_replace('"', '""', CsvCell::safe($this->nameOf($names, $employmentRecordId))).'"',
             '"'.str_replace('"', '""', CsvCell::safe($pan)).'"',
             $regime,
             $runResult->gross_amount,
@@ -135,5 +143,26 @@ class StatutoryTdsDraftStatementExportService
         $pan = $identifier->encrypted_value;
 
         return $canViewIdentifiers ? $pan : PartialValueMasker::mask($pan);
+    }
+
+    /**
+     * HR.R1-C24 (WO-3, D2-R09): each result's current Employee name, keyed by employment, in one batched read. A
+     * result's Employee is its employment's (both written once, at creation and calculation). A missing name
+     * fails the export, as the eager-loaded relation did: never a filing row without a name.
+     *
+     * @param  Collection<int, PayrollStatutoryCalculationResult>  $results
+     * @return array<string, ?string>
+     */
+    private function names(School $school, Collection $results): array
+    {
+        $ids = $results->map(fn (PayrollStatutoryCalculationResult $r) => $r->payrollRunResult->employment_record_id)->unique()->values()->all();
+
+        return collect($this->roster->labels($school, $ids))->mapWithKeys(fn (array $l) => [$l['employmentRecordId'] => $l['fullName']])->all();
+    }
+
+    /** @param  array<string, ?string>  $names  a missing label or a null name fails the export, never an empty cell */
+    private function nameOf(array $names, string $employmentRecordId): string
+    {
+        return $names[$employmentRecordId] ?? throw new LogicException("No HR name for employment {$employmentRecordId}.");
     }
 }

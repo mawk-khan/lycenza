@@ -2,7 +2,6 @@
 
 namespace App\Domain\Payroll\Statutory\Http\Controllers;
 
-use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Statutory\Application\Admin\EmployeeEsiCoverageAdminService;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -20,9 +19,11 @@ use Illuminate\Http\Request;
  */
 class StatutoryEsiCoverageController extends Controller
 {
+    use RequiresSchoolEmployment;
+
     public function index(Request $request, School $school, string $employmentRecord, EmployeeEsiCoverageAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
         $history = $service->history($school, $employmentRecord, $request->user());
 
         return response()->json(['data' => $history->map(fn (array $row) => [
@@ -36,7 +37,7 @@ class StatutoryEsiCoverageController extends Controller
 
     public function store(Request $request, School $school, string $employmentRecord, EmployeeEsiCoverageAdminService $service): JsonResponse
     {
-        EmploymentRecord::query()->where('school_id', $school->id)->findOrFail($employmentRecord);
+        $this->requireEmployment($school, $employmentRecord);
 
         $validated = $request->validate([
             'period_start' => ['required', 'date'],
