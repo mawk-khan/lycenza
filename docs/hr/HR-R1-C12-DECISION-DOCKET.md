@@ -164,7 +164,7 @@ Option B adds no reader. These two exist.
 | XRP-3 and X-1 stay separate | Ready: §15 |
 | The owner says whether implementation is a new checkpoint | **Pending.** Recommended: yes, WO-3 |
 
-**Status: PENDING.**
+**Status: DECIDED 2026-11-11 (HR.R1-C23), Architecture: Option B as docketed; implementation is WO-3, a separate checkpoint; the 9 API existence sites keep the 404 and drop the HR class name.** `HR-R1-C23-D2-DECISION.md` holds the reconciled register (still 62 / 9 / 8). Not built: R1-02 stays open until WO-3 ships, and X-1 and the 24 non-Payroll files are not part of it.
 
 ## 5. R1-01: one writer
 

@@ -94,12 +94,20 @@ to payroll data.
 
 ## Dependency position
 
-Payroll depends on HR (`Employee`, `EmploymentRecord` — read-only, via
-HR's Application layer) and Finance (`LedgerService::post()`/
+Payroll depends on HR (`Employee`, `EmploymentRecord` — read-only) and
+Finance (`LedgerService::post()`/
 `reverse()` — the only sanctioned write path into `journal_entries`).
 Neither HR nor Finance depends on Payroll. Payroll never writes to
 `employees`, `employment_records`, `journal_entries`, or `journal_lines`
 directly.
+
+**How Payroll reads HR (D-2, decided HR.R1-C23, ADR 0034 item 20).** Through
+HR's Application readers where the register says so (`EmploymentRoster::span()`,
+`labels()`, `ActingEmployeeResolver`, `HrSelfAdministrationGuard`, the retention
+readers), and directly only at the sites, foreign keys and SQL functions named in
+`docs/hr/HR-R1-C23-D2-DECISION.md` §3. A new Payroll reference to an HR model,
+table or function needs an Architecture decision first. Until WO-3 ships, the 22
+reader sites still read the HR models directly.
 
 ## Core entities
 

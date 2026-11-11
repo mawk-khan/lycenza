@@ -41,7 +41,7 @@ by ADR 0028 and `DOMAIN-MAP.md:108`: salary structures, payroll runs,
 and (gated, see below) statutory deductions. Payroll depends on HR and
 Finance; neither depends on Payroll. Payroll never writes HR or Finance
 tables directly — it reads HR's `Employee`/`EmploymentRecord` via HR's
-Application layer, and posts to Finance exclusively through
+Application layer or the named exceptions of item 20, and posts to Finance exclusively through
 `App\Domain\Finance\Application\LedgerService::post()`/`reverse()`.
 
 ### Payroll vs. Compliance ownership (resolving a real contradiction)
@@ -389,3 +389,18 @@ author approving the next run, which first paid the change. Amended:
     paid by them, with no override: the owner's explicit choice, 2026-11-06. An
     approver who becomes such an Employee through a reversal loses independence like
     one who becomes an author.
+20. **HR.R1-C23 (D-2, Architecture, 2026-11-11).** Payroll reads HR through HR's
+    Application readers, or directly only where the register in
+    `docs/hr/HR-R1-C23-D2-DECISION.md` §3 names the site. Option B: 22 sites move to
+    `EmploymentRoster::span()`/`labels()` (WO-3, not built), and 27 are narrow
+    exceptions (calculation and provenance, the compensation lock, searches with
+    ended staff, own employments, sorted paged names, id-only reads). 13 need no
+    change (unused relations, retention). The nine composite foreign keys are
+    approved structural keys and are never weakened to reduce coupling. The eight
+    Payroll SQL functions are approved exceptions, the protected first-paid,
+    independence and reversal functions among them. Payroll never writes an HR
+    table. A moved existence site keeps the 404 without the HR class name. A new
+    Payroll reference to an HR model, table or function needs an Architecture
+    decision first. Rejected: one blanket exception (it excuses future code), and a
+    reader for every site (it touches the provenance paths for little
+    minimization).

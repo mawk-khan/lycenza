@@ -1,7 +1,7 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C21 have. **Never
+started; the HR.R1-0 audit and checkpoints C1 to C23 have. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -203,7 +203,7 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 | §2 fingerprint | Not evidenced | The reference pack is not in Git, so only the owner can check it |
 | §2 baseline | Not yet | No baseline SHA chosen for the final assessment |
 | R1-01 one writer | **Finding** | No writer outside the owning domain in a sample of 16 models. Inside HR, assignment and Employee have several sites and no guard pins it. What "one writer" means needs deciding |
-| R1-02 integration | **Finding** | Payroll holds 25 direct `EmploymentRecord` references with no owner-approved exception (D-2). Direct `Employee::query()` remains in Timetable, Transport and Visitor controllers |
+| R1-02 integration | **Finding, exception decided by C23** | Architecture approved D-2 Option B (HR.R1-C23): 22 Payroll sites move to HR readers in WO-3 (not built), 27 narrow exceptions, 13 no change, 9 structural FKs, 8 functions. Direct `Employee::query()` remains in Timetable, Transport and Visitor controllers (X-1) |
 | R1-03 temporal | **Finding, narrowed by C22** | Calendar answers as of a date from each School's history start (WO-5); earlier dates are "not recorded" by owner decision D6-3, a closure-time reading. Policy answers through `LeavePolicyAsOf`. Shifts are absent by design |
 | R1-04 authorization | Recorded | Re-run on the baseline |
 | R1-05 reports | Recorded | Re-run on the baseline |
@@ -289,5 +289,13 @@ The final-candidate reviews of HR.R1-C4 found no HIGH and no way to post an affe
 - **Published `337631b7`:** CI gate run 42586811898, 11,592 cases, 0 failures, 1 skip (ESI-12), 466,313 assertions.
 - **DDEV:** forward-migrated, its October 2026 lock and Staff Attendance history byte-identical.
 - **Still open:** C18-A12 (screen reader) and the same-person Identity MEDIUM. No baseline is selected. HR.R1 stays OPEN. Production stays NO-GO.
+
+**Evidence recorded (HR.R1-C23, 2026-11-11): D-2 decided, nothing built.** Architecture chose D-2 Option B as docketed (`HR-R1-C23-D2-DECISION.md`).
+
+- **Re-verified at `a3f36cd2`:** 62 PHP sites, 9 FKs and 8 Payroll SQL functions, the same as C12; only line numbers moved. Payroll writes no HR table.
+- **Approved:** a per-site register: 22 reader moves, 27 narrow exceptions, 13 no change, 9 structural FKs, 8 functions (one SECURITY DEFINER retention function the runtime role cannot execute). The 404 stays, without the HR class name.
+- **WO-3 implements it**, as a separate checkpoint. R1-02 is not closed: WO-3, X-1 and the 24 non-Payroll files remain.
+- **The HR owner accepted the four C22 deviations.** C22-N4 was re-examined: approval never reads HRX evidence, so no stale calculation is approved and there is no financial-integrity defect. It stays LOW.
+- **Unchanged:** R1-01, R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows), the 61 audit identifiers, C18-A12, C14-N5 and the same-person Identity MEDIUM. No baseline is selected. HR.R1 stays OPEN.
 
 Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
