@@ -287,7 +287,7 @@ Applying the ten points to the baseline shows where they need refining.
 - **Acceptance.** No scheduler exists. If detection is chosen, it posts nothing and tests both a missed and a completed month.
 - **Readiness.** Closes LVA-1's decision. Operations, not an R1 criterion.
 
-**Status: DECIDED 2026-11-12 (HR.R1-C31), HR owner: option 3, manual plus "month not run" detection.** Detection reads completed, failed and running runs and re-asks the canonical read-only evaluation (`preview()`) whether a month would still credit anyone; a status per leave type and month in the accrual workspace plus a read-only artisan report; no alerts; School HR (`hr.leave.manage`) reviews monthly. WO-9 specified, **not built** (`HR-R1-C31-D3-ACCRUAL-DETECTION-DECISION.md`).
+**Status: DECIDED 2026-11-12 (HR.R1-C31), HR owner: option 3, manual plus "month not run" detection.** Detection reads completed, failed and running runs and re-asks the canonical read-only evaluation (`preview()`) whether a month would still credit anyone; a status per leave type and month in the accrual workspace plus a read-only artisan report; no alerts; School HR (`hr.leave.manage`) reviews monthly. WO-9 specified (`HR-R1-C31-D3-ACCRUAL-DETECTION-DECISION.md`) and **built by HR.R1-C32** (`HR-R1-C32-WO9-ACCRUAL-STATUS.md`).
 
 ## 7. D-4: Leave allocation assurance
 

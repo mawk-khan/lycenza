@@ -45,6 +45,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'RedispatchDueAutomationExecutions.php', // an execution of a suspended School becomes terminal `skipped`
         'PruneWebhookDeliveries.php',            // retention maintenance
         'PruneIdempotencyRecords.php',           // retention maintenance
+        'LeaveAccrualStatusReport.php',          // read-only report (HR.R1-C32, WO-9): includes and marks non-active Schools
         'RedispatchDueEmailMessages.php',        // expiry purges sealed email content on time; submits only for active Schools
         'PruneEmailRecords.php',                 // retention maintenance
         'PruneOutboxEvents.php',                 // retention maintenance (E21-D4)

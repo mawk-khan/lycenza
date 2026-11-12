@@ -68,7 +68,16 @@ type Status =
     | 'finalized'
     // HR.13: staff task lifecycle (`submitted`, `completed`, `cancelled` exist above).
     | 'assigned'
-    | 'returned';
+    | 'returned'
+    // HR.R1-C32 (WO-9): monthly accrual status, prefixed so it never collides with a run status.
+    | 'accrual_not_due'
+    | 'accrual_running'
+    | 'accrual_failed'
+    | 'accrual_missed'
+    | 'accrual_incomplete'
+    | 'accrual_complete'
+    | 'accrual_nothing_to_credit'
+    | 'accrual_unknown';
 
 interface Props {
     status: Status;
@@ -128,6 +137,15 @@ const STYLES: Record<Status, { label: string; family: Family }> = {
     finalized: { label: 'Finalized', family: 'info' },
     assigned: { label: 'To do', family: 'info' },
     returned: { label: 'Returned for revision', family: 'attention' },
+    // HR.R1-C32 (WO-9). Unknown is never shown as a success.
+    accrual_not_due: { label: 'Not yet due', family: 'neutral' },
+    accrual_running: { label: 'Running', family: 'progress' },
+    accrual_failed: { label: 'Failed', family: 'negative' },
+    accrual_missed: { label: 'Missed', family: 'attention' },
+    accrual_incomplete: { label: 'Incomplete', family: 'attention' },
+    accrual_complete: { label: 'Complete', family: 'positive' },
+    accrual_nothing_to_credit: { label: 'Nothing to credit', family: 'neutral' },
+    accrual_unknown: { label: 'Status unknown', family: 'attention' },
     fulfilled: { label: 'Fulfilled', family: 'positive' },
     // PayrollPeriod / PayrollRun lifecycle.
     open: { label: 'Open', family: 'info' },

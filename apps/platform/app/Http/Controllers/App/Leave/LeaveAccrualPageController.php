@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\App\Leave;
 
+use App\Domain\Leave\Application\Accrual\AccrualMonthNotInYearException;
+use App\Domain\Leave\Application\Accrual\LeaveAccrualMonthStatusReader;
 use App\Domain\Leave\Application\Accrual\LeaveAccrualOutcome;
 use App\Domain\Leave\Application\Accrual\LeaveAccrualService;
 use App\Domain\Leave\Application\Accrual\LeaveStatementReader;
@@ -33,6 +35,10 @@ use Inertia\Response;
  *   whether it completed or should be continued.
  *
  * Every number comes from LeaveAccrualService / LeaveStatementReader.
+ *
+ * HR.R1-C32 (WO-9, D-3 option 3): with `period_start`, that month's accrual status, and with `check_months`, every
+ * month's (LeaveAccrualMonthStatusReader, read-only, `hr.leave.view` or `.manage`). Nothing here runs accrual: a
+ * missed or incomplete month is run again with the existing POST.
  */
 class LeaveAccrualPageController extends Controller
 {
@@ -41,7 +47,7 @@ class LeaveAccrualPageController extends Controller
     /** Batches one web request processes before handing back (a technical bound; the run resumes). */
     private const WEB_BATCHES = 20;
 
-    public function show(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, LeaveAccrualService $accruals, LeaveStatementReader $statements): Response
+    public function show(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, LeaveAccrualService $accruals, LeaveStatementReader $statements, LeaveAccrualMonthStatusReader $statusReader): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
@@ -50,6 +56,7 @@ class LeaveAccrualPageController extends Controller
             'leave_type_id' => ['sometimes', 'uuid'], 'leave_year_id' => ['sometimes', 'uuid'], 'period_start' => ['sometimes', 'date_format:Y-m-d'],
             'after' => ['sometimes', 'uuid'], 'preview_after' => ['sometimes', 'uuid'], 'run' => ['sometimes', 'uuid'],
             'outcome' => ['sometimes', Rule::in(array_column(LeaveAccrualOutcome::options(), 'value'))], 'item_after' => ['sometimes', 'uuid'],
+            'check_months' => ['sometimes', 'boolean'],
         ]);
         $today = SchoolTimezone::today($school);
         $types = array_values(array_filter($reads->types($school, $actor), fn (array $t) => $t['tracksBalance']));
@@ -58,7 +65,7 @@ class LeaveAccrualPageController extends Controller
         $yearId = $validated['leave_year_id'] ?? (collect($years)->first(fn (array $y) => $y['startsOn'] <= $today && $y['endsOn'] >= $today)['id'] ?? ($years[0]['id'] ?? null));
         $canManage = $capabilities->canInSchool($actor, LeaveCapabilities::MANAGE, $school);
 
-        $grid = $runs = $preview = $run = null;
+        $grid = $runs = $preview = $run = $monthStatus = $monthStatuses = null;
         $error = null;
         try {
             if ($typeId !== null && $yearId !== null) {
@@ -66,6 +73,12 @@ class LeaveAccrualPageController extends Controller
                 $runs = $accruals->runs($school, $typeId, $yearId, $actor);
                 if ($canManage && isset($validated['period_start'])) {
                     $preview = $accruals->preview($school, $typeId, $yearId, $validated['period_start'], $actor, $validated['preview_after'] ?? null);
+                }
+                if (isset($validated['period_start'])) {
+                    $monthStatus = $statusReader->month($school, $typeId, $yearId, $validated['period_start'], $actor);
+                }
+                if ((bool) ($validated['check_months'] ?? false)) {
+                    $monthStatuses = $statusReader->year($school, $typeId, $yearId, $actor);
                 }
             }
             if (isset($validated['run'])) {
@@ -75,12 +88,15 @@ class LeaveAccrualPageController extends Controller
             $error = "{$e->getMessage()} ({$e->errorCode()})";
         } catch (ModelNotFoundException) {
             $error = 'Choose a leave type, year and run of this School.';
+        } catch (AccrualMonthNotInYearException) {
+            $error = 'Choose a month of the selected Leave Year.';
         }
 
         return Inertia::render('App/Leave/Accruals', [
             'types' => $types, 'years' => $years, 'leaveTypeId' => $typeId ?? '', 'leaveYearId' => $yearId ?? '', 'today' => $today,
             'periodStart' => $validated['period_start'] ?? '', 'grid' => $grid, 'runs' => $runs, 'preview' => $preview, 'run' => $run,
             'outcome' => $validated['outcome'] ?? '', 'outcomes' => LeaveAccrualOutcome::options(), 'error' => $error, 'canManage' => $canManage,
+            'monthStatus' => $monthStatus, 'monthStatuses' => $monthStatuses,
         ]);
     }
 

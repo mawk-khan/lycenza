@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref } from 'vue';
+import StatusBadge from '../../../Components/StatusBadge.vue';
 import {
     accrualOutcomeLabels,
     monthLabel,
@@ -45,6 +46,18 @@ interface PreviewRow {
     postableOn: string | null;
     eligibilityDrift: boolean;
 }
+interface MonthStatus {
+    periodStart: string;
+    status: AccrualStatus;
+    reason: string;
+    counts: Record<string, number> | null;
+    runId: string | null;
+    runStatus: string | null;
+    failureCode: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    blockedBy: 'year_closed' | 'type_inactive' | 'type_untracked' | null;
+}
 interface Props {
     types: LeaveTypeRow[];
     years: YearRow[];
@@ -85,9 +98,83 @@ interface Props {
     outcomes: Option[];
     error: string | null;
     canManage: boolean;
+    monthStatus: MonthStatus | null;
+    monthStatuses: MonthStatus[] | null;
 }
 
 const props = defineProps<Props>();
+
+// HR.R1-C32 (WO-9, D-3 option 3): read-only month status. Nothing here runs accrual.
+type AccrualStatus =
+    | 'not_due'
+    | 'running'
+    | 'failed'
+    | 'missed'
+    | 'incomplete'
+    | 'complete'
+    | 'nothing_to_credit'
+    | 'unknown';
+const STATUS_BADGE = {
+    not_due: 'accrual_not_due',
+    running: 'accrual_running',
+    failed: 'accrual_failed',
+    missed: 'accrual_missed',
+    incomplete: 'accrual_incomplete',
+    complete: 'accrual_complete',
+    nothing_to_credit: 'accrual_nothing_to_credit',
+    unknown: 'accrual_unknown',
+} as const;
+function when(iso: string | null): string {
+    return iso === null ? '' : `${iso.slice(0, 16).replace('T', ' ')} UTC`;
+}
+const BLOCKED: Record<NonNullable<MonthStatus['blockedBy']>, string> = {
+    year_closed: 'The leave year is closed, so the month can no longer be run.',
+    type_inactive: 'The leave type is inactive, so the month cannot be run.',
+    type_untracked: 'The leave type does not track a balance, so the month cannot be run.',
+};
+function explain(s: MonthStatus): string {
+    const text = reasonText(s);
+    return s.blockedBy ? `${text} ${BLOCKED[s.blockedBy]}` : text;
+}
+function reasonText(s: MonthStatus): string {
+    const wouldCredit = s.counts?.credited ?? 0;
+    // Only a manager can run a month: a viewer is told who can (review LOW-4).
+    const runIt = props.canManage
+        ? 'Run the month'
+        : 'Someone who manages leave needs to run the month';
+    switch (s.reason) {
+        case 'month_not_started':
+            return 'The month has not started.';
+        case 'version_not_yet_postable':
+            return 'Some staff are credited in arrears and are not due yet.';
+        case 'run_processing':
+            return `A run started ${when(s.startedAt)} and has not finished. ${runIt} again to continue it.`;
+        case 'run_failed':
+            return `The last run failed (${s.failureCode ?? 'no code'}). ${runIt} again to resume it.`;
+        case 'never_run':
+            return `No run has completed, and ${wouldCredit} employment(s) would be credited. ${runIt}.`;
+        case 'would_still_credit':
+            return `A run completed, but ${wouldCredit} employment(s) would still be credited (for example, added after the run). ${runIt} again: nothing is credited twice.`;
+        case 'run_completed':
+            return 'A run completed and nobody is left to credit.';
+        case 'no_credit_due':
+            return 'Nobody has anything to credit this month.';
+        case 'credits_without_completed_run':
+            return 'Credits exist but no completed run was found. Check the run history.';
+        case 'runs_unreadable':
+            return 'The run history could not be read. Treat the month as unchecked and try again.';
+        default:
+            return 'The status could not be worked out. Treat the month as unchecked and try again.';
+    }
+}
+function checkMonths(): void {
+    router.get(
+        '/app/leave/accruals',
+        // Not the selected month: checking the year does not also re-run that month's preview (review LOW-3).
+        { ...base(), check_months: '1' },
+        { preserveScroll: true },
+    );
+}
 const leaveError = useLeaveError();
 
 const filters = ref({ leave_type_id: props.leaveTypeId, leave_year_id: props.leaveYearId });
@@ -202,6 +289,47 @@ function cell(value: number | null): string {
         <p v-if="types.length === 0 || years.length === 0" class="mt-4 text-sm text-ink-muted">
             Create a balance-tracked leave type and open a leave year first.
         </p>
+
+        <section v-if="year" class="mt-6" aria-labelledby="status-heading">
+            <h2 id="status-heading" class="text-sm font-semibold">Accrual status</h2>
+            <p class="mt-1 text-sm text-ink-muted">
+                Whether each month that is due has been run and fully credited. This only reads; it
+                never runs a month.
+            </p>
+            <p v-if="monthStatus" class="mt-2 text-sm" aria-live="polite">
+                {{ monthLabel(monthStatus.periodStart) }}:
+                <StatusBadge :status="STATUS_BADGE[monthStatus.status]" />
+                {{ explain(monthStatus) }}
+            </p>
+            <button type="button" class="mt-2 underline" @click="checkMonths">
+                Check every month of this year
+            </button>
+            <table v-if="monthStatuses" class="mt-3 w-full text-left text-sm">
+                <caption class="sr-only">
+                    Accrual status of each month
+                </caption>
+                <thead>
+                    <tr>
+                        <th scope="col" class="py-1">Month</th>
+                        <th scope="col" class="py-1">Status</th>
+                        <th scope="col" class="py-1">What it means</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr
+                        v-for="s in monthStatuses"
+                        :key="s.periodStart"
+                        class="border-t border-line"
+                    >
+                        <th scope="row" class="py-1 font-normal">
+                            {{ monthLabel(s.periodStart) }}
+                        </th>
+                        <td class="py-1"><StatusBadge :status="STATUS_BADGE[s.status]" /></td>
+                        <td class="py-1 text-ink-muted">{{ explain(s) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
 
         <section v-if="canManage && year" class="mt-6" aria-labelledby="month-heading">
             <h2 id="month-heading" class="text-sm font-semibold">Credit a month</h2>

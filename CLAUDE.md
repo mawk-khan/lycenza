@@ -1942,6 +1942,7 @@ once several modules copy it.
      - **Adjustments and openings** need `hr.leave.manage` then a fresh MFA code (S-7). A correction is a new adjustment naming an entry of the same account; nothing is edited.
      - **What corrected a credit (HR.R1-C9):** the net of its adjustment chain, through `signedUnitsSql()`, by `source_id` only. Never by equal amounts, never debits alone, and never treat an unnamed debit as a correction. Every reader asks `LeaveLedgerEntry::isCreditSql()` or `isCredit()`, and the database list is pinned to `CREDIT_KINDS` (HR.R1-C10).
      - **Not built until decided:** in-year carried expiry (OD-HR-16) and proration (OD-HR-17).
+     - **Accrual stays manual; its status is read, never acted on (D-3, HR.R1-C31/C32).** `LeaveAccrualMonthStatusReader` answers one of eight statuses per leave type and month (not_due, running, failed, missed, incomplete, complete, nothing_to_credit, unknown) from the recorded runs and the calculator's unlocked evaluation only. Never a stored status, a second formula, a scheduler, an alert, an automatic re-run or a write; never show `unknown` as complete. The workspace and `leave:accrual-status` read it; a missed or incomplete month is run again with the existing manual run.
 135. **Line managers decide leave only through the `line_manager` add-on, the current reporting line and one stage (HR.11, OD-HR-5, ADR 0065 §30, ADR 0071 §30).**
      - **The role:** `line_manager` holds exactly `hr.leave.approve`.
        - Never add another key to it.

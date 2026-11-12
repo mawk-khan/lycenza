@@ -18,9 +18,8 @@ when HR background work fails. It sits beside `FAILED-JOBS.md`,
 
    Leave accrual and eligibility are not scheduled and have no heartbeat. They are
    run by a person from the accrual workspace (§4), so a missed month is silent.
-   D-3 was decided on 2026-11-12 (HR.R1-C31): accrual stays manual, and a
-   read-only month status (WO-9) will show a missed, incomplete or failed month.
-   **WO-9 is not built yet**: until it is, check each due month by hand (§4).
+   D-3 (HR.R1-C31) keeps accrual manual; since HR.R1-C32 a read-only month
+   status shows a missed, incomplete, failed or running month (§4).
 3. Sign in as an HR administrator and check:
    - **HR reports** opens;
    - **Staff attendance** shows "Showing 1–N of TOTAL staff", and TOTAL
@@ -65,12 +64,18 @@ Runs resume from their cursor and never post twice. A failed batch rolls back
 on its own.
 - Re-run the same month from the accrual workspace.
 - Never edit `leave_ledger_entries`. A correction is a new adjustment.
-- **Checking a month by hand (until WO-9 ships).** After a month becomes due
-  (its first day for advance timing, the day after its last day for arrears),
-  open the accrual workspace for each monthly leave type: a month with no
-  completed run needs one; for a completed month, the preview should credit
-  nobody (if it would, run the month again; it never credits twice). Owner:
-  School HR (`hr.leave.manage`).
+- **Monthly check (HR.R1-C32, WO-9).** After each month becomes due (its first
+  day for advance timing, the day after its last day for arrears), School HR
+  (`hr.leave.manage`) opens the accrual workspace for each monthly leave type
+  and uses **Check every month of this year**:
+  - **Missed** or **Incomplete**: run the month (it never credits twice);
+  - **Failed**: run it again to resume; **Running**: run it again to continue;
+  - **Status unknown**: the evidence could not be read; try again, and raise it
+    if it persists. Never treat it as done;
+  - a closed year or inactive type is named: such a month can no longer be run.
+  Operators can list every School: `php artisan leave:accrual-status
+  [--school=<id>]` (read-only, ids and counts only, every started Leave Year
+  not yet closed). Nothing is scheduled and nothing alerts.
 
 Leave balances in **HR reports** are **as posted**: an entry counts from the
 School-local day it was recorded.
