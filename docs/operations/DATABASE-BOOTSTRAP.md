@@ -148,10 +148,17 @@ does from the audit ledger. The runtime and retention logins can never set
 it.
 
 `platform:verify-database` also checks `hr_family_runtime_privileges` (HR.R1-C26, R1-01
-point 4): the runtime role's effective privileges on each of the 56 HR-family tables equal
+point 4): the runtime role's effective privileges on each of the 57 HR-family tables (56 at C26, plus `employee_credential_verifications` at HR.R1-C29) equal
 `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES` exactly (SELECT, INSERT, UPDATE as listed, a
 single-column grant included; never DELETE, TRUNCATE, REFERENCES or TRIGGER). Since HR.R1-C28 a single-column REFERENCES is seen too. `hr_family_trigger_functions` binds every HR-family trigger through `tgfoid` to its pinned function and definition and checks the function's mode, owner, `search_path` (`pg_temp` last) and EXECUTE on the four approved DEFINER functions; `runtime_role_memberships_none` requires that `school_os_app` belongs to no role and is held by none, except the schema owner WITH ADMIN only: what PostgreSQL 16 gives a non-superuser CREATEROLE creator (e.g. on managed PostgreSQL), which it cannot revoke. ADMIN grants no privilege directly, and a self-granted SET or INHERIT fails the check. A non-empty `createrole_self_grant` gives the creator SET or INHERIT and fails it too, correctly. `retention_role_narrow` does not yet allow the same creator grant on the retention role (C28-N4): set this up before staging. Both assume the role that creates `school_os_app` is the schema owner (the migration role): on managed PostgreSQL run `production-bootstrap.sql` as the migration role, or remove the master's ADMIN grant, or the checks fail closed on a correct database. A FAIL names the trigger and the property (`:binding`, `:mode`, `:search_path`, ...). A FAIL names each table that differs. A new family table gets DELETE from the
 schema's default privileges, so its migration must revoke what the allowlist does not grant.
+
+`platform:verify-database` also checks `hr_credential_verification_invariants` (HR.R1-C29,
+C14-N5): the whole bodies of `hr_credential_revision_guard`,
+`employee_credential_verifications_guard` and `employee_credential_verifications_apply`, the nine
+credential-verification CHECKs, the two same-Employee, same-School decision keys (ON DELETE
+CASCADE), the decision order's identity column and forced RLS. A FAIL names the function
+(`:shipped`), constraint or property. A deliberate change updates its pinned hash in the same change.
 
 `platform:verify-database` also checks `employee_account_links_guarded` (HR.R1-C7,
 HR.R1-C8): the history and correction triggers enabled, the writing functions

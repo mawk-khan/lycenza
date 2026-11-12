@@ -93,7 +93,10 @@ class EmployeeRetentionClassificationTest extends TestCase
         ],
         'employee_personal_details' => [], 'employee_documents' => [],
         'employee_addresses' => [], 'employee_emergency_contacts' => [], 'employee_notes' => [],
-        'employee_qualifications' => [], 'employee_experience_records' => [], 'employee_certifications' => [],
+        // HR.R1-C29 (C14-N5): a credential's verification decisions go with it (FK cascade).
+        'employee_qualifications' => ['employee_credential_verifications' => 'D9 ancillary (2 y): verification decisions, go with their credential (cascade)'],
+        'employee_experience_records' => [],
+        'employee_certifications' => ['employee_credential_verifications' => 'D9 ancillary (2 y): verification decisions, go with their credential (cascade)'],
         'employee_statutory_identifiers' => [], 'employee_tax_profile' => [], 'employee_pf_status' => [], 'employee_esi_coverage' => [],
     ];
 

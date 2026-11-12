@@ -25,6 +25,12 @@ final class EmployeeProfileQualificationEntry
         public readonly ?string $gradeOrResult,
         public readonly string $verificationStatus,
         public readonly ?string $verifiedAt,
+        // HR.R1-C29 (C14-N5): the current revision, the revision the status names (null with a status = before
+        // version recording) and every recorded decision, newest first, without who decided.
+        public readonly int $revision = 1,
+        public readonly ?int $verificationRevision = null,
+        /** @var list<array{decision: string, revision: int, decided_at: string}> */
+        public readonly array $verificationHistory = [],
     ) {}
 
     /** @return array<string, mixed> */
@@ -43,6 +49,9 @@ final class EmployeeProfileQualificationEntry
             'grade_or_result' => $this->gradeOrResult,
             'verification_status' => $this->verificationStatus,
             'verified_at' => $this->verifiedAt,
+            'revision' => $this->revision,
+            'verification_revision' => $this->verificationRevision,
+            'verification_history' => $this->verificationHistory,
         ];
     }
 }

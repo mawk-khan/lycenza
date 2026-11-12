@@ -53,6 +53,8 @@ class DatabaseRoleVerifier
         // HR
         'employee_account_link_corrections' => 'SIU', 'employee_account_links' => 'S', 'employee_addresses' => 'SIU',
         'employee_assignments' => 'SIU', 'employee_categories' => 'SIU', 'employee_certifications' => 'SIU',
+        // HR.R1-C29 (C14-N5, C29-B): verification decisions are inserted, never changed or deleted at runtime.
+        'employee_credential_verifications' => 'SI',
         'employee_documents' => 'SIU', 'employee_emergency_contacts' => 'SIU', 'employee_experience_records' => 'SIU',
         'employee_notes' => 'SIU', 'employee_personal_details' => 'SIU', 'employee_placement_changes' => 'SI',
         'employee_qualifications' => 'SIU', 'employee_reference_codes' => 'SIU', 'employees' => 'SIU',
@@ -88,14 +90,27 @@ class DatabaseRoleVerifier
         'employee_account_link_corrections' => ['trg_employee_account_link_corrections_apply' => ['employee_account_link_corrections_apply', 'ffdc25fefce189b9c5279f307901bc2d'], 'trg_employee_account_link_corrections_guard' => ['employee_account_link_corrections_guard', '9b0c5c4796eee271713cef0a69fe67ed']],
         'employee_addresses' => ['trg_employee_addresses_archive_guard' => ['hr_profile_record_archive_guard', '61f9a03187257a73bd1b7f81e8e42a07'], 'trg_retention_guard_employee_addresses' => ['retention_guard_retention_delete', '8def060bc737047643310b0753ef63d5']],
         'employee_assignments' => ['trg_employee_assignments_never_effective' => ['hr_employee_assignments_never_effective', '2661dc5957cce8abd37e92459399373d'], 'trg_employee_assignments_placement_identity' => ['hr_employee_assignments_placement_identity', '545d5627360416f888bb32fa1dc25c38'], 'trg_employee_assignments_primary_no_overlap' => ['hr_employee_assignments_primary_no_overlap', '3b00c5e4881f6f25dc11fd88c160d56d'], 'trg_retention_guard_employee_assignments' => ['retention_guard_retention_delete', 'd61b64f098a5da2872fd93c85aefa682'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '1a3eaf2f7f38ae5f2715c745019e2973']],
-        'employee_certifications' => ['trg_employee_certifications_archive_guard' => ['hr_profile_record_archive_guard', '9dddf0a90994aecb3ab24886f88984a8'], 'trg_retention_guard_employee_certifications' => ['retention_guard_retention_delete', '79c1ee092934cad9eb02f2c59b7823d9']],
+        'employee_certifications' => ['trg_employee_certifications_archive_guard' => ['hr_profile_record_archive_guard', '9dddf0a90994aecb3ab24886f88984a8'], 'trg_employee_certifications_revision_guard' => [
+            'hr_credential_revision_guard',
+            '5a57dbcf34cd0765d201027dd93cade5',
+        ], 'trg_retention_guard_employee_certifications' => ['retention_guard_retention_delete', '79c1ee092934cad9eb02f2c59b7823d9']],
+        'employee_credential_verifications' => ['trg_employee_credential_verifications_apply' => [
+            'employee_credential_verifications_apply',
+            '497859c03a3491730c9fdf2f7419878f',
+        ], 'trg_employee_credential_verifications_guard' => [
+            'employee_credential_verifications_guard',
+            '75075a81fa8a760a77304eba5c69606f',
+        ], 'trg_employee_credential_verifications_immutable' => ['hr_history_row_immutable', '3ee96f192e066ec847b19fe58f9ddca5']],
         'employee_documents' => ['trg_employee_documents_guard' => ['hr_employee_documents_guard', 'a4871a51a716ee37b17e542068532f5b'], 'trg_retention_guard_employee_documents' => ['retention_guard_retention_delete', '0468012607415c852be6ee0ebf9403f2'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'bd4ee16d0f77e0dd202ef0ce2d6e1a75']],
         'employee_emergency_contacts' => ['trg_employee_emergency_contacts_archive_guard' => ['hr_profile_record_archive_guard', '72d689eeae02dc4a61b6df50f4fe7481'], 'trg_retention_guard_employee_emergency_contacts' => ['retention_guard_retention_delete', '4fa101d2f8e369cf26f5347603a1232c']],
         'employee_experience_records' => ['trg_employee_experience_records_archive_guard' => ['hr_profile_record_archive_guard', 'dfd7609e4729471cba96a159c0566c03'], 'trg_retention_guard_employee_experience_records' => ['retention_guard_retention_delete', '361c096b239f60a4cf3a387f1b017321']],
         'employee_notes' => ['trg_employee_notes_archive_guard' => ['hr_profile_record_archive_guard', '4903a61349d030a47542fcd2130c4baf'], 'trg_retention_guard_employee_notes' => ['retention_guard_retention_delete', 'ba7a5b08c7c98959a972fba876eb3580']],
         'employee_personal_details' => ['trg_retention_guard_employee_personal_details' => ['retention_guard_retention_delete', '6b1c7c8be05881933269dd9ba2405996'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '8f1b7f8d11fb99eb4968debb6b0cf5d0']],
         'employee_placement_changes' => ['trg_employee_placement_changes_guard' => ['hr_employee_placement_changes_guard', '4f4c6cbaec6ced377185ef8924480a8f'], 'trg_employee_placement_changes_immutable' => ['hr_history_row_immutable', 'e19758909ec27bdfeb9c56c99469afc8']],
-        'employee_qualifications' => ['trg_employee_qualifications_archive_guard' => ['hr_profile_record_archive_guard', 'b4dc08ab178a296ed2007eb1f69e78f5'], 'trg_retention_guard_employee_qualifications' => ['retention_guard_retention_delete', '1d9e38531578880afa7b80c6a07251cc']],
+        'employee_qualifications' => ['trg_employee_qualifications_archive_guard' => ['hr_profile_record_archive_guard', 'b4dc08ab178a296ed2007eb1f69e78f5'], 'trg_employee_qualifications_revision_guard' => [
+            'hr_credential_revision_guard',
+            '60cd649a3094d88c94bb84c48bf5aa9e',
+        ], 'trg_retention_guard_employee_qualifications' => ['retention_guard_retention_delete', '1d9e38531578880afa7b80c6a07251cc']],
         'employee_reference_codes' => ['trg_employee_reference_codes_guard' => ['hr_employee_reference_codes_guard', '0b7ab1eb7d86f23c9eded153220b598b']],
         'employees' => ['trg_employees_identity_guard' => ['hr_employees_identity_guard', 'f5642bb32d72676e5d42426b4516d320'], 'trg_employees_not_minimized' => ['users_guard_principal_column', '4faf68edf809c425f443299f009392cc'], 'trg_employees_record_account_link_insert' => ['employees_record_account_link', '6bbe0f32a9c1704a7e993f7ae5e2e1a3'], 'trg_employees_record_account_link_update' => ['employees_record_account_link', 'aff1effce0fa7ba3860353ce2406af27'], 'trg_employees_user_link_payroll_lock' => ['employees_user_link_payroll_lock', 'cf1a0d346147b02d4dd45353f27df815'], 'trg_retention_guard_employees' => ['retention_guard_retention_delete', 'c071ab3f981d06fa2b0f63948707bd62'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'eb0280bc1a8f394efcfdcf52bbb846d9']],
         'employment_records' => ['trg_employment_records_after_death' => ['hr_employment_records_after_death', '2fb7bab266e160e323492b7cf842c802'], 'trg_employment_records_archived_identity' => ['hr_employment_records_archived_identity', '158d87b2b217a1b2ffd66c55298deba8'], 'trg_employment_records_eligibility_guard' => ['retention_guard_end_record', 'bcae3e03439b160b6577916aa07fd514'], 'trg_employment_records_initial_terms' => ['hr_employment_records_initial_terms', '45ea7bbe6be0f56ae3d49aabf8418761'], 'trg_employment_records_no_overlap' => ['hr_employment_records_no_overlap', 'a392e50be9187b953a4cdea7e1389d2a'], 'trg_employment_records_reporting_bounds' => ['hr_employment_records_reporting_bounds', 'd514b90a50e45c732cddad5446050d26'], 'trg_employment_records_separation_notice' => ['hr_employment_records_separation_notice', '4a662a357cceebd720ec0b5af865fefb'], 'trg_employment_records_terms_projection_guard' => ['hr_employment_records_terms_projection_guard', '2ff452333404c3bf147071baaef34869'], 'trg_retention_guard_employment_records' => ['retention_guard_retention_delete', '729dad82a8f562daee589288ce8ec1e4'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'ec6d4769d0a303bb874fa0e854020758']],
@@ -188,6 +203,8 @@ class DatabaseRoleVerifier
         // records are archived; reference codes are retired. Only retention purges any of them.
         'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
         'employee_experience_records', 'employee_certifications', 'employee_documents', 'employee_reference_codes',
+        // HR.R1-C29 (C14-N5): verification decisions leave only with their credential (FK cascade).
+        'employee_credential_verifications',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
@@ -770,8 +787,97 @@ class DatabaseRoleVerifier
         $results[] = $this->employmentLifecycleAdmissionCheck();
         $results[] = $this->staffAttendanceMonthLockCheck();
         $results[] = $this->staffCalendarHistoryCheck();
+        $results[] = $this->credentialVerificationCheck();
 
         return $results;
+    }
+
+    /**
+     * HR.R1-C29 (C14-N5): md5 of each credential-verification function's body, comments stripped and whitespace collapsed.
+     * Each pair is [function, hash], the hash on its own line: gitleaks' generic-api-key rule reads "credential" in a
+     * name as a key word, and would otherwise flag the hash beside it.
+     */
+    private const CREDENTIAL_VERIFICATION_BODIES = [
+        [
+            'hr_credential_revision_guard',
+            '6553c41f80a26f6140c7495c9aa55a78',
+        ],
+        [
+            'employee_credential_verifications_guard',
+            '049dd4561192f2b2d15c400f8d381cf6',
+        ],
+        [
+            'employee_credential_verifications_apply',
+            '21ecb390914a6a297aa9decfe80c7ce4',
+        ],
+    ];
+
+    /** HR.R1-C29: md5 of each credential-verification CHECK's `pg_get_constraintdef`. */
+    private const CREDENTIAL_VERIFICATION_CHECKS = [
+        'employee_qualifications_revision_check' => 'f08b1255b0651119b0dd2c4d8a18bf83',
+        'employee_qualifications_verification_revision_check' => 'c2fa0981d64133e8a0d31f164827ffdb',
+        'employee_qualifications_verification_status_check' => '8ae736350b03d2539d4be66c1a33c5b2',
+        'employee_certifications_revision_check' => 'f08b1255b0651119b0dd2c4d8a18bf83',
+        'employee_certifications_verification_revision_check' => 'c2fa0981d64133e8a0d31f164827ffdb',
+        'employee_certifications_verification_status_check' => '8ae736350b03d2539d4be66c1a33c5b2',
+        'employee_credential_verifications_decision_check' => '66b76431a2d39dd298028fd22db82369',
+        'employee_credential_verifications_kind_check' => 'ac590783c51a57bbacdfc55cc04538c0',
+        'employee_credential_verifications_revision_check' => 'f08b1255b0651119b0dd2c4d8a18bf83',
+    ];
+
+    /**
+     * HR.R1-C29 (C14-N5, owner decisions C29-A/B, rule 132): a credential's verification names a revision only the
+     * database moves, and only a recorded decision on that revision sets it. The trigger bindings, modes, owners
+     * and `search_path` are `hr_family_trigger_functions`; this pins what those functions do (whole bodies, as
+     * C28-N3 asks of new guards), the CHECKs, the two same-Employee, same-School keys that cascade with their
+     * credential, the decision order (an identity column whose value the guard assigns after the credential's row lock,
+     * discarding any a writer supplied, review MEDIUM-1) and forced RLS.
+     */
+    private function credentialVerificationCheck(): CheckResult
+    {
+        $strip = fn (string $src): string => (string) preg_replace(['/--[^\n]*/', '#/\*.*?\*/#s'], '', $src);
+        $missing = [];
+        foreach (self::CREDENTIAL_VERIFICATION_BODIES as [$function, $hash]) {
+            $src = (string) (DB::selectOne("select prosrc as src from pg_proc where proname = ? and pronamespace = 'public'::regnamespace", [$function])->src ?? '');
+            if (md5(trim((string) preg_replace('/\s+/', ' ', $strip($src)))) !== $hash) {
+                $missing[] = "{$function}:shipped";
+            }
+        }
+        foreach (self::CREDENTIAL_VERIFICATION_CHECKS as $constraint => $hash) {
+            $definition = DB::selectOne("select pg_get_constraintdef(oid) as d from pg_constraint where conname = ? and contype = 'c' and convalidated", [$constraint])->d ?? null;
+            if ($definition === null || md5((string) $definition) !== $hash) {
+                $missing[] = "{$constraint}:shipped";
+            }
+        }
+        foreach (['qualification' => 'employee_qualifications', 'certification' => 'employee_certifications'] as $kind => $table) {
+            $key = DB::selectOne(
+                "select pg_get_constraintdef(oid) as d, confdeltype as del from pg_constraint where conname = ? and contype = 'f' and convalidated
+                 and conrelid = 'public.employee_credential_verifications'::regclass",
+                ["employee_credential_verifications_{$kind}_fk"],
+            );
+            if ($key === null || $key->del !== 'c' || $key->d !== "FOREIGN KEY ({$kind}_id, employee_id, school_id) REFERENCES {$table}(id, employee_id, school_id) ON DELETE CASCADE") {
+                $missing[] = "employee_credential_verifications_{$kind}_fk";
+            }
+        }
+        $sequence = DB::selectOne("select attidentity as i from pg_attribute where attrelid = 'public.employee_credential_verifications'::regclass and attname = 'sequence' and not attisdropped");
+        if ($sequence === null || $sequence->i !== 'a') {
+            $missing[] = 'employee_credential_verifications:sequence';
+        }
+        // Delta review INFO-B: the guard takes the order with nextval (USAGE), and nobody at runtime may rewind it (setval).
+        $sequencePrivileges = DB::selectOne(
+            "select has_sequence_privilege(?, pg_get_serial_sequence('public.employee_credential_verifications', 'sequence'), 'USAGE') as usage,
+                    has_sequence_privilege(?, pg_get_serial_sequence('public.employee_credential_verifications', 'sequence'), 'UPDATE') as rewind",
+            [self::RUNTIME_ROLE, self::RUNTIME_ROLE],
+        );
+        if ($sequencePrivileges === null || ! $sequencePrivileges->usage || $sequencePrivileges->rewind) {
+            $missing[] = 'employee_credential_verifications:sequence_privileges';
+        }
+        $forced = DB::selectOne("select relrowsecurity and relforcerowsecurity as x from pg_class where oid = 'public.employee_credential_verifications'::regclass");
+        if ($forced === null || ! $forced->x) {
+            $missing[] = 'employee_credential_verifications:rls';
+        }
+
+        return CheckResult::of('hr_credential_verification_invariants', $missing === [], $missing === [] ? '' : implode(', ', $missing));
     }
 
     /**

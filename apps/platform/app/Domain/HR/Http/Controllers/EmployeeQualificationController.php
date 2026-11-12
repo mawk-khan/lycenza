@@ -94,7 +94,9 @@ class EmployeeQualificationController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $qualificationModel = EmployeeQualification::query()->findOrFail($qualification);
 
-        $updated = $service->verify($employeeModel, $qualificationModel, $request->user());
+        // HR.R1-C29 (C14-N5): the revision the decision-maker saw; a stale one is a 409, a missing one a 422.
+        $revision = (int) $request->validate(['revision' => ['required', 'integer', 'min:1']])['revision'];
+        $updated = $service->verify($employeeModel, $qualificationModel, $request->user(), $revision);
 
         return response()->json(['data' => $this->present($updated)]);
     }
@@ -106,7 +108,9 @@ class EmployeeQualificationController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $qualificationModel = EmployeeQualification::query()->findOrFail($qualification);
 
-        $updated = $service->reject($employeeModel, $qualificationModel, $request->user());
+        // HR.R1-C29 (C14-N5): the revision the decision-maker saw; a stale one is a 409, a missing one a 422.
+        $revision = (int) $request->validate(['revision' => ['required', 'integer', 'min:1']])['revision'];
+        $updated = $service->reject($employeeModel, $qualificationModel, $request->user(), $revision);
 
         return response()->json(['data' => $this->present($updated)]);
     }
@@ -130,6 +134,9 @@ class EmployeeQualificationController extends Controller
             'gradeOrResult' => $qualification->grade_or_result,
             'verificationStatus' => $qualification->verification_status,
             'verifiedAt' => $qualification->verified_at?->toIso8601String(),
+            // HR.R1-C29: the current revision, and the one the status names (null with a status: before version recording).
+            'revision' => (int) $qualification->revision,
+            'verificationRevision' => $qualification->verification_revision,
         ];
     }
 }

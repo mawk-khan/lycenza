@@ -31,15 +31,8 @@ class EmployeeCertificationFactory extends Factory
         ];
     }
 
-    public function verified(): static
-    {
-        return $this->state(fn () => ['verification_status' => 'verified', 'verified_at' => now()]);
-    }
-
-    public function rejected(): static
-    {
-        return $this->state(fn () => ['verification_status' => 'rejected', 'verified_at' => null]);
-    }
+    // HR.R1-C29 (C14-N5): no verified/rejected state. Only a recorded decision on a revision sets one, through
+    // the service (CredentialVerificationDecisions); the database refuses a credential born decided.
 
     public function nonExpiring(): static
     {

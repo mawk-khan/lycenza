@@ -624,3 +624,13 @@ decision was taken or needed.
 - **Guard search path (C28-N2).** Every HR-family guard pins `search_path` with `pg_temp` last (migration `2027_02_17_090000` for the 40 that set none), so a session's temporary table can never stand in for a table a guard reads.
 - **Runtime role (C26-N1).** `school_os_app` is a member of no role and held by none, except the schema owner WITH ADMIN only (what PostgreSQL 16 gives a non-superuser CREATEROLE creator, which it cannot revoke; ADMIN grants no privilege directly, and a self-granted SET would be reported; the creator must be the schema owner, C28-N4); the HR-family allowlist reads REFERENCES per column (C27-N1).
 - **Not changed.** Business rules, writers, the shared runtime role. Trigger functions outside the HR family are C28-N1 (Platform).
+
+### HR.R1-C29 amendment (2026-11-12): a credential verification names the revision it verified
+
+**Status: implemented for development once this candidate's exact-SHA `CI gate` is green and it is published** (`docs/hr/HR-R1-C29-CREDENTIAL-VERIFICATION.md`). Owner decisions C29-A/B/C, HR with Security.
+
+- **Revision (C29-A).** Each qualification and certification carries a `revision` only the database moves; any actual change to a verifiable field moves it and must reset verification. Verify and Reject name the revision seen; any other is refused. A credential reads decided only while it names its current revision.
+- **Decisions (C29-B).** `employee_credential_verifications` is append-only (runtime `SI`, no UPDATE for any role, forced RLS, cascade with its credential, decider RESTRICT). Its insert is the only thing that sets the status; its order is assigned by the guard under the credential's lock. No field values are copied.
+- **Legacy (C29-C).** A status recorded before C29 names no revision and is shown so; nothing is fabricated.
+- **Supersedes** the 8A.6 note that verification has no version and the HR.R1-C14 note that C14-N5 is open; the 8A.6 rule that every edit is material stands.
+- **Not changed.** Who may verify, MFA, independence, consumers (there are none), Documents, the shared runtime role.

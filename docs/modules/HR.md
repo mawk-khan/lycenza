@@ -934,6 +934,22 @@ satisfies the checkpoint's own requirement that a caller cannot verify
 one certificate and silently transform it (issuer, credential number,
 dates, name) into another while keeping `verified` status.
 
+**Revision-bound verification (HR.R1-C29, C14-N5; owner decisions C29-A/B/C,
+HR with Security, 2026-11-12)**: each qualification and certification
+carries a `revision` that only the database moves (any actual change of a
+verifiable field; re-saving identical values is no change and resets
+nothing). Verify and Reject name the revision the decision-maker saw and
+are refused for any other (API 409 `HR_CREDENTIAL_CHANGED`, missing 422,
+web refusal). Every decision is an append-only
+`employee_credential_verifications` row (credential, revision, decision,
+decider, database time; never a copy of the fields), written only by
+`CredentialVerificationDecisions`; its insert sets the status in the
+database, and nothing else can. The profile shows the version each status
+names and the decision history (without the decider). A status recorded
+before C29 names no revision and is shown as "before versions were
+recorded"; nothing is fabricated for it. See
+`docs/hr/HR-R1-C29-CREDENTIAL-VERIFICATION.md`.
+
 **Audit**: every mutation calls `AuditRecorder::school()`
 (`hr.qualification.created`/`.updated`/`.removed`/`.verified`/
 `.rejected`, `hr.experience.created`/`.updated`/`.removed`,

@@ -212,7 +212,7 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
 
-        $verified = app(EmployeeQualificationService::class)->verify($employee, $qualification, $this->fullHrActor($school));
+        $verified = app(EmployeeQualificationService::class)->verify($employee, $qualification, $this->fullHrActor($school), 1);
 
         $this->assertSame('verified', $verified->verification_status);
         $this->assertNotNull($verified->verified_at);
@@ -225,7 +225,7 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
 
-        $rejected = app(EmployeeQualificationService::class)->reject($employee, $qualification, $this->fullHrActor($school));
+        $rejected = app(EmployeeQualificationService::class)->reject($employee, $qualification, $this->fullHrActor($school), 1);
 
         $this->assertSame('rejected', $rejected->verification_status);
         $this->assertNull($rejected->verified_at);
@@ -241,7 +241,7 @@ class EmployeeQualificationTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeQualificationService::class)->verify($employeeA, $qualificationB, $this->fullHrActor($school));
+        app(EmployeeQualificationService::class)->verify($employeeA, $qualificationB, $this->fullHrActor($school), 1);
     }
 
     #[Test]
@@ -252,7 +252,7 @@ class EmployeeQualificationTest extends TestCase
         $qualification = $this->createEmployeeQualification($employee);
         $service = app(EmployeeQualificationService::class);
         $actor = $this->fullHrActor($school);
-        $service->verify($employee, $qualification, $actor);
+        $service->verify($employee, $qualification, $actor, 1);
 
         $edited = $service->update($employee, $qualification, ['grade_or_result' => 'Corrected Grade'], $actor);
 
@@ -268,7 +268,7 @@ class EmployeeQualificationTest extends TestCase
         $qualification = $this->createEmployeeQualification($employee);
         $service = app(EmployeeQualificationService::class);
         $actor = $this->fullHrActor($school);
-        $service->reject($employee, $qualification, $actor);
+        $service->reject($employee, $qualification, $actor, 1);
 
         $edited = $service->update($employee, $qualification, ['grade_or_result' => 'Corrected Grade'], $actor);
 
@@ -283,7 +283,7 @@ class EmployeeQualificationTest extends TestCase
         $qualification = $this->createEmployeeQualification($employee);
         $service = app(EmployeeQualificationService::class);
         $actor = $this->fullHrActor($school);
-        $service->verify($employee, $qualification, $actor);
+        $service->verify($employee, $qualification, $actor, 1);
 
         $unchanged = $service->update($employee, $qualification, [], $actor);
 

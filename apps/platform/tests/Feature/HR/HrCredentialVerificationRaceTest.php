@@ -4,6 +4,7 @@ namespace Tests\Feature\HR;
 
 use App\Domain\HR\Application\EmployeeCertificationService;
 use App\Domain\HR\Application\EmployeeQualificationService;
+use App\Domain\HR\Application\Exceptions\CredentialRevisionChangedException;
 use App\Domain\HR\Application\Exceptions\ProfileRecordArchivedException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Models\School;
@@ -21,8 +22,11 @@ use Tests\TestCase;
  * and the new content stayed verified. Two real sessions, the verification held open and
  * the edit observed blocked. Reproduced on the unlocked writers.
  *
- * It does NOT prove a verifier saw what they verified. A verification names no version, so
- * one landing after an edit attests content nobody may have read. That half of C14-N5 is open.
+ * HR.R1-C29 (C14-N5, C29-A/B): the other half. A verification named no version, so one landing
+ * after an edit attested content nobody may have read: `5be4f9ad` ended that race `verified`.
+ * A decision now names the revision its decision-maker saw and is refused when the row moved on;
+ * when the verification commits first, the edit resets the status and the decision on the earlier
+ * revision stays recorded.
  */
 class HrCredentialVerificationRaceTest extends TestCase
 {
@@ -65,6 +69,21 @@ class HrCredentialVerificationRaceTest extends TestCase
         return [$row->{$column}, $row->verification_status];
     }
 
+    /** @return array{0: int, 1: ?int} the revision, and the revision the status names */
+    private function revisions(string $table, string $id): array
+    {
+        $row = DB::connection('pgsql_admin')->table($table)->where('id', $id)->first();
+
+        return [(int) $row->revision, $row->verification_revision === null ? null : (int) $row->verification_revision];
+    }
+
+    /** @return list<array{0: int, 1: string}> every recorded decision on the credential: revision, decision */
+    private function decisions(string $column, string $id): array
+    {
+        return DB::connection('pgsql_admin')->table('employee_credential_verifications')->where($column, $id)->orderBy('sequence')
+            ->get(['revision', 'decision'])->map(fn ($d) => [(int) $d->revision, (string) $d->decision])->all();
+    }
+
     #[Test]
     public function a_qualification_edit_waiting_on_a_verification_resets_it(): void
     {
@@ -75,18 +94,39 @@ class HrCredentialVerificationRaceTest extends TestCase
         $this->assertSame('ok:verified', $holder);
         $this->assertSame('ok:unverified', $contender);
         $this->assertSame(['Edited in a race', 'unverified'], $this->row('employee_qualifications', 'qualification_name', $row->id));
+        // HR.R1-C29: the edit moved the revision, and the decision on the revision that was verified stays recorded.
+        $this->assertSame([2, null], $this->revisions('employee_qualifications', $row->id));
+        $this->assertSame([[1, 'verified']], $this->decisions('qualification_id', $row->id));
     }
 
-    #[Test]
-    public function a_verification_landing_after_an_edit_attests_the_row_as_it_stands(): void
+    /** @return array<string, array{0: string}> */
+    public static function decisionsBehindAnEdit(): array
     {
-        $row = app(EmployeeQualificationService::class)->add($this->employee, ['qualification_type' => 'degree', 'qualification_name' => 'BEd', 'institution' => 'A College'], $this->hr);
+        return ['qualification verify' => ['qualification-verify'], 'qualification reject' => ['qualification-reject'],
+            'certification verify' => ['certification-verify'], 'certification reject' => ['certification-reject']];
+    }
 
-        [$holder, $contender] = $this->raceWithHeldHolder($this->op('qualification-edit', $row->id), $this->op('qualification-verify', $row->id));
+    /**
+     * HR.R1-C29: on `5be4f9ad` the contender ended `ok:verified` and the row read
+     * ['Edited in a race', 'verified']: content nobody had read, attested.
+     */
+    #[DataProvider('decisionsBehindAnEdit')]
+    #[Test]
+    public function a_decision_waiting_on_an_edit_is_refused_as_stale(string $decision): void
+    {
+        [$row, $table, $column, $key] = str_starts_with($decision, 'qualification')
+            ? [app(EmployeeQualificationService::class)->add($this->employee, ['qualification_type' => 'degree', 'qualification_name' => 'BEd', 'institution' => 'A College'], $this->hr), 'employee_qualifications', 'qualification_name', 'qualification_id']
+            : [app(EmployeeCertificationService::class)->add($this->employee, ['name' => 'First aid', 'issuer' => 'A Board'], $this->hr), 'employee_certifications', 'name', 'certification_id'];
+        $edit = str_starts_with($decision, 'qualification') ? 'qualification-edit' : 'certification-edit';
+
+        // The decision-maker saw revision 1; the edit commits revision 2 while the decision waits on the row.
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op($edit, $row->id), [...$this->op($decision, $row->id), '1']);
 
         $this->assertSame('ok:unverified', $holder);
-        $this->assertSame('ok:verified', $contender);
-        $this->assertSame(['Edited in a race', 'verified'], $this->row('employee_qualifications', 'qualification_name', $row->id));
+        $this->assertSame('rejected:'.CredentialRevisionChangedException::class, $contender);
+        $this->assertSame(['Edited in a race', 'unverified'], $this->row($table, $column, $row->id));
+        $this->assertSame([2, null], $this->revisions($table, $row->id));
+        $this->assertSame([], $this->decisions($key, $row->id), 'nothing was decided');
     }
 
     /** @return array<string, array{0: string, 1: string}> */

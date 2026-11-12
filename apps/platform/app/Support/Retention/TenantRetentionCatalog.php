@@ -207,6 +207,8 @@ final class TenantRetentionCatalog
         'hr_ancillary' => [self::ADOPTED, 'D9: 2 y after final separation', [
             'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
             'employee_experience_records', 'employee_certifications',
+            // HR.R1-C29 (C14-N5): a credential's verification decisions go with it (FK cascade).
+            'employee_credential_verifications',
         ]],
         'hr_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['employee_categories', 'hr_departments', 'positions', 'hr_employee_number_counters', 'separation_clearance_requirements',
             // HR.13: task categories, recurring templates and versions, generation-run counts (no person data).

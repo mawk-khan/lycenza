@@ -46,6 +46,7 @@ class RollbackProductionShapeTest extends TestCase
         'payroll attestation' => ['2027_02_06_090000_create_payroll_posting_attestations', 'payroll_posting_attestations', [], 'posting attestations are recorded'],
         'payroll reconciliation' => ['2027_02_07_090000_create_payroll_reversal_reconciliations', 'payroll_reversal_reconciliations', [], 'reconciliation obligations are recorded'],
         'account link corrections' => ['2027_02_10_090100_require_two_people_to_correct_an_account_link', 'employee_account_link_corrections', [], 'account link correction requests are recorded'],
+        'credential verification decisions' => ['2027_02_18_090000_bind_credential_verification_to_a_revision', 'employee_credential_verifications', [], 'credential verification decisions are recorded'],
         'account link history' => ['2027_02_08_090000_create_employee_account_links', 'employee_account_links', ['origin' => "'recorded'"], 'account link history is recorded'],
         'payroll calculations' => ['2027_01_01_090000_record_payroll_run_calculations_and_participant_approval', 'payroll_run_calculations', [], 'payroll_run_calculations holds'],
         'leave ledger' => ['2026_11_17_090000_create_leave_foundation', 'leave_ledger_entries', [], 'Leave holds Employee evidence'],
@@ -179,7 +180,8 @@ class RollbackProductionShapeTest extends TestCase
     private function insert(string $table, array $values, string $school): string
     {
         $columns = DB::connection(self::SUPER)->select("SELECT column_name AS name, data_type AS type, is_nullable AS nullable, column_default AS fallback, character_maximum_length AS length
-            FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND is_generated = 'NEVER' ORDER BY ordinal_position", [$table]);
+            FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND is_generated = 'NEVER' AND is_identity = 'NO' ORDER BY ordinal_position", [$table]);
+        // HR.R1-C29: an identity column (a decision's order) is the database's to assign, never a sentinel's.
 
         $row = $values + ['id' => 'gen_random_uuid()', 'school_id' => "'{$school}'"];
         foreach ($columns as $column) {

@@ -167,7 +167,7 @@ class HrMutationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(EmployeeQualificationService::class)->verify($employee, $qualification, $viewOnlyActor);
+        app(EmployeeQualificationService::class)->verify($employee, $qualification, $viewOnlyActor, 1);
     }
 
     #[Test]
@@ -180,7 +180,7 @@ class HrMutationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(EmployeeCertificationService::class)->verify($employee, $certification, $viewOnlyActor);
+        app(EmployeeCertificationService::class)->verify($employee, $certification, $viewOnlyActor, 1);
     }
 
     #[Test]
@@ -195,7 +195,7 @@ class HrMutationAuthorizationTest extends TestCase
         $qualification = $this->createEmployeeQualification($employee);
         $actor = $this->createUserWithCapabilities($school, ['hr.employees.qualifications.manage']);
 
-        $verified = app(EmployeeQualificationService::class)->verify($employee, $qualification, $actor);
+        $verified = app(EmployeeQualificationService::class)->verify($employee, $qualification, $actor, 1);
 
         $this->assertSame('verified', $verified->verification_status);
     }

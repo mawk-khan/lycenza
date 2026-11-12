@@ -87,6 +87,9 @@ interface Qualification {
     completed_on: string | null;
     grade_or_result: string | null;
     verification_status: 'unverified' | 'verified' | 'rejected';
+    revision: number;
+    verification_revision: number | null;
+    verification_history: VerificationDecision[];
 }
 
 interface Experience {
@@ -105,6 +108,16 @@ interface Certification {
     issued_on: string | null;
     expires_on: string | null;
     verification_status: 'unverified' | 'verified' | 'rejected';
+    revision: number;
+    verification_revision: number | null;
+    verification_history: VerificationDecision[];
+}
+
+// HR.R1-C29 (C14-N5): one recorded Verify or Reject, on the version it was made on (never who decided).
+interface VerificationDecision {
+    decision: 'verified' | 'rejected';
+    revision: number;
+    decided_at: string;
 }
 
 interface DocumentEntry {
@@ -719,12 +732,46 @@ function submitQualification(): void {
         },
     });
 }
-function verifyQualification(id: string): void {
-    router.post(`${base}/qualifications/${id}/verify`, {}, { preserveScroll: true });
+// HR.R1-C29 (C14-N5): a decision names the version on this page; a record changed since is refused, never decided.
+function verifyQualification(q: Qualification): void {
+    router.post(
+        `${base}/qualifications/${q.id}/verify`,
+        { revision: q.revision },
+        { preserveScroll: true },
+    );
 }
-function rejectQualification(id: string): void {
-    router.post(`${base}/qualifications/${id}/reject`, {}, { preserveScroll: true });
+function rejectQualification(q: Qualification): void {
+    router.post(
+        `${base}/qualifications/${q.id}/reject`,
+        { revision: q.revision },
+        { preserveScroll: true },
+    );
 }
+
+// HR.R1-C29: what the status says about the version shown. A status recorded before versions were kept names none.
+function verificationLabel(c: Qualification | Certification): string {
+    if (c.verification_status === 'unverified') return `unverified (version ${c.revision})`;
+    if (c.verification_revision === null)
+        return `${c.verification_status} before versions were recorded`;
+    return `${c.verification_status} (version ${c.verification_revision})`;
+}
+function canDecide(c: Qualification | Certification, decision: 'verified' | 'rejected'): boolean {
+    return c.verification_status !== decision || c.verification_revision === null;
+}
+function decisionLine(c: Qualification | Certification, d: VerificationDecision): string {
+    const outcome = d.decision === 'verified' ? 'Verified' : 'Rejected';
+    const day = d.decided_at.slice(0, 10);
+    return d.revision === c.revision
+        ? `${outcome} version ${d.revision} on ${day}`
+        : `${outcome} version ${d.revision} on ${day} (an earlier version)`;
+}
+const credentialErrors = computed(() => {
+    const errors = usePage().props.errors as Record<string, string | undefined>;
+    return {
+        qualification: errors.qualification ?? null,
+        certification: errors.certification ?? null,
+    };
+});
 
 // --- Experience ----------------------------------------------------------
 
@@ -759,11 +806,19 @@ function submitCertification(): void {
         },
     });
 }
-function verifyCertification(id: string): void {
-    router.post(`${base}/certifications/${id}/verify`, {}, { preserveScroll: true });
+function verifyCertification(c: Certification): void {
+    router.post(
+        `${base}/certifications/${c.id}/verify`,
+        { revision: c.revision },
+        { preserveScroll: true },
+    );
 }
-function rejectCertification(id: string): void {
-    router.post(`${base}/certifications/${id}/reject`, {}, { preserveScroll: true });
+function rejectCertification(c: Certification): void {
+    router.post(
+        `${base}/certifications/${c.id}/reject`,
+        { revision: c.revision },
+        { preserveScroll: true },
+    );
 }
 
 // --- Documents (governed uploads, HR.2A) ------------------------------------
@@ -2690,6 +2745,9 @@ function submitNote(): void {
                 </button>
             </div>
 
+            <p v-if="credentialErrors.qualification" class="mt-2 text-sm text-danger" role="alert">
+                {{ credentialErrors.qualification }}
+            </p>
             <p v-if="workspace.qualifications.length === 0" class="mt-3 text-sm text-ink-muted">
                 No qualifications visible.
             </p>
@@ -2708,23 +2766,38 @@ function submitNote(): void {
                         </p>
                         <p class="mt-0.5 text-ink-muted">
                             {{ q.institution }} · {{ q.completed_on ?? 'ongoing' }} ·
-                            {{ q.verification_status }}
+                            {{ verificationLabel(q) }}
                         </p>
+                        <details
+                            v-if="q.verification_history.length > 0"
+                            class="mt-1 text-ink-muted"
+                        >
+                            <summary class="cursor-pointer text-xs font-medium text-ink">
+                                Decision history ({{ q.verification_history.length }})
+                            </summary>
+                            <ul class="mt-1 space-y-0.5 text-xs">
+                                <li v-for="(d, i) in q.verification_history" :key="i">
+                                    {{ decisionLine(q, d) }}
+                                </li>
+                            </ul>
+                        </details>
                     </div>
                     <div v-if="can.manageQualifications" class="flex shrink-0 items-center gap-3">
                         <button
-                            v-if="q.verification_status !== 'verified'"
+                            v-if="canDecide(q, 'verified')"
                             type="button"
                             class="underline"
-                            @click="verifyQualification(q.id)"
+                            :aria-label="`Verify version ${q.revision} of ${q.qualification_name}`"
+                            @click="verifyQualification(q)"
                         >
                             Verify
                         </button>
                         <button
-                            v-if="q.verification_status !== 'rejected'"
+                            v-if="canDecide(q, 'rejected')"
                             type="button"
                             class="underline"
-                            @click="rejectQualification(q.id)"
+                            :aria-label="`Reject version ${q.revision} of ${q.qualification_name}`"
+                            @click="rejectQualification(q)"
                         >
                             Reject
                         </button>
@@ -2895,6 +2968,9 @@ function submitNote(): void {
                 </button>
             </div>
 
+            <p v-if="credentialErrors.certification" class="mt-2 text-sm text-danger" role="alert">
+                {{ credentialErrors.certification }}
+            </p>
             <p v-if="workspace.certifications.length === 0" class="mt-3 text-sm text-ink-muted">
                 No certifications visible.
             </p>
@@ -2908,23 +2984,38 @@ function submitNote(): void {
                         <p class="font-medium">{{ c.name }}</p>
                         <p class="mt-0.5 text-ink-muted">
                             {{ c.issuer }} · expires {{ c.expires_on ?? 'never' }} ·
-                            {{ c.verification_status }}
+                            {{ verificationLabel(c) }}
                         </p>
+                        <details
+                            v-if="c.verification_history.length > 0"
+                            class="mt-1 text-ink-muted"
+                        >
+                            <summary class="cursor-pointer text-xs font-medium text-ink">
+                                Decision history ({{ c.verification_history.length }})
+                            </summary>
+                            <ul class="mt-1 space-y-0.5 text-xs">
+                                <li v-for="(d, i) in c.verification_history" :key="i">
+                                    {{ decisionLine(c, d) }}
+                                </li>
+                            </ul>
+                        </details>
                     </div>
                     <div v-if="can.manageQualifications" class="flex shrink-0 items-center gap-3">
                         <button
-                            v-if="c.verification_status !== 'verified'"
+                            v-if="canDecide(c, 'verified')"
                             type="button"
                             class="underline"
-                            @click="verifyCertification(c.id)"
+                            :aria-label="`Verify version ${c.revision} of ${c.name}`"
+                            @click="verifyCertification(c)"
                         >
                             Verify
                         </button>
                         <button
-                            v-if="c.verification_status !== 'rejected'"
+                            v-if="canDecide(c, 'rejected')"
                             type="button"
                             class="underline"
-                            @click="rejectCertification(c.id)"
+                            :aria-label="`Reject version ${c.revision} of ${c.name}`"
+                            @click="rejectCertification(c)"
                         >
                             Reject
                         </button>

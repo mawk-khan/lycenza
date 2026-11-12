@@ -47,6 +47,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php hr-lifecycle-op.php <schoolId> note-archive <employeeId> <noteId> <actorId>
 //   php hr-lifecycle-op.php <schoolId> task-category <actorId>
 //   php hr-lifecycle-op.php <schoolId> task-cancel <taskId> <version> <actorId>
+//   (HR.R1-C29: verify/reject take the revision the decision-maker saw as an optional sixth argument, default 1.)
 //   php hr-lifecycle-op.php <schoolId> qualification-verify|qualification-edit|qualification-archive|qualification-reject|certification-verify|certification-edit|certification-reject|certification-archive <employeeId> <rowId> <actorId>
 
 require __DIR__.'/../../vendor/autoload.php';
@@ -84,12 +85,12 @@ try {
             })(),
             'task-category' => (string) $app->make(TaskCatalogueService::class)->createCategory(School::query()->findOrFail($argv[1]), 'raced', 'Raced', User::query()->findOrFail($argv[3]))->id,
             'task-cancel' => (string) $app->make(TaskWorkflowService::class)->cancel(School::query()->findOrFail($argv[1]), $argv[3], (int) $argv[4], TaskCancelReason::NO_LONGER_NEEDED, User::query()->findOrFail($argv[5]))->status,
-            'qualification-verify' => (string) $app->make(EmployeeQualificationService::class)->verify(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'qualification-verify' => (string) $app->make(EmployeeQualificationService::class)->verify(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), (int) ($argv[6] ?? 1))->verification_status,
             'qualification-edit' => (string) $app->make(EmployeeQualificationService::class)->update(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), ['qualification_name' => 'Edited in a race'], User::query()->findOrFail($argv[5]))->verification_status,
-            'certification-verify' => (string) $app->make(EmployeeCertificationService::class)->verify(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'certification-verify' => (string) $app->make(EmployeeCertificationService::class)->verify(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), (int) ($argv[6] ?? 1))->verification_status,
             'certification-edit' => (string) $app->make(EmployeeCertificationService::class)->update(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), ['name' => 'Edited in a race'], User::query()->findOrFail($argv[5]))->verification_status,
-            'qualification-reject' => (string) $app->make(EmployeeQualificationService::class)->reject(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
-            'certification-reject' => (string) $app->make(EmployeeCertificationService::class)->reject(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]))->verification_status,
+            'qualification-reject' => (string) $app->make(EmployeeQualificationService::class)->reject(Employee::query()->findOrFail($argv[3]), EmployeeQualification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), (int) ($argv[6] ?? 1))->verification_status,
+            'certification-reject' => (string) $app->make(EmployeeCertificationService::class)->reject(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), (int) ($argv[6] ?? 1))->verification_status,
             'certification-archive' => (function () use ($app, $argv): string {
                 $app->make(EmployeeCertificationService::class)->remove(Employee::query()->findOrFail($argv[3]), EmployeeCertification::query()->findOrFail($argv[4]), User::query()->findOrFail($argv[5]), ProfileRecordArchiveReason::NO_LONGER_CURRENT);
 

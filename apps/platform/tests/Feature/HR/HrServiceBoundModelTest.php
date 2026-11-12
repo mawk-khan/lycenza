@@ -164,8 +164,8 @@ class HrServiceBoundModelTest extends TestCase
         $service = app(EmployeeQualificationService::class);
         $row = $service->add($this->employee, ['qualification_type' => 'degree', 'qualification_name' => 'BEd', 'institution' => 'A College'], $this->hr);
 
-        $this->assertSame('verified', $service->verify($this->employee, $row, $this->hr)->fresh()->verification_status);
-        $this->assertSame('rejected', $service->reject($this->employee, $row->fresh(), $this->hr)->fresh()->verification_status);
+        $this->assertSame('verified', $service->verify($this->employee, $row, $this->hr, 1)->fresh()->verification_status);
+        $this->assertSame('rejected', $service->reject($this->employee, $row->fresh(), $this->hr, 1)->fresh()->verification_status);
     }
 
     #[Test]
@@ -175,13 +175,13 @@ class HrServiceBoundModelTest extends TestCase
         // dropped it with no error and left an edited credential verified. Strict mode is off here, as in production.
         $qualifications = app(EmployeeQualificationService::class);
         $qualification = $qualifications->add($this->employee, ['qualification_type' => 'degree', 'qualification_name' => 'BEd', 'institution' => 'A College'], $this->hr);
-        $qualifications->verify($this->employee, $qualification, $this->hr);
+        $qualifications->verify($this->employee, $qualification, $this->hr, 1);
         $edited = $qualifications->update($this->employee, $qualification->fresh(), ['qualification_name' => 'MEd'], $this->hr);
         $this->assertSame(['MEd', 'unverified', null], [$edited->qualification_name, $edited->verification_status, $edited->verified_at]);
 
         $certifications = app(EmployeeCertificationService::class);
         $certification = $certifications->add($this->employee, ['name' => 'First aid', 'issuer' => 'A Board'], $this->hr);
-        $certifications->verify($this->employee, $certification, $this->hr);
+        $certifications->verify($this->employee, $certification, $this->hr, 1);
         $editedCertification = $certifications->update($this->employee, $certification->fresh(), ['name' => 'CPR'], $this->hr);
         $this->assertSame(['CPR', 'unverified', null], [$editedCertification->name, $editedCertification->verification_status, $editedCertification->verified_at]);
 
@@ -196,7 +196,7 @@ class HrServiceBoundModelTest extends TestCase
     {
         $service = app(EmployeeQualificationService::class);
         $qualification = $service->add($this->employee, ['qualification_type' => 'degree', 'qualification_name' => 'BEd', 'institution' => 'A College'], $this->hr);
-        $service->verify($this->employee, $qualification, $this->hr);
+        $service->verify($this->employee, $qualification, $this->hr, 1);
 
         $this->assertSame('verified', $service->update($this->employee, $qualification->fresh(), [], $this->hr)->verification_status);
     }

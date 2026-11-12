@@ -128,6 +128,8 @@ final class UserReferenceCatalog
         'employee_qualifications' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
         'employee_experience_records' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
         'employee_certifications' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.R1-C29 (C14-N5): who decided a credential verification is the decision's evidence (RESTRICT).
+        'employee_credential_verifications' => ['decided_by_user_id' => self::RETAIN_REFERENCE],
         'employee_reference_codes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE, 'retired_by_user_id' => self::RETAIN_REFERENCE],
         // HR.1A: who recorded an employment-terms change and a named placement change (history, RESTRICT).
         'employee_placement_changes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],

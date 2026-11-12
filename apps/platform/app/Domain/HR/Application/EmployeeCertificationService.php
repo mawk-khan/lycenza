@@ -2,16 +2,19 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Credentials\CredentialVerificationDecisions;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
 use App\Domain\HR\Application\Profile\ArchivesProfileRecords;
 use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCertification;
+use App\Domain\HR\Infrastructure\EmployeeCredentialVerification;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,6 +27,10 @@ use Illuminate\Support\Facades\DB;
  * credential_number, dates, name) into another while keeping
  * `verified` status -- `update()` resets to `unverified` whenever it
  * changes any field on a previously verified/rejected record.
+ *
+ * HR.R1-C29 (C14-N5): verify()/reject() name the revision their
+ * decision-maker saw and record an append-only decision, exactly as
+ * EmployeeQualificationService does.
  */
 class EmployeeCertificationService
 {
@@ -34,6 +41,7 @@ class EmployeeCertificationService
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly SchoolOperationalGuard $operational,
+        private readonly CredentialVerificationDecisions $decisions,
     ) {}
 
     /**
@@ -63,7 +71,8 @@ class EmployeeCertificationService
                     'certificationId' => $certification->id,
                 ]);
 
-                return $certification;
+                // The database's revision (1) and defaults, never assumed here.
+                return $certification->refresh();
             });
         });
     }
@@ -89,10 +98,21 @@ class EmployeeCertificationService
                 $this->assertLiveRecord($locked);
                 $wasVerified = $locked->verification_status !== 'unverified';
 
+                // HR.R1-C29 (delta review LOW-A): a date column stores a day, so a value with a time of day is compared
+                // as the day PostgreSQL will store; otherwise an unchanged day would look like an edit.
+                foreach (['issued_on', 'expires_on'] as $date) {
+                    if (isset($attributes[$date]) && is_string($attributes[$date])) {
+                        $attributes[$date] = Carbon::parse($attributes[$date])->toDateString();
+                    }
+                }
                 $locked->fill($attributes);
+                // HR.R1-C29 (C29-A, review LOW-2): an actual change of a verifiable field is what resets a decision,
+                // exactly what moves the revision in the database; re-saving the same values decides nothing.
+                $changed = $locked->isDirty();
                 // HR.R1-C13 (GOV-6): verification is not fillable, so the reset is stated, and the audit still names it.
-                if ($attributes !== [] && $wasVerified) {
-                    $locked->forceFill(['verification_status' => 'unverified', 'verified_at' => null]);
+                if ($changed && $wasVerified) {
+                    // HR.R1-C29: the database moves the revision; the reset names no verification any more.
+                    $locked->forceFill(['verification_status' => 'unverified', 'verified_at' => null, 'verification_revision' => null]);
                     $attributes = [...$attributes, 'verification_status' => 'unverified', 'verified_at' => null];
                 }
                 $locked->save();
@@ -101,7 +121,7 @@ class EmployeeCertificationService
                     'employeeId' => $employee->id,
                     'certificationId' => $certification->id,
                     'fields' => array_keys($attributes),
-                    'verificationReset' => $wasVerified && $attributes !== [],
+                    'verificationReset' => $wasVerified && $changed,
                 ]);
 
                 return $locked->fresh();
@@ -121,24 +141,35 @@ class EmployeeCertificationService
         $this->archiveProfileRecord($employee, $certification, $reason, $actor, 'hr.certification.archived', ['certificationId' => $certification->id]);
     }
 
-    public function verify(Employee $employee, EmployeeCertification $certification, User $actor): EmployeeCertification
+    /**
+     * HR.R1-C29 (C14-N5, C29-A): `$revision` is the revision the decision-maker saw. Decided on the locked row:
+     * any other revision is refused (CredentialRevisionChangedException) and nothing is written. The decision is
+     * recorded once per revision and sets the certification's verification in the database.
+     */
+    public function verify(Employee $employee, EmployeeCertification $certification, User $actor, int $revision): EmployeeCertification
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $certification);
         $this->assertLiveRecord($certification);
 
-        return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
-            return DB::transaction(function () use ($employee, $certification, $actor) {
+        return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor, $revision) {
+            return DB::transaction(function () use ($employee, $certification, $actor, $revision) {
                 $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $locked = EmployeeCertification::query()->whereKey($certification->id)->lockForUpdate()->firstOrFail();
                 $this->assertLiveRecord($locked);
-                $locked->forceFill(['verification_status' => 'verified', 'verified_at' => now()])->save();
+                $recorded = $this->decisions->decide($locked, $revision, EmployeeCredentialVerification::VERIFIED, $actor);
+                if ($recorded === null) {
+                    // This revision already carries this decision: no new evidence, nothing written or audited.
+                    return $locked;
+                }
 
                 $this->audit->school($employee->school, 'hr.certification.verified', actor: $actor, subject: $certification, metadata: [
                     'employeeId' => $employee->id,
                     'certificationId' => $certification->id,
+                    'revision' => $revision,
+                    'decisionId' => $recorded->id,
                 ]);
 
                 return $certification->fresh();
@@ -146,24 +177,35 @@ class EmployeeCertificationService
         });
     }
 
-    public function reject(Employee $employee, EmployeeCertification $certification, User $actor): EmployeeCertification
+    /**
+     * HR.R1-C29 (C14-N5, C29-A): `$revision` is the revision the decision-maker saw. Decided on the locked row:
+     * any other revision is refused (CredentialRevisionChangedException) and nothing is written. The decision is
+     * recorded once per revision and sets the certification's verification in the database.
+     */
+    public function reject(Employee $employee, EmployeeCertification $certification, User $actor, int $revision): EmployeeCertification
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $certification);
         $this->assertLiveRecord($certification);
 
-        return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
-            return DB::transaction(function () use ($employee, $certification, $actor) {
+        return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor, $revision) {
+            return DB::transaction(function () use ($employee, $certification, $actor, $revision) {
                 $this->operational->requireOperational($employee->school_id);
                 // HR.2A (S-3): nobody administers their own HR record.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $locked = EmployeeCertification::query()->whereKey($certification->id)->lockForUpdate()->firstOrFail();
                 $this->assertLiveRecord($locked);
-                $locked->forceFill(['verification_status' => 'rejected', 'verified_at' => null])->save();
+                $recorded = $this->decisions->decide($locked, $revision, EmployeeCredentialVerification::REJECTED, $actor);
+                if ($recorded === null) {
+                    // This revision already carries this decision: no new evidence, nothing written or audited.
+                    return $locked;
+                }
 
                 $this->audit->school($employee->school, 'hr.certification.rejected', actor: $actor, subject: $certification, metadata: [
                     'employeeId' => $employee->id,
                     'certificationId' => $certification->id,
+                    'revision' => $revision,
+                    'decisionId' => $recorded->id,
                 ]);
 
                 return $certification->fresh();

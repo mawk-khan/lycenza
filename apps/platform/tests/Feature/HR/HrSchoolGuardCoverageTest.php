@@ -32,6 +32,8 @@ class HrSchoolGuardCoverageTest extends TestCase
     /** Writes through a trusted path that holds the School before it gets here. */
     private const CHECKED_BY_THE_CALLER = [
         'Domain/HR/Application/Profile/ArchivesProfileRecords.php' => 'used only by classes that hold `$operational`, and it calls the guard itself',
+        // HR.R1-C29: inserts a decision only inside verify()/reject() of the two credential services, after their guard.
+        'Domain/HR/Application/Credentials/CredentialVerificationDecisions.php' => 'called only inside the qualification and certification services\' transactions, after requireOperational()',
     ];
 
     /** @return iterable<string, string> */

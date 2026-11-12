@@ -9,6 +9,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmployeeCertification;
+use App\Domain\HR\Infrastructure\EmployeeCredentialVerification;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Domain\HR\Infrastructure\EmployeeExperience;
@@ -241,6 +242,19 @@ class EmployeeProfileWorkspaceService
             ->orderBy('id')
             ->get();
 
+        // HR.R1-C29 (C14-N5, C29-B): each visible credential's decisions, newest first, in one query; what a
+        // decision records (its revision and outcome), never who decided.
+        $decisions = ! $canViewQualifications || ($qualifications->isEmpty() && $certifications->isEmpty()) ? collect() : EmployeeCredentialVerification::query()
+            ->where('school_id', $school->id)
+            ->where('employee_id', $employee->id)
+            ->where(fn ($q) => $q->whereIn('qualification_id', $qualifications->pluck('id'))->orWhereIn('certification_id', $certifications->pluck('id')))
+            ->orderByDesc('sequence')
+            ->get(['qualification_id', 'certification_id', 'revision', 'decision', 'decided_at']);
+        $history = fn (?string $qualificationId, ?string $certificationId): array => $decisions
+            ->filter(fn (EmployeeCredentialVerification $d) => $qualificationId !== null ? $d->qualification_id === $qualificationId : $d->certification_id === $certificationId)
+            ->map(fn (EmployeeCredentialVerification $d) => ['decision' => $d->decision, 'revision' => $d->revision, 'decided_at' => $d->decided_at->toIso8601String()])
+            ->values()->all();
+
         // Phase 8A.10: not queried at all without hr.employees.documents.view.
         // Highly Sensitive is excluded from this query regardless (8A.9,
         // unchanged) -- see App\Domain\HR\Application\EmployeeSensitiveDocumentReadService
@@ -364,6 +378,9 @@ class EmployeeProfileWorkspaceService
                 gradeOrResult: $q->grade_or_result,
                 verificationStatus: $q->verification_status,
                 verifiedAt: $q->verified_at?->toIso8601String(),
+                revision: (int) $q->revision,
+                verificationRevision: $q->verification_revision,
+                verificationHistory: $history($q->id, null),
             ))->all(),
             experience: $experience->map(fn (EmployeeExperience $x) => new EmployeeProfileExperienceEntry(
                 id: $x->id,
@@ -384,6 +401,9 @@ class EmployeeProfileWorkspaceService
                 expiresOn: $c->expires_on?->toDateString(),
                 verificationStatus: $c->verification_status,
                 verifiedAt: $c->verified_at?->toIso8601String(),
+                revision: (int) $c->revision,
+                verificationRevision: $c->verification_revision,
+                verificationHistory: $history(null, $c->id),
             ))->all(),
             documents: $documents->map(fn (EmployeeDocument $d) => new EmployeeProfileDocumentEntry(
                 id: $d->id,

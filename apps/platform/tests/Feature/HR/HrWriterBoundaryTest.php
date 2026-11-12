@@ -55,6 +55,8 @@ class HrWriterBoundaryTest extends TestCase
         // Trigger-only history (R6, rule 145); the runtime role reads it only.
         'EmployeeAccountLink' => [],
         'EmployeeAccountLinkCorrection' => ['EmployeeAccountLinkCorrectionService'],
+        // HR.R1-C29 (C14-N5): one writer of decisions; its insert sets the credential's verification in the database.
+        'EmployeeCredentialVerification' => ['CredentialVerificationDecisions'],
         'EmployeeAddress' => ['EmployeeAddressService'],
         // Create, end, set primary; close at the employment's end; retention.
         'EmployeeAssignment' => ['EmployeeAssignmentService', 'EmploymentService', 'EmployeeRecordRetentionService'],
@@ -390,7 +392,7 @@ class HrWriterBoundaryTest extends TestCase
     public function the_writer_register_and_the_privilege_allowlist_cover_exactly_the_family(): void
     {
         // A new model of the family fails here until it has writers named and its runtime privileges classified.
-        $this->assertCount(56, $this->familyNames(), 'the HR family as of HR.R1-C26');
+        $this->assertCount(57, $this->familyNames(), 'the HR family as of HR.R1-C26, and the credential decisions of HR.R1-C29');
         $register = array_keys(self::WRITERS);
         sort($register);
         $expected = [...$this->familyNames(), ...array_keys(self::OTHER_MODELS)];

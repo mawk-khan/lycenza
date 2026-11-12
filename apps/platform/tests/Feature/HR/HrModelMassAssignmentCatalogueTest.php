@@ -94,7 +94,7 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
     ];
 
     /** Accept nothing by mass assignment by construction: `$guarded = ['*']`, or a writer of their own. */
-    private const CLOSED = ['EmployeeAccountLink', 'EmployeeAccountLinkCorrection', 'EmployeeReferenceCode'];
+    private const CLOSED = ['EmployeeAccountLink', 'EmployeeAccountLinkCorrection', 'EmployeeCredentialVerification', 'EmployeeReferenceCode'];
 
     /** @return array<string, class-string<Model>> short name => class */
     private static function discovered(): array
@@ -131,7 +131,8 @@ class HrModelMassAssignmentCatalogueTest extends TestCase
     #[Test]
     public function the_inventory_is_the_whole_namespace(): void
     {
-        $this->assertCount(90, self::discovered(), 'A model was added or removed: give it a disposition here and in the C13 record.');
+        // HR.R1-C29 added EmployeeCredentialVerification (CLOSED), recorded in HR-R1-C29-CREDENTIAL-VERIFICATION.md.
+        $this->assertCount(91, self::discovered(), 'A model was added or removed: give it a disposition here and in the C13 record.');
     }
 
     #[Test]

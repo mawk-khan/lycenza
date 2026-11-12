@@ -195,7 +195,7 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee);
 
-        $verified = app(EmployeeCertificationService::class)->verify($employee, $certification, $this->fullHrActor($school));
+        $verified = app(EmployeeCertificationService::class)->verify($employee, $certification, $this->fullHrActor($school), 1);
 
         $this->assertSame('verified', $verified->verification_status);
         $this->assertNotNull($verified->verified_at);
@@ -208,7 +208,7 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee);
 
-        $rejected = app(EmployeeCertificationService::class)->reject($employee, $certification, $this->fullHrActor($school));
+        $rejected = app(EmployeeCertificationService::class)->reject($employee, $certification, $this->fullHrActor($school), 1);
 
         $this->assertSame('rejected', $rejected->verification_status);
         $this->assertNull($rejected->verified_at);
@@ -222,7 +222,7 @@ class EmployeeCertificationTest extends TestCase
         $certification = $this->createEmployeeCertification($employee);
         $service = app(EmployeeCertificationService::class);
         $actor = $this->fullHrActor($school);
-        $service->verify($employee, $certification, $actor);
+        $service->verify($employee, $certification, $actor, 1);
 
         $edited = $service->update($employee, $certification, ['issuer' => 'A Different Issuer'], $actor);
 
@@ -238,7 +238,7 @@ class EmployeeCertificationTest extends TestCase
         $certification = $this->createEmployeeCertification($employee, ['credential_number' => 'ORIGINAL-1']);
         $service = app(EmployeeCertificationService::class);
         $actor = $this->fullHrActor($school);
-        $service->verify($employee, $certification, $actor);
+        $service->verify($employee, $certification, $actor, 1);
 
         $edited = $service->update($employee, $certification, ['credential_number' => 'CHANGED-2'], $actor);
 
@@ -254,7 +254,7 @@ class EmployeeCertificationTest extends TestCase
         $certification = $this->createEmployeeCertification($employee);
         $service = app(EmployeeCertificationService::class);
         $actor = $this->fullHrActor($school);
-        $service->verify($employee, $certification, $actor);
+        $service->verify($employee, $certification, $actor, 1);
 
         $unchanged = $service->update($employee, $certification, [], $actor);
 

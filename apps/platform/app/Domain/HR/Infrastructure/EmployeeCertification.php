@@ -31,6 +31,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $expires_on
  * @property string $verification_status unverified|verified|rejected
  * @property Carbon|null $verified_at
+ * @property int $revision moved only by the database, on any change of a verifiable field (HR.R1-C29)
+ * @property int|null $verification_revision the revision the current decision names; NULL with a decision = before version recording
  * @property Carbon|null $archived_at
  * @property string|null $archived_by_user_id
  * @property string|null $archive_reason
@@ -51,6 +53,8 @@ class EmployeeCertification extends Model
             'issued_on' => 'date',
             'expires_on' => 'date',
             'verified_at' => 'datetime',
+            'revision' => 'integer',
+            'verification_revision' => 'integer',
         ];
     }
 

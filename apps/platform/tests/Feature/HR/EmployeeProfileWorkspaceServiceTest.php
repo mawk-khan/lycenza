@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\HR;
 
+use App\Domain\HR\Application\EmployeeCertificationService;
 use App\Domain\HR\Application\EmployeeProfileWorkspace;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
+use App\Domain\HR\Application\EmployeeQualificationService;
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
@@ -338,7 +340,9 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $this->createEmployeeQualification($employee, ['qualification_name' => 'Bachelor of Education', 'verification_status' => 'verified']);
+        $qualification = $this->createEmployeeQualification($employee, ['qualification_name' => 'Bachelor of Education']);
+        // HR.R1-C29: only a recorded decision on a revision makes a credential verified.
+        app(EmployeeQualificationService::class)->verify($employee, $qualification, $this->fullHrActor($school), 1);
 
         $workspace = $this->build($school, $employee->id);
 
@@ -346,7 +350,7 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
         $this->assertSame([
             'id', 'qualification_type', 'qualification_name', 'specialization', 'institution',
             'awarding_body', 'country_code', 'starts_on', 'completed_on', 'grade_or_result',
-            'verification_status', 'verified_at',
+            'verification_status', 'verified_at', 'revision', 'verification_revision', 'verification_history',
         ], array_keys($workspace->qualifications[0]->toArray()));
         $this->assertSame('Bachelor of Education', $workspace->qualifications[0]->qualificationName);
         $this->assertSame('verified', $workspace->qualifications[0]->verificationStatus);
@@ -373,12 +377,13 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $this->createEmployeeCertification($employee, ['name' => 'First Aid', 'credential_number' => 'CERT-123', 'verification_status' => 'rejected']);
+        $certification = $this->createEmployeeCertification($employee, ['name' => 'First Aid', 'credential_number' => 'CERT-123']);
+        app(EmployeeCertificationService::class)->reject($employee, $certification, $this->fullHrActor($school), 1);
 
         $workspace = $this->build($school, $employee->id);
 
         $this->assertCount(1, $workspace->certifications);
-        $this->assertSame(['id', 'name', 'issuer', 'credential_number', 'issued_on', 'expires_on', 'verification_status', 'verified_at'], array_keys($workspace->certifications[0]->toArray()));
+        $this->assertSame(['id', 'name', 'issuer', 'credential_number', 'issued_on', 'expires_on', 'verification_status', 'verified_at', 'revision', 'verification_revision', 'verification_history'], array_keys($workspace->certifications[0]->toArray()));
         $this->assertSame('CERT-123', $workspace->certifications[0]->credentialNumber);
         $this->assertSame('rejected', $workspace->certifications[0]->verificationStatus);
     }

@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C29, 2026-11-12): C14-N5 closed for development.** The owner decided C29-A/B/C (HR with Security): a verification names a database-maintained revision and is refused for any other; every decision is an append-only row whose insert alone sets the status; legacy statuses are shown unbound (`HR-R1-C29-CREDENTIAL-VERIFICATION.md`).
+
+- **Reproduced first** on `5be4f9ad` (the C14 race pin and a stale page), then refused in both commit orders with two real sessions.
+- **Reviewed:** an independent Security review (no HIGH; MEDIUM-1, a supplied decision order, fixed) and a delta review of the fixes.
+- **Blocking under C27-C after C29:** C14-N2, LVA-1/TRR-2 (D-3), the person-level Identity MEDIUM. R1-02 stays PARTIAL. Every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
+
 **Readings recorded (HR.R1-C27, 2026-11-12; `HR-R1-C27-CLOSURE-INTERPRETATIONS.md` §2).** The text above is unchanged; these are the HR owner's readings of it.
 - **§1 (C27-B):** met when each of the eight connections has one recorded status: INTEGRATED (with a test), DEFERRED BY OWNER, or NOT BUILT (with a named owner). At C27: Organization, Transport, Timetable/Academic, IAM/security and retention/audit INTEGRATED (development); Finance/Payroll INTEGRATED (Payroll) and DEFERRED (Finance staff dues); Inventory DEFERRED; SIS NOT BUILT (owners SIS + HR, Fees).
 - **§4 (C27-C):** P1/HIGH = BLOCKER, P2/MEDIUM = MAJOR, for development and architecture findings. Legal, staging and production items, and owner-DEFERRED items, do not fail the verdict if recorded, unchanged and refused; the verdict then reads "PASS for development scope; production not addressed". Blocking at C27: C14-N2, C14-N5, LVA-1/TRR-2 (D-3), the person-level Identity MEDIUM.

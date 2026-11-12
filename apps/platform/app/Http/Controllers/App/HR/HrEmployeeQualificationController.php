@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\HR;
 
 use App\Domain\HR\Application\EmployeeQualificationService;
+use App\Domain\HR\Application\Exceptions\CredentialRevisionChangedException;
 use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
@@ -13,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class HrEmployeeQualificationController extends Controller
 {
@@ -60,7 +62,7 @@ class HrEmployeeQualificationController extends Controller
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }
 
-    public function verify(TenantContext $context, EmployeeQualificationService $service, string $employee, string $qualification): RedirectResponse
+    public function verify(Request $request, TenantContext $context, EmployeeQualificationService $service, string $employee, string $qualification): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('hr.employees.qualifications.manage', $school);
@@ -69,12 +71,22 @@ class HrEmployeeQualificationController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $qualificationModel = EmployeeQualification::query()->findOrFail($qualification);
 
-        $service->verify($employeeModel, $qualificationModel, $context->actor());
+        // HR.R1-C29 (C14-N5): the revision on the page; a changed record is refused and shown, never decided.
+        // A missing or malformed revision is the same stale page, shown in its own section.
+        $revision = filter_var($request->input('revision'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($revision === false) {
+            throw ValidationException::withMessages(['qualification' => ['This page is out of date. Reload it and try again.']]);
+        }
+        try {
+            $service->verify($employeeModel, $qualificationModel, $context->actor(), $revision);
+        } catch (CredentialRevisionChangedException $e) {
+            throw ValidationException::withMessages(['qualification' => [$e->getMessage()]]);
+        }
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }
 
-    public function reject(TenantContext $context, EmployeeQualificationService $service, string $employee, string $qualification): RedirectResponse
+    public function reject(Request $request, TenantContext $context, EmployeeQualificationService $service, string $employee, string $qualification): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('hr.employees.qualifications.manage', $school);
@@ -83,7 +95,17 @@ class HrEmployeeQualificationController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $qualificationModel = EmployeeQualification::query()->findOrFail($qualification);
 
-        $service->reject($employeeModel, $qualificationModel, $context->actor());
+        // HR.R1-C29 (C14-N5): the revision on the page; a changed record is refused and shown, never decided.
+        // A missing or malformed revision is the same stale page, shown in its own section.
+        $revision = filter_var($request->input('revision'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($revision === false) {
+            throw ValidationException::withMessages(['qualification' => ['This page is out of date. Reload it and try again.']]);
+        }
+        try {
+            $service->reject($employeeModel, $qualificationModel, $context->actor(), $revision);
+        } catch (CredentialRevisionChangedException $e) {
+            throw ValidationException::withMessages(['qualification' => [$e->getMessage()]]);
+        }
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }
