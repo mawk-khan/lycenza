@@ -156,4 +156,12 @@ Also authorized:
   - `pkill`'s exit code is unchecked, which is harmless.
 - **Existing behaviour, unchanged:** a handler that leaves its own transaction open can lose `complete()`, as `release()` could before.
 
-Publication evidence is recorded in the evidence commit.
+**Publication.**
+- **Candidate `8eda4cc7`, CI run 43288849962: green on its first attempt, no reruns.**
+  - shards: 2,941 × 4;
+  - **11,764 tests, 468,257 assertions, 0 failures, 1 skip (ESI-12)**;
+  - shard coverage union green;
+  - static, full-history secrets, supply chain, integrity and production images all green.
+- **Published** with `lycenza-ci publication-check --candidate 8eda4cc7… --push` on 2026-11-12. E16 last valid day 2026-11-28, no problems. `origin/main` = `8eda4cc7`; main CI run **43292802632**.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression for the publication.
+- **Not needed:** no migration, so no rollback proof. No change to the DDEV database. No screen changed, so no browser or accessibility work.
