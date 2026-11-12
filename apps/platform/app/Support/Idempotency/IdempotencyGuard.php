@@ -97,15 +97,25 @@ class IdempotencyGuard
      * this class's crash-window docblock for what this default path
      * does and does not guarantee.
      */
-    public function complete(ApiIdempotencyKey $record, Response $response): void
+    public function complete(ApiIdempotencyKey $record, Response $response): bool
     {
-        $record->forceFill([
-            'status' => IdempotencyStatus::Completed->value,
-            'response_status' => $response->getStatusCode(),
-            'response_headers' => $this->safeHeaders($response),
-            'response_body' => $this->decodeBody($response),
-            'completed_at' => now(),
-        ])->save();
+        // HR.R1-C30: only the request that still holds the claim records an outcome. One that outlived its in-flight
+        // timeout and was reclaimed (handleProcessing() moves `created_at`) must not overwrite the newer request's
+        // outcome, nor a self-participating completion; the same compare as releaseIfStillClaimed().
+        $body = $this->decodeBody($response);
+
+        return ApiIdempotencyKey::query()
+            ->whereKey($record->getKey())
+            ->where('status', IdempotencyStatus::Processing->value)
+            ->where('created_at', $record->getRawOriginal('created_at'))
+            ->update([
+                'status' => IdempotencyStatus::Completed->value,
+                'response_status' => $response->getStatusCode(),
+                'response_headers' => json_encode($this->safeHeaders($response)),
+                'response_body' => $body === null ? null : json_encode($body),
+                'completed_at' => now(),
+                'updated_at' => now(),
+            ]) === 1;
     }
 
     /**

@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C30, 2026-11-12): C14-N2 closed for development.** The Platform owner decided C30-A/B: a rendered 5xx on an idempotent route is released only when the request provably committed nothing; after a committed effect it stays remembered and is never re-executed (`HR-R1-C30-IDEMPOTENCY-SERVER-ERRORS.md`).
+
+- **Reproduced first** on `506c6c62`, then proven on real routes with real server-side failures and with two real processes under a deterministic barrier.
+- **Reviewed:** an independent review (no HIGH; MEDIUM-1, a lost acknowledgement read as "nothing committed", fixed), a delta review and a final-state recheck.
+- **Blocking under C27-C after C30:** LVA-1/TRR-2 (D-3) and the person-level Identity MEDIUM. R1-02 stays PARTIAL. Every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
+
 **Evidence recorded (HR.R1-C29, 2026-11-12): C14-N5 closed for development.** The owner decided C29-A/B/C (HR with Security): a verification names a database-maintained revision and is refused for any other; every decision is an append-only row whose insert alone sets the status; legacy statuses are shown unbound (`HR-R1-C29-CREDENTIAL-VERIFICATION.md`).
 
 - **Reproduced first** on `5be4f9ad` (the C14 race pin and a stale page), then refused in both commit orders with two real sessions.

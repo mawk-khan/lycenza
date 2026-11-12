@@ -241,8 +241,31 @@ reaches route middleware, so `EnsureIdempotent` sees a response on a real
 request, with the exception attached. Its catch blocks serve only a direct
 call. Until HR.R1-C14 nothing read that attachment.
 
-- **Remembered** (every rendered response, 5xx included): **replayed
-  verbatim** on retry, and a new key is a new attempt.
+- **Remembered** (every rendered response except the two released below):
+  **replayed verbatim** on retry, and a new key is a new attempt. This includes
+  every 4xx, and every 5xx after a committed effect.
+- **Released, a 5xx that committed nothing** (HR.R1-C30, C14-N2, Platform
+  owner decisions C30-A/B, 2026-11-12): `App\Support\Idempotency\CommittedEffectDetector`
+  watches the request from `$next()` to its response, judging every statement
+  before it runs, on every connection. A committed effect is a write statement
+  ATTEMPTED outside any transaction the request opened (reported or not: a lost
+  acknowledgement may hide a committed write), a write in a level later
+  committed back to the request's starting level (a rolled-back level is
+  discarded), PostgreSQL's own answer at the outermost commit
+  (`pg_current_xact_id_if_assigned()`; a committed transaction that only locked
+  rows FOR UPDATE also has one, and counts), a SELECT calling a VOLATILE
+  `public` function or a `pg_catalog` writer, a job about to be queued
+  (`JobQueueing`), an outbound HTTP request or a mail. A statement it cannot
+  classify, several statements in one string, `SELECT ... INTO` and `EXPLAIN
+  ANALYZE` count as writes, and so does every statement if the function list
+  could not be read. Doubt is a yes.
+  None of these, and the 5xx is released through `releaseIfStillClaimed()`:
+  the same key is a real retry. Any of them, and the 5xx stays remembered and a
+  retry replays it (C30-B), because some routes have no atomic completion. It
+  cannot see bytes written to object storage, which hold no business record.
+  On a fresh-MFA route the code is spent before the business step, itself a
+  committed write, so every 5xx there is remembered (a retry could not reuse
+  the code).
 - **Released** (`SchoolNotOperationalException`): the row is deleted via
   `IdempotencyGuard::releaseIfStillClaimed()`, so a retry after the School
   resumes is a real attempt. A row another request has reclaimed is left
@@ -256,11 +279,20 @@ call. Until HR.R1-C14 nothing read that attachment.
 - **A self-participating route** that called `completeWithin()` keeps its
   record: it is no longer `processing`, so neither path touches it.
 
-**A 5xx is currently remembered, and this section used to say otherwise.** A
-handled failure can follow a commit, and some routes have no atomic completion
-(`WebhookEndpointService`, the Inventory stock API), so releasing it would let a
-retry run the effect twice. Whether that should change is a Platform decision
-(C14-N2, `docs/hr/HR-R1-C14-RESIDUAL-HARDENING.md` §2).
+**History.** Until HR.R1-C30 every rendered 5xx was remembered, and before
+HR.R1-C14 this section wrongly said it was released. A handled failure can
+follow a commit, and some routes have no atomic completion
+(`WebhookEndpointService`, the Inventory stock API), so a blanket release would
+let a retry run the effect twice; C30 releases only what provably committed
+nothing (`docs/hr/HR-R1-C30-IDEMPOTENCY-SERVER-ERRORS.md`).
+
+**Only the claimant records an outcome (HR.R1-C30).** `complete()` updates the
+row only while it is still `processing` with this request's `created_at`, the
+same compare as `releaseIfStillClaimed()`. A request that outlived its in-flight
+timeout and was reclaimed records nothing over the newer request's outcome. (The
+default path's documented limit is unchanged: such a slow request and its
+reclaimer can both execute; a route that cannot tolerate that calls
+`completeWithin()`.)
 
 ### Expiration and pruning
 

@@ -279,8 +279,16 @@ docs/roadmap             MASTER-ROADMAP.md
 
     **A rendered failure reaches the middleware as a response, not an
     exception (HR.R1-C14).** Read the attached exception to classify it.
-    Only `SchoolNotOperationalException` is released: a 5xx can follow a
-    commit, so it is currently remembered (C14-N2, open).
+    `SchoolNotOperationalException` is released. **A rendered 5xx is released
+    only when the request provably committed nothing (HR.R1-C30, C14-N2,
+    Platform decisions C30-A/B):** `CommittedEffectDetector` sees no committed
+    write (PostgreSQL's transaction id at the outermost commit, any write
+    statement ATTEMPTED outside a transaction, a VOLATILE `public` function),
+    no job queueing, outbound HTTP or mail; doubt counts as a commit. Any committed effect, or doubt, keeps it
+    remembered: a retry never runs a committed effect again. Only the request
+    that still holds the claim records an outcome (`complete()` is
+    conditional). Never release a 5xx on any other test, and never make a
+    remembered one re-executable.
 
 33. **A feature-specific external idempotency model may still be
     required.** The generic `Idempotency-Key` middleware only

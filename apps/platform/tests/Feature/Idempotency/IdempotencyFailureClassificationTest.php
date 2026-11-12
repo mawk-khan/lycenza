@@ -22,8 +22,8 @@ use Tests\TestCase;
  * remembers, over real HTTP. Laravel's routing pipeline renders an exception into a
  * response BEFORE it reaches route middleware, so `EnsureIdempotent`'s catch blocks never
  * see one on a real request. On `e3df37b3` a suspended School's 404 was stored and replayed
- * for 48 hours after it resumed. That is corrected. A 500 is stored too, against what
- * RELIABILITY.md used to say: releasing it can double an effect, so that stays a decision.
+ * for 48 hours after it resumed. That is corrected. HR.R1-C30 (C14-N2): a 500 is released only when the
+ * request committed nothing; after a committed effect it stays remembered.
  */
 class IdempotencyFailureClassificationTest extends TestCase
 {
@@ -112,25 +112,55 @@ class IdempotencyFailureClassificationTest extends TestCase
         $this->assertSame(1, $this->notes());
     }
 
+    /**
+     * HR.R1-C30 (C14-N2, C30-A): until 506c6c62 this pinned the opposite. The School's check fails before anything
+     * was written, so the 500 is not remembered: the same key retries for real and runs once. A 5xx after a committed
+     * effect stays remembered (IdempotencyServerErrorRecoveryTest, IdempotencyServerErrorRealRouteTest).
+     */
     #[Test]
-    public function a_server_error_stays_remembered_because_it_can_follow_a_commit(): void
+    public function a_server_error_before_any_write_is_released_and_the_same_key_runs_once(): void
     {
-        // Today's behaviour, pinned, not endorsed: C14-N2 is the Platform owner's. Releasing it would let a retry run a
-        // committed effect twice on a route with no atomic completion, so a new key is what gets a new attempt.
         $this->theGuardFailsOnceWith(new RuntimeException('a dependency went away'));
 
         $this->postNote()->assertStatus(500);
-
-        $this->assertSame(1, $this->keys());
-        app('auth')->forgetGuards();
-        $replay = $this->postNote();
-        $replay->assertStatus(500);
-        $this->assertSame('true', $replay->headers->get('Idempotency-Replayed'));
+        $this->assertSame(0, $this->keys(), 'nothing committed, nothing remembered');
         $this->assertSame(0, $this->notes());
 
         app('auth')->forgetGuards();
-        $this->postNote('01890f3e-7c1a-7d3e-9b1a-1234567890ac')->assertCreated();
+        $retry = $this->postNote();
+        $retry->assertCreated();
+        $this->assertNull($retry->headers->get('Idempotency-Replayed'));
         $this->assertSame(1, $this->notes());
+
+        app('auth')->forgetGuards();
+        $this->postNote()->assertCreated();
+        $this->assertSame(1, $this->notes(), 'the success is remembered and replayed');
+    }
+
+    /** HR.R1-C30: a request that lost its claim records nothing over the newer claimant's outcome. */
+    #[Test]
+    public function a_slow_request_cannot_overwrite_the_outcome_of_the_request_that_reclaimed_it(): void
+    {
+        $record = $this->claim();
+        $this->inContext(function () use ($record): void {
+            DB::table('api_idempotency_keys')->where('id', $record->id)->update(['created_at' => now()->addMinute()]);
+            $this->assertFalse(app(IdempotencyGuard::class)->complete($record, response()->json(['data' => ['stale' => true]], 201)));
+        });
+        $row = null;
+        $this->inContext(function () use ($record, &$row): void {
+            $row = DB::table('api_idempotency_keys')->where('id', $record->id)->first(['status', 'response_body']);
+        });
+        $this->assertSame('processing', $row->status, 'still the newer request\'s claim');
+        $this->assertNull($row->response_body);
+
+        // And once the newer request has completed, the stale one cannot replace its outcome either.
+        $this->inContext(fn () => app(IdempotencyGuard::class)->completeWithin(ApiIdempotencyKey::query()->findOrFail($record->id), 201, ['data' => ['fresh' => true]]));
+        $this->inContext(fn () => $this->assertFalse(app(IdempotencyGuard::class)->complete($record, response()->json(['data' => ['stale' => true]], 201))));
+        $body = null;
+        $this->inContext(function () use ($record, &$body): void {
+            $body = DB::table('api_idempotency_keys')->where('id', $record->id)->value('response_body');
+        });
+        $this->assertSame(['data' => ['fresh' => true]], json_decode((string) $body, true));
     }
 
     #[Test]

@@ -44,6 +44,8 @@ My first correction released it, to match the document. **The independent review
 
 Other default-path create routes may share this: not walked. `RELIABILITY.md` now says what is true, and a test pins it.
 
+**Decided and closed by HR.R1-C30 (2026-11-12):** option B, released only when the request provably committed nothing (`HR-R1-C30-IDEMPOTENCY-SERVER-ERRORS.md`).
+
 | Option | Effect |
 |---|---|
 | A. Keep remembering (recommended for now) | Safe against doubles. A client needs a new key after a 500 |

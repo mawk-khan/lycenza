@@ -121,7 +121,8 @@ class IdempotencyRealConcurrencyTest extends TestCase
     {
         $publicPath = base_path('public');
 
-        $this->server = new Process(['php', '-S', "127.0.0.1:{$this->port}", '-t', $publicPath]);
+        // HR.R1-C30 (review LOW-4): without workers `php -S` serves the two requests one after the other.
+        $this->server = new Process(['php', '-S', "127.0.0.1:{$this->port}", '-t', $publicPath], null, ['PHP_CLI_SERVER_WORKERS' => '4']);
         $this->server->setWorkingDirectory(base_path());
         $this->server->start();
 

@@ -53,6 +53,7 @@ use App\Support\Configuration\ProductionConfigurationException;
 use App\Support\Configuration\ProductionConfigurationGuard;
 use App\Support\Configuration\UnsupportedEnvironmentException;
 use App\Support\Database\RollbackSafeMigrator;
+use App\Support\Idempotency\CommittedEffectDetector;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\LogErrorReporter;
 use App\Support\Observability\Metrics\ArrayMetricStore;
@@ -206,6 +207,8 @@ class AppServiceProvider extends ServiceProvider
         // ADR 0053 (Phase 0O.7A): service keys are parsed once per process
         // (lazily, from resolved config); changing them is a restart.
         $this->app->singleton(ServiceAuthKeys::class);
+        // HR.R1-C30 (C14-N2): one scope per request, opened and closed by EnsureIdempotent.
+        $this->app->singleton(CommittedEffectDetector::class);
 
         // Phase 1A.3: like AiContextTokenService above (since Phase
         // 0O.1), this does NOT cast a missing key to an empty string

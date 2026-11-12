@@ -6,6 +6,7 @@ use App\Models\ApiIdempotencyKey;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use App\Support\Idempotency\CommittedEffectDetector;
 use App\Support\Idempotency\Exceptions\IdempotencyKeyConflictException;
 use App\Support\Idempotency\Exceptions\IdempotencyRequestInProgressException;
 use App\Support\Idempotency\IdempotencyGuard;
@@ -53,6 +54,7 @@ class EnsureIdempotent
         private readonly IdempotencyMetrics $metrics,
         private readonly TenantContext $context,
         private readonly CampusScopeResolver $campusScopes,
+        private readonly CommittedEffectDetector $effects,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -129,27 +131,37 @@ class EnsureIdempotent
     {
         $request->attributes->set('idempotency_record', $record);
 
+        // HR.R1-C30 (C14-N2, C30-A): watch what the request leaves behind, so a server error can be told apart from a
+        // server error after a commit.
+        $this->effects->begin();
         try {
             $response = $next($request);
         } catch (ValidationException $e) {
+            $this->effects->end();
             $this->guard->failDeterministically($record, $e->status, [
                 'error' => ['message' => $e->getMessage(), 'status' => $e->status, 'errors' => $e->errors()],
             ]);
             throw $e;
         } catch (AuthorizationException $e) {
+            $this->effects->end();
             $this->guard->failDeterministically($record, 403, [
                 'error' => ['message' => $e->getMessage(), 'status' => 403, 'errors' => null],
             ]);
             throw $e;
         } catch (Throwable $e) {
-            // Reached only by a direct call: on a real request the routing
-            // pipeline has already rendered the exception (see below).
-            // Unclassified (transient infra, unexpected 500, ...) --
-            // never poison the key over a failure we can't prove was
-            // deterministic. See IdempotencyGuard::release()'s docblock.
-            $this->guard->release($record);
+            // Reached only by a direct call: on a real request the routing pipeline has already rendered the exception
+            // (see below). The same rule as a rendered 5xx (C30-A): released only when nothing committed; otherwise
+            // remembered, so a retry never runs a committed effect again (C30-B).
+            if ($this->effects->end()) {
+                if (! $this->guard->complete($record, response()->json(['error' => ['message' => 'Server Error', 'status' => 500]], 500))) {
+                    Log::info('idempotency.claim_lost', ['school_id' => $record->school_id, 'route_action' => $record->route_action, 'request_id' => $request->attributes->get('request_id')]);
+                }
+            } else {
+                $this->guard->releaseIfStillClaimed($record);
+            }
             throw $e;
         }
+        $committed = $this->effects->end();
 
         // A self-participating controller (section 17) may already have
         // called IdempotencyGuard::completeWithin() inside its own
@@ -157,8 +169,25 @@ class EnsureIdempotent
         if ($record->fresh()?->status === IdempotencyStatus::Processing->value) {
             if ($this->theSchoolRefused($response)) {
                 $this->guard->releaseIfStillClaimed($record);
+            } elseif ($response->getStatusCode() >= 500 && ! $committed) {
+                // HR.R1-C30 (C30-A): a server error that provably left nothing behind is not remembered; the same key
+                // is a real retry. One after a committed effect, or one the detector cannot clear, is remembered.
+                $this->guard->releaseIfStillClaimed($record);
+                Log::info('idempotency.server_error_released', [
+                    'school_id' => $record->school_id,
+                    'route_action' => $record->route_action,
+                    'status' => $response->getStatusCode(),
+                    'request_id' => $request->attributes->get('request_id'),
+                ]);
             } else {
-                $this->guard->complete($record, $response);
+                // Conditional (HR.R1-C30): a request that lost its claim records nothing over the newer one.
+                if (! $this->guard->complete($record, $response)) {
+                    Log::info('idempotency.claim_lost', [
+                        'school_id' => $record->school_id,
+                        'route_action' => $record->route_action,
+                        'request_id' => $request->attributes->get('request_id'),
+                    ]);
+                }
             }
         }
 
@@ -172,9 +201,9 @@ class EnsureIdempotent
      * after the request-time check is refused before anything of the effect
      * committed: this reaches the response after a commit on no idempotent
      * route today (RELIABILITY.md names the routes that commit in batches). It
-     * may resume, so the refusal is not remembered. A rendered 5xx is currently remembered: a
-     * handled failure can follow a commit, and some routes have no atomic
-     * completion. Whether that should change is open (C14-N2, RELIABILITY.md).
+     * may resume, so the refusal is not remembered. A rendered 5xx is released only when the
+     * request provably committed nothing (HR.R1-C30, CommittedEffectDetector); after a committed
+     * effect it stays remembered, because some routes have no atomic completion.
      */
     private function theSchoolRefused(Response $response): bool
     {
