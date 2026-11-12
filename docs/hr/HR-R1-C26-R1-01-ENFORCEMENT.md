@@ -170,7 +170,7 @@ Each was planted in a copied file, the guard run, the file restored and its chec
 | `tests/Feature/Identity` (DDEV, local; checklist) | 199 passed, 42,442 assertions, 0 failures |
 | Local gates (`/publish-gate`) | Pint, Larastan, whitespace (untracked included), gitleaks on changed files: PASS |
 | Rollback | §4.5 |
-| Full suite, CI, publication | evidence commit |
+| Full suite, CI, publication | §10 |
 
 ## 7. C16 reference pack, E16, historical checks
 
@@ -188,6 +188,7 @@ Each was planted in a copied file, the guard run, the file restored and its chec
 | C26-R2 (review L1 to L3, I1) | **CLOSED** |
 | Final-state review F-L1 to F-L5 | **CLOSED** before commit (§2.1) |
 | **C26-N1** | **New, LOW, Platform.** The allowlist answers the runtime role's own effective privileges (it is NOINHERIT). A role it could `SET ROLE` into is checked only for the schema owner (`runtime_role_not_owner_member`). Today the runtime role is a member of no role. Proposed: a verifier check that the runtime role belongs to no role |
+| **C26-N2** | **Observation, Platform.** `BacklogSignalsTest::an_automation_execution_waiting_for_its_backoff_is_not_overdue` asserts an exact age (230 s) across a second boundary and failed once with 231 on attempt 1 of C26's candidate run; the same flake was seen locally in the E16 cycle. Not a product defect; the assertion needs a tolerance or a frozen database clock |
 | C22-N1 to N4, C24-N1, C24 export identity, C10-N2, C14-N1, C14-N2, C14-N5, C18-A12, C19-N1, C19-N2, C20-N1, C20-N2, the person-level Identity MEDIUM | Unchanged, open as recorded |
 | HRC-4, HRC-8, LVA-4, XRP-3, XRP-4, TRR-6, TRR-8 | Unchanged, open. All 61 original identifiers preserved |
 
@@ -206,5 +207,18 @@ Each was planted in a copied file, the guard run, the file restored and its chec
 | Local synthetic UAT | Eligible for implemented, governed functionality |
 | Staging | Paused (owner, 2026-10-17); AWS not authenticated |
 | Production | **NO-GO** |
+
+## 10. Publication evidence
+
+| | |
+|---|---|
+| Candidate | `3efcfcdb` (one commit on `b7204210`), pushed to `integration/hr-r1-c26` |
+| Committed-range gitleaks | `b7204210..3efcfcdb`, pinned `zricethezav/gitleaks:v8.28.0@sha256:cdbb7c95…`, repository config: no leaks |
+| Candidate `CI gate` | Run 43194294858. **Attempt 1 failed** on one test in shard 1, `BacklogSignalsTest::an_automation_execution_waiting_for_its_backoff_is_not_overdue` ("the running lease expired 230 s ago": 231 vs 230), a known pre-existing timing flake of a second boundary in an Observability test that C26 does not touch. Shards 2 to 4 green on attempt 1. **Attempt 2** re-ran the failed job only, on the same SHA: green; `CI gate` green (check run 131122027749) |
+| Full suite on the exact SHA | 4 shards, 2,922 + 2,921 × 3 = **11,685 cases**, **466,978 assertions** (shard 1 from attempt 2), **0 failures, 1 skip (ESI-12)**. Coverage union = canonical suite: success. +60 cases on C24 (the per-table writer cases replacing four, the new test file, the split SET NULL case) |
+| Publication | `lycenza-ci publication-check --candidate 3efcfcdb --push`: fast-forward, no problems; remote `main` = `3efcfcdb`. Main `CI` run 43200554612: success |
+| E16 | Valid (`OWNER-0O-E16-2026-11-01`, through 2026-11-28) |
+| DDEV development database | The one pending migration applied forward on `db` through `pgsql_admin` (APP_ENV local, `current_database()` = `db` checked first); `platform:verify-database` failed=0, `hr_family_runtime_privileges` PASS; 391 migrations, 255 forced-RLS tables; the October 2026 Staff Attendance month lock intact. No data changed |
+| Regression counter | 0/5: the exact-SHA full suite is this unit's regression (rule 82, ADR 0072 §28.8) |
 
 **Next.** R1-09 and HR.R1 §1/§4, the closure-contract interpretations, with WO-13 (C22-N1) resolved before the final architecture acceptance. Nothing starts without the owner's go-ahead.
