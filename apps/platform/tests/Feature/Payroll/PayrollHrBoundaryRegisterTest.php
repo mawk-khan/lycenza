@@ -29,8 +29,17 @@ use Tests\TestCase;
  * In the database: the 9 Payroll → HR foreign keys with their delete rule, and the 8 Payroll functions that read
  * HR tables with their security mode, `search_path` and the runtime role's EXECUTE.
  *
+ * Since HR.R1-C26 (C25-N1) it also counts array-form eager loads (`with([...])`), HR relations reached through a
+ * loaded row (`lazy`), and `new`, `instanceof` and return types naming an HR model (`type`).
+ *
  * Writes are not decided here: `HrWriterBoundaryTest::payroll_never_writes_an_hr_table()` does that, and the
  * database denies what history forbids. Limits, honestly:
+ * - the `lazy` count knows the relation names `employmentRecord`, `employee(s)` and `employeeAssignment` (not
+ *   `assignment`, which is Payroll's own `CompensationAssignmentValue` relation); an HR row reached through another relation name, or held in a plain variable, is not counted;
+ * - the `type` count knows `HR_MODELS` only, and a parameter type is the `hint` count; a ternary's
+ *   `: Employee::...` also counts as a type (it fails closed, never open);
+ * - the array form is read up to its first `]`, so an HR relation named after a nested array inside it
+ *   (`with(['run' => fn ($q) => $q->select(['id']), 'employmentRecord'])`) is not counted;
  * - a source scan cannot see a write or a reference built at run time (a table name assembled from parts, a
  *   model class held in a variable);
  * - the `sql` count knows the eight HR tables in HR_TABLES only: a raw read of another HR table (`departments`,
@@ -63,8 +72,8 @@ class PayrollHrBoundaryRegisterTest extends TestCase
     private const REGISTER = [
         // Governed readers: the 22 moves (§3.1), and the readers that were already compliant (§2).
         'Http/Controllers/App/Payroll/PayrollRunController.php' => ['ids' => 'R01-R03 labels(); X14, X15 id for a typed service', 'imports' => [self::ROSTER, self::RECORD], 'refs' => ['model' => 2, 'reader' => 3]],
-        'Http/Controllers/App/Payroll/CompensationController.php' => ['ids' => 'R04 labels(); X09 search; X16 id for assign()', 'imports' => [self::ROSTER, self::RECORD], 'refs' => ['model' => 2, 'hint' => 1, 'relation' => 2, 'reader' => 1]],
-        'Http/Controllers/App/Payroll/Statutory/StatutoryEmployeeController.php' => ['ids' => 'R05 labels(); X10 search', 'imports' => [self::ROSTER, self::RECORD], 'refs' => ['model' => 1, 'hint' => 1, 'relation' => 2, 'reader' => 1]],
+        'Http/Controllers/App/Payroll/CompensationController.php' => ['ids' => 'R04 labels(); X09 search (its two name reads counted as lazy since C26); X16 id for assign()', 'imports' => [self::ROSTER, self::RECORD], 'refs' => ['model' => 2, 'hint' => 1, 'relation' => 2, 'lazy' => 2, 'reader' => 1]],
+        'Http/Controllers/App/Payroll/Statutory/StatutoryEmployeeController.php' => ['ids' => 'R05 labels(); X10 search (its two name reads counted as lazy since C26)', 'imports' => [self::ROSTER, self::RECORD], 'refs' => ['model' => 1, 'hint' => 1, 'relation' => 2, 'lazy' => 2, 'reader' => 1]],
         'Domain/Payroll/Application/PayslipReadService.php' => ['ids' => 'R06 labels(); X11 own employments; ActingEmployeeResolver (compliant)', 'imports' => ['App\\Domain\\HR\\Application\\ActingEmployeeResolver', self::ROSTER, 'App\\Domain\\HR\\Application\\Exceptions\\ActingEmployeeUnavailableException', self::RECORD], 'refs' => ['model' => 1, 'reader' => 1]],
         'Domain/Payroll/Statutory/Application/Export/StatutoryEcrExportService.php' => ['ids' => 'R07 labels(), once per export', 'imports' => [self::ROSTER], 'refs' => ['reader' => 1]],
         'Domain/Payroll/Statutory/Application/Export/StatutoryEsiContributionWorksheetExportService.php' => ['ids' => 'R08 labels(), once per export', 'imports' => [self::ROSTER], 'refs' => ['reader' => 1]],
@@ -169,7 +178,16 @@ class PayrollHrBoundaryRegisterTest extends TestCase
         $refs = array_filter([
             'model' => preg_match_all('/\b(?:'.self::HR_MODELS.')::/', $code),
             'hint' => preg_match_all('/\b(?:'.self::HR_MODELS.')\s+\$/', $code),
-            'relation' => preg_match_all("/->(?:with|whereHas|has|load|whereDoesntHave|orWhereHas)\\(\\s*'[\\w.]*(?:employee|employmentRecord)/", $code),
+            'relation' => preg_match_all("/->(?:with|whereHas|has|load|whereDoesntHave|orWhereHas)\\(\\s*[\'\"][\\w.]*(?:employee|employmentRecord)/", $code)
+                // HR.R1-C26 (C25-N1): the array form, each HR relation named in it.
+                + array_sum(array_map(
+                    fn (string $list) => preg_match_all('/[\'"][\\w.]*(?:employee|employmentRecord)/', $list),
+                    preg_match_all('/->(?:with|whereHas|has|load|whereDoesntHave|orWhereHas)\\(\\s*\\[([^\\]]*)\\]/', $code, $lists) > 0 ? $lists[1] : [],
+                )),
+            // HR.R1-C26 (C25-N1): an HR relation reached through a loaded row (`$result->employmentRecord->employee`).
+            'lazy' => preg_match_all('/(?<!\\$this)->(?:employmentRecord|employee|employees|employeeAssignment)\\??(?=->)/', $code),
+            // HR.R1-C26 (C25-N1): constructing, testing or returning an HR model.
+            'type' => preg_match_all('/\\bnew\\s+(?:'.self::HR_MODELS.')\\b(?![\\\\\\w])|\\binstanceof\\s+(?:'.self::HR_MODELS.')\\b(?![\\\\\\w])|\\)\\s*:\\s*\\??(?:'.self::HR_MODELS.')\\b(?![\\\\\\w])/', $code),
             'sql' => array_sum(array_map(fn (string $s) => preg_match_all('/\b(?:'.self::HR_TABLES.')\b/', $s), $strings)),
             'reader' => preg_match_all('/->(?:labels|span|spans|paged|pageOverlapping|requireEmployment)\(/', $code),
             // A fully qualified HR name outside the imports is a reference the import list would not show.
@@ -215,6 +233,13 @@ class PayrollHrBoundaryRegisterTest extends TestCase
         $this->assertSame([], self::fingerprint("<?php\n// EmploymentRecord::query()->update([]);\n/** Employee \$e, employment_records */\nclass Z {}")['refs'], 'comments are not code');
         $this->assertSame([], self::fingerprint("<?php return redirect('/app/payroll/statutory/employees/1');")['refs'], 'a URL is not a table');
         $this->assertSame([], self::fingerprint('<?php EmployeeCategory::query()->get(); function g(EmployeeNumber $n) {}')['refs'], 'a longer name is another class');
+        // HR.R1-C26 (C25-N1): the shapes the C24 scan did not count.
+        $this->assertSame(['relation' => 2], self::fingerprint("<?php \$q->with(['run', 'employmentRecord.employee', 'payrollRunResult.employee']);")['refs'], 'array-form eager load');
+        $this->assertSame(['relation' => 1], self::fingerprint('<?php $q->with(["run", "employmentRecord.employee"]);')['refs'], 'array-form eager load, double quotes');
+        $this->assertSame(['lazy' => 2], self::fingerprint('<?php $n = $result->employmentRecord->employee?->full_name;')['refs'], 'lazy relation access');
+        $this->assertSame([], self::fingerprint('<?php $this->employees->purgeSeparatedBefore($s, $d);')['refs'], 'an injected service is no relation');
+        $this->assertSame(['type' => 3], self::fingerprint('<?php $e = new Employee(); if ($x instanceof EmploymentRecord) {} function h(): ?EmployeeAssignment {}')['refs'], 'new, instanceof and a return type');
+        $this->assertSame([], self::fingerprint('<?php $r = new EmploymentRecordView(); function k(): EmployeeNumber {}')['refs'], 'a longer name is still another class');
     }
 
     #[Test]

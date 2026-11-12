@@ -40,12 +40,49 @@ class DatabaseRoleVerifier
         'retention_holds',
     ];
 
+    /**
+     * HR.R1-C26 (R1-01 point 4, review M3): an allowlist, not a denylist. Every table of the HR family (HR, Leave,
+     * Staff Attendance, WorkforceTasks) with exactly the runtime privileges its named operations need:
+     * S = SELECT, I = INSERT, U = UPDATE. None holds DELETE or TRUNCATE; their rows leave only with their School
+     * or through the retention identity. A new table of the family gets DELETE from the schema's default
+     * privileges, so `HrWriterBoundaryTest` fails until it is classified here, and this check fails wherever a
+     * privilege differs. Changing an entry is an R1-01 point 4 decision, never a fix to make a check pass.
+     */
+    public const HR_FAMILY_RUNTIME_PRIVILEGES = [
+        // HR
+        'employee_account_link_corrections' => 'SIU', 'employee_account_links' => 'S', 'employee_addresses' => 'SIU',
+        'employee_assignments' => 'SIU', 'employee_categories' => 'SIU', 'employee_certifications' => 'SIU',
+        'employee_documents' => 'SIU', 'employee_emergency_contacts' => 'SIU', 'employee_experience_records' => 'SIU',
+        'employee_notes' => 'SIU', 'employee_personal_details' => 'SIU', 'employee_placement_changes' => 'SI',
+        'employee_qualifications' => 'SIU', 'employee_reference_codes' => 'SIU', 'employees' => 'SIU',
+        'employment_records' => 'SIU', 'employment_separation_cases' => 'SIU', 'employment_separation_events' => 'SI',
+        'employment_terms' => 'SI', 'hr_departments' => 'SIU', 'hr_employee_number_counters' => 'SIU',
+        'positions' => 'SIU', 'reporting_relationships' => 'SIU', 'separation_clearance_items' => 'SIU',
+        'separation_clearance_requirements' => 'SIU',
+        // Leave, including the staff calendar (rule 149)
+        'leave_accrual_run_items' => 'SI', 'leave_accrual_runs' => 'SIU', 'leave_allocation_runs' => 'SI',
+        'leave_decisions' => 'SI', 'leave_eligibility_rules' => 'SI', 'leave_eligibility_runs' => 'SI',
+        'leave_ledger_entries' => 'SI', 'leave_policies' => 'SIU', 'leave_policy_assignments' => 'SIU',
+        'leave_request_days' => 'SI', 'leave_requests' => 'SIU', 'leave_settings' => 'SIU', 'leave_types' => 'SIU',
+        'leave_year_close_items' => 'SI', 'leave_year_close_reconciliations' => 'SI', 'leave_year_closes' => 'SI',
+        'leave_year_start_changes' => 'SI', 'leave_years' => 'SI', 'staff_holidays' => 'SIU',
+        'staff_working_week_versions' => 'SIU', 'staff_working_weekdays' => 'S',
+        // Staff Attendance (rule 147)
+        'staff_attendance_corrections' => 'SI', 'staff_attendance_locked_corrections' => 'SIU',
+        'staff_attendance_month_locks' => 'SI', 'staff_attendance_records' => 'SIU',
+        // WorkforceTasks (rule 139)
+        'workforce_task_categories' => 'SIU', 'workforce_task_events' => 'SI', 'workforce_task_generation_runs' => 'SIU',
+        'workforce_task_template_versions' => 'SI', 'workforce_task_templates' => 'SIU', 'workforce_tasks' => 'SIU',
+    ];
+
     /** Tables whose history the runtime role must never delete. */
     public const NO_RUNTIME_DELETE = [
         // HR.R1-C20 (WO-6, rule 147): a month lock never goes, and a locked-month request leaves only by retention.
         'staff_attendance_month_locks', 'staff_attendance_locked_corrections',
         // HR.R1-C22 (WO-5, S-16): the staff calendar's history is withdrawn or superseded, never deleted; the retired week is read-only.
         'staff_working_week_versions', 'staff_holidays', 'staff_working_weekdays',
+        // HR.R1-C26 (WO-11, C12-N2, R1-01 point 4): HR configuration is deactivated, never deleted; it leaves only with its School.
+        'hr_departments', 'positions', 'employee_categories', 'hr_employee_number_counters',
         'schools', 'platform_role_assignments', 'school_groups', 'api_clients', 'api_client_credentials',
         'platform_audit_events', 'school_audit_events', 'email_suppressions',
         'membership_role_assignments',
@@ -654,6 +691,7 @@ class DatabaseRoleVerifier
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
         $results[] = $this->payrollApprovalProvenanceCheck();
         $results[] = $this->payrollReconciliationCheck();
+        $results[] = $this->hrFamilyRuntimePrivilegesCheck();
         $results[] = $this->employeeAccountLinkCheck();
         $results[] = $this->employmentLifecycleAdmissionCheck();
         $results[] = $this->staffAttendanceMonthLockCheck();
@@ -878,6 +916,36 @@ class DatabaseRoleVerifier
             && $guard !== null && str_contains($guard->src, 'never begins with a planned end')
             && $placement !== null && (int) $placement->columns === 2 && str_contains($placement->src, 'never took effect is final') && str_contains($placement->src, 'past its end')
             && $afterDeath === 1);
+    }
+
+    /**
+     * HR.R1-C26 (R1-01 point 4): the runtime role's effective privileges on every HR-family table equal the
+     * allowlist exactly. The effective privilege is read, so a grant to PUBLIC counts too; SELECT, INSERT and
+     * UPDATE also count when granted on a single column (`has_any_column_privilege`), and REFERENCES or TRIGGER
+     * fail. A missing table fails rather than passing unseen.
+     */
+    private function hrFamilyRuntimePrivilegesCheck(): CheckResult
+    {
+        $differ = [];
+        foreach (self::HR_FAMILY_RUNTIME_PRIVILEGES as $table => $expected) {
+            if (DB::selectOne('select to_regclass(?) as t', ["public.{$table}"])->t === null) {
+                $differ[] = "{$table}:missing";
+
+                continue;
+            }
+            $held = '';
+            foreach (['S' => 'SELECT', 'I' => 'INSERT', 'U' => 'UPDATE'] as $letter => $privilege) {
+                $held .= DB::selectOne('select has_any_column_privilege(?, ?, ?) as p', [self::RUNTIME_ROLE, "public.{$table}", $privilege])->p ? $letter : '';
+            }
+            foreach (['D' => 'DELETE', 'T' => 'TRUNCATE', 'R' => 'REFERENCES', 'X' => 'TRIGGER'] as $letter => $privilege) {
+                $held .= DB::selectOne('select has_table_privilege(?, ?, ?) as p', [self::RUNTIME_ROLE, "public.{$table}", $privilege])->p ? $letter : '';
+            }
+            if ($held !== $expected) {
+                $differ[] = "{$table}:{$held}";
+            }
+        }
+
+        return CheckResult::of('hr_family_runtime_privileges', $differ === [], $differ === [] ? '' : implode(', ', $differ));
     }
 
     /**

@@ -66,7 +66,10 @@ migration changed.
   `tests/Feature/Postgres/ElevationRlsIsolationTest.php` (RLS table count
   and its comment).
 - **Runtime privileges:** REVOKE DELETE on history; the retention identity
-  gets only what a purge reads (item 6).
+  gets only what a purge reads (item 6). An HR-family table (HR, Leave, Staff
+  Attendance, WorkforceTasks, or any table named like one) is classified in
+  `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES` with exactly its
+  privileges, and its writers in `HrWriterBoundaryTest::WRITERS` (HR.R1-C26).
 - **Keys:**
   - tenant composite keys `(x, school_id)` (rule 70);
   - indexes for every key and filter;
@@ -162,5 +165,5 @@ Added after SIS 11.8, whose first journey run tested stale assets.
 
 - A new column that holds state, an actor or a parent on a model in `Tests\Support\LifecycleModels` stays out of `$fillable`; its writer uses `forceCreate`/`forceFill`.
 - A new HR writer of identity, employment, terms, placement, reporting or separation takes `SchoolOperationalGuard` first in its transaction (rule 86).
-- A second class writing an HR-owned table is named in `HrWriterBoundaryTest`, with its operation.
+- Every class writing an HR-family table is named in `HrWriterBoundaryTest::WRITERS`, a second one with its operation (HR.R1-C26).
 - A new caller of `DocumentService::create()` or `archive()` needs its own answer on Highly Sensitive step-up.

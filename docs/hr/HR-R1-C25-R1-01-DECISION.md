@@ -1,5 +1,13 @@
 # HR.R1-C25: R1-01, what "exactly one writer" means, decided (2026-11-11)
 
+> **Amended by HR.R1-C26 (2026-11-12, `HR-R1-C26-R1-01-ENFORCEMENT.md`).** An independent review of this contract corrected four statements below:
+> - §11's "pinned" held for 19 of the 56 HR-family tables only. C26 pins all 56.
+> - §5.3 files `SchoolSettingsController` as a cross-domain writer only. It is also a controller write, now admitted under a rule 76 category of point 2 (Architecture, M5).
+> - §5.3 says the rule 86 service grants the bootstrap administrator's role. It also suspends earlier memberships and revokes their grants, while the School is provisioning.
+> - §5.4 omits two trigger writes that belong to their parent operation (point 7): `staff_attendance_locked_corrections_apply` also inserts the `staff_attendance_corrections` row, and the INVOKER `staff_working_week_versions_guard` updates the version it supersedes.
+>
+> The rest stands as decided.
+
 **HR.R1 stays OPEN, and this is not the closure audit.** This record holds what Architecture decided on R1-01, the re-verified evidence behind it, the writer exception register it adopts, and the work it leaves. **Nothing was built.** No PHP, migration, grant, function or test changed.
 
 | | |

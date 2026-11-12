@@ -82,7 +82,7 @@ class TenantCompositeSetNullTest extends TestCase
     }
 
     #[Test]
-    public function deleting_a_campus_or_parent_department_demotes_the_department_and_keeps_its_school(): void
+    public function deleting_a_campus_demotes_the_department_and_keeps_its_school(): void
     {
         $school = $this->createSchool();
         $campus = $this->createCampus($school);
@@ -95,12 +95,33 @@ class TenantCompositeSetNullTest extends TestCase
         $this->assertNull($row->campus_id);
         $this->assertSame($parent, $row->parent_department_id);
         $this->assertSame($school->id, $row->school_id);
+    }
 
-        app(TenantContext::class)->withSchool($school, fn () => DB::table('hr_departments')->where('id', $parent)->delete());
-        $row = $this->departmentRow($school, $child);
-        $this->assertNotNull($row);
-        $this->assertNull($row->parent_department_id);
-        $this->assertSame($school->id, $row->school_id);
+    #[Test]
+    public function deleting_a_parent_department_demotes_its_child_and_keeps_its_school(): void
+    {
+        // HR.R1-C26 (WO-11): the runtime role can no longer delete a Department, so only the owner can exercise this key.
+        $this->inRolledBackAdminTransaction(function (Connection $admin): void {
+            [$school] = $this->adminSchoolAndUser($admin);
+            $department = function (?string $parent) use ($admin, $school): string {
+                $id = (string) Str::uuid7();
+                $admin->table('hr_departments')->insert([
+                    'id' => $id, 'school_id' => $school, 'name' => 'Dept '.$id, 'code' => 'D'.Str::upper(Str::random(6)),
+                    'parent_department_id' => $parent, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+
+                return $id;
+            };
+            $parent = $department(null);
+            $child = $department($parent);
+
+            $admin->table('hr_departments')->where('id', $parent)->delete();
+
+            $row = $admin->table('hr_departments')->where('id', $child)->first();
+            $this->assertNotNull($row, 'the department survives');
+            $this->assertNull($row->parent_department_id);
+            $this->assertSame($school, $row->school_id);
+        });
     }
 
     #[Test]

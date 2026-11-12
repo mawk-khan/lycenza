@@ -604,3 +604,14 @@ decision was taken or needed.
 - **Privileges.** The runtime role holds only what the named operations need. Four HR tables still hold an unused DELETE (C12-N2), revoked by WO-11, not built. A privilege is never a business authorization.
 - **Primary correction.** `EmployeeAssignmentService::setPrimary()` stays the named writer of `primary_correction` (rule 130). C10-N2 is still open.
 - **Not adopted.** Module-specific database credentials. One runtime role serves every domain, so ownership is an application boundary backed by fact-level database invariants.
+
+### HR.R1-C26 amendment (2026-11-12): one writer enforced for the HR family
+
+**Status: implemented for development; R1-01 enforcement verified for the HR family once this candidate's exact-SHA `CI gate` is green and it is published** (`docs/hr/HR-R1-C26-R1-01-ENFORCEMENT.md`, with the run in its evidence section). An independent review of the C25 contract found no HIGH and no unaccounted writer, and five MEDIUMs. The owner widened C26 to close M1 to M3 and, as Architecture, decided M5.
+
+- **Point 2, rule 76 (M5).** A controller's short inline write for a genuinely simple entity of its own domain (rule 76) satisfies point 2, so the definition stays general (R7). `SchoolSettingsController::update()` is both a rule 76 controller write and a rule 76/75 cross-domain write to `schools` profile fields. No HR-family table uses the rule 76 shape.
+- **Point 1 and 2 pins (M1).** The foreign-domain and controller guards cover all 56 HR-family tables, from their models, instead of 19.
+- **Point 3 pin (M2).** `HrWriterBoundaryTest::WRITERS` names the writing classes of every family table and of Payroll's `employee_esi_coverage`. A second class fails until it is named.
+- **Point 4 allowlist (M3, WO-11).** The runtime role's privileges on every family table equal `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES`, checked by `platform:verify-database`. No family table holds DELETE or TRUNCATE. The unused DELETE on `hr_departments`, `positions`, `employee_categories` and `hr_employee_number_counters` is revoked (migration `2027_02_16_090000`). A new family table fails CI until it is classified.
+- **C25-N1 (WO-12).** Payroll's register also counts array-form eager loads, HR relations reached through a loaded row, and `new`/`instanceof`/return types; relation-chain writes are refused.
+- **Unchanged.** One runtime role serves every domain. Source guards see static shapes only. Module-specific database credentials are still not adopted.

@@ -81,6 +81,8 @@ class OperatorVerificationCommandsTest extends TestCase
             'employment_lifecycle_admission_guarded',
             // HR.R1-C5 (PAY-15)
             'migration_owner_sees_every_row', 'rollback_guards_fail_closed',
+            // HR.R1-C26 (R1-01 point 4)
+            'hr_family_runtime_privileges',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

@@ -147,6 +147,12 @@ set `retention_recorded_at` explicitly, from the migration/owner login only
 does from the audit ledger. The runtime and retention logins can never set
 it.
 
+`platform:verify-database` also checks `hr_family_runtime_privileges` (HR.R1-C26, R1-01
+point 4): the runtime role's effective privileges on each of the 56 HR-family tables equal
+`DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES` exactly (SELECT, INSERT, UPDATE as listed, a
+single-column grant included; never DELETE, TRUNCATE, REFERENCES or TRIGGER). A FAIL names each table that differs. A new family table gets DELETE from the
+schema's default privileges, so its migration must revoke what the allowlist does not grant.
+
 `platform:verify-database` also checks `employee_account_links_guarded` (HR.R1-C7,
 HR.R1-C8): the history and correction triggers enabled, the writing functions
 security-definer with a pinned search path, no `employee_account_link_void()`, the

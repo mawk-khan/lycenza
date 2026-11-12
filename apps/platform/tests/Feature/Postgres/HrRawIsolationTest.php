@@ -533,9 +533,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from hr_departments where id = ?', [$departmentB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.R1-C26 (WO-11): refused by privilege before RLS is consulted, not merely "0 rows".
+        $this->assertRuntimeDeleteRevoked('delete from hr_departments where id = ?', [$departmentB->id]);
     }
 
     // --- Phase 8A.3: positions --------------------------------------------
@@ -626,9 +625,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from positions where id = ?', [$positionB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.R1-C26 (WO-11): refused by privilege before RLS is consulted, not merely "0 rows".
+        $this->assertRuntimeDeleteRevoked('delete from positions where id = ?', [$positionB->id]);
     }
 
     // --- Phase 8A.4: employment_records -----------------------------------
@@ -1364,9 +1362,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_categories where id = ?', [$categoryB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.R1-C26 (WO-11): refused by privilege before RLS is consulted, not merely "0 rows".
+        $this->assertRuntimeDeleteRevoked('delete from employee_categories where id = ?', [$categoryB->id]);
     }
 
     // --- Phase 8A closure correction: employee_notes ------------------------
