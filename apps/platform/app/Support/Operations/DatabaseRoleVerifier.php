@@ -5,6 +5,7 @@ namespace App\Support\Operations;
 use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Database\RollbackSafeMigrator;
 use App\Support\Retention\RetentionAnchors;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -74,6 +75,77 @@ class DatabaseRoleVerifier
         'workforce_task_categories' => 'SIU', 'workforce_task_events' => 'SI', 'workforce_task_generation_runs' => 'SIU',
         'workforce_task_template_versions' => 'SI', 'workforce_task_templates' => 'SIU', 'workforce_tasks' => 'SIU',
     ];
+
+    /**
+     * HR.R1-C28 (WO-13, C22-N1): every trigger on an HR-family table, bound through `pg_trigger.tgfoid` to exactly
+     * this function, with the md5 of its whole `pg_get_triggerdef` (timing, events, `UPDATE OF` columns, `WHEN`,
+     * row or statement, arguments, deferral). A family table not listed has no trigger. A new, dropped, re-pointed
+     * or redefined trigger fails `hr_family_trigger_functions` until it is classified here.
+     *
+     * @var array<string, array<string, array{0: string, 1: string}>>
+     */
+    public const HR_FAMILY_TRIGGERS = [
+        'employee_account_link_corrections' => ['trg_employee_account_link_corrections_apply' => ['employee_account_link_corrections_apply', 'ffdc25fefce189b9c5279f307901bc2d'], 'trg_employee_account_link_corrections_guard' => ['employee_account_link_corrections_guard', '9b0c5c4796eee271713cef0a69fe67ed']],
+        'employee_addresses' => ['trg_employee_addresses_archive_guard' => ['hr_profile_record_archive_guard', '61f9a03187257a73bd1b7f81e8e42a07'], 'trg_retention_guard_employee_addresses' => ['retention_guard_retention_delete', '8def060bc737047643310b0753ef63d5']],
+        'employee_assignments' => ['trg_employee_assignments_never_effective' => ['hr_employee_assignments_never_effective', '2661dc5957cce8abd37e92459399373d'], 'trg_employee_assignments_placement_identity' => ['hr_employee_assignments_placement_identity', '545d5627360416f888bb32fa1dc25c38'], 'trg_employee_assignments_primary_no_overlap' => ['hr_employee_assignments_primary_no_overlap', '3b00c5e4881f6f25dc11fd88c160d56d'], 'trg_retention_guard_employee_assignments' => ['retention_guard_retention_delete', 'd61b64f098a5da2872fd93c85aefa682'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '1a3eaf2f7f38ae5f2715c745019e2973']],
+        'employee_certifications' => ['trg_employee_certifications_archive_guard' => ['hr_profile_record_archive_guard', '9dddf0a90994aecb3ab24886f88984a8'], 'trg_retention_guard_employee_certifications' => ['retention_guard_retention_delete', '79c1ee092934cad9eb02f2c59b7823d9']],
+        'employee_documents' => ['trg_employee_documents_guard' => ['hr_employee_documents_guard', 'a4871a51a716ee37b17e542068532f5b'], 'trg_retention_guard_employee_documents' => ['retention_guard_retention_delete', '0468012607415c852be6ee0ebf9403f2'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'bd4ee16d0f77e0dd202ef0ce2d6e1a75']],
+        'employee_emergency_contacts' => ['trg_employee_emergency_contacts_archive_guard' => ['hr_profile_record_archive_guard', '72d689eeae02dc4a61b6df50f4fe7481'], 'trg_retention_guard_employee_emergency_contacts' => ['retention_guard_retention_delete', '4fa101d2f8e369cf26f5347603a1232c']],
+        'employee_experience_records' => ['trg_employee_experience_records_archive_guard' => ['hr_profile_record_archive_guard', 'dfd7609e4729471cba96a159c0566c03'], 'trg_retention_guard_employee_experience_records' => ['retention_guard_retention_delete', '361c096b239f60a4cf3a387f1b017321']],
+        'employee_notes' => ['trg_employee_notes_archive_guard' => ['hr_profile_record_archive_guard', '4903a61349d030a47542fcd2130c4baf'], 'trg_retention_guard_employee_notes' => ['retention_guard_retention_delete', 'ba7a5b08c7c98959a972fba876eb3580']],
+        'employee_personal_details' => ['trg_retention_guard_employee_personal_details' => ['retention_guard_retention_delete', '6b1c7c8be05881933269dd9ba2405996'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '8f1b7f8d11fb99eb4968debb6b0cf5d0']],
+        'employee_placement_changes' => ['trg_employee_placement_changes_guard' => ['hr_employee_placement_changes_guard', '4f4c6cbaec6ced377185ef8924480a8f'], 'trg_employee_placement_changes_immutable' => ['hr_history_row_immutable', 'e19758909ec27bdfeb9c56c99469afc8']],
+        'employee_qualifications' => ['trg_employee_qualifications_archive_guard' => ['hr_profile_record_archive_guard', 'b4dc08ab178a296ed2007eb1f69e78f5'], 'trg_retention_guard_employee_qualifications' => ['retention_guard_retention_delete', '1d9e38531578880afa7b80c6a07251cc']],
+        'employee_reference_codes' => ['trg_employee_reference_codes_guard' => ['hr_employee_reference_codes_guard', '0b7ab1eb7d86f23c9eded153220b598b']],
+        'employees' => ['trg_employees_identity_guard' => ['hr_employees_identity_guard', 'f5642bb32d72676e5d42426b4516d320'], 'trg_employees_not_minimized' => ['users_guard_principal_column', '4faf68edf809c425f443299f009392cc'], 'trg_employees_record_account_link_insert' => ['employees_record_account_link', '6bbe0f32a9c1704a7e993f7ae5e2e1a3'], 'trg_employees_record_account_link_update' => ['employees_record_account_link', 'aff1effce0fa7ba3860353ce2406af27'], 'trg_employees_user_link_payroll_lock' => ['employees_user_link_payroll_lock', 'cf1a0d346147b02d4dd45353f27df815'], 'trg_retention_guard_employees' => ['retention_guard_retention_delete', 'c071ab3f981d06fa2b0f63948707bd62'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'eb0280bc1a8f394efcfdcf52bbb846d9']],
+        'employment_records' => ['trg_employment_records_after_death' => ['hr_employment_records_after_death', '2fb7bab266e160e323492b7cf842c802'], 'trg_employment_records_archived_identity' => ['hr_employment_records_archived_identity', '158d87b2b217a1b2ffd66c55298deba8'], 'trg_employment_records_eligibility_guard' => ['retention_guard_end_record', 'bcae3e03439b160b6577916aa07fd514'], 'trg_employment_records_initial_terms' => ['hr_employment_records_initial_terms', '45ea7bbe6be0f56ae3d49aabf8418761'], 'trg_employment_records_no_overlap' => ['hr_employment_records_no_overlap', 'a392e50be9187b953a4cdea7e1389d2a'], 'trg_employment_records_reporting_bounds' => ['hr_employment_records_reporting_bounds', 'd514b90a50e45c732cddad5446050d26'], 'trg_employment_records_separation_notice' => ['hr_employment_records_separation_notice', '4a662a357cceebd720ec0b5af865fefb'], 'trg_employment_records_terms_projection_guard' => ['hr_employment_records_terms_projection_guard', '2ff452333404c3bf147071baaef34869'], 'trg_retention_guard_employment_records' => ['retention_guard_retention_delete', '729dad82a8f562daee589288ce8ec1e4'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'ec6d4769d0a303bb874fa0e854020758']],
+        'employment_separation_cases' => ['trg_employment_separation_cases_guard' => ['hr_employment_separation_cases_guard', 'ffd7a3dd40a02c10c40427566d1821e8']],
+        'employment_terms' => ['trg_employment_terms_append_guard' => ['hr_employment_terms_append_guard', '9a11a1bca26e5540a63a4f62300a4864'], 'trg_employment_terms_immutable' => ['hr_history_row_immutable', 'c12c92b4e208b4a9904ec096b1b5234e'], 'trg_employment_terms_project' => ['hr_employment_terms_project', 'bf3d9dbf6a507ea1c7dd66b60679d454']],
+        'hr_departments' => ['trg_hr_departments_no_cycle' => ['hr_departments_no_cycle', 'd4b31242d9290f08f32c92f8df989ca5']],
+        'leave_accrual_run_items' => ['trg_leave_accrual_run_items_guard' => ['leave_accrual_run_items_guard', '94eafef88296a178a41e2dbe9bb509ef']],
+        'leave_accrual_runs' => ['trg_leave_accrual_runs_guard' => ['leave_accrual_runs_guard', 'e38187ee4f511f9c57073459d30fc751']],
+        'leave_decisions' => ['trg_leave_decisions_guard' => ['leave_decisions_guard', 'c827aa6abf87b8ada41cd6ca1ebe2f59'], 'trg_leave_decisions_participant_guard' => ['leave_decisions_refuse_submitter', 'd9c14d4d59a6aca53ed3ac4dc4d980ce'], 'trg_retention_guard_leave_decisions' => ['retention_guard_retention_delete', '8e5de7f47651ebb2fd71c310669c6f8c'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '1e559df84152b1ba72a2780a32153a23']],
+        'leave_eligibility_rules' => ['trg_leave_eligibility_rules_guard' => ['leave_eligibility_rules_guard', 'c7b189cf7734f5c2aabefa18a3ad4746']],
+        'leave_eligibility_runs' => ['trg_leave_eligibility_runs_immutable' => ['leave_eligibility_runs_immutable', '033af45deec9771b5881af8e813c18f8']],
+        'leave_ledger_entries' => ['trg_leave_ledger_guard' => ['leave_ledger_guard', 'da362ae2fd096726545795c699bda688'], 'trg_retention_guard_leave_ledger_entries' => ['retention_guard_retention_delete', '1419c21767a8e402a1ecd82018b58862'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'd550aec5dca759d58f6d9e5d2adf5587']],
+        'leave_policies' => ['trg_leave_policies_immutable' => ['leave_policies_immutable', '5bbe5cbd25094ae8eff70a38720bed57'], 'trg_leave_policies_rules_complete' => ['leave_policies_rules_complete', '11d6e95357f0f068e31cda8c2d95dd2f']],
+        'leave_policy_assignments' => ['trg_leave_policy_assignments_accrual_bounds' => ['leave_policy_assignments_accrual_bounds', 'db1e66783f770bc2bd9ad83f665af090'], 'trg_leave_policy_assignments_guard' => ['leave_policy_assignments_guard', '7147300d9ddfc8c1e5cfc2dd73f2dfff'], 'trg_retention_guard_leave_policy_assignments' => ['retention_guard_retention_delete', '1cc1f3f3009dfdac1deaa168d6bf0b55'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '24f1ab8ec5c428a30b970bde3004b5fa']],
+        'leave_request_days' => ['trg_leave_request_days_guard' => ['leave_request_days_guard', '57d9b0b4b915f0a969a12e5aa8fe48bc'], 'trg_retention_guard_leave_request_days' => ['retention_guard_retention_delete', '1abb2a20d6eed35682611ba4eca9c252'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'ea3ad2c318190100acdd66ce94dd7245']],
+        'leave_requests' => ['trg_leave_requests_guard' => ['leave_requests_guard', 'fbcae3257c574ffbd8276c1a27fc8055'], 'trg_retention_guard_leave_requests' => ['retention_guard_retention_delete', '9c0e3aedec2e5dc4c4dd8ec7ef17c2a8'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '2fe36e156ded2098abe66275015d3f63']],
+        'leave_settings' => ['trg_leave_settings_lock' => ['leave_settings_lock', '7711c5d4dedb982f1ae8ed79ef90b116']],
+        'leave_types' => ['trg_leave_types_freeze' => ['leave_types_freeze', 'cc60dced480d1da676eac8e122ca61f0']],
+        'leave_year_close_items' => ['trg_retention_guard_leave_year_close_items' => ['retention_guard_retention_delete', '2a79abdca35d19f66209d2c437beefdd'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'dee42d831aefb0cb844f9b275ec487c5']],
+        'leave_year_close_reconciliations' => ['trg_retention_guard_leave_year_close_reconciliations' => ['retention_guard_retention_delete', '28ed95f131ea9e83ae3f50af2be32174'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'fac963394a49ade228ce52a2701d2483']],
+        'leave_year_start_changes' => ['trg_leave_year_start_changes_guard' => ['leave_year_start_changes_guard', '04c75ba2e4d62433986e7319ed0aa605']],
+        'leave_years' => ['trg_leave_years_guard' => ['leave_years_guard', '7d4d630eeae2cd45cbab4f47dee4963a']],
+        'reporting_relationships' => ['trg_reporting_relationships_guard' => ['hr_reporting_relationships_guard', '8647badeab0f5c7d9299bb938b1612c6']],
+        'separation_clearance_items' => ['trg_separation_clearance_items_guard' => ['hr_separation_clearance_items_guard', 'cc68ae994237e4ba8bb07a58f2ca9352']],
+        'separation_clearance_requirements' => ['trg_separation_clearance_requirements_guard' => ['hr_separation_clearance_requirements_guard', 'c3685ff63658c8e7f00522c111302b08']],
+        'staff_attendance_corrections' => ['trg_retention_guard_staff_attendance_corrections' => ['retention_guard_retention_delete', '598f49e04e741a18e26224ffefe86993'], 'trg_staff_attendance_corrections_applied' => ['staff_attendance_corrections_applied', '481da3ea852419b2f4e17afee9d20969'], 'trg_staff_attendance_corrections_guard' => ['staff_attendance_corrections_guard', 'c55cc865210e86f6514ef6ace252839e'], 'trg_staff_attendance_corrections_month_guard' => ['staff_attendance_corrections_month_guard', '4f484fa568d9014d4b34db43542ca84c'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'f5a3752ad0aa7339113b3823a1312a81']],
+        'staff_attendance_locked_corrections' => ['trg_retention_guard_staff_attendance_locked_corrections' => ['retention_guard_retention_delete', 'a06244edd1d6dedd72553f33fd0797e9'], 'trg_staff_attendance_locked_corrections_apply' => ['staff_attendance_locked_corrections_apply', 'a77fdb5753f1c08a7f4ec612723b5a45'], 'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections_guard', 'a5286fbc424f1805f5b27e9c775514f5'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '20bc7aea6456832c67245ba3de83c163']],
+        'staff_attendance_month_locks' => ['trg_staff_attendance_month_locks_guard' => ['staff_attendance_month_locks_guard', 'bc94e1314db90e7f11672f2c2d606294']],
+        'staff_attendance_records' => ['trg_retention_guard_staff_attendance_records' => ['retention_guard_retention_delete', 'bc00a1bc482d7c33d5f35668434aca05'], 'trg_staff_attendance_records_guard' => ['staff_attendance_records_guard', '4e95458c8c4b0a0f12b78730114ad329'], 'trg_staff_attendance_records_month_guard' => ['staff_attendance_records_month_guard', '91f69bcd18f21f92063b38689634ea34'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '2c9059c13af6ed766b75bf3c25d336d3']],
+        'staff_holidays' => ['trg_staff_attendance_holiday_month_guard' => ['staff_attendance_calendar_month_guard', '8b965ccf99d1621e1ba412d0d21dd8a7'], 'trg_staff_holidays_history_guard' => ['staff_holidays_history_guard', '816645bc2eb5e6fb8b0aa0844be12589']],
+        'staff_working_week_versions' => ['trg_staff_attendance_calendar_month_guard' => ['staff_attendance_calendar_month_guard', 'd65201ced651b50e7f35a8de4d7e4c7a'], 'trg_staff_working_week_versions_guard' => ['staff_working_week_versions_guard', 'bf387aea8c71ff42886059f97b1558ac']],
+        'workforce_task_events' => ['trg_workforce_task_events_guard' => ['hr_workforce_task_events_guard', '487a2ddbec8a2fff22cc7e8d5e5f5bab']],
+        'workforce_tasks' => ['trg_workforce_tasks_guard' => ['hr_workforce_tasks_guard', 'af7cd30948efee3d8c0146bc8b5efaec']],
+    ];
+
+    /**
+     * HR.R1-C28 (WO-13): the only SECURITY DEFINER functions behind an HR-family trigger, with their pinned
+     * `search_path`: the retention delete guard (E21), the account-link history and its approved correction
+     * (rule 145), and the approved locked-month correction (rule 147). Every other family trigger function is
+     * SECURITY INVOKER with `search_path` pinned and `pg_temp` last (C28-N2).
+     */
+    public const HR_FAMILY_DEFINER_FUNCTIONS = [
+        'retention_guard_retention_delete' => 'pg_catalog, pg_temp',
+        'employees_record_account_link' => 'pg_catalog, public, pg_temp',
+        'employee_account_link_corrections_apply' => 'pg_catalog, public, pg_temp',
+        'staff_attendance_locked_corrections_apply' => 'pg_catalog, public, pg_temp',
+    ];
+
+    /** HR.R1-C28 (C28-N2): an INVOKER guard's path names only these schemas and puts the temporary schema last. */
+    public const HR_FAMILY_INVOKER_SEARCH_PATHS = ['pg_catalog, pg_temp', 'pg_catalog, public, pg_temp'];
 
     /** Tables whose history the runtime role must never delete. */
     public const NO_RUNTIME_DELETE = [
@@ -692,6 +764,8 @@ class DatabaseRoleVerifier
         $results[] = $this->payrollApprovalProvenanceCheck();
         $results[] = $this->payrollReconciliationCheck();
         $results[] = $this->hrFamilyRuntimePrivilegesCheck();
+        $results[] = $this->hrFamilyTriggerFunctionsCheck();
+        $results[] = $this->runtimeRoleMembershipCheck();
         $results[] = $this->employeeAccountLinkCheck();
         $results[] = $this->employmentLifecycleAdmissionCheck();
         $results[] = $this->staffAttendanceMonthLockCheck();
@@ -920,9 +994,10 @@ class DatabaseRoleVerifier
 
     /**
      * HR.R1-C26 (R1-01 point 4): the runtime role's effective privileges on every HR-family table equal the
-     * allowlist exactly. The effective privilege is read, so a grant to PUBLIC counts too; SELECT, INSERT and
-     * UPDATE also count when granted on a single column (`has_any_column_privilege`), and REFERENCES or TRIGGER
-     * fail. A missing table fails rather than passing unseen.
+     * allowlist exactly. The effective privilege is read, so a grant to PUBLIC counts too; SELECT, INSERT, UPDATE
+     * and (since HR.R1-C28, C27-N1) REFERENCES also count when granted on a single column
+     * (`has_any_column_privilege`), and REFERENCES or TRIGGER fail. A missing table fails rather than passing
+     * unseen. A privilege reachable only through another role is `runtimeRoleMembershipCheck()`'s concern (C26-N1).
      */
     private function hrFamilyRuntimePrivilegesCheck(): CheckResult
     {
@@ -937,7 +1012,12 @@ class DatabaseRoleVerifier
             foreach (['S' => 'SELECT', 'I' => 'INSERT', 'U' => 'UPDATE'] as $letter => $privilege) {
                 $held .= DB::selectOne('select has_any_column_privilege(?, ?, ?) as p', [self::RUNTIME_ROLE, "public.{$table}", $privilege])->p ? $letter : '';
             }
-            foreach (['D' => 'DELETE', 'T' => 'TRUNCATE', 'R' => 'REFERENCES', 'X' => 'TRIGGER'] as $letter => $privilege) {
+            foreach (['D' => 'DELETE', 'T' => 'TRUNCATE'] as $letter => $privilege) {
+                $held .= DB::selectOne('select has_table_privilege(?, ?, ?) as p', [self::RUNTIME_ROLE, "public.{$table}", $privilege])->p ? $letter : '';
+            }
+            // HR.R1-C28 (C27-N1): REFERENCES can be granted on one column, so it is read per column too; TRIGGER is table-level only.
+            $held .= DB::selectOne('select has_any_column_privilege(?, ?, ?) as p', [self::RUNTIME_ROLE, "public.{$table}", 'REFERENCES'])->p ? 'R' : '';
+            foreach (['X' => 'TRIGGER'] as $letter => $privilege) {
                 $held .= DB::selectOne('select has_table_privilege(?, ?, ?) as p', [self::RUNTIME_ROLE, "public.{$table}", $privilege])->p ? $letter : '';
             }
             if ($held !== $expected) {
@@ -946,6 +1026,100 @@ class DatabaseRoleVerifier
         }
 
         return CheckResult::of('hr_family_runtime_privileges', $differ === [], $differ === [] ? '' : implode(', ', $differ));
+    }
+
+    /**
+     * HR.R1-C28 (WO-13, C22-N1, C28-N2): each HR-family trigger is enabled and bound, through `tgfoid`, to its pinned
+     * function with its pinned definition, and no other trigger sits on a family table. Each bound function is in
+     * `public`, takes no arguments and is the only function of its name (so a body hash by name is a hash of the
+     * bound function), is owned by the schema owner, and is SECURITY DEFINER exactly when listed in
+     * `HR_FAMILY_DEFINER_FUNCTIONS`, with that pinned path and no EXECUTE for the runtime role, the retention
+     * identity or PUBLIC. Every other one is SECURITY INVOKER with a pinned path that puts `pg_temp` last.
+     */
+    private function hrFamilyTriggerFunctionsCheck(): CheckResult
+    {
+        $owner = (string) DB::selectOne("select pg_get_userbyid(relowner) as o from pg_class where oid = 'public.migrations'::regclass")->o;
+        $rows = DB::select(
+            "select c.relname as tbl, t.tgname, t.tgenabled, p.proname, n.nspname, p.prosecdef,
+                    pg_get_function_identity_arguments(p.oid) as args, pg_get_userbyid(p.proowner) as owner, md5(pg_get_triggerdef(t.oid)) as def,
+                    coalesce(array_to_string(p.proconfig, '|'), '') as config,
+                    (select count(*) from pg_proc q where q.proname = p.proname and q.pronamespace = 'public'::regnamespace) as same_name,
+                    has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec,
+                    has_function_privilege(?, p.oid, 'EXECUTE') as retention_exec,
+                    exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_exec
+             from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid join pg_namespace n on n.oid = p.pronamespace
+             where not t.tgisinternal and c.relnamespace = 'public'::regnamespace and c.relname = any (?::text[])",
+            [self::RUNTIME_ROLE, self::RETENTION_ROLE, '{'.implode(',', array_keys(self::HR_FAMILY_RUNTIME_PRIVILEGES)).'}'],
+        );
+
+        $differ = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $key = "{$row->tbl}.{$row->tgname}";
+            $seen[$key] = true;
+            $expected = self::HR_FAMILY_TRIGGERS[$row->tbl][$row->tgname] ?? null;
+            if ($expected === null) {
+                $differ[] = "{$key}:unexpected";
+
+                continue;
+            }
+            [$function, $definition] = $expected;
+            $definer = self::HR_FAMILY_DEFINER_FUNCTIONS[$function] ?? null;
+            $path = str_starts_with((string) $row->config, 'search_path=') && ! str_contains((string) $row->config, '|')
+                ? substr((string) $row->config, strlen('search_path='))
+                : null;
+            $problems = array_keys(array_filter([
+                'disabled' => $row->tgenabled !== 'O',
+                'binding' => $row->proname !== $function || $row->nspname !== 'public' || $row->args !== '' || (int) $row->same_name !== 1,
+                'definition' => $row->def !== $definition,
+                'owner' => $row->owner !== $owner,
+                'mode' => (bool) $row->prosecdef !== ($definer !== null),
+                'search_path' => $definer !== null ? $path !== $definer : ! in_array($path, self::HR_FAMILY_INVOKER_SEARCH_PATHS, true),
+                'execute' => $definer !== null && ($row->runtime_exec || $row->retention_exec || $row->public_exec),
+            ]));
+            if ($problems !== []) {
+                $differ[] = "{$key}:".implode('+', $problems);
+            }
+        }
+        foreach (self::HR_FAMILY_TRIGGERS as $table => $triggers) {
+            foreach (array_keys($triggers) as $trigger) {
+                if (! isset($seen["{$table}.{$trigger}"])) {
+                    $differ[] = "{$table}.{$trigger}:missing";
+                }
+            }
+        }
+
+        return CheckResult::of('hr_family_trigger_functions', $differ === [], $differ === [] ? '' : implode(', ', $differ));
+    }
+
+    /**
+     * HR.R1-C28 (C26-N1): the runtime role is a member of no role, directly or through another (any grant row counts:
+     * ADMIN on another role would let it grant that role to itself), and no role holds it, with one exception: the
+     * schema owner may hold it WITH ADMIN only (`set_option` and `inherit_option` false). On PostgreSQL 16 a
+     * non-superuser with CREATEROLE that creates the role holds exactly that and cannot revoke it (managed
+     * PostgreSQL, `production-bootstrap.sql`). ADMIN confers no privilege directly, but its holder could grant
+     * itself SET or INHERIT, which this check then reports; the schema owner already owns every object. A
+     * non-empty `createrole_self_grant` would give the creator SET or INHERIT and fail this check, correctly.
+     * It is NOINHERIT, so `has_table_privilege` reports only its own grants, but a member may
+     * `SET ROLE` to any role it belongs to and act with that role's privileges; with no membership there is none
+     * to reach, which is what makes the allowlist above the whole answer. `$connection` lets a test read inside
+     * its own uncommitted transaction, because roles are cluster-wide and a probe must never be visible to
+     * another database's sessions.
+     */
+    public function runtimeRoleMembershipCheck(?ConnectionInterface $connection = null): CheckResult
+    {
+        $db = $connection ?? DB::connection();
+        $row = $db->selectOne(
+            "select (select count(*) from pg_auth_members m where m.member = r.oid) as member_of,
+                    (select count(*) from pg_auth_members m where m.roleid = r.oid
+                       and (m.set_option or m.inherit_option or m.member <> (select relowner from pg_class where oid = 'public.migrations'::regclass))) as members,
+                    (select count(*) from pg_roles o where o.oid <> r.oid and pg_has_role(r.oid, o.oid, 'MEMBER')) as reachable
+             from pg_roles r where r.rolname = ?",
+            [self::RUNTIME_ROLE],
+        );
+        $ok = $row !== null && (int) $row->member_of === 0 && (int) $row->members === 0 && (int) $row->reachable === 0;
+
+        return CheckResult::of('runtime_role_memberships_none', $ok, $ok ? '' : ($row === null ? 'runtime role missing' : "member of {$row->member_of}, members {$row->members}, reachable {$row->reachable}"));
     }
 
     /**

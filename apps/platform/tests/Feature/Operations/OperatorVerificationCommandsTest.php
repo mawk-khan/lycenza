@@ -83,6 +83,8 @@ class OperatorVerificationCommandsTest extends TestCase
             'migration_owner_sees_every_row', 'rollback_guards_fail_closed',
             // HR.R1-C26 (R1-01 point 4)
             'hr_family_runtime_privileges',
+            // HR.R1-C28 (WO-13, C26-N1)
+            'hr_family_trigger_functions', 'runtime_role_memberships_none',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

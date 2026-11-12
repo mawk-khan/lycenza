@@ -34,8 +34,10 @@ use Tests\TestCase;
  *
  * Writes are not decided here: `HrWriterBoundaryTest::payroll_never_writes_an_hr_table()` does that, and the
  * database denies what history forbids. Limits, honestly:
- * - the `lazy` count knows the relation names `employmentRecord`, `employee(s)` and `employeeAssignment` (not
- *   `assignment`, which is Payroll's own `CompensationAssignmentValue` relation); an HR row reached through another relation name, or held in a plain variable, is not counted;
+ * - the `lazy` count knows the relation names `employmentRecord`, `employee(s)` and `employeeAssignment`, from any
+ *   receiver including `$this` (HR.R1-C28, C27-N3), except `$this->employees`, an injected service. It does not
+ *   count `assignment`, Payroll's own `CompensationAssignmentValue` relation. An HR row reached through another
+ *   relation name, or held in a plain variable, is not counted;
  * - the `type` count knows `HR_MODELS` only, and a parameter type is the `hint` count; a ternary's
  *   `: Employee::...` also counts as a type (it fails closed, never open);
  * - the array form is read up to its first `]`, so an HR relation named after a nested array inside it
@@ -185,7 +187,9 @@ class PayrollHrBoundaryRegisterTest extends TestCase
                     preg_match_all('/->(?:with|whereHas|has|load|whereDoesntHave|orWhereHas)\\(\\s*\\[([^\\]]*)\\]/', $code, $lists) > 0 ? $lists[1] : [],
                 )),
             // HR.R1-C26 (C25-N1): an HR relation reached through a loaded row (`$result->employmentRecord->employee`).
-            'lazy' => preg_match_all('/(?<!\\$this)->(?:employmentRecord|employee|employees|employeeAssignment)\\??(?=->)/', $code),
+            // HR.R1-C28 (C27-N3): `$this->employmentRecord->` inside a Payroll model counts too; only `$this->employees`,
+            // the injected HR retention reader (`PayrollEmployeeRetentionService`), is a service and not a relation.
+            'lazy' => preg_match_all('/(?:->(?:employmentRecord|employee|employeeAssignment)|(?<!\\$this)->employees)\\??(?=->)/', $code),
             // HR.R1-C26 (C25-N1): constructing, testing or returning an HR model.
             'type' => preg_match_all('/\\bnew\\s+(?:'.self::HR_MODELS.')\\b(?![\\\\\\w])|\\binstanceof\\s+(?:'.self::HR_MODELS.')\\b(?![\\\\\\w])|\\)\\s*:\\s*\\??(?:'.self::HR_MODELS.')\\b(?![\\\\\\w])/', $code),
             'sql' => array_sum(array_map(fn (string $s) => preg_match_all('/\b(?:'.self::HR_TABLES.')\b/', $s), $strings)),
@@ -238,6 +242,9 @@ class PayrollHrBoundaryRegisterTest extends TestCase
         $this->assertSame(['relation' => 1], self::fingerprint('<?php $q->with(["run", "employmentRecord.employee"]);')['refs'], 'array-form eager load, double quotes');
         $this->assertSame(['lazy' => 2], self::fingerprint('<?php $n = $result->employmentRecord->employee?->full_name;')['refs'], 'lazy relation access');
         $this->assertSame([], self::fingerprint('<?php $this->employees->purgeSeparatedBefore($s, $d);')['refs'], 'an injected service is no relation');
+        // HR.R1-C28 (C27-N3): a relation reached from inside a Payroll model.
+        $this->assertSame(['lazy' => 2], self::fingerprint('<?php return $this->employmentRecord->employee?->full_name;')['refs'], 'a relation of $this is still a relation');
+        $this->assertSame(['lazy' => 1], self::fingerprint('<?php $n = $this->employee->full_name;')['refs']);
         $this->assertSame(['type' => 3], self::fingerprint('<?php $e = new Employee(); if ($x instanceof EmploymentRecord) {} function h(): ?EmployeeAssignment {}')['refs'], 'new, instanceof and a return type');
         $this->assertSame([], self::fingerprint('<?php $r = new EmploymentRecordView(); function k(): EmployeeNumber {}')['refs'], 'a longer name is still another class');
     }

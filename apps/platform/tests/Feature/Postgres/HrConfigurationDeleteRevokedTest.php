@@ -121,6 +121,9 @@ class HrConfigurationDeleteRevokedTest extends TestCase
             // A single column is enough (review LOW-1), and so is REFERENCES.
             ['GRANT UPDATE (voided_at) ON employee_account_links TO school_os_app', 'REVOKE UPDATE (voided_at) ON employee_account_links FROM school_os_app', 'employee_account_links:SU'],
             ['GRANT REFERENCES ON employees TO school_os_app', 'REVOKE REFERENCES ON employees FROM school_os_app', 'employees:SIUR'],
+            // HR.R1-C28 (C27-N1): REFERENCES on one column, to the runtime role or to PUBLIC.
+            ['GRANT REFERENCES (id) ON employees TO school_os_app', 'REVOKE REFERENCES (id) ON employees FROM school_os_app', 'employees:SIUR'],
+            ['GRANT REFERENCES (id) ON leave_types TO PUBLIC', 'REVOKE REFERENCES (id) ON leave_types FROM PUBLIC', 'leave_types:SIUR'],
             // Losing a privilege a named operation needs is drift too.
             ['REVOKE UPDATE ON staff_attendance_records FROM school_os_app', 'GRANT UPDATE ON staff_attendance_records TO school_os_app', 'staff_attendance_records:SI'],
         ];
@@ -135,6 +138,21 @@ class HrConfigurationDeleteRevokedTest extends TestCase
                 $admin->unprepared($restore);
             }
             $this->assertSame(CheckResult::PASS, $status()->status, "after: {$restore}");
+        }
+    }
+
+    #[Test]
+    public function a_column_grant_is_invisible_to_a_table_level_read(): void
+    {
+        // HR.R1-C28 (C27-N1), the reproduction: what the C26 check read for REFERENCES misses a one-column grant.
+        $admin = DB::connection('pgsql_admin');
+        $admin->unprepared('GRANT REFERENCES (id) ON employees TO school_os_app');
+        try {
+            $read = DB::selectOne("select has_table_privilege('school_os_app', 'public.employees', 'REFERENCES') as tbl, has_any_column_privilege('school_os_app', 'public.employees', 'REFERENCES') as col");
+            $this->assertFalse((bool) $read->tbl, 'the table-level read C26 used does not see it');
+            $this->assertTrue((bool) $read->col, 'the column-level read C28 uses does');
+        } finally {
+            $admin->unprepared('REVOKE REFERENCES (id) ON employees FROM school_os_app');
         }
     }
 }

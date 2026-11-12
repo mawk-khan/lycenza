@@ -70,6 +70,11 @@ migration changed.
   Attendance, WorkforceTasks, or any table named like one) is classified in
   `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES` with exactly its
   privileges, and its writers in `HrWriterBoundaryTest::WRITERS` (HR.R1-C26).
+- **Triggers and guard functions:** a trigger on an HR-family table is listed
+  in `DatabaseRoleVerifier::HR_FAMILY_TRIGGERS` (function and the md5 of its `pg_get_triggerdef`); its
+  function sets `search_path` with `pg_temp` last, and is SECURITY DEFINER only
+  if added to `HR_FAMILY_DEFINER_FUNCTIONS` by decision (HR.R1-C28). Any new
+  trigger function anywhere should set its `search_path` (C28-N1).
 - **Keys:**
   - tenant composite keys `(x, school_id)` (rule 70);
   - indexes for every key and filter;

@@ -615,3 +615,12 @@ decision was taken or needed.
 - **Point 4 allowlist (M3, WO-11).** The runtime role's privileges on every family table equal `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES`, checked by `platform:verify-database`. No family table holds DELETE or TRUNCATE. The unused DELETE on `hr_departments`, `positions`, `employee_categories` and `hr_employee_number_counters` is revoked (migration `2027_02_16_090000`). A new family model's table, or a model-less table named like the family's, fails CI until it is classified; a model-less family table named otherwise is not seen (HR.R1-C27, C27-N2).
 - **C25-N1 (WO-12).** Payroll's register also counts array-form eager loads, HR relations reached through a loaded row, and `new`/`instanceof`/return types; relation-chain writes are refused.
 - **Unchanged.** One runtime role serves every domain. Source guards see static shapes only. Module-specific database credentials are still not adopted.
+
+### HR.R1-C28 amendment (2026-11-12): the HR family's triggers, functions and runtime role are pinned
+
+**Status: implemented for development once this candidate's exact-SHA `CI gate` is green and it is published** (`docs/hr/HR-R1-C28-WO13-VERIFIER.md`).
+
+- **Triggers (WO-13, C22-N1).** `platform:verify-database` binds each of the 103 HR-family triggers through `tgfoid` to its pinned function and definition, and checks each function's mode, owner, `search_path` and, for the four approved SECURITY DEFINER functions, that the runtime role, the retention identity and PUBLIC may not EXECUTE them.
+- **Guard search path (C28-N2).** Every HR-family guard pins `search_path` with `pg_temp` last (migration `2027_02_17_090000` for the 40 that set none), so a session's temporary table can never stand in for a table a guard reads.
+- **Runtime role (C26-N1).** `school_os_app` is a member of no role and held by none, except the schema owner WITH ADMIN only (what PostgreSQL 16 gives a non-superuser CREATEROLE creator, which it cannot revoke; ADMIN grants no privilege directly, and a self-granted SET would be reported; the creator must be the schema owner, C28-N4); the HR-family allowlist reads REFERENCES per column (C27-N1).
+- **Not changed.** Business rules, writers, the shared runtime role. Trigger functions outside the HR family are C28-N1 (Platform).
