@@ -49,7 +49,7 @@ A second independent read-only reviewer examined the candidate diff itself (the 
 
 | Id | Finding | Fix |
 |---|---|---|
-| F-L1 | `has_table_privilege` misses a column-level grant and REFERENCES/TRIGGER, so "exactly" overstated | SELECT, INSERT, UPDATE read with `has_any_column_privilege`; REFERENCES and TRIGGER fail; drift cases for `UPDATE (voided_at)` and REFERENCES added |
+| F-L1 | `has_table_privilege` misses a column-level grant and REFERENCES/TRIGGER, so "exactly" overstated | SELECT, INSERT, UPDATE read with `has_any_column_privilege`; REFERENCES and TRIGGER fail; drift cases for `UPDATE (voided_at)` and REFERENCES added A column-level REFERENCES still passed: C27-N1 (HR.R1-C27), with WO-13 |
 | F-L2 | `assignment` is Payroll's own `CompensationAssignmentValue` relation, so the `lazy` and chain-write patterns over-matched (fail closed) | `assignment` removed from both lists; `employeeAssignment` kept |
 | F-L3 | Two unstated scanner limits: the array form stops at its first `]`; a ternary's `: Employee::` counts as a type | Both named in the register docblock |
 | F-L4 | The ADR status said "verified" without the CI condition | Conditioned on the exact-SHA `CI gate` and publication |
@@ -73,7 +73,7 @@ Rule 151 and ADR 0028 (HR.R1-C26 amendment) carry the changes. Point 2 gains the
 - Migration `2027_02_16_090000_revoke_unused_runtime_delete_on_hr_configuration`: `REVOKE DELETE` on exactly the four tables; `down()` restores the grant it removed. SELECT, INSERT and UPDATE unchanged.
 - `DatabaseRoleVerifier::NO_RUNTIME_DELETE` lists the four.
 - **The allowlist (M3).** `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES` names every one of the 56 family tables with exactly its runtime privileges (S, I, U). Check `hr_family_runtime_privileges`: the effective privilege (`has_table_privilege`, which counts PUBLIC) must equal the entry, in both directions; SELECT, INSERT and UPDATE also count when granted on one column, and REFERENCES or TRIGGER fail; a missing table fails. No family table holds DELETE or TRUNCATE after C26.
-- `HrWriterBoundaryTest::the_writer_register_and_the_privilege_allowlist_cover_exactly_the_family`: the family's models (56) equal the allowlist's tables, and every table named like the family's is classified or named as another domain's, so a new family table, with or without a model, fails CI until it is classified.
+- `HrWriterBoundaryTest::the_writer_register_and_the_privilege_allowlist_cover_exactly_the_family`: the family's models (56) equal the allowlist's tables, and every table named like the family's is classified or named as another domain's, so a new family model's table, or a model-less table whose name matches `FAMILY_TABLE_NAMES`, fails CI until it is classified (C27-N2: a model-less family table named otherwise is not seen).
 
 | Class | Tables |
 |---|---:|
@@ -153,6 +153,8 @@ Each was planted in a copied file, the guard run, the file restored and its chec
 | 10 | A model-less table `hr_c26_probe` (test database, dropped after) | family table-name sweep |
 
 ### 5.7 What the guards still cannot see
+
+**Corrected by HR.R1-C27 (C27-N2, C27-N3):** a model-less family table whose name does not match `FAMILY_TABLE_NAMES` is not seen, and the register's `lazy` count skips `$this->employmentRecord->...` inside a Payroll model.
 
 `DB::table($name)` and other names built at run time; writes through a variable whose name is not an HR row name, or a relation not named in the lists; code outside `app/`; dynamic SQL. The `Support/Retention/` path is exempt as a whole (point 8). One runtime role serves every domain: PostgreSQL cannot tell which module wrote (§6 of C25 stands). These are stated limits, backed at runtime by the privilege allowlist, forced RLS, composite keys and the fact-level triggers.
 

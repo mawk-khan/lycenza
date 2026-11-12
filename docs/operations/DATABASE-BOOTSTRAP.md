@@ -150,7 +150,7 @@ it.
 `platform:verify-database` also checks `hr_family_runtime_privileges` (HR.R1-C26, R1-01
 point 4): the runtime role's effective privileges on each of the 56 HR-family tables equal
 `DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES` exactly (SELECT, INSERT, UPDATE as listed, a
-single-column grant included; never DELETE, TRUNCATE, REFERENCES or TRIGGER). A FAIL names each table that differs. A new family table gets DELETE from the
+single-column grant included; never DELETE, TRUNCATE, REFERENCES or TRIGGER). A REFERENCES granted on a single column is not yet seen (C27-N1, with WO-13). A FAIL names each table that differs. A new family table gets DELETE from the
 schema's default privileges, so its migration must revoke what the allowlist does not grant.
 
 `platform:verify-database` also checks `employee_account_links_guarded` (HR.R1-C7,
