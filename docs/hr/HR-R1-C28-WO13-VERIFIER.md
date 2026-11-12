@@ -97,7 +97,20 @@ A second read-only reviewer checked F-1 to F-5 as applied. **No HIGH, no MEDIUM.
 
 ## 6. Evidence
 
-See §9 of the evidence commit for the suites, the full exact-SHA regression and publication.
+| Check | Result |
+|---|---|
+| New tests | `HrFamilyTriggerFunctionsVerifierTest` 4 passed; `GuardSearchPathShadowTest` 1 (failed before the migration, the reproduction); `HrConfigurationDeleteRevokedTest` 5 (with the C27-N1 reproduction) |
+| Guards and verifier suites | `HrWriterBoundaryTest` 70, `PayrollHrBoundaryRegisterTest` 6, `OperatorVerificationCommandsTest` 9, month-lock and calendar verifier suites: all passed |
+| Directories (DDEV, before the review fixes, which touched only the verifier and its test) | HR 1,471; Leave 176; Staff Attendance 76; Postgres 1,247; Payroll 542: all passed |
+| Documentation guards | 38 passed |
+| Local gates | Pint, Larastan, whitespace (untracked included), gitleaks on changed files: PASS |
+| Rollback | `/rollback-proof 1`, twice (before and after the definition pin): IDENTICAL, 40 schema lines, verifier failed=0 on the Compose database (another owner role) |
+| Committed-range gitleaks | `154113c3..bf627ae4`: no leaks |
+| Candidate `CI gate` | `bf627ae4`, run 43218039185, **green on attempt 1**: 4 shards, 2,923 × 3 + 2,922 = **11,691 cases**, **465,650 assertions**, **0 failures, 1 skip (ESI-12)**; coverage union success. +6 cases on C26 (the new tests). C26-N2 did not recur |
+| Publication | `lycenza-ci publication-check --candidate bf627ae4 --push`: fast-forward; remote `main` = `bf627ae4`. Main `CI` run 43221582346: success |
+| E16 | `OWNER-0O-E16-2026-11-01`, valid through 2026-11-28 |
+| DDEV `db` | the one pending migration applied forward through `pgsql_admin` (APP_ENV local, `current_database()` = `db` first); verifier failed=0, `hr_family_runtime_privileges`, `hr_family_trigger_functions`, `runtime_role_memberships_none` PASS; 392 migrations, 255 forced RLS; the October 2026 month lock intact; no data changed |
+| Regression counter | 0/5 (the exact-SHA full suite is this unit's regression) |
 
 ## 7. Status
 
