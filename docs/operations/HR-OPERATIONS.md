@@ -17,8 +17,10 @@ when HR background work fails. It sits beside `FAILED-JOBS.md`,
    - `workforce-tasks-generate` runs every minute.
 
    Leave accrual and eligibility are not scheduled and have no heartbeat. They are
-   run by a person from the accrual workspace (§4), so a missed month is silent:
-   check it by hand until the owner decides D-3.
+   run by a person from the accrual workspace (§4), so a missed month is silent.
+   D-3 was decided on 2026-11-12 (HR.R1-C31): accrual stays manual, and a
+   read-only month status (WO-9) will show a missed, incomplete or failed month.
+   **WO-9 is not built yet**: until it is, check each due month by hand (§4).
 3. Sign in as an HR administrator and check:
    - **HR reports** opens;
    - **Staff attendance** shows "Showing 1–N of TOTAL staff", and TOTAL
@@ -63,6 +65,12 @@ Runs resume from their cursor and never post twice. A failed batch rolls back
 on its own.
 - Re-run the same month from the accrual workspace.
 - Never edit `leave_ledger_entries`. A correction is a new adjustment.
+- **Checking a month by hand (until WO-9 ships).** After a month becomes due
+  (its first day for advance timing, the day after its last day for arrears),
+  open the accrual workspace for each monthly leave type: a month with no
+  completed run needs one; for a completed month, the preview should credit
+  nobody (if it would, run the month again; it never credits twice). Owner:
+  School HR (`hr.leave.manage`).
 
 Leave balances in **HR reports** are **as posted**: an entry counts from the
 School-local day it was recorded.

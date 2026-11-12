@@ -139,7 +139,7 @@ Dataset: one School, 5,000 employments, 100,000 attendance records and
 | Browser UAT | Done for the flows in §4; write flows that need MFA were not exercised in a browser |
 | Accessibility | Axe clean on 22 pages; a screen-reader pass is still needed |
 | Performance | Measured (§3); no agreed target; R-HR16-1 (month view) |
-| Monitoring | A scheduled-task heartbeat and alert rule exist for task generation (HR.13). Leave accrual and eligibility are manual and have none (corrected by HR.R1-C10, LVA-1; the choice is D-3); runbook `docs/operations/HR-OPERATIONS.md` |
+| Monitoring | A scheduled-task heartbeat and alert rule exist for task generation (HR.13). Leave accrual and eligibility are manual and have none (corrected by HR.R1-C10, LVA-1). D-3 decided 2026-11-12 (HR.R1-C31): accrual stays manual with a read-only month status (WO-9, **not built**), no alerts; runbook `docs/operations/HR-OPERATIONS.md` |
 | Migration and rollback | HR.16 adds no migration. Rollback is a code revert. HR.2A's data-losing rollback stays forward-fix only. |
 | **Local testing (DDEV)** | **GO** for the implemented HR scope with synthetic data |
 | **Staging testing** | **CONDITIONAL.** It may test the implemented HR scope with synthetic data only, provided: the staging environment and its approvals exist; E16 is current (the 2026-11-01 decision runs out after 2026-11-28); the legacy-document inventory is done; the API client MFA note is published; and backup and restore evidence exists for staging (a documented policy is not a tested restore). Payroll, clock attendance, exports and person-count analytics stay disabled. |
