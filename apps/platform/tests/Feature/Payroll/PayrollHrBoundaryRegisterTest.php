@@ -93,14 +93,16 @@ class PayrollHrBoundaryRegisterTest extends TestCase
         'Domain/Payroll/Application/PayrollHrxInputReadService.php' => ['ids' => 'compliant: EmploymentRoster', 'imports' => [self::ROSTER], 'refs' => ['reader' => 1]],
 
         // Narrow exceptions (§3.2): 26 after §3.5 (X24 left with the id-taking listAssignments()).
-        'Domain/Payroll/Application/PayrollRunService.php' => ['ids' => 'X01, X02 findOrFail; X03-X06, X21, X22 type hints', 'imports' => [self::RECORD], 'refs' => ['model' => 2, 'hint' => 6]],
+        'Domain/Payroll/Application/PayrollRunService.php' => ['ids' => 'X01, X02 findOrFail; X03-X06, X21, X22 type hints; HrSelfAdministrationGuard (compliant, HR.R1-C34 WO-16)', 'imports' => ['App\\Domain\\HR\\Application\\HrSelfAdministrationGuard', self::RECORD], 'refs' => ['model' => 2, 'hint' => 6]],
         'Domain/Payroll/Application/CompensationService.php' => ['ids' => 'X08 FOR UPDATE; X07, X23 type hints', 'imports' => [self::RECORD], 'refs' => ['model' => 1, 'hint' => 2]],
-        'Domain/Payroll/Application/PayrollPostingIndependence.php' => ['ids' => 'X12, X13 SQL join', 'imports' => [], 'refs' => ['sql' => 2]],
+        'Domain/Payroll/Application/PayrollPostingIndependence.php' => ['ids' => 'X12, X13 SQL join; HrSelfAdministrationGuard (compliant, HR.R1-C34 WO-16)', 'imports' => ['App\\Domain\\HR\\Application\\HrSelfAdministrationGuard'], 'refs' => ['sql' => 2]],
         'Domain/Payroll/Application/PayrollCompensationAdministrationService.php' => ['ids' => 'X25 id for isEmployeeOf(); HrSelfAdministrationGuard (compliant)', 'imports' => ['App\\Domain\\HR\\Application\\HrSelfAdministrationGuard', self::RECORD], 'refs' => ['hint' => 1]],
         'Domain/Payroll/Application/PayrollRunAdministrationService.php' => ['ids' => 'X26, X27; HrSelfAdministrationGuard (compliant)', 'imports' => ['App\\Domain\\HR\\Application\\HrSelfAdministrationGuard', self::RECORD], 'refs' => ['hint' => 2]],
         'Domain/Payroll/Http/Controllers/PayrollRunController.php' => ['ids' => 'X17, X18', 'imports' => [self::RECORD], 'refs' => ['model' => 2]],
         'Domain/Payroll/Http/Controllers/CompensationAssignmentController.php' => ['ids' => 'X19 (keeps its 404), X20', 'imports' => [self::RECORD], 'refs' => ['model' => 2]],
         'Domain/Payroll/Application/PayrollSelfBeneficiaries.php' => ['ids' => 'A1 employee_account_links (rule 145)', 'imports' => [], 'refs' => ['sql' => 2]],
+        // HR.R1-C34 (WO-16): the known-same-person rule through HR's own reader, never an HR table.
+        'Domain/Payroll/Application/PayrollReversalReconciliationService.php' => ['ids' => 'HrSelfAdministrationGuard (compliant, HR.R1-C34 WO-16)', 'imports' => ['App\\Domain\\HR\\Application\\HrSelfAdministrationGuard'], 'refs' => []],
 
         // No change (§3.3): 12 after D2-N09 was removed.
         'Domain/Payroll/Infrastructure/EmployeeCompensationAssignment.php' => ['ids' => 'N01', 'imports' => [self::RECORD], 'refs' => ['model' => 1]],

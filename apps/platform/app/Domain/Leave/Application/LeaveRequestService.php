@@ -486,6 +486,17 @@ class LeaveRequestService
         if (! $this->makerChecker->permits($actor, self::participants($request))) {
             throw LeaveException::forbidden('LEAVE_PARTICIPANT_DECISION', 'You submitted this request; another person must decide it.');
         }
+        // HR.R1-C34 (WO-16, C33): nor an account known to be the same person as the submitter or the requester
+        // (an uncorrected link, current or ended, to the requester's Employee). Backed by leave_decisions_participant_guard.
+        if ($this->selfAdministration->knownSamePersonParticipation($school->id, $actor, self::participants($request)->all()) !== null
+            || $this->selfAdministration->isKnownToBeEmployee($actor, $school->id, $request->employee_id)) {
+            throw self::samePerson();
+        }
+    }
+
+    private static function samePerson(): LeaveException
+    {
+        return LeaveException::forbidden('LEAVE_SAME_PERSON_DECISION', 'One of your accounts is known to belong to the requester or to whoever submitted this request; another person must decide it.');
     }
 
     /** G-4: the administrative path never acts on the actor's own employment (self-service does). */
@@ -554,6 +565,9 @@ class LeaveRequestService
         } catch (QueryException $e) {
             if (str_contains($e->getMessage(), 'leave_decisions_no_self_decision')) {
                 throw LeaveException::forbidden('LEAVE_SELF_DECISION', 'Nobody approves or rejects their own leave request.');
+            }
+            if (str_contains($e->getMessage(), 'leave_decisions_same_person')) {
+                throw self::samePerson();
             }
             if (str_contains($e->getMessage(), 'leave_decisions_participant_guard')) {
                 throw LeaveException::forbidden('LEAVE_PARTICIPANT_DECISION', 'You submitted this request; another person must decide it.');

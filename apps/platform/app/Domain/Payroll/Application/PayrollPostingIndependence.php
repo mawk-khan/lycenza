@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Application;
 
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
+use App\Domain\Payroll\Application\Exceptions\KnownSamePersonDecisionException;
 use App\Domain\Payroll\Application\Exceptions\PostingAttestationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\PostingAttestorCannotReviewException;
 use App\Domain\Payroll\Application\Exceptions\PostingAttestorNotIndependentException;
@@ -14,6 +16,7 @@ use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +44,7 @@ final class PayrollPostingIndependence
         private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
         private readonly PayrollSelfBeneficiaries $beneficiaries,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /** The evidence version of an open exception, or null when the approval still stands on its own. */
@@ -55,8 +59,12 @@ final class PayrollPostingIndependence
     public function assertMayAttest(PayrollRun $run, User $actor, string $version, ?PostingAttestation $attestation): void
     {
         $school = $run->school;
-        if (! $this->isIndependent($run, $actor)) {
+        if (! $this->accountIndependent($run, $actor)) {
             throw new PostingAttestorNotIndependentException($run->id);
+        }
+        // HR.R1-C34 (WO-16, C33): nor an account known to be the same person as a maker or the approver.
+        if ($this->knownSameAsMakerOrApprover($run, $actor)) {
+            throw new KnownSamePersonDecisionException($run->id);
         }
         // HR.R1-C6 (OD-HR-24): nobody certifies independence over a change to their own pay.
         if ($this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id)->conflicted) {
@@ -223,7 +231,8 @@ final class PayrollPostingIndependence
         $beneficiary = $version === null ? null : $this->beneficiaries->of($run, (string) $run->approved_calculation_id, $actor->id);
         $blocked = match (true) {
             $run->status !== 'approved' => null,
-            ! $independent => 'not_independent',
+            ! $this->accountIndependent($run, $actor) => 'not_independent',
+            ! $independent => 'same_person',
             $beneficiary?->conflicted === true => 'self_beneficiary',
             // A read, outside any decision transaction; the decision re-reads this fresh in assertMayAttest().
             ! $this->capabilities->canInSchool($actor, self::SENSITIVE_VIEW, $run->school) => 'cannot_review',
@@ -328,7 +337,21 @@ final class PayrollPostingIndependence
      */
     private function isIndependent(PayrollRun $run, User $actor): bool
     {
+        return $this->accountIndependent($run, $actor) && ! $this->knownSameAsMakerOrApprover($run, $actor);
+    }
+
+    private function accountIndependent(PayrollRun $run, User $actor): bool
+    {
         return $actor->id !== $run->approved_by_user_id
             && app(PayrollRunService::class)->participants($run)->participationOf($actor->id) === null;
+    }
+
+    /** HR.R1-C34 (WO-16): backed by payroll_posting_attestations_guard. Read in the run's School context (review I-3). */
+    private function knownSameAsMakerOrApprover(PayrollRun $run, User $actor): bool
+    {
+        $aliases = app(TenantContext::class)->withSchool($run->school, fn (): array => $this->selfAdministration->knownSamePersonAccounts($run->school_id, $actor->id));
+
+        return $aliases !== [] && (in_array((string) $run->approved_by_user_id, $aliases, true)
+            || app(PayrollRunService::class)->knownSamePersonParticipation($run, $actor) !== null);
     }
 }

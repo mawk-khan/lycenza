@@ -88,7 +88,8 @@ class PayrollApprovalReviewLargeRunTest extends TestCase
         $first = $reviews->packet($school, $current, $checker);
         // HR.R1-C1 (PAY-12): a bounded number of queries whatever the run's size (42 measured at 500 to 10,000 entries).
         // HR.R1-C3 adds two constant ones, the attribution version and the reversed-baseline check (flat at 500 to 10,000).
-        $this->assertLessThanOrEqual(47, count(DB::getQueryLog()), 'the review packet never issues a query per entry');
+        // HR.R1-C34 adds three constant ones: the known-same-person read of the reviewer's own links and its School context.
+        $this->assertLessThanOrEqual(50, count(DB::getQueryLog()), 'the review packet never issues a query per entry');
         DB::disableQueryLog();
         $this->assertSame([number_format($expected['current'], 2, '.', ''), number_format($expected['previous'], 2, '.', ''), self::ENTRIES, true], [$first['totals']['net'], $first['previousTotals']['net'], $first['totals']['entries'], $first['totals']['reconciles']]);
         $this->assertSame(number_format($expected['current'], 2, '.', ''), $first['components'][0]['amount'], 'component totals equal the run total');

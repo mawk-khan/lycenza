@@ -25,6 +25,7 @@ interface Props {
         blockedReason:
             | 'already_reviewed'
             | 'not_independent'
+            | 'same_person'
             | 'self_beneficiary'
             | 'cannot_review'
             | 'needs_mfa'
@@ -247,6 +248,10 @@ function review(): void {
             >
                 You took part in this run or its reversal, so you cannot review it. Someone
                 independent of both must do this.
+            </p>
+            <p v-else-if="reconciliation.blockedReason === 'same_person'" class="mt-2" role="alert">
+                One of your accounts is known to belong to a person who took part in this run or its
+                reversal, so you cannot review it. Someone independent of both must do this.
             </p>
             <p
                 v-else-if="reconciliation.blockedReason === 'self_beneficiary'"

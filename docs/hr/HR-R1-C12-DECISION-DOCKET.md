@@ -384,7 +384,7 @@ C10-N1 itself is not reopened by any of these.
 Two accounts do not prove two people, and no record of natural persons exists. C7, C8 and rule 145 reduce the path but cannot close it. Options for Identity and Security: accept and record it, an out-of-band assertion by the School, or a verified identity process. **No biometric, no inferred matching, and no new personal identifier may come from this docket.** MEDIUM, open, and it blocks real Payroll.
 
 **Status: DECIDED 2026-11-12 (HR.R1-C33), Identity and Security owner.**
-- **Known same person:** a decision is refused when the decider and a participant are known to be one person, from rule 145's uncorrected link history. This applies in the HR family and Payroll (Payroll approval, posting attestation and reconciliation review; Leave decisions; separation cases); WO-16 is specified, **not built**.
+- **Known same person:** a decision is refused when the decider and a participant are known to be one person, from rule 145's uncorrected link history. This applies in the HR family and Payroll (Payroll approval, posting attestation and reconciliation review; Leave decisions; separation cases); WO-16 is built by HR.R1-C34.
 - **Unknown:** independence is never treated as proven; the residual is recorded. A School's out-of-band one-account-per-person assertion is required before real Payroll (release gate RG-ID-1).
 - **Timing:** evaluated at the decision, never retroactive.
 - **Handoffs:** Fees, Payments, Communications, Examinations and Erasure go to their owners (C33-H1 to H5). `HR-R1-C33-IDENTITY-INDEPENDENCE-DECISION.md`

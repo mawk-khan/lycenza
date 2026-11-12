@@ -26,6 +26,13 @@ namespace App\Support\Approval;
  *   freshMfa         decisions needing FreshMfaRequirement
  *   compatibility    'pilot' | 'as_is' | 'adapter' | 'special_rules' | 'not_applicable'
  *   relationshipConflict  (optional) a domain-specific decider conflict beyond maker/checker
+ *   knownSamePerson  HR.R1-C34 (WO-16, owner decision HR.R1-C33): whether an account KNOWN to be the same
+ *                    person as a participant (two accounts with uncorrected links to one Employee, rule 145) is
+ *                    refused too. Enforced: ['check' => the class::method holding the service check, 'dbGuard'
+ *                    => the trigger that backs it (DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS)]; or
+ *                    ['handoff' => the C33 handoff to the owning domain, decided there, never here]. Every
+ *                    HR-family and Payroll entry is enforced (KnownSamePersonCoverageTest). Unknown (no shared
+ *                    Employee) is never refused and never proof of two people (RG-ID-1).
  */
 final class ApprovalWorkflowRegistry
 {
@@ -47,6 +54,7 @@ final class ApprovalWorkflowRegistry
             'compatibility' => 'pilot',
             // ORG.8A-R1 (§59): the concession's own beneficiary conflict, after maker/checker; backed by
             // fee_concessions_beneficiary_guardian_guard; the decider cannot edit the relationship (Rule B).
+            'knownSamePerson' => ['handoff' => 'C33-H1'],
             'relationshipConflict' => 'guardian_of_student_beneficiary',
             'note' => 'ORG.8A pilot. Request terms and requester are DB-immutable; revoke and adjustment cancellation stay outside the pilot (G-3).',
         ],
@@ -67,6 +75,7 @@ final class ApprovalWorkflowRegistry
             'compatibility' => 'as_is',
             // ORG.8C (§61): never a Guardian of any Student the Payment or the request touches; backed by
             // payment_correction_requests_beneficiary_guardian_guard; Rule B (§59) keeps the link un-editable by the decider.
+            'knownSamePerson' => ['handoff' => 'C33-H2'],
             'relationshipConflict' => 'guardian_of_student_beneficiary',
             'note' => 'ORG.8C. Reallocation, reversal and recorded refund; approval executes through PaymentCorrectionService::executeApproved() against the requested correction generation (stale otherwise); no direct human correction route.',
         ],
@@ -88,6 +97,7 @@ final class ApprovalWorkflowRegistry
             'drift' => 'fingerprint',
             'freshMfa' => ['approve', 'refuse'],
             'compatibility' => 'as_is',
+            'knownSamePerson' => ['check' => 'App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService::assertMayDecide', 'dbGuard' => 'trg_employee_account_link_corrections_guard'],
             'note' => 'Separation of duties, never proof of two people. Also refused: an account ever linked to the Employee, and an account known to be the requester (a shared uncorrected link).',
         ],
         // HR.R1-C18 (WO-6; S-6 decided HR.R1-C17): a correction of a LOCKED Staff Attendance month. Requested by a
@@ -109,7 +119,8 @@ final class ApprovalWorkflowRegistry
             'drift' => 'immutable_terms',
             'freshMfa' => ['approveLockedCorrection', 'refuseLockedCorrection'],
             'compatibility' => 'as_is',
-            'note' => 'Separation of duties, never proof of two people (the same-person Identity MEDIUM stays open). Also refused in the database: a decider who holds no whole-School lock key, a known same person, or any account ever linked to the Employee.',
+            'knownSamePerson' => ['check' => 'App\Domain\StaffAttendance\Application\StaffAttendanceService::independentOf', 'dbGuard' => 'trg_staff_attendance_locked_corrections_guard'],
+            'note' => 'Separation of duties, never proof of two people (HR.R1-C34: known same person refused here since C18; unknown stays RG-ID-1). Also refused in the database: a decider who holds no whole-School lock key, a known same person, or any account ever linked to the Employee.',
         ],
         'communication_approvals' => [
             'domain' => 'Communications',
@@ -128,6 +139,7 @@ final class ApprovalWorkflowRegistry
             'drift' => 'fingerprint',
             'freshMfa' => [],
             'compatibility' => 'adapter',
+            'knownSamePerson' => ['handoff' => 'C33-H3'],
             'note' => 'Self-approval refused in the service only (no DB check); the announcement creator is a second candidate participant (ORG.9D-2: refused as decider for a fee_reminder, whose preparer is the only sender); ORG.9D-3: calendar Events share this table (exclusive event_id subject) -- their creator and every audited editor are refused deciders; the capability is checked in the controller.',
         ],
         'student_mark_corrections' => [
@@ -146,6 +158,7 @@ final class ApprovalWorkflowRegistry
             'drift' => 'immutable_terms',
             'freshMfa' => ['approve', 'reject'],
             'compatibility' => 'as_is',
+            'knownSamePerson' => ['handoff' => 'C33-H4'],
             'note' => 'Production-refused in code (E36/E37); the capability is checked at the route.',
         ],
         'leave_requests' => [
@@ -166,6 +179,8 @@ final class ApprovalWorkflowRegistry
             'drift' => 'immutable_terms',
             'freshMfa' => [],
             'compatibility' => 'special_rules',
+            // HR.R1-C34: nor an account known to be the submitter, or the requester through an uncorrected link, current or ended.
+            'knownSamePerson' => ['check' => 'App\Domain\Leave\Application\LeaveRequestService::assertMayDecide', 'dbGuard' => 'trg_leave_decisions_participant_guard'],
             'note' => 'ORG.8D (§62). Two paths: manager = whole-School hr.leave.approve AND the current reporting line (ReportingLine::holdManagerOf, FOR SHARE, read at decision time; HR.3A: the dated employment-level line effective on the decision date); administrative = hr.leave.manage (any request, fallback). Authority read fresh; the submitter and the requester Employee never decide (service + leave_decisions_no_self_decision + leave_decisions_participant_guard). No Campus logic; Campus-granted managers and cross-Campus managers are owner decision OD-8.8 (not built). No step-up (NONE). Administrative writes never touch the actor\'s own employment (G-4).',
         ],
         // HR.12 (owner decision HR-061, 2026-11-04; ADR 0028 HR.12 amendment): HR records, ANOTHER person decides.
@@ -184,6 +199,8 @@ final class ApprovalWorkflowRegistry
             'drift' => 'immutable_terms',
             'freshMfa' => ['approve'],
             'compatibility' => 'as_is',
+            // HR.R1-C34: nor an account known to be the recorder, or the separating Employee through an uncorrected link.
+            'knownSamePerson' => ['check' => 'App\Domain\HR\Application\Separation\SeparationCaseService::assertMayDecide', 'dbGuard' => 'trg_employment_separation_cases_guard'],
             'note' => 'Approval moves the employment to notice_period; finalization (EmploymentService::end()) is a separate HR step on or after the planned last day. Terms (employment, reason, notice date, requester) are DB-immutable; nobody records, decides, finalizes or clears their own separation (trg_employment_separation_cases_guard).',
         ],
         'payroll_runs' => [
@@ -208,6 +225,8 @@ final class ApprovalWorkflowRegistry
             'drift' => 'frozen_at_approval',
             'freshMfa' => ['approve'],
             'compatibility' => 'as_is',
+            // HR.R1-C34: nor an account known to be the same person as any participant, under the compensation lock.
+            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollRunService::assertMayDecide', 'dbGuard' => 'payroll_runs_participant_approval_guard'],
             'note' => 'Approve freezes the results (calculated -> approved); posting is a separate step the approver may also take (OD-8.4); stale results (an adjustment after the last recorded calculation) are refused.',
         ],
         'erasure_cases' => [
@@ -225,6 +244,7 @@ final class ApprovalWorkflowRegistry
             'drift' => 'immutable_terms',
             'freshMfa' => [],
             'compatibility' => 'not_applicable',
+            'knownSamePerson' => ['handoff' => 'C33-H5'],
             'note' => 'A data subject\'s request decided by the operator CLI; the requester is not a User, so maker/checker does not apply.',
         ],
     ];
@@ -249,6 +269,8 @@ final class ApprovalWorkflowRegistry
             'capability' => 'payroll.runs.post', 'action' => 'Payroll run posting (and its reversal, payroll.runs.reverse)',
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
             'evidence' => 'payroll_run_postings (append-only) + payroll_posting_attestations when a reversal took the approval\'s independence (HR.R1-C4) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
+            // HR.R1-C34: the attestor is never known to be the same person as the approver or a maker.
+            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollPostingIndependence::assertMayAttest', 'dbGuard' => 'trg_payroll_posting_attestations_guard'],
         ],
         // HR.R1-C6 (PAY-18, OD-HR-23): closing an OPEN obligation is a direct review, never a second approval.
         'App\Domain\Payroll\Application\PayrollReversalReconciliationService' => [
@@ -258,6 +280,8 @@ final class ApprovalWorkflowRegistry
             // Never the run's makers or approver, whoever executed the reversal, or the Employee of a change it pays first.
             'relationshipConflict' => 'payroll_run_independence',
             'dbGuard' => ['trigger' => 'trg_payroll_reversal_reconciliation_reviews_guard', 'refusal' => 'a reviewer is independent of the run, its reversal and its first-paid changes'],
+            // HR.R1-C34: nor known to be the same person as the approver, the reverser, a maker or an author.
+            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollReversalReconciliationService::conflict', 'dbGuard' => 'trg_payroll_reversal_reconciliation_reviews_guard'],
         ],
         // ORG.12C (ADR 0080 §8): legal name, registration and affiliation references.
         'App\Domain\Schools\Application\SchoolIdentityService' => [

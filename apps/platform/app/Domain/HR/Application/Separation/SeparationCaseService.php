@@ -24,6 +24,7 @@ use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -363,6 +364,18 @@ final class SeparationCaseService
         if (! $this->makerChecker->permits($actor, self::participants($case))) {
             throw SeparationException::forbidden('SEPARATION_PARTICIPANT_DECISION', 'You recorded this separation; another person must decide it.');
         }
+        // HR.R1-C34 (WO-16, C33): nor an account known to be the same person as the recorder or the separating
+        // Employee (an uncorrected link, current or ended). Backed by trg_employment_separation_cases_guard.
+        $employeeId = (string) EmploymentRecord::query()->where('school_id', $school->id)->whereKey($case->employment_record_id)->value('employee_id');
+        if ($this->selfAdministration->knownSamePersonParticipation($school->id, $actor, self::participants($case)->all()) !== null
+            || $this->selfAdministration->isKnownToBeEmployee($actor, $school->id, $employeeId)) {
+            throw self::samePerson();
+        }
+    }
+
+    private static function samePerson(): SeparationException
+    {
+        return SeparationException::forbidden('SEPARATION_SAME_PERSON_DECISION', 'One of your accounts is known to belong to the separating person or to whoever recorded this separation; another person must decide it.');
     }
 
     /**
@@ -406,7 +419,15 @@ final class SeparationCaseService
     /** @param  array<string, mixed>  $columns */
     private function transition(EmploymentSeparationCase $case, string $status, array $columns): void
     {
-        $case->forceFill([...$columns, 'status' => $status, 'version' => $case->version + 1])->save();
+        try {
+            $case->forceFill([...$columns, 'status' => $status, 'version' => $case->version + 1])->save();
+        } catch (QueryException $e) {
+            // HR.R1-C34: the database's own same-person refusal (a link that changed after the service read it).
+            if (str_contains($e->getMessage(), 'hr_employment_separation_same_person')) {
+                throw self::samePerson();
+            }
+            throw $e;
+        }
     }
 
     private function assertPlannedDay(EmploymentRecord $employment, string $notifiedOn, string $plannedLastDay): void

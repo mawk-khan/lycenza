@@ -788,6 +788,7 @@ class DatabaseRoleVerifier
         $results[] = $this->staffAttendanceMonthLockCheck();
         $results[] = $this->staffCalendarHistoryCheck();
         $results[] = $this->credentialVerificationCheck();
+        $results[] = $this->knownSamePersonGuardsCheck();
 
         return $results;
     }
@@ -1234,6 +1235,81 @@ class DatabaseRoleVerifier
      * compensation writes take the School's compensation lock; calculated
      * results and lines are never rewritten.
      */
+    /**
+     * HR.R1-C34 (WO-16, C33): every decision the owner put under the known-same-person rule refuses it in the
+     * database: trigger => [table, bound function, the relation its body must call]. Two accounts with
+     * uncorrected links to one Employee are one person; the relation is SECURITY INVOKER (RLS applies), STABLE,
+     * owned by the schema owner, `pg_temp` last, executable by the runtime role and never by PUBLIC.
+     *
+     * @var array<string, array{0: string, 1: string, 2: string}>
+     */
+    public const KNOWN_SAME_PERSON_GUARDS = [
+        'payroll_runs_participant_approval_guard' => ['payroll_runs', 'payroll_runs_refuse_participant_approval', 'employee_account_link_same_person_accounts'],
+        'trg_payroll_posting_attestations_guard' => ['payroll_posting_attestations', 'payroll_posting_attestations_guard', 'employee_account_link_same_person_accounts'],
+        'trg_payroll_reversal_reconciliation_reviews_guard' => ['payroll_reversal_reconciliation_reviews', 'payroll_reversal_reconciliation_reviews_guard', 'employee_account_link_same_person_accounts'],
+        'trg_leave_decisions_participant_guard' => ['leave_decisions', 'leave_decisions_refuse_submitter', 'employee_account_link_same_person_accounts'],
+        'trg_employment_separation_cases_guard' => ['employment_separation_cases', 'hr_employment_separation_cases_guard', 'employee_account_link_same_person_accounts'],
+        'trg_employee_account_link_corrections_guard' => ['employee_account_link_corrections', 'employee_account_link_corrections_guard', 'employee_account_link_correction_same_person'],
+        'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections', 'staff_attendance_locked_corrections_guard', 'employee_account_link_correction_same_person'],
+    ];
+
+    /**
+     * HR.R1-C34 (C34 review L-1): md5 of each function's whole body (`prosrc`), so a later redefinition that
+     * keeps the call but disables it (a comment, a dead branch) fails this check. A deliberate backstop change
+     * updates its pin in the same change.
+     *
+     * @var array<string, string>
+     */
+    public const KNOWN_SAME_PERSON_BODIES = [
+        'employee_account_link_same_person_accounts' => '852951d0ba4932c3f839aea54b1a7ff7',
+        'employee_account_link_correction_same_person' => '6af30c7d4b3f86e757f22467159c9647',
+        'payroll_runs_refuse_participant_approval' => '3eb3d5d5495a4b21dc21daca99b97b28',
+        'payroll_posting_attestations_guard' => '91407209205c35dd6459776260f257e2',
+        'payroll_reversal_reconciliation_reviews_guard' => 'ae7a3cce9568a8fe48b61d2b55ab489f',
+        'leave_decisions_refuse_submitter' => '3823d9e8a758efa89e2051388ac0ac83',
+        'hr_employment_separation_cases_guard' => '0d361816ddad02297dedca0b4141d387',
+        'employee_account_link_corrections_guard' => 'db128a19cb8591f854679f691a507234',
+        'staff_attendance_locked_corrections_guard' => 'e4e5c7af3e955ef0c31875efe62b87f4',
+    ];
+
+    private function knownSamePersonGuardsCheck(): CheckResult
+    {
+        $owner = (string) DB::selectOne("select pg_get_userbyid(relowner) as o from pg_class where oid = 'public.migrations'::regclass")->o;
+        $missing = [];
+        foreach (['employee_account_link_same_person_accounts' => 'p_school uuid, p_user uuid', 'employee_account_link_correction_same_person' => 'p_school uuid, p_first uuid, p_second uuid'] as $relation => $args) {
+            $fn = DB::selectOne(
+                "select p.prosecdef, p.provolatile, coalesce(array_to_string(p.proconfig, '|'), '') as config, pg_get_userbyid(p.proowner) as owner,
+                        has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec,
+                        exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_exec
+                 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = ? and pg_get_function_identity_arguments(p.oid) = ?",
+                [self::RUNTIME_ROLE, $relation, $args],
+            );
+            if ($fn === null || $fn->prosecdef || $fn->provolatile !== 's' || $fn->config !== 'search_path=pg_catalog, public, pg_temp'
+                || $fn->owner !== $owner || ! $fn->runtime_exec || $fn->public_exec) {
+                $missing[] = $relation;
+            }
+        }
+        foreach (self::KNOWN_SAME_PERSON_GUARDS as $trigger => [$table, $function, $relation]) {
+            $row = DB::selectOne(
+                "select t.tgenabled, p.proname, p.prosrc from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
+                 where not t.tgisinternal and c.relnamespace = 'public'::regnamespace and c.relname = ? and t.tgname = ?",
+                [$table, $trigger],
+            );
+            if ($row === null || $row->tgenabled !== 'O' || $row->proname !== $function || ! str_contains((string) $row->prosrc, 'public.'.$relation.'(')) {
+                $missing[] = $trigger;
+            }
+        }
+
+        foreach (self::KNOWN_SAME_PERSON_BODIES as $function => $hash) {
+            $bodies = DB::select("select md5(prosrc) as h from pg_proc where pronamespace = 'public'::regnamespace and proname = ?", [$function]);
+            if (count($bodies) !== 1 || $bodies[0]->h !== $hash) {
+                $missing[] = $function.':body';
+            }
+        }
+
+        return CheckResult::of('known_same_person_guards', $missing === [], $missing === [] ? '' : implode(', ', $missing));
+    }
+
     /**
      * HR.R1-C7 (OD-HR-25): no link change without history, and the runtime role reads it only.
      */

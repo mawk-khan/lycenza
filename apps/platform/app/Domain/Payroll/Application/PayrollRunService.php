@@ -2,11 +2,13 @@
 
 namespace App\Domain\Payroll\Application;
 
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\Exceptions\ConcurrentRunApprovalConflictException;
 use App\Domain\Payroll\Application\Exceptions\DuplicateRegularRunException;
 use App\Domain\Payroll\Application\Exceptions\InvalidCorrectionTargetException;
 use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
+use App\Domain\Payroll\Application\Exceptions\KnownSamePersonDecisionException;
 use App\Domain\Payroll\Application\Exceptions\NegativeNetPayException;
 use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
@@ -84,6 +86,7 @@ class PayrollRunService
         private readonly PayrollSelfBeneficiaries $beneficiaries,
         private readonly CorrectionTargetGuard $correctionTarget,
         private readonly SchoolOperationalGuard $operational,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     public const WORKFLOW = 'payroll_runs';
@@ -655,8 +658,31 @@ class PayrollRunService
         if (! $this->makerChecker->permits($approver, $participants)) {
             throw new SelfApprovalNotAllowedException($run->id);
         }
+        // HR.R1-C34 (WO-16, C33): nor an account known to be the same person as a participant. Under the
+        // shared compensation lock, which every link change takes exclusively (trg_employees_user_link_payroll_lock),
+        // so the link history read here is the one the decision commits on. Backed by
+        // payroll_runs_participant_approval_guard.
+        if ($this->knownSamePersonParticipation($run, $approver, $participants) !== null) {
+            throw new KnownSamePersonDecisionException($run->id);
+        }
 
         return $participants;
+    }
+
+    /**
+     * HR.R1-C34 (WO-16): the participation an account known to be the same person as $actor holds in this
+     * run, or null. For the review packet and the decision; read in the School's context.
+     */
+    public function knownSamePersonParticipation(PayrollRun $run, User $actor, ?ApprovalParticipants $participants = null): ?string
+    {
+        return $this->context->withSchool($run->school, function () use ($run, $actor, $participants): ?string {
+            // One indexed read in the common case: no account is known to be this actor, so nothing else is read.
+            if ($this->selfAdministration->knownSamePersonAccounts($run->school_id, $actor->id) === []) {
+                return null;
+            }
+
+            return $this->selfAdministration->knownSamePersonParticipation($run->school_id, $actor, ($participants ?? $this->participants($run))->all());
+        });
     }
 
     /** ORG.8B: adjustments serialize with calculate() and approve() on the run row; a decided run is not editable. */

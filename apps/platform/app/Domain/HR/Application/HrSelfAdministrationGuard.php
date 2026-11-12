@@ -74,6 +74,51 @@ class HrSelfAdministrationGuard
     }
 
     /**
+     * HR.R1-C34 (WO-16, C33): the OTHER accounts known to be the same person as $userId -- each has an
+     * uncorrected link to an Employee $userId also has an uncorrected link to. The application form of the
+     * SQL `employee_account_link_same_person_accounts()` the database guards call. Read inside the School's
+     * context (RLS shows only its links). Empty means unknown, never proof of two people.
+     *
+     * @return list<string>
+     */
+    public function knownSamePersonAccounts(string $schoolId, string $userId): array
+    {
+        return EmployeeAccountLink::query()->where('school_id', $schoolId)->whereNull('voided_at')->where('user_id', '<>', $userId)
+            ->whereIn('employee_id', EmployeeAccountLink::query()->where('school_id', $schoolId)->where('user_id', $userId)->whereNull('voided_at')->select('employee_id'))
+            ->distinct()->orderBy('user_id')->pluck('user_id')->map(fn ($id): string => (string) $id)->all();
+    }
+
+    /**
+     * HR.R1-C34 (WO-16): whether a decision by $decider is taken by a known same person as one of the
+     * item's material participants -- the participation an alias of $decider holds, or null. The decider's
+     * own account is MakerCheckerPolicy's; this adds only accounts known to be the same person.
+     *
+     * @param  array<string, list<string>>  $participants  participation => User ids, the map of an approval item's participants
+     */
+    public function knownSamePersonParticipation(string $schoolId, User $decider, array $participants): ?string
+    {
+        $aliases = $this->knownSamePersonAccounts($schoolId, $decider->id);
+        foreach ($participants as $participation => $userIds) {
+            if (array_intersect($aliases, array_map('strval', $userIds)) !== []) {
+                return $participation;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * HR.R1-C34 (WO-16): whether $decider, or an account known to be the same person, has an uncorrected
+     * link -- current or ended -- to this Employee: the decider is, as far as anything here knows, that
+     * Employee. Stricter than the current link (ownsEmployment()): an unlink does not change who a person is.
+     */
+    public function isKnownToBeEmployee(User $decider, string $schoolId, string $employeeId): bool
+    {
+        return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('employee_id', $employeeId)->whereNull('voided_at')
+            ->whereIn('user_id', [$decider->id, ...$this->knownSamePersonAccounts($schoolId, $decider->id)])->exists();
+    }
+
+    /**
      * HR.R1-C7 (OD-HR-25): whether $actor ever had a link to this Employee, corrected
      * or not. Stricter than hasUncorrectedLink(), for one purpose: nobody tied to an
      * Employee's identity in any way requests or decides a correction of its links.

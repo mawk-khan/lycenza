@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Application;
 
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
+use App\Domain\Payroll\Application\Exceptions\KnownSamePersonDecisionException;
 use App\Domain\Payroll\Application\Exceptions\ReconciliationAcceptanceRequiredException;
 use App\Domain\Payroll\Application\Exceptions\ReconciliationAlreadyReviewedException;
 use App\Domain\Payroll\Application\Exceptions\ReconciliationEvidenceStaleException;
@@ -52,6 +54,7 @@ final class PayrollReversalReconciliationService
         private readonly PayrollSelfBeneficiaries $beneficiaries,
         private readonly PayrollRunService $runs,
         private readonly AuditRecorder $audit,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     public function review(School $school, string $reconciliationId, User $actor, FreshMfaProof $mfa, string $expectedVersion, bool $accepted): PayrollReversalReconciliationReview
@@ -76,6 +79,7 @@ final class PayrollReversalReconciliationService
                     }
                     match ($this->conflict($obligation, $run, $actor)) {
                         'not_independent' => throw new ReconciliationReviewerNotIndependentException($obligation->id),
+                        'same_person' => throw new KnownSamePersonDecisionException($obligation->id),
                         'self_beneficiary' => throw new SelfBeneficiaryConflictException($run->id),
                         default => null,
                     };
@@ -135,16 +139,31 @@ final class PayrollReversalReconciliationService
      * first, so the closed reason never reveals that someone who took part is also
      * paid by the run.
      *
-     * @return 'not_independent'|'self_beneficiary'|null
+     * HR.R1-C34 (WO-16, C33): then an account known to be the same person as any of them ('same_person',
+     * backed by payroll_reversal_reconciliation_reviews_guard), under the shared compensation lock every
+     * link change takes exclusively.
+     *
+     * @return 'not_independent'|'same_person'|'self_beneficiary'|null
      */
     public function conflict(PayrollReversalReconciliation $obligation, PayrollRun $run, User $actor): ?string
     {
         $subject = $this->beneficiaries->ofObligation($obligation->school_id, $obligation->id, $actor->id);
-        if ($actor->id === $run->approved_by_user_id || $actor->id === $obligation->reversed_by_user_id
-            || $subject->authored || $this->runs->participants($run)->participationOf($actor->id) !== null) {
+        if ($this->tookPart($obligation, $run, $actor->id, $subject->authored)) {
             return 'not_independent';
+        }
+        foreach ($this->selfAdministration->knownSamePersonAccounts($obligation->school_id, $actor->id) as $alias) {
+            if ($this->tookPart($obligation, $run, $alias, $this->beneficiaries->ofObligation($obligation->school_id, $obligation->id, $alias)->authored)) {
+                return 'same_person';
+            }
         }
 
         return $subject->conflicted ? 'self_beneficiary' : null;
+    }
+
+    /** The run's makers, its approver, the reverser, or an author of a change in the obligation. */
+    private function tookPart(PayrollReversalReconciliation $obligation, PayrollRun $run, string $userId, bool $authored): bool
+    {
+        return $userId === $run->approved_by_user_id || $userId === $obligation->reversed_by_user_id
+            || $authored || $this->runs->participants($run)->participationOf($userId) !== null;
     }
 }

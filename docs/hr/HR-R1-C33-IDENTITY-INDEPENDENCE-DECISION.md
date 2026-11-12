@@ -2,6 +2,8 @@
 
 **Decision only. Nothing is built here.** HR.R1 stays OPEN. The Identity MEDIUM's development part stays a MAJOR blocker under C27-C until WO-16 is built and published.
 
+**Status (HR.R1-C34, 2026-11-12): WO-16 built** (`HR-R1-C34-WO16-KNOWN-SAME-PERSON.md`). The attestor check sits in `trg_payroll_posting_attestations_guard`, where the attestor is recorded, rather than `trg_payroll_runs_posting_independence` (§6 table); nothing weaker results. RG-ID-1 and the handoffs are unchanged.
+
 | | |
 |---|---|
 | Baseline | `69ef41c0` = `main` = `origin/main`; `63015a50` (C32 code) an ancestor; clean tree; the historical stash and `integration/e16-r2` preserved |

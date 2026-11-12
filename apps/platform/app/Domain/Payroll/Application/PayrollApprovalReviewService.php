@@ -226,6 +226,9 @@ final class PayrollApprovalReviewService
         // Shown here only; the decision itself is MakerCheckerPolicy's (PayrollRunService::approve()).
         if (app(PayrollRunService::class)->participants($run)->participationOf($actor->id) !== null) {
             $blocking[] = ['code' => 'PAYROLL_SELF_APPROVAL', 'message' => 'You prepared, calculated, adjusted or changed compensation for this run; another person must approve it.'];
+        } elseif (app(PayrollRunService::class)->knownSamePersonParticipation($run, $actor) !== null) {
+            // HR.R1-C34 (WO-16): shown here only; the decision is PayrollRunService::approve() and the database.
+            $blocking[] = ['code' => 'PAYROLL_SAME_PERSON_DECISION', 'message' => 'One of your accounts is known to belong to a person who prepared, calculated, adjusted or changed compensation for this run; another person must approve it.'];
         }
         // HR.R1-C6 (OD-HR-24): shown here only; the decision itself is PayrollRunService::approve() and the database.
         if ($latest !== null && $latest->compensation_sources_recorded && $run->run_kind === 'regular') {

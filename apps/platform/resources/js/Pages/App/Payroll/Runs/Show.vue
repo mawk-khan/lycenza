@@ -94,7 +94,12 @@ interface Props {
     postingIndependence: {
         phase: 'before_posting' | 'after_posting' | 'attested';
         blockedReason:
-            'not_independent' | 'self_beneficiary' | 'cannot_review' | 'needs_mfa' | null;
+            | 'not_independent'
+            | 'same_person'
+            | 'self_beneficiary'
+            | 'cannot_review'
+            | 'needs_mfa'
+            | null;
         evidenceVersion: string | null;
         attestation: { attestedBy: string | null; attestedAt: string | null } | null;
         details: {
@@ -724,6 +729,15 @@ const reversalPosting = computed(
                 >
                     You took part in this run, so you cannot attest to it. An independent person
                     with payroll.runs.post must post it.
+                </p>
+                <p
+                    v-else-if="independence.blockedReason === 'same_person'"
+                    class="mt-2"
+                    role="alert"
+                >
+                    One of your accounts is known to belong to a person who took part in this run,
+                    so you cannot attest to it. An independent person with payroll.runs.post must
+                    post it.
                 </p>
                 <p
                     v-else-if="independence.blockedReason === 'self_beneficiary'"
