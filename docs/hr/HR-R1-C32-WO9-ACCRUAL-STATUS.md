@@ -133,4 +133,12 @@ Cost is linear in the roster and in the months due; there is no N+1 per employme
 
 Final local state: the WO-9 tests and the School-lifecycle guard pass (36); Leave 203; Pint and Larastan clean.
 
-Publication evidence is recorded in the evidence commit.
+**Publication.**
+- **Candidate `63015a50`, CI run 43307544720: green on its first attempt, no reruns.**
+  - shards: 2,948 × 4;
+  - **11,792 tests, 467,236 assertions, 0 failures, 1 skip (ESI-12)**;
+  - coverage union green;
+  - static and frontend, full-history secrets, supply chain, integrity and production images all green.
+- **Published** with `lycenza-ci publication-check --candidate 63015a50… --push` on 2026-11-12. E16 last valid day 2026-11-28, no problems. `origin/main` = `63015a50`; main CI run **43311721901**.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Not needed:** no migration (so no rollback proof), and no change to the DDEV database.
