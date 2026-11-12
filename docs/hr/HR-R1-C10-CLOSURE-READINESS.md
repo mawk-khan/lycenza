@@ -47,7 +47,7 @@ hold the evidence with file and line.
 | S-16 | Open for `staff_holidays` | HR owner | D-6 |
 | X-1 | Write paths and pickers FIXED. Rule 4 drift remains in Timetable, Transport and Visitor controllers | Architecture | With D-2 |
 | M-1 | Production prerequisite: an unlinked staff parent is not detected | Owner policy | Before production |
-| Same-person identity | **OPEN, MEDIUM.** Two accounts do not prove two people, and two HR holders can collude | Identity and security owners | A decision before real Payroll |
+| Same-person identity | **OPEN, MEDIUM; DECIDED 2026-11-12 (HR.R1-C33).** Two accounts do not prove two people, and two HR holders can collude. Known-same-person refusals in HR and Payroll decided (WO-16, not built); the unknown residual recorded with a School assertion before real Payroll (RG-ID-1) | Identity and security owners | WO-16 for development; RG-ID-1 before real Payroll |
 
 ## 4. Blockers
 

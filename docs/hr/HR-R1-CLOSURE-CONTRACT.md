@@ -316,6 +316,14 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Decision recorded (HR.R1-C33, 2026-11-12): person-level identity decided, nothing built.**
+- **Reproduced on `69ef41c0`:** one person's second, known-same account approved a run their first account prepared, because the shared maker/checker compares account ids only.
+- **Decided by the Identity and Security owner:**
+  - known-same-person refusals in the HR family and Payroll, specified as WO-16 (not built), with the five other domains' workflows handed to their owners;
+  - the unknown residual recorded, with a School's out-of-band one-account-per-person assertion before real Payroll (RG-ID-1);
+  - evaluation at the decision, never retroactive.
+- **Still blocking under C27-C:** the Identity MEDIUM's development part, until WO-16 is published. Unchanged: R1-02 PARTIAL, every Legal, DPO and Security gate, the capability map (361 rows), the 61 audit identifiers. No baseline is selected. HR.R1 stays OPEN (`HR-R1-C33-IDENTITY-INDEPENDENCE-DECISION.md`).
+
 **Evidence recorded (HR.R1-C32, 2026-11-12): WO-9 built; LVA-1 and TRR-2 closed for development.** A read-only status per leave type and month, from the recorded runs and the canonical evaluation, in the accrual workspace and `leave:accrual-status`; accrual stays manual (`HR-R1-C32-WO9-ACCRUAL-STATUS.md`).
 
 - **Proven:** two real sessions (a held first run is invisible and reads `missed`; a committed `processing` run reads `running` without waiting), a backdated employment reads `incomplete`, School-local boundaries for both timings, and reading writes nothing.
