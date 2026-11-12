@@ -142,7 +142,35 @@ Suites, static checks, rollback proof, CI and publication: §9.
 - **Cause:** registers outside the HR, Postgres and Retention suites run locally. Not a code defect.
 - **Fix:** the decider is declared in `ApprovalWorkflowRegistry::NOT_WORKFLOWS` as a direct HR attestation (no request, no second decider, C29-N1). The reference counts move by one.
 
-The final candidate, its CI and the publication are recorded in the evidence commit.
+- **Published candidate `3ad20770`** (code `90ddf328` plus the register fix-up). Candidate CI run **43270438958** passed on its first attempt for this SHA:
+  - shards: 2,929 / 2,930 / 2,929 / 2,930;
+  - **11,718 tests, 467,527 assertions, 0 failures, 1 skip (ESI-12)**;
+  - shard coverage (union = canonical suite) green;
+  - static, secrets (full-history gitleaks), supply chain, integrity and production images all green.
+
+  The C26-N2 flake did not recur.
+- **Publication:** `lycenza-ci publication-check --candidate 3ad20770... --push` on 2026-11-12 (E16 last valid day 2026-11-28, no problems). `origin/main` = `3ad20770`; main CI run **43274773490**.
+- **Regression counter:** this exact-SHA full suite is the canonical regression for the publication (ADR 0072 §28.8), so the counter is 0/5.
+- **Local, before the candidate:**
+  - suites: HR 1,486; Postgres 1,259; Retention 287 (4 object-storage skips, run in CI);
+  - focused re-runs: 76 + 20 + 47 + 13;
+  - rollback proof IDENTICAL (375 schema lines removed and restored), verifier `failed=0`;
+  - Pint, Larastan, whitespace, gitleaks, vue-tsc, ESLint, Prettier.
+- **DDEV development database:** migrated forward (393 migrations), verifier `failed=0` (`hr_credential_verification_invariants`, `hr_family_trigger_functions`, `hr_family_runtime_privileges` PASS). The October 2026 Staff Attendance lock is intact, and the existing credentials are unchanged (unverified, revision 1).
+- **Browser UAT (DDEV, `hr.payroll@example.test`, synthetic qualification on a demo Employee), 11/11:**
+  1. Created: unverified, version 1.
+  2. Verified version 1.
+  3. A second tab stayed open on version 1 while the record was edited through the service: its Reject was refused and announced (`role="alert"`).
+  4. The record now reads unverified at version 2, with the version 1 decision kept.
+  5. The history marks version 1 "(an earlier version)". Step 6 first failed on my own selector, which picked another row; re-checked scoped to the row: pass.
+  6. Re-verified version 2: two decisions recorded.
+  7. Another School's URL returned 404, and a member without the capability got 403.
+
+  The two synthetic qualifications were then archived through the service; their decisions stay.
+- **Accessibility:**
+  - axe-core 4.10.2 on the profile in three states (stale refusal shown, history open, version 2 verified): **0 violations**.
+  - The history summary is keyboard-focusable.
+  - **No manual screen-reader review was performed.**
 
 ## 10. Open after C29
 
