@@ -320,6 +320,8 @@ final class ApprovalWorkflowRegistry
      * with the reason. Anything else decision-shaped must be a workflow.
      */
     public const NOT_WORKFLOWS = [
+        // HR.R1-C29 (C14-N5): one person verifies or rejects one revision directly; no request, no second decider (C29-N1).
+        'employee_credential_verifications.decided_by_user_id' => 'who verified or rejected a revision of a qualification or certification: a direct HR attestation under hr.employees.qualifications.manage, never a request decided by a second person',
         // HR.R1-C6 (OD-HR-23): declared in DIRECT_ASSURED. Nothing is requested, and nothing executes because of it.
         'payroll_reversal_reconciliation_reviews.reviewed_by_user_id' => 'who independently reviewed a post-posting reversal (an evidence statement that changes no run, never a request decided by a second person)',
         'attendance_sessions.submitted_by_user_id' => 'who submitted a Student attendance register; a register is recorded, never requested or decided by a second person',

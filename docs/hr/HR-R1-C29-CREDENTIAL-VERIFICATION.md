@@ -138,7 +138,11 @@ Suites, static checks, rollback proof, CI and publication: §9.
 
 ## 9. Publication evidence
 
-Recorded after publication in the evidence commit.
+- **First candidate `90ddf328`, CI run 43264296121: FAILED on attempt 1.** Shards 2 and 4 passed. Shard 1 failed one test, `UserReferenceCatalogTest` (the decider column is a new `users` reference, 193 → 194). Shard 3 failed one test, `ApprovalWorkflowRegistryTest` (`decided_by_user_id` is decision-shaped).
+- **Cause:** registers outside the HR, Postgres and Retention suites run locally. Not a code defect.
+- **Fix:** the decider is declared in `ApprovalWorkflowRegistry::NOT_WORKFLOWS` as a direct HR attestation (no request, no second decider, C29-N1). The reference counts move by one.
+
+The final candidate, its CI and the publication are recorded in the evidence commit.
 
 ## 10. Open after C29
 
