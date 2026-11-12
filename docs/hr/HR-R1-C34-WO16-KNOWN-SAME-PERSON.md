@@ -122,4 +122,3 @@ A separate reviewer read the final code (no file changed, nothing run). **No HIG
 | C34-N1 (LOW), C34-N2 (INFO), C34-N3 (INFO) | Open, recorded |
 | Seven P3 findings (HRC-4, HRC-8, LVA-4, XRP-3, XRP-4, TRR-6, TRR-8), R1-02 PARTIAL, C32-N1 to N4, C30-N1/N2, C29-N1/N2, C28-N1/N3/N4, C24-N1, C20-N1/N2, C18-A12 | Unchanged |
 | Legal, DPO and Security gates; capability map (361); 61 audit identifiers; five closure baselines | Unchanged; baselines unselected |
-
