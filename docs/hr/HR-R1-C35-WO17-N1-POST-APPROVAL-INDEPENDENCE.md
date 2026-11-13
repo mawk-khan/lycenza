@@ -137,3 +137,14 @@ Its five LOW documentation items were fixed: the inventory row (11 replacements)
 | WO-19 to WO-22 | Not started |
 | Seven P3 decisions, other P3/LOW findings, RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
 | Development database | 396 migrations; this unit's `2027_02_22_090000` is not applied there (D-WO18-2 covered the three earlier ones). Forward-migrating it needs the owner's word |
+
+## 6. Publication
+
+- **Candidate `f58b2eeb`, CI run 43462474515: green on its first attempt, no reruns.**
+  - **11,861 tests (11,845 + the 16 new), 467,825 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards, coverage union proven equal to the canonical inventory;
+  - static and frontend, full-history secrets, supply chain, integrity and production images all green.
+- **The assertion total is 593 below WO-18's** although 16 tests were added. Recent canonical runs moved by -22 (WO-17), +995 (WO-18) and -593 here: tests that assert per data row vary between runs. That explanation is not traced test by test; it is recorded as a limitation, not proven.
+- **Published** with `lycenza-ci publication-check --candidate f58b2eeb… --push` on 2026-11-13. E16 last valid day 2026-11-28, no problems. `origin/main` = `f58b2eeb`.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database:** unchanged at 396; this unit's migration is not applied there (needs the owner's word).
