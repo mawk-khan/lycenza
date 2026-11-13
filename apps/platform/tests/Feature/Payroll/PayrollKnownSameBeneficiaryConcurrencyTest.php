@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payroll;
 
+use App\Domain\HR\Application\AccountLinks\EmployeeAccountLinkCorrectionService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -264,5 +265,27 @@ class PayrollKnownSameBeneficiaryConcurrencyTest extends TestCase
 
         $this->assertSame(['ok', 'ok'], [$holder, $contender]);
         $this->assertSame(1, $this->rowCount('payroll_reversal_reconciliation_reviews', 'reconciliation_id', $o->id));
+    }
+
+    /** HR.R1-C35 WO-18 (C34-N2): a voiding correction is ordered against the approval by the compensation lock. */
+    #[Test]
+    public function a_voiding_correction_held_open_is_seen_by_a_waiting_approval_which_then_approves(): void
+    {
+        $this->assign('2026-12-01', '60000.00');
+        $december = $this->calculatedRun('2026-12-01');
+        $this->inSchool($this->school, fn () => app(EmployeeService::class)->linkUser($this->duplicate->fresh(), $this->d->id, $this->hr));
+        $a = (string) $this->inSchool($this->school, fn () => DB::table('employee_account_links')->where('employee_id', $this->employee->id)->whereNull('ended_at')->value('user_id'));
+        $linkId = (string) $this->inSchool($this->school, fn () => DB::table('employee_account_links')->where('employee_id', $this->duplicate->id)->where('user_id', $a)->value('id'));
+        $correction = $this->requestCorrection($this->inSchool($this->school, fn () => Employee::query()->findOrFail($this->duplicate->id)), $linkId, $this->linkedHrStaff($this->school));
+        $version = $this->inSchool($this->school, fn () => app(EmployeeAccountLinkCorrectionService::class)->version($this->school->id, $linkId));
+        $reviewer = $this->linkedHrStaff($this->school);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            ['php', __DIR__.'/../../Support/payroll-reconciliation-op.php', 'approve-correction', $this->school->id, $correction->id, $version, $reviewer->id],
+            $this->approveAsD($december),
+        );
+
+        $this->assertSame(['ok', 'approved'], [$holder, $contender], 'it waited for the correction, then D was no longer known to be the paid Employee');
+        $this->assertSame('approved', $this->runStatus($december));
     }
 }

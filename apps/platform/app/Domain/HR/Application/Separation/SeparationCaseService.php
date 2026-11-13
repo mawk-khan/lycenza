@@ -104,6 +104,12 @@ final class SeparationCaseService
                 });
             } catch (UniqueConstraintViolationException) {
                 throw SeparationException::conflict('SEPARATION_CASE_EXISTS', 'This employment already has a separation case in progress.');
+            } catch (QueryException $e) {
+                // WO-18 review L-1: the database's own refusal (a link that changed after the service read it).
+                if (str_contains($e->getMessage(), 'hr_employment_separation_own_case')) {
+                    throw self::ownCase();
+                }
+                throw $e;
             }
 
             $this->event($case, 'requested', $actor);
@@ -289,7 +295,15 @@ final class SeparationCaseService
                 throw SeparationException::conflict('SEPARATION_CLEARANCE_ALREADY_CLEARED', 'This clearance item was already cleared.');
             }
 
-            $item->forceFill(['status' => 'cleared', 'cleared_by_user_id' => $actor->id, 'cleared_at' => now()])->save();
+            try {
+                $item->forceFill(['status' => 'cleared', 'cleared_by_user_id' => $actor->id, 'cleared_at' => now()])->save();
+            } catch (QueryException $e) {
+                // HR.R1-C35 WO-18: the database's own refusal (a link that changed after the service read it).
+                if (str_contains($e->getMessage(), 'hr_separation_clearance_own_case')) {
+                    throw self::ownCase();
+                }
+                throw $e;
+            }
             EmploymentSeparationEvent::query()->create(['case_id' => $case->id, 'kind' => 'clearance_cleared', 'clearance_item_id' => $item->id, 'actor_user_id' => $actor->id, 'occurred_at' => now()]);
             $this->audit->school($school, 'hr.separation.clearance_cleared', actor: $actor, subject: $case, metadata: [
                 'clearanceItemId' => $item->id,
@@ -373,6 +387,11 @@ final class SeparationCaseService
         }
     }
 
+    private static function ownCase(): SeparationException
+    {
+        return SeparationException::forbidden('SEPARATION_OWN_CASE', 'One of your accounts is known to belong to the separating person; another person must do this.');
+    }
+
     private static function samePerson(): SeparationException
     {
         return SeparationException::forbidden('SEPARATION_SAME_PERSON_DECISION', 'One of your accounts is known to belong to the separating person or to whoever recorded this separation; another person must decide it.');
@@ -389,6 +408,13 @@ final class SeparationCaseService
 
         $this->placement->forPlacementChange($school, $employeeId);
         $this->selfAdministration->refuseOwnEmployee($actor, $employeeId, $operation);
+        // HR.R1-C35 WO-18 (C34-N3, D-C35-9): nor through an old (ended, uncorrected) or known-same account of the
+        // separating person, for every write. The decisions keep C34's own check and codes (assertMayDecide()).
+        // Backed by trg_employment_separation_cases_guard and trg_separation_clearance_items_guard.
+        if (! in_array($operation, ['separation.approve', 'separation.reject'], true)
+            && $this->selfAdministration->isKnownToBeEmployee($actor, $school->id, $employeeId)) {
+            throw self::ownCase();
+        }
 
         return EmploymentRecord::query()->whereKey($employmentRecordId)->lockForUpdate()->firstOrFail();
     }
@@ -425,6 +451,9 @@ final class SeparationCaseService
             // HR.R1-C34: the database's own same-person refusal (a link that changed after the service read it).
             if (str_contains($e->getMessage(), 'hr_employment_separation_same_person')) {
                 throw self::samePerson();
+            }
+            if (str_contains($e->getMessage(), 'hr_employment_separation_own_case')) {
+                throw self::ownCase();
             }
             throw $e;
         }

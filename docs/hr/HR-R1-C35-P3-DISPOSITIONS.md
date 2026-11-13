@@ -196,6 +196,8 @@ Engineering and product direction only; not legal, privacy or DPO approval.
 | D-C35-7 | XRP-3 | Defer to a TeachingAssignments checkpoint | TeachingAssignments owner | Recorded deferral, not failing | Before staging or a School above 1,000 staff | That checkpoint | Trigger as stated |
 | D-C35-8 | XRP-4 | Document as a known limit | Timetable, Transport owners | P3 closed (accepted alternative) | None | None | Rehire volume; an employment column |
 | D-C35-9 | C34-N3 | Extend "never one's own" person-level to every separation write and administrative leave withdraw/cancel (amends OD-HR-25 for HR) | HR, Identity, Security owner | Finding stays INFO until WO-18 | None | WO-18 | Any change to OD-HR-25 |
+| D-WO18-1 | WO17-N1 | MEDIUM (MAJOR); Option A, the post-decision independence functions treat a known-same account of the paid Employee like the Employee's own | Payroll, Identity, Security owner | NOT CLOSED until that unit publishes | Real Payroll waits as before | A separate unit after WO-18 | Any change to OD-HR-24/25 |
+| D-WO18-2 | Development database | Forward-migrate it through `pgsql_admin` after WO-18 publishes, then verify | Owner | None | None | Done in WO-18 §8 | — |
 | D-C35-10 | Other open P3/LOW findings | Disposition each individually before baseline selection | HR owner | Final PASS remains possible | None | Their dispositions | — |
 
 ## 10. Verdict and next checkpoint

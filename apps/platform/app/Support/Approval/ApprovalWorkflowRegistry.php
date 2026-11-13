@@ -31,7 +31,8 @@ namespace App\Support\Approval;
  *                    refused too. Enforced: ['check' => the class::method holding the service check, 'dbGuard'
  *                    => the trigger that backs it (DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS)], plus, for
  *                    Payroll (WO-17, C34-N1), 'beneficiaryCheck'/'beneficiaryGuard': the OD-HR-24 self-beneficiary
- *                    refusal, which matches a known-same account too; or
+ *                    refusal, which matches a known-same account too; plus, for separation and Leave (WO-18,
+ *                    C34-N3), 'ownCaseCheck'/'ownCaseGuards': "never one's own" for the other lifecycle writes; or
  *                    ['handoff' => the C33 handoff to the owning domain, decided there, never here]. Every
  *                    HR-family and Payroll entry is enforced (KnownSamePersonCoverageTest). Unknown (no shared
  *                    Employee) is never refused and never proof of two people (RG-ID-1).
@@ -182,7 +183,9 @@ final class ApprovalWorkflowRegistry
             'freshMfa' => [],
             'compatibility' => 'special_rules',
             // HR.R1-C34: nor an account known to be the submitter, or the requester through an uncorrected link, current or ended.
-            'knownSamePerson' => ['check' => 'App\Domain\Leave\Application\LeaveRequestService::assertMayDecide', 'dbGuard' => 'trg_leave_decisions_participant_guard'],
+            'knownSamePerson' => ['check' => 'App\Domain\Leave\Application\LeaveRequestService::assertMayDecide', 'dbGuard' => 'trg_leave_decisions_participant_guard',
+                // WO-18 (C34-N3): administrative withdraw and cancel of one's own leave, person-level.
+                'ownCaseCheck' => 'App\Domain\Leave\Application\LeaveRequestService::refuseKnownToBeRequester', 'ownCaseGuards' => ['trg_leave_decisions_participant_guard']],
             'note' => 'ORG.8D (§62). Two paths: manager = whole-School hr.leave.approve AND the current reporting line (ReportingLine::holdManagerOf, FOR SHARE, read at decision time; HR.3A: the dated employment-level line effective on the decision date); administrative = hr.leave.manage (any request, fallback). Authority read fresh; the submitter and the requester Employee never decide (service + leave_decisions_no_self_decision + leave_decisions_participant_guard). No Campus logic; Campus-granted managers and cross-Campus managers are owner decision OD-8.8 (not built). No step-up (NONE). Administrative writes never touch the actor\'s own employment (G-4).',
         ],
         // HR.12 (owner decision HR-061, 2026-11-04; ADR 0028 HR.12 amendment): HR records, ANOTHER person decides.
@@ -202,7 +205,9 @@ final class ApprovalWorkflowRegistry
             'freshMfa' => ['approve'],
             'compatibility' => 'as_is',
             // HR.R1-C34: nor an account known to be the recorder, or the separating Employee through an uncorrected link.
-            'knownSamePerson' => ['check' => 'App\Domain\HR\Application\Separation\SeparationCaseService::assertMayDecide', 'dbGuard' => 'trg_employment_separation_cases_guard'],
+            'knownSamePerson' => ['check' => 'App\Domain\HR\Application\Separation\SeparationCaseService::assertMayDecide', 'dbGuard' => 'trg_employment_separation_cases_guard',
+                // WO-18 (C34-N3): every separation write, person-level ("never one's own", OD-HR-25 amended for HR).
+                'ownCaseCheck' => 'App\Domain\HR\Application\Separation\SeparationCaseService::lockEmployment', 'ownCaseGuards' => ['trg_employment_separation_cases_guard', 'trg_separation_clearance_items_guard']],
             'note' => 'Approval moves the employment to notice_period; finalization (EmploymentService::end()) is a separate HR step on or after the planned last day. Terms (employment, reason, notice date, requester) are DB-immutable; nobody records, decides, finalizes or clears their own separation (trg_employment_separation_cases_guard).',
         ],
         'payroll_runs' => [

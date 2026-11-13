@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-18, 2026-11-13): C34-N3, C34-N5 and C34-N2 closed for development on publication; WO17-N1 rated MAJOR.**
+- **Built:** "never one's own" is person-level for every separation write and administrative leave withdraw/cancel, in service and database (OD-HR-25 amended for HR).
+- **Reproduced first:** 8 of 8 new behaviour tests failed before the fix.
+- **Reviewed:** independent review, no HIGH or MEDIUM; its LOWs fixed.
+- **WO17-N1:** reproduced (a run that, after a reversal, pays its approver's own raise first posts without attestation when a second account approved it); the owner rated it MEDIUM and authorized Option A as a separate unit. **HR.R1 is NOT CLOSED until it publishes** (`HR-R1-C35-WO18-OWN-CASE.md`).
+
 **Evidence recorded (HR.R1-C35 WO-17, 2026-11-13): C34-N1 and C34-N4 closed for development on publication.**
 - **Reproduced:** 4 of 8 new tests failed before the fix.
 - **Fixed:** the self-beneficiary refusal now matches a known-same account at approval, attestation and review, in service and database, at no extra query. Nine guard triggers are pinned by definition, and the pinned functions by body, mode and path.

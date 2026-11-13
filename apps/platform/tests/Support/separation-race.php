@@ -10,6 +10,7 @@ use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // HR.12: one separation-case operation in a GENUINELY separate OS process, so
 // SeparationConcurrencyTest can race real PostgreSQL transactions.
@@ -33,13 +34,14 @@ $cases = $app->make(SeparationCaseService::class);
 $proof = new FreshMfaProof($actor->id, CarbonImmutable::now());
 
 try {
-    $result = match ($op) {
+    // HR.R1-C35 WO-18: held open when the parent asks (CONCURRENCY_HOLD_DIR); otherwise runs as before.
+    $result = HeldTransaction::run(fn () => match ($op) {
         'approve' => $cases->approve($school, $caseId, (int) $version, $actor, $proof)->status,
         'finalize' => $cases->finalize($school, $caseId, (int) $version, $actor, $proof)->status,
         'cancel' => $cases->cancel($school, $caseId, (int) $version, SeparationCancelReason::RECORDED_IN_ERROR, $actor, $proof)->status,
         'clear' => $cases->clearItem($school, $caseId, (string) $itemId, $actor)->status,
         default => throw new InvalidArgumentException("unknown op {$op}"),
-    };
+    });
     echo 'ok:'.$result;
 } catch (SeparationException $e) {
     echo 'refused:'.$e->errorCode();

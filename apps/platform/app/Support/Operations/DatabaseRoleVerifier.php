@@ -1253,6 +1253,8 @@ class DatabaseRoleVerifier
         'trg_payroll_posting_attestations_self_beneficiary' => ['payroll_posting_attestations', 'payroll_posting_attestations_self_beneficiary_guard', 'employee_account_link_same_person_accounts', 'a08d1181b3cbeeedbad1137ad3382976'],
         'trg_leave_decisions_participant_guard' => ['leave_decisions', 'leave_decisions_refuse_submitter', 'employee_account_link_same_person_accounts', 'd9c14d4d59a6aca53ed3ac4dc4d980ce'],
         'trg_employment_separation_cases_guard' => ['employment_separation_cases', 'hr_employment_separation_cases_guard', 'employee_account_link_same_person_accounts', 'ffd7a3dd40a02c10c40427566d1821e8'],
+        // WO-18 (C34-N3): whoever clears a clearance item is never the separating person through any known account.
+        'trg_separation_clearance_items_guard' => ['separation_clearance_items', 'hr_separation_clearance_items_guard', 'employee_account_link_same_person_accounts', 'cc68ae994237e4ba8bb07a58f2ca9352'],
         'trg_employee_account_link_corrections_guard' => ['employee_account_link_corrections', 'employee_account_link_corrections_guard', 'employee_account_link_correction_same_person', '9b0c5c4796eee271713cef0a69fe67ed'],
         'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections', 'staff_attendance_locked_corrections_guard', 'employee_account_link_correction_same_person', 'a5286fbc424f1805f5b27e9c775514f5'],
     ];
@@ -1273,8 +1275,11 @@ class DatabaseRoleVerifier
         'payroll_reversal_reconciliation_reviews_guard' => 'ad3751c777e3b97a875f679d89d871ee',
         'payroll_runs_self_beneficiary_guard' => '082cd4318c5c05b7bbc421d09c3897d6',
         'payroll_posting_attestations_self_beneficiary_guard' => '00fe114944f09eaeeef69f898c3b7e62',
-        'leave_decisions_refuse_submitter' => '3823d9e8a758efa89e2051388ac0ac83',
-        'hr_employment_separation_cases_guard' => '0d361816ddad02297dedca0b4141d387',
+        // WO-18: administrative withdraw/cancel of one's own leave (was 3823d9e8...).
+        'leave_decisions_refuse_submitter' => '3e7a2304d3db03c105f25bb8b29c6008',
+        // WO-18: every separation write, person-level (was 0d361816...).
+        'hr_employment_separation_cases_guard' => 'f666844c83972d5539fd2c5f37e0301b',
+        'hr_separation_clearance_items_guard' => 'ace7fa43cb6eb2ad7238460e0ced5a04',
         'employee_account_link_corrections_guard' => 'db128a19cb8591f854679f691a507234',
         'staff_attendance_locked_corrections_guard' => 'e4e5c7af3e955ef0c31875efe62b87f4',
     ];

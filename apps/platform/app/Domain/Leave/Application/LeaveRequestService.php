@@ -234,6 +234,7 @@ class LeaveRequestService
             if ($path === 'administrative') {
                 $this->authority->requireCurrent($actor, LeaveCapabilities::MANAGE, $school);
                 $this->refuseOwnEmployment($school, $actor, $request->employment_record_id);
+                $this->refuseKnownToBeRequester($school, $actor, $request);
             }
             if ($owner !== null && $owner->asOf >= $request->starts_on->toDateString()) {
                 throw LeaveException::conflict('LEAVE_SELF_CANCEL_STARTED', 'Leave that has started can only be cancelled by an administrator.');
@@ -371,6 +372,7 @@ class LeaveRequestService
             } elseif ($path === 'administrative') {
                 $this->authority->requireCurrent($actor, LeaveCapabilities::MANAGE, $school);
                 $this->refuseOwnEmployment($school, $actor, $request->employment_record_id);
+                $this->refuseKnownToBeRequester($school, $actor, $request);
             }
 
             $days = $decision === 'approved' ? $this->charge($school, $request, $actor) : [];
@@ -499,6 +501,23 @@ class LeaveRequestService
         return LeaveException::forbidden('LEAVE_SAME_PERSON_DECISION', 'One of your accounts is known to belong to the requester or to whoever submitted this request; another person must decide it.');
     }
 
+    /**
+     * HR.R1-C35 WO-18 (C34-N3, D-C35-9): an administrative withdraw or cancel is never taken through an old
+     * (ended, uncorrected) or known-same account of the requester. Backed by trg_leave_decisions_participant_guard.
+     * Self-service (`withdrawOwn`, `cancelOwn`) is the requester's own path and is unchanged.
+     */
+    private function refuseKnownToBeRequester(School $school, User $actor, LeaveRequest $request): void
+    {
+        if ($this->selfAdministration->isKnownToBeEmployee($actor, $school->id, $request->employee_id)) {
+            throw self::ownLeave();
+        }
+    }
+
+    private static function ownLeave(): LeaveException
+    {
+        return LeaveException::forbidden('LEAVE_OWN_LEAVE', 'One of your accounts is known to belong to this employee; another administrator must do this.');
+    }
+
     /** G-4: the administrative path never acts on the actor's own employment (self-service does). */
     private function refuseOwnEmployment(School $school, User $actor, string $employmentRecordId): void
     {
@@ -568,6 +587,9 @@ class LeaveRequestService
             }
             if (str_contains($e->getMessage(), 'leave_decisions_same_person')) {
                 throw self::samePerson();
+            }
+            if (str_contains($e->getMessage(), 'leave_decisions_own_leave')) {
+                throw self::ownLeave();
             }
             if (str_contains($e->getMessage(), 'leave_decisions_participant_guard')) {
                 throw LeaveException::forbidden('LEAVE_PARTICIPANT_DECISION', 'You submitted this request; another person must decide it.');

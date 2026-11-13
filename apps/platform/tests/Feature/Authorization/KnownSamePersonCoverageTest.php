@@ -78,6 +78,9 @@ class KnownSamePersonCoverageTest extends TestCase
                 if ($w['domain'] === 'Payroll') {
                     $this->assertArrayHasKey('beneficiaryCheck', $w['knownSamePerson'], "{$key}: WO-17, the self-beneficiary refusal covers known-same accounts");
                 }
+                if (in_array($key, ['leave_requests', 'employment_separation_cases'], true)) {
+                    $this->assertArrayHasKey('ownCaseCheck', $w['knownSamePerson'], "{$key}: WO-18, never one's own is person-level");
+                }
             } else {
                 $this->assertSame(['handoff'], array_keys($w['knownSamePerson']), "{$key}: outside HR and Payroll it is the owning domain's decision");
                 $handoffs[$key] = $w['knownSamePerson']['handoff'];
@@ -94,7 +97,7 @@ class KnownSamePersonCoverageTest extends TestCase
     {
         $guards = [];
         foreach ($this->enforced() as $key => $declared) {
-            foreach (array_filter([$declared['check'], $declared['beneficiaryCheck'] ?? null]) as $check) {
+            foreach (array_filter([$declared['check'], $declared['beneficiaryCheck'] ?? null, $declared['ownCaseCheck'] ?? null]) as $check) {
                 [$class, $method] = explode('::', $check);
                 $reflection = new ReflectionMethod($class, $method);
                 $body = implode('', array_slice(file((string) $reflection->getFileName()), $reflection->getStartLine() - 1, $reflection->getEndLine() - $reflection->getStartLine() + 1));
@@ -108,6 +111,9 @@ class KnownSamePersonCoverageTest extends TestCase
             $guards[] = $declared['dbGuard'];
             if (isset($declared['beneficiaryGuard'])) {
                 $guards[] = $declared['beneficiaryGuard'];
+            }
+            foreach ($declared['ownCaseGuards'] ?? [] as $guard) {
+                $guards[] = $guard;
             }
         }
         $guards = array_values(array_unique($guards));

@@ -139,15 +139,29 @@ class SeparationKnownSamePersonTest extends TestCase
         $this->relink($own, $this->hr->id, null, $alt->id);
         $case = $this->record();
 
+        // C34-N5 (WO-18): refused BEFORE the correction, on both decisions, and nothing moves.
+        $this->assertSame('SEPARATION_SAME_PERSON_DECISION', $this->code(fn () => $this->cases()->approve($this->school, $case->id, $case->version, $alt, $this->freshMfaProofFor($alt))));
+        $this->assertSame('SEPARATION_SAME_PERSON_DECISION', $this->code(fn () => $this->cases()->reject($this->school, $case->id, $case->version, $alt)));
+        $this->assertSame(['requested', 'active'], $this->state($case));
+
         // An approved two-person correction voids the recorder's old link: the two accounts are no longer known to be one person.
         $link = EmployeeAccountLink::query()->where('employee_id', $own->id)->where('user_id', $this->hr->id)->firstOrFail();
         $this->correctLink(Employee::query()->findOrFail($own->id), $link->id);
-        $this->assertSame('ok', $this->code(fn () => $this->cases()->reject($this->school, $case->id, $case->version, $alt)));
 
+        // Allowed AFTER it, on both decisions (reject this case; approve a second one).
+        $this->assertSame('ok', $this->code(fn () => $this->cases()->reject($this->school, $case->id, $case->version, $alt)));
+        $after = $this->record();
+        $this->assertSame('approved', $this->cases()->approve($this->school, $after->id, $after->version, $alt, $this->freshMfaProofFor($alt))->status);
+
+    }
+
+    #[Test]
+    public function unknown_is_never_refused(): void
+    {
         // Unknown: an account sharing no Employee with anyone on the case decides.
-        $second = $this->record();
+        $case = $this->record();
         $unknown = $this->decider();
-        $this->assertSame('approved', $this->cases()->approve($this->school, $second->id, $second->version, $unknown, $this->freshMfaProofFor($unknown))->status);
+        $this->assertSame('approved', $this->cases()->approve($this->school, $case->id, $case->version, $unknown, $this->freshMfaProofFor($unknown))->status);
     }
 
     #[Test]
