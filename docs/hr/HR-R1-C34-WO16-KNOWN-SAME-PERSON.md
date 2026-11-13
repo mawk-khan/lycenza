@@ -122,3 +122,13 @@ A separate reviewer read the final code (no file changed, nothing run). **No HIG
 | C34-N1 (LOW), C34-N2 (INFO), C34-N3 (INFO) | Open, recorded |
 | Seven P3 findings (HRC-4, HRC-8, LVA-4, XRP-3, XRP-4, TRR-6, TRR-8), R1-02 PARTIAL, C32-N1 to N4, C30-N1/N2, C29-N1/N2, C28-N1/N3/N4, C24-N1, C20-N1/N2, C18-A12 | Unchanged |
 | Legal, DPO and Security gates; capability map (361); 61 audit identifiers; five closure baselines | Unchanged; baselines unselected |
+
+## 8. Publication
+
+- **First candidate `6fddaf74`, CI run 43327932968:** all four shards and the coverage union green; **failed Repository integrity** only (`git diff --check`: a blank line at the end of this record, edited after the local whitespace gate ran). Not rerun: corrected by a new commit.
+- **Candidate `6b881295`, CI run 43330907850: green on its first attempt, no reruns.**
+  - **11,816 tests, 467,445 assertions, 0 failures, 1 skip (ESI-12)**; four shards; coverage union proven equal to the canonical inventory;
+  - static and frontend, full-history secrets, supply chain, integrity and production images all green.
+- **Published** with `lycenza-ci publication-check --candidate 6b881295… --push` on 2026-11-13. E16 last valid day 2026-11-28, no problems. `origin/main` = `6b881295`.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression (11,792 → 11,816: the 24 new tests).
+- **Development database:** unchanged. Every test ran on the isolated test database; the rollback proof on its own isolated project.
