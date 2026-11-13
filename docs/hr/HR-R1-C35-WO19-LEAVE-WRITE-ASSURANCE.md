@@ -123,3 +123,15 @@ No migration, function, trigger, grant or verifier change. PostgreSQL cannot kno
 | WO-20 to WO-22 | Not started |
 | Development database | Unchanged: 396 migrations, `2027_02_22_090000` not applied (needs the owner's word); WO-19 has no migration |
 | Seven P3 decisions, other P3/LOW findings, RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
+
+## 9. Publication
+
+- **Candidate `3786968e`, CI run 43512976352: green on its first attempt, no reruns.**
+  - **11,887 tests (11,861 + the 26 new), 469,732 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards (2,972 / 2,972 / 2,972 / 2,971), coverage union proven equal to the canonical inventory;
+  - static and frontend, contracts and shared types, full-history secrets, supply chain, integrity and production images all green.
+- **The assertion total is 1,907 above WO17-N1's** (467,825). The 26 new tests account for part of it; data-dependent assertion counts vary between runs (-22, +995, -593 recently). Not traced test by test: a recorded limitation, as before.
+- Committed-range gitleaks (`5cbc6abd..3786968e`): no leaks.
+- **Published** with `lycenza-ci publication-check --candidate 3786968e… --push` on 2026-11-13. E16 last valid day 2026-11-28, no problems. `origin/main` = `3786968e`.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database:** unchanged at 396 migrations; WO-19 has none, and `2027_02_22_090000` (WO17-N1) is still unapplied there (needs the owner's word).
