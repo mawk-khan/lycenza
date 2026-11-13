@@ -91,7 +91,7 @@ No finding has new evidence that raises its severity.
 |---|---|---|
 | P1/HIGH | — | None open |
 | C14-N2, C14-N5, LVA-1/TRR-2 (D-3), person-level Identity | P2/MEDIUM | Closed for development (C30, C29, C32, C34) |
-| **C34-N1** | **MEDIUM (owner, D-C35-1)** | **Open MAJOR**, WO-17 |
+| **C34-N1** | **MEDIUM (owner, D-C35-1)** | **Open MAJOR**, WO-17. **Built by WO-17** (`HR-R1-C35-WO17-KNOWN-SAME-BENEFICIARY.md`): closed for development on its publication |
 
 **Other open findings.** Each is carried individually and dispositioned before baseline selection (D-C35-10):
 

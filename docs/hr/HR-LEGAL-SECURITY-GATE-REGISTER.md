@@ -300,7 +300,7 @@ No new identifier: this amends OD-HR-25, whose record above stands as decided. *
 ### HR.R1-C35 decisions touching OD-HR-24 and OD-HR-25 (2026-11-13)
 
 Engineering direction by the owner, not legal, privacy or DPO approval. Nothing is built. `HR-R1-C35-P3-DISPOSITIONS.md` §4, §9.
-- **OD-HR-24 extended in purpose (D-C35-1).** A Payroll decider known to be the same person as an Employee whose change the run first pays is refused like that Employee's own account. C34-N1 rated MEDIUM; WO-17.
+- **OD-HR-24 extended in purpose (D-C35-1).** A Payroll decider known to be the same person as an Employee whose change the run first pays is refused like that Employee's own account. C34-N1 rated MEDIUM; **built by WO-17** (`HR-R1-C35-WO17-KNOWN-SAME-BENEFICIARY.md`): approval, attestation and review, service and database. Residual WO17-N1: the post-decision independence functions (`payroll_run_independence_exception`, `payroll_run_first_paid_compensation`) still judge the approver's own links.
 - **OD-HR-25 amended for HR administration (D-C35-9).** "Never one's own" also refuses an uncorrected ended link and a known-same account, for every separation write and administrative leave withdraw/cancel; WO-18. Until WO-18 is built, rule 145's current-link answer stands for HR.
 
 ### OD-HR-22 decision record

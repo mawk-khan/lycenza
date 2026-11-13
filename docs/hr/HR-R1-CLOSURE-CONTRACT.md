@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-17, 2026-11-13): C34-N1 and C34-N4 closed for development on publication.**
+- **Reproduced:** 4 of 8 new tests failed before the fix.
+- **Fixed:** the self-beneficiary refusal now matches a known-same account at approval, attestation and review, in service and database, at no extra query. Nine guard triggers are pinned by definition, and the pinned functions by body, mode and path.
+- **Reviewed:** independent review, no HIGH or MEDIUM. New LOW WO17-N1 (post-decision independence by known-same accounts, for an owner decision) and WO17-N2.
+- **No open MAJOR remains.** WO-18 to WO-22 and the other P3/LOW dispositions still stand before baseline selection. HR.R1 stays OPEN (`HR-R1-C35-WO17-KNOWN-SAME-BENEFICIARY.md`).
+
 **Decisions recorded (HR.R1-C35, 2026-11-13): the seven P3s dispositioned; C34-N1 rated MAJOR. Nothing built.**
 - **Seven P3s:** HRC-4, HRC-8, LVA-4 (D-4) and TRR-6 approved for implementation (WO-20, WO-21, WO-19, WO-22); XRP-3 deferred to a TeachingAssignments checkpoint; XRP-4 and TRR-8 accepted (documented).
 - **C34-N1** reproduced (a known-same account of a paid Employee approves the run that pays that Employee's change first) and rated **MEDIUM by the owner: MAJOR under C27-C, so HR.R1 is NOT CLOSED** until WO-17 publishes.

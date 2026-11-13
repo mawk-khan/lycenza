@@ -8,6 +8,7 @@ use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionClassConstant;
 use ReflectionMethod;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -73,7 +74,10 @@ class KnownSamePersonCoverageTest extends TestCase
         foreach (ApprovalWorkflowRegistry::WORKFLOWS as $key => $w) {
             $this->assertArrayHasKey('knownSamePerson', $w, "{$key}: declare whether a known same person is refused (C33)");
             if (in_array($w['domain'], self::ENFORCED_DOMAINS, true)) {
-                $this->assertSame(['check', 'dbGuard'], array_keys($w['knownSamePerson']), "{$key}: an HR-family or Payroll workflow enforces it");
+                $this->assertSame(['check', 'dbGuard'], array_slice(array_keys($w['knownSamePerson']), 0, 2), "{$key}: an HR-family or Payroll workflow enforces it");
+                if ($w['domain'] === 'Payroll') {
+                    $this->assertArrayHasKey('beneficiaryCheck', $w['knownSamePerson'], "{$key}: WO-17, the self-beneficiary refusal covers known-same accounts");
+                }
             } else {
                 $this->assertSame(['handoff'], array_keys($w['knownSamePerson']), "{$key}: outside HR and Payroll it is the owning domain's decision");
                 $handoffs[$key] = $w['knownSamePerson']['handoff'];
@@ -89,13 +93,24 @@ class KnownSamePersonCoverageTest extends TestCase
     public function each_declared_check_calls_the_hr_rule_and_each_guard_is_pinned_by_the_verifier(): void
     {
         $guards = [];
-        foreach ($this->enforced() as $key => ['check' => $check, 'dbGuard' => $guard]) {
-            [$class, $method] = explode('::', $check);
-            $reflection = new ReflectionMethod($class, $method);
-            $lines = array_slice(file((string) $reflection->getFileName()), $reflection->getStartLine() - 1, $reflection->getEndLine() - $reflection->getStartLine() + 1);
-            $this->assertMatchesRegularExpression('/knownSame|isKnownToBeEmployee/', implode('', $lines), "{$key}: {$check} applies the known-same-person rule");
-            $guards[] = $guard;
+        foreach ($this->enforced() as $key => $declared) {
+            foreach (array_filter([$declared['check'], $declared['beneficiaryCheck'] ?? null]) as $check) {
+                [$class, $method] = explode('::', $check);
+                $reflection = new ReflectionMethod($class, $method);
+                $body = implode('', array_slice(file((string) $reflection->getFileName()), $reflection->getStartLine() - 1, $reflection->getEndLine() - $reflection->getStartLine() + 1));
+                if (str_ends_with($class, 'PayrollSelfBeneficiaries')) {
+                    // One query: the relation is applied through the class's IS_ACTOR clause (WO-17).
+                    $this->assertStringContainsString('self::IS_ACTOR', $body, "{$check} applies IS_ACTOR");
+                    $body = (string) (new ReflectionClassConstant($class, 'IS_ACTOR'))->getValue();
+                }
+                $this->assertMatchesRegularExpression('/knownSame|isKnownToBeEmployee|employee_account_link_same_person_accounts/', $body, "{$key}: {$check} applies the known-same-person rule");
+            }
+            $guards[] = $declared['dbGuard'];
+            if (isset($declared['beneficiaryGuard'])) {
+                $guards[] = $declared['beneficiaryGuard'];
+            }
         }
+        $guards = array_values(array_unique($guards));
         $pinned = array_keys(DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS);
         sort($guards);
         sort($pinned);
@@ -105,13 +120,13 @@ class KnownSamePersonCoverageTest extends TestCase
     #[Test]
     public function each_guard_is_enabled_bound_and_calls_the_relation(): void
     {
-        foreach (DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS as $trigger => [$table, $function, $relation]) {
+        foreach (DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS as $trigger => [$table, $function, $relation, $definition]) {
             $row = DB::selectOne(
-                'select t.tgenabled, p.proname, p.prosrc from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid where c.relname = ? and t.tgname = ?',
+                'select t.tgenabled, p.proname, p.prosrc, md5(pg_get_triggerdef(t.oid)) as def from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid where c.relname = ? and t.tgname = ?',
                 [$table, $trigger],
             );
             $this->assertNotNull($row, $trigger);
-            $this->assertSame(['O', $function], [$row->tgenabled, $row->proname], $trigger);
+            $this->assertSame(['O', $function, $definition], [$row->tgenabled, $row->proname, $row->def], "{$trigger}: enabled, bound, and its timing, events and WHEN as pinned (C34-N4)");
             $this->assertStringContainsString('public.'.$relation.'(', (string) $row->prosrc, "{$trigger} calls {$relation}");
         }
 

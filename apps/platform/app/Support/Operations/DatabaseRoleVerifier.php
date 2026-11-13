@@ -1237,20 +1237,24 @@ class DatabaseRoleVerifier
      */
     /**
      * HR.R1-C34 (WO-16, C33): every decision the owner put under the known-same-person rule refuses it in the
-     * database: trigger => [table, bound function, the relation its body must call]. Two accounts with
+     * database: trigger => [table, bound function, the relation its body must call, md5 of the whole
+     * `pg_get_triggerdef` (timing, events, `UPDATE OF`, `WHEN`; C34-N4, WO-17)]. Two accounts with
      * uncorrected links to one Employee are one person; the relation is SECURITY INVOKER (RLS applies), STABLE,
      * owned by the schema owner, `pg_temp` last, executable by the runtime role and never by PUBLIC.
      *
-     * @var array<string, array{0: string, 1: string, 2: string}>
+     * @var array<string, array{0: string, 1: string, 2: string, 3: string}>
      */
     public const KNOWN_SAME_PERSON_GUARDS = [
-        'payroll_runs_participant_approval_guard' => ['payroll_runs', 'payroll_runs_refuse_participant_approval', 'employee_account_link_same_person_accounts'],
-        'trg_payroll_posting_attestations_guard' => ['payroll_posting_attestations', 'payroll_posting_attestations_guard', 'employee_account_link_same_person_accounts'],
-        'trg_payroll_reversal_reconciliation_reviews_guard' => ['payroll_reversal_reconciliation_reviews', 'payroll_reversal_reconciliation_reviews_guard', 'employee_account_link_same_person_accounts'],
-        'trg_leave_decisions_participant_guard' => ['leave_decisions', 'leave_decisions_refuse_submitter', 'employee_account_link_same_person_accounts'],
-        'trg_employment_separation_cases_guard' => ['employment_separation_cases', 'hr_employment_separation_cases_guard', 'employee_account_link_same_person_accounts'],
-        'trg_employee_account_link_corrections_guard' => ['employee_account_link_corrections', 'employee_account_link_corrections_guard', 'employee_account_link_correction_same_person'],
-        'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections', 'staff_attendance_locked_corrections_guard', 'employee_account_link_correction_same_person'],
+        'payroll_runs_participant_approval_guard' => ['payroll_runs', 'payroll_runs_refuse_participant_approval', 'employee_account_link_same_person_accounts', '381845c0503adeb90c1f4776346b6e50'],
+        'trg_payroll_posting_attestations_guard' => ['payroll_posting_attestations', 'payroll_posting_attestations_guard', 'employee_account_link_same_person_accounts', '8864479ca38e3c3945b8947c79b0eb35'],
+        'trg_payroll_reversal_reconciliation_reviews_guard' => ['payroll_reversal_reconciliation_reviews', 'payroll_reversal_reconciliation_reviews_guard', 'employee_account_link_same_person_accounts', '4e1e2fbd387f097e41785401886c83f5'],
+        // WO-17 (C34-N1): the self-beneficiary guards of approval and attestation (the review's is the reviews guard above).
+        'trg_payroll_runs_self_beneficiary' => ['payroll_runs', 'payroll_runs_self_beneficiary_guard', 'employee_account_link_same_person_accounts', '910f44909e3d3a8cca882c8061c0fcc3'],
+        'trg_payroll_posting_attestations_self_beneficiary' => ['payroll_posting_attestations', 'payroll_posting_attestations_self_beneficiary_guard', 'employee_account_link_same_person_accounts', 'a08d1181b3cbeeedbad1137ad3382976'],
+        'trg_leave_decisions_participant_guard' => ['leave_decisions', 'leave_decisions_refuse_submitter', 'employee_account_link_same_person_accounts', 'd9c14d4d59a6aca53ed3ac4dc4d980ce'],
+        'trg_employment_separation_cases_guard' => ['employment_separation_cases', 'hr_employment_separation_cases_guard', 'employee_account_link_same_person_accounts', 'ffd7a3dd40a02c10c40427566d1821e8'],
+        'trg_employee_account_link_corrections_guard' => ['employee_account_link_corrections', 'employee_account_link_corrections_guard', 'employee_account_link_correction_same_person', '9b0c5c4796eee271713cef0a69fe67ed'],
+        'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections', 'staff_attendance_locked_corrections_guard', 'employee_account_link_correction_same_person', 'a5286fbc424f1805f5b27e9c775514f5'],
     ];
 
     /**
@@ -1265,7 +1269,10 @@ class DatabaseRoleVerifier
         'employee_account_link_correction_same_person' => '6af30c7d4b3f86e757f22467159c9647',
         'payroll_runs_refuse_participant_approval' => '3eb3d5d5495a4b21dc21daca99b97b28',
         'payroll_posting_attestations_guard' => '91407209205c35dd6459776260f257e2',
-        'payroll_reversal_reconciliation_reviews_guard' => 'ae7a3cce9568a8fe48b61d2b55ab489f',
+        // WO-17: its subject check also matches an account known to be the same person (was ae7a3cce...).
+        'payroll_reversal_reconciliation_reviews_guard' => 'ad3751c777e3b97a875f679d89d871ee',
+        'payroll_runs_self_beneficiary_guard' => '082cd4318c5c05b7bbc421d09c3897d6',
+        'payroll_posting_attestations_self_beneficiary_guard' => '00fe114944f09eaeeef69f898c3b7e62',
         'leave_decisions_refuse_submitter' => '3823d9e8a758efa89e2051388ac0ac83',
         'hr_employment_separation_cases_guard' => '0d361816ddad02297dedca0b4141d387',
         'employee_account_link_corrections_guard' => 'db128a19cb8591f854679f691a507234',
@@ -1289,21 +1296,27 @@ class DatabaseRoleVerifier
                 $missing[] = $relation;
             }
         }
-        foreach (self::KNOWN_SAME_PERSON_GUARDS as $trigger => [$table, $function, $relation]) {
+        foreach (self::KNOWN_SAME_PERSON_GUARDS as $trigger => [$table, $function, $relation, $definition]) {
             $row = DB::selectOne(
-                "select t.tgenabled, p.proname, p.prosrc from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
+                "select t.tgenabled, p.proname, p.prosrc, md5(pg_get_triggerdef(t.oid)) as def from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
                  where not t.tgisinternal and c.relnamespace = 'public'::regnamespace and c.relname = ? and t.tgname = ?",
                 [$table, $trigger],
             );
             if ($row === null || $row->tgenabled !== 'O' || $row->proname !== $function || ! str_contains((string) $row->prosrc, 'public.'.$relation.'(')) {
                 $missing[] = $trigger;
+            } elseif ($row->def !== $definition) {
+                $missing[] = $trigger.':definition';
             }
         }
 
         foreach (self::KNOWN_SAME_PERSON_BODIES as $function => $hash) {
-            $bodies = DB::select("select md5(prosrc) as h from pg_proc where pronamespace = 'public'::regnamespace and proname = ?", [$function]);
+            // WO-17 review L-2: the body, and the mode and path `prosrc` does not carry (INVOKER, `pg_temp` last).
+            $bodies = DB::select("select md5(prosrc) as h, prosecdef, coalesce(array_to_string(proconfig, '|'), '') as config
+                from pg_proc where pronamespace = 'public'::regnamespace and proname = ?", [$function]);
             if (count($bodies) !== 1 || $bodies[0]->h !== $hash) {
                 $missing[] = $function.':body';
+            } elseif ($bodies[0]->prosecdef || $bodies[0]->config !== 'search_path=pg_catalog, public, pg_temp') {
+                $missing[] = $function.':mode';
             }
         }
 

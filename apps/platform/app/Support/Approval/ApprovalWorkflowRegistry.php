@@ -29,7 +29,9 @@ namespace App\Support\Approval;
  *   knownSamePerson  HR.R1-C34 (WO-16, owner decision HR.R1-C33): whether an account KNOWN to be the same
  *                    person as a participant (two accounts with uncorrected links to one Employee, rule 145) is
  *                    refused too. Enforced: ['check' => the class::method holding the service check, 'dbGuard'
- *                    => the trigger that backs it (DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS)]; or
+ *                    => the trigger that backs it (DatabaseRoleVerifier::KNOWN_SAME_PERSON_GUARDS)], plus, for
+ *                    Payroll (WO-17, C34-N1), 'beneficiaryCheck'/'beneficiaryGuard': the OD-HR-24 self-beneficiary
+ *                    refusal, which matches a known-same account too; or
  *                    ['handoff' => the C33 handoff to the owning domain, decided there, never here]. Every
  *                    HR-family and Payroll entry is enforced (KnownSamePersonCoverageTest). Unknown (no shared
  *                    Employee) is never refused and never proof of two people (RG-ID-1).
@@ -226,7 +228,9 @@ final class ApprovalWorkflowRegistry
             'freshMfa' => ['approve'],
             'compatibility' => 'as_is',
             // HR.R1-C34: nor an account known to be the same person as any participant, under the compensation lock.
-            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollRunService::assertMayDecide', 'dbGuard' => 'payroll_runs_participant_approval_guard'],
+            // WO-17 (C34-N1): the self-beneficiary refusal matches a known-same account too.
+            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollRunService::assertMayDecide', 'dbGuard' => 'payroll_runs_participant_approval_guard',
+                'beneficiaryCheck' => 'App\Domain\Payroll\Application\PayrollSelfBeneficiaries::of', 'beneficiaryGuard' => 'trg_payroll_runs_self_beneficiary'],
             'note' => 'Approve freezes the results (calculated -> approved); posting is a separate step the approver may also take (OD-8.4); stale results (an adjustment after the last recorded calculation) are refused.',
         ],
         'erasure_cases' => [
@@ -270,7 +274,8 @@ final class ApprovalWorkflowRegistry
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for posting; an optional bounded note for a reversal (existing contract)',
             'evidence' => 'payroll_run_postings (append-only) + payroll_posting_attestations when a reversal took the approval\'s independence (HR.R1-C4) + school_audit_events payroll.run.posted / payroll.run.posting_reversed', 'relationshipConflict' => null,
             // HR.R1-C34: the attestor is never known to be the same person as the approver or a maker.
-            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollPostingIndependence::assertMayAttest', 'dbGuard' => 'trg_payroll_posting_attestations_guard'],
+            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollPostingIndependence::assertMayAttest', 'dbGuard' => 'trg_payroll_posting_attestations_guard',
+                'beneficiaryCheck' => 'App\Domain\Payroll\Application\PayrollSelfBeneficiaries::of', 'beneficiaryGuard' => 'trg_payroll_posting_attestations_self_beneficiary'],
         ],
         // HR.R1-C6 (PAY-18, OD-HR-23): closing an OPEN obligation is a direct review, never a second approval.
         'App\Domain\Payroll\Application\PayrollReversalReconciliationService' => [
@@ -281,7 +286,8 @@ final class ApprovalWorkflowRegistry
             'relationshipConflict' => 'payroll_run_independence',
             'dbGuard' => ['trigger' => 'trg_payroll_reversal_reconciliation_reviews_guard', 'refusal' => 'a reviewer is independent of the run, its reversal and its first-paid changes'],
             // HR.R1-C34: nor known to be the same person as the approver, the reverser, a maker or an author.
-            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollReversalReconciliationService::conflict', 'dbGuard' => 'trg_payroll_reversal_reconciliation_reviews_guard'],
+            'knownSamePerson' => ['check' => 'App\Domain\Payroll\Application\PayrollReversalReconciliationService::conflict', 'dbGuard' => 'trg_payroll_reversal_reconciliation_reviews_guard',
+                'beneficiaryCheck' => 'App\Domain\Payroll\Application\PayrollSelfBeneficiaries::ofObligation', 'beneficiaryGuard' => 'trg_payroll_reversal_reconciliation_reviews_guard'],
         ],
         // ORG.12C (ADR 0080 §8): legal name, registration and affiliation references.
         'App\Domain\Schools\Application\SchoolIdentityService' => [
