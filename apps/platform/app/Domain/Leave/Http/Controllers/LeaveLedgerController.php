@@ -28,6 +28,13 @@ use Illuminate\Validation\Rule;
  * stored replay commit or roll back together. Authorization runs as route
  * middleware before the idempotency guard (rule 32) and again in the
  * service. The stored replay holds ids and units only (rule 36).
+ *
+ * HR.R1-C35 WO-19 (D-4, D-C35-3; S-7): allocation, the annual run, adjustment
+ * and opening each re-verify a fresh MFA code (`mfa_code`) after the route's
+ * capability check and outside the transaction (rule 95), and hand the proof
+ * to the service, which also re-reads current authority inside its write. A
+ * replay of a completed key never re-executes (and needs no new code); its
+ * authorization is re-checked first (rule 32).
  */
 class LeaveLedgerController extends Controller
 {
@@ -59,7 +66,7 @@ class LeaveLedgerController extends Controller
         return response()->json(['data' => LeaveReadService::assignment($service->end($school, $leavePolicyAssignment, $validated['effective_to'], $request->user()))]);
     }
 
-    public function allocate(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard): JsonResponse
+    public function allocate(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate([
             'employment_record_id' => ['required', 'uuid'],
@@ -67,10 +74,11 @@ class LeaveLedgerController extends Controller
             'leave_year_id' => ['required', 'uuid'],
             'units' => ['required', 'integer', 'min:1', 'max:1000'],
         ]);
+        $proof = $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
 
-        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request) {
-            $entry = $ledger->allocate($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user());
+        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request, $proof) {
+            $entry = $ledger->allocate($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user(), $proof);
             $body = ['data' => LeaveReadService::entry($entry)];
             if ($record !== null) {
                 $guard->completeWithin($record, 201, $body, ['Content-Type' => 'application/json']);
@@ -93,13 +101,14 @@ class LeaveLedgerController extends Controller
         ]]);
     }
 
-    public function executeRun(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard): JsonResponse
+    public function executeRun(Request $request, School $school, LeaveLedgerService $ledger, IdempotencyGuard $guard, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate(['leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid']]);
+        $proof = $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
 
-        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request) {
-            $run = $ledger->executeRun($school, $validated['leave_type_id'], $validated['leave_year_id'], $request->user());
+        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request, $proof) {
+            $run = $ledger->executeRun($school, $validated['leave_type_id'], $validated['leave_year_id'], $request->user(), $proof);
             $body = ['data' => LeaveReadService::runSummary($run)];
             if ($record !== null) {
                 $guard->completeWithin($record, 201, $body, ['Content-Type' => 'application/json']);
@@ -127,11 +136,11 @@ class LeaveLedgerController extends Controller
             'reason' => ['required', Rule::in(LeaveLedgerEntry::ADJUSTMENT_REASONS)],
             'corrects_entry_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
 
-        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request) {
-            $entry = $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user(),
+        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request, $proof) {
+            $entry = $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user(), $proof,
                 isset($validated['corrects_entry_id']) ? strtolower((string) $validated['corrects_entry_id']) : null);
             $body = ['data' => LeaveReadService::entry($entry)];
             if ($record !== null) {
@@ -153,11 +162,11 @@ class LeaveLedgerController extends Controller
             'leave_year_id' => ['required', 'uuid'],
             'units' => ['required', 'integer', 'min:1', 'max:1000'],
         ]);
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
 
-        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request) {
-            $entry = $ledger->recordOpening($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user());
+        $body = DB::transaction(function () use ($school, $validated, $ledger, $guard, $record, $request, $proof) {
+            $entry = $ledger->recordOpening($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user(), $proof);
             $body = ['data' => LeaveReadService::entry($entry)];
             if ($record !== null) {
                 $guard->completeWithin($record, 201, $body, ['Content-Type' => 'application/json']);

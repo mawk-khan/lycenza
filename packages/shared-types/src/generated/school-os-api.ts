@@ -1440,7 +1440,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** HRX.1: an explicit allocation of exact units (e.g. a mid-year joiner; no proration), at most one per employment, type and year. Requires hr.leave.manage. Idempotency-Key required. */
+        /** HRX.1: an explicit allocation of exact units (e.g. a mid-year joiner; no proration), at most one per employment, type and year. Requires hr.leave.manage, re-read at the write (HR.R1-C35 WO-19), and a fresh mfa_code (D-4). Idempotency-Key required. */
         post: operations["createLeaveAllocation"];
         delete?: never;
         options?: never;
@@ -1508,7 +1508,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** HR.10 (D11-01): a go-live opening balance of exact units -- once per account and only as its first entry; never the caller's own employment. Requires hr.leave.manage and a fresh mfa_code (S-7). Idempotency-Key required. */
+        /** HR.10 (D11-01): a go-live opening balance of exact units -- once per account and only as its first entry; never the caller's own employment. Requires hr.leave.manage, re-read at the write (HR.R1-C35 WO-19), and a fresh mfa_code (S-7). Idempotency-Key required. */
         post: operations["recordLeaveOpening"];
         delete?: never;
         options?: never;
@@ -1560,7 +1560,7 @@ export interface paths {
         /** HR.10: the accrual runs of one leave type and year, newest month first. Requires hr.leave.view. */
         get: operations["listLeaveAccrualRuns"];
         put?: never;
-        /** HR.10: opens the month's run (or resumes its open one) and processes up to max_batches batches, each its own transaction. Idempotent by construction: one open run per month, one accrual per account and month, a resumable cursor -- a retry continues the same run. Requires hr.leave.manage. */
+        /** HR.10: opens the month's run (or resumes its open one) and processes up to max_batches batches, each its own transaction. Idempotent by construction: one open run per month, one accrual per account and month, a resumable cursor -- a retry continues the same run. Requires hr.leave.manage, re-read inside every batch (HR.R1-C35 WO-19): a batch credits nothing once that authority is gone, and the run is left failed (LEAVE_ACCRUAL_AUTHORITY_REFUSED), resumable by an authorized operator. */
         post: operations["executeLeaveAccrualRun"];
         delete?: never;
         options?: never;
@@ -1628,7 +1628,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** HRX.1: grants every assigned employment its policy's annual units, once per School, type and year; explicit grants are skipped. Requires hr.leave.manage. Idempotency-Key required. */
+        /** HRX.1: grants every assigned employment its policy's annual units, once per School, type and year; explicit grants are skipped. Requires hr.leave.manage, re-read at the write (HR.R1-C35 WO-19), and a fresh mfa_code (D-4). Idempotency-Key required. */
         post: operations["executeLeaveAllocationRun"];
         delete?: never;
         options?: never;
@@ -1645,7 +1645,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** HRX.1: an append-only credit or debit correction with a closed reason code; never below zero. Requires hr.leave.manage. Idempotency-Key required. */
+        /** HRX.1: an append-only credit or debit correction with a closed reason code; never below zero. Requires hr.leave.manage, re-read at the write (HR.R1-C35 WO-19), and a fresh mfa_code (S-7). Idempotency-Key required. */
         post: operations["createLeaveAdjustment"];
         delete?: never;
         options?: never;
@@ -1868,7 +1868,7 @@ export interface paths {
         /** HRX.2: the School's executed leave-year closes. Requires hr.leave.view. */
         get: operations["listLeaveYearCloses"];
         put?: never;
-        /** HRX.2: closes an ended leave year once -- carry forward up to the policy cap into the adjacent next year, lapse the rest. Refused while a submitted request overlaps the year, before the previous year is closed, or before the next year is open. Requires hr.leave.manage. Idempotency-Key required. */
+        /** HRX.2: closes an ended leave year once -- carry forward up to the policy cap into the adjacent next year, lapse the rest. Refused while a submitted request overlaps the year, before the previous year is closed, or before the next year is open. Requires hr.leave.manage, re-read at the write (HR.R1-C35 WO-19). Idempotency-Key required. */
         post: operations["executeLeaveYearClose"];
         delete?: never;
         options?: never;
@@ -9071,12 +9071,16 @@ export interface components {
             leave_year_id: string;
             /** @description Integer half-day units (2 = one full day). */
             units: number;
+            /** @description HR.R1-C35 WO-19 (D-4): a current authentication code, re-verified now. */
+            mfa_code: string;
         };
         LeaveAllocationRunInput: {
             /** Format: uuid */
             leave_type_id: string;
             /** Format: uuid */
             leave_year_id: string;
+            /** @description HR.R1-C35 WO-19 (D-4): a current authentication code, re-verified now. */
+            mfa_code: string;
         };
         LeaveAllocationRun: {
             /** Format: uuid */
@@ -9116,7 +9120,7 @@ export interface components {
              */
             corrects_entry_id?: string | null;
             /** @description HR.10 (S-7): a current authentication code, re-verified now. */
-            mfa_code?: string;
+            mfa_code: string;
         };
         LeaveOpeningInput: {
             /** Format: uuid */
@@ -16726,7 +16730,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Validation failed. */
+            /** @description Validation failed, including a missing, invalid or already used mfa_code (D-4). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17004,7 +17008,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Validation failed. */
+            /** @description Validation failed, including a missing, invalid or already used mfa_code (S-7). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17544,7 +17548,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Validation failed. */
+            /** @description Validation failed, including a missing, invalid or already used mfa_code (D-4). */
             422: {
                 headers: {
                     [name: string]: unknown;

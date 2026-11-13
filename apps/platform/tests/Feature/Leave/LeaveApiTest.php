@@ -33,11 +33,12 @@ class LeaveApiTest extends TestCase
         return "/api/v1/schools/{$w['school']->id}/leave{$path}";
     }
 
+    /** HR.R1-C35 WO-19 (D-4): an allocation carries a fresh MFA code (a new one unless $overrides names one). */
     private function allocate(array $w, User $actor, array $overrides = [], ?string $key = null): TestResponse
     {
         return $this->as($actor, $key)->postJson($this->url($w, '/allocations'), array_merge([
             'employment_record_id' => $w['employment']->id, 'leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id, 'units' => 6,
-        ], $overrides));
+        ], array_key_exists('mfa_code', $overrides) ? [] : ['mfa_code' => $this->freshMfaCode($actor)], $overrides));
     }
 
     #[Test]
@@ -80,11 +81,13 @@ class LeaveApiTest extends TestCase
         $w = $this->leaveWorld();
         $key = (string) Str::uuid();
 
-        $first = $this->allocate($w, $w['admin'], [], $key)->assertCreated();
-        $this->allocate($w, $w['admin'], [], $key)->assertCreated()->assertJsonPath('data.id', $first->json('data.id'));
+        // WO-19: the retry resends the identical body (its code already spent): the stored response replays, nothing re-executes.
+        $code = $this->freshMfaCode($w['admin']);
+        $first = $this->allocate($w, $w['admin'], ['mfa_code' => $code], $key)->assertCreated();
+        $this->allocate($w, $w['admin'], ['mfa_code' => $code], $key)->assertCreated()->assertJsonPath('data.id', $first->json('data.id'));
         $this->assertSame(1, $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->count()), 'a retry never grants twice');
 
-        $this->allocate($w, $w['admin'], ['units' => 8], $key)->assertStatus(409)->assertJsonPath('error.code', 'IDEMPOTENCY_KEY_CONFLICT');
+        $this->allocate($w, $w['admin'], ['units' => 8, 'mfa_code' => $code], $key)->assertStatus(409)->assertJsonPath('error.code', 'IDEMPOTENCY_KEY_CONFLICT');
         $this->allocate($w, $w['admin'], ['units' => 8])->assertStatus(409)->assertJsonPath('error.code', 'LEAVE_ALREADY_ALLOCATED');
     }
 
@@ -113,9 +116,9 @@ class LeaveApiTest extends TestCase
         $query = "?leave_type_id={$w['type']->id}&leave_year_id={$w['year']->id}";
 
         $this->as($w['admin'])->getJson($this->url($w, "/allocation-runs/preview{$query}"))->assertOk()->assertJsonPath('data.candidateCount', 1);
-        $this->as($w['admin'])->postJson($this->url($w, '/allocation-runs'), ['leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id])
+        $this->as($w['admin'])->postJson($this->url($w, '/allocation-runs'), ['leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id, 'mfa_code' => $this->freshMfaCode($w['admin'])])
             ->assertCreated()->assertJsonPath('data.allocatedCount', 1);
-        $this->as($w['admin'])->postJson($this->url($w, '/allocation-runs'), ['leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id])
+        $this->as($w['admin'])->postJson($this->url($w, '/allocation-runs'), ['leave_type_id' => $w['type']->id, 'leave_year_id' => $w['year']->id, 'mfa_code' => $this->freshMfaCode($w['admin'])])
             ->assertStatus(409)->assertJsonPath('error.code', 'LEAVE_RUN_ALREADY_EXECUTED');
     }
 }

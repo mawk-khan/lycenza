@@ -14,12 +14,14 @@ use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -47,6 +49,16 @@ use Throwable;
  *   operator's own included -- nobody chooses an amount.
  * - **Reconciliation:** examined = the sum of the disjoint outcome counts
  *   (items, one per employment per run).
+ * - **Current authority (HR.R1-C35 WO-19, D-C35-3):** start (or resume) and
+ *   EVERY batch re-read the operator's `hr.leave.manage` inside their own
+ *   write transaction (`ApprovalDecisionAuthority::requireCurrent()`), never
+ *   the 60 s cached answer: a batch credits nothing once the operator's grant,
+ *   membership, account or the Leave module is gone. One read per batch (its
+ *   locks held to commit), never per employment. No fresh MFA here: the owner
+ *   decided MFA for allocation and allocation runs only
+ *   (`ApprovalWorkflowRegistry::FRESH_AUTHORITY_WRITES`). A refused batch
+ *   leaves the run `failed` (LEAVE_ACCRUAL_AUTHORITY_REFUSED), resumable by an
+ *   authorized operator; nothing is ever marked completed for it.
  */
 class LeaveAccrualService
 {
@@ -63,6 +75,7 @@ class LeaveAccrualService
         private readonly LeaveAccrualCalculator $calculator,
         private readonly LeaveLedgerService $ledger,
         private readonly LeaveYearCloseService $closes,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -117,7 +130,11 @@ class LeaveAccrualService
             try {
                 $run = $this->processBatch($school, $run->id, $actor);
             } catch (Throwable $e) {
-                $this->markFailed($school, $run->id, $e instanceof LeaveException ? $e->errorCode() : 'LEAVE_ACCRUAL_BATCH_FAILED', $actor);
+                $this->markFailed($school, $run->id, match (true) {
+                    $e instanceof LeaveException => $e->errorCode(),
+                    $e instanceof AuthorizationException => 'LEAVE_ACCRUAL_AUTHORITY_REFUSED',
+                    default => 'LEAVE_ACCRUAL_BATCH_FAILED',
+                }, $actor);
                 throw $e;
             }
         }
@@ -137,6 +154,7 @@ class LeaveAccrualService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveTypeId, $leaveYearId, $periodStart, $actor) {
             $this->guard->requireOperational($school->id);
+            $this->authority->requireCurrent($actor, 'hr.leave.manage', $school);
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             $period = $this->period($year, $periodStart);
             LeaveLocks::accrual($school, $type->id, $year->id, $period['start']);
@@ -177,6 +195,7 @@ class LeaveAccrualService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $runId, $actor) {
             $this->guard->requireOperational($school->id);
+            $this->authority->requireCurrent($actor, 'hr.leave.manage', $school);
             $peek = LeaveAccrualRun::query()->where('school_id', $school->id)->findOrFail($runId);
             $periodStart = $peek->period_start->toDateString();
             LeaveLocks::accrual($school, $peek->leave_type_id, $peek->leave_year_id, $periodStart);

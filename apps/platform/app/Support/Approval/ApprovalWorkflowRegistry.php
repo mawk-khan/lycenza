@@ -266,9 +266,11 @@ final class ApprovalWorkflowRegistry
      * `FreshMfaProof` and a closed code-owned reason, and writes database-
      * required evidence; never maker/checker, participants or approval
      * provenance. `relationshipConflict` names a beneficiary rule the class
-     * enforces (service + `dbGuard`); `entryPoints` are the only callers.
+     * enforces (service + `dbGuard`); `entryPoints` are the only callers;
+     * `writeMethods` (WO-19) are the class's own public write methods, each
+     * of which takes the proof and re-reads authority.
      *
-     * @var array<class-string, array{capability: string, action: string, freshAuthority: true, freshMfa: true, reason: string, evidence: string, relationshipConflict: string|null, dbGuard?: array{trigger: string, refusal: string}, accountingOwner?: string, entryPoints?: list<string>}>
+     * @var array<class-string, array{capability: string, action: string, freshAuthority: true, freshMfa: true, reason: string, evidence: string, relationshipConflict: string|null, dbGuard?: array{trigger: string, refusal: string}, accountingOwner?: string, entryPoints?: list<string>, writeMethods?: list<string>}>
      */
     public const DIRECT_ASSURED = [
         // HR.R1-C1 (S-5, S-13): posting an approved payroll run (and reversing its posting, payroll.runs.reverse)
@@ -341,12 +343,48 @@ final class ApprovalWorkflowRegistry
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'CalendarChangeReason (closed: late declaration, entered in error, administrative review; no free text)',
             'evidence' => 'staff_working_week_versions.reason_code / staff_holidays.recorded_reason_code / withdrawn_reason_code (DB-required for a past date: staff_calendar_reason_required) + school_audit_events leave.calendar.* (mfa: fresh)', 'relationshipConflict' => null,
         ],
+        // HR.R1-C35 WO-19 (D-4, D-C35-3; S-7): Leave entitlement writes. Allocation and the annual allocation run
+        // (and, since HR.10, adjustment and opening) take the actor's own fresh-MFA proof IN THE SERVICE; each
+        // re-reads current hr.leave.manage inside its write transaction. Consumption and reversal keep the leave
+        // decision's authority; accrual and the year close re-read authority only (FRESH_AUTHORITY_WRITES).
+        'App\Domain\Leave\Application\LeaveLedgerService' => [
+            'capability' => 'hr.leave.manage', 'action' => 'Leave allocation, annual allocation run, adjustment and opening balance (allocate, executeRun, adjust, recordOpening)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'none for an allocation, a run or an opening (the units are the decision); an adjustment carries a closed adjustment reason code (LeaveLedgerEntry::ADJUSTMENT_REASONS)',
+            'evidence' => 'leave_ledger_entries (append-only; one allocation per account and year, funding exclusivity, database-enforced) + leave_allocation_runs + school_audit_events leave.allocation.granted / leave.allocation_run.executed / leave.adjustment.recorded / leave.opening.recorded (freshMfa: true)', 'relationshipConflict' => null,
+            'writeMethods' => ['allocate', 'executeRun', 'adjust', 'recordOpening'],
+        ],
         // ORG.9C-2 (ADR 0076 §70): never a request/approve chain (INV-034 stays DO_NOT_BUILD).
         'App\Domain\Inventory\Application\InventoryStockService' => [
             'capability' => 'inventory.stock.manage', 'action' => 'Inventory stock write-off (writeOff(); issue, receive and transfer stay ordinary)',
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'WriteOffReason (closed: damaged, expired, lost; no free text)',
             'evidence' => 'stock_movements write_off movement + write_off_reason (DB-required: stock_movements_write_off_reason_check)', 'relationshipConflict' => null,
             'campusScoped' => 'The Location\'s Campus: requireCurrent() with it (a whole-School grant or an active grant on that Campus); a School-wide Location needs whole-School authority.',
+        ],
+    ];
+
+    /**
+     * HR.R1-C35 WO-19 (D-4, owner decision D-C35-3: "a fresh authority read on
+     * every Leave ledger and accrual write entry point"): direct writes that
+     * re-read the actor's CURRENT authority (`ApprovalDecisionAuthority::
+     * requireCurrent()`) inside their own write transaction, holding the
+     * membership and grants FOR SHARE to commit, but take NO fresh-MFA step-up
+     * -- the owner decided MFA for Leave allocation and allocation runs only
+     * (DIRECT_ASSURED). Never workflows: no participants, maker/checker or
+     * provenance. `writeMethods` are the public methods that open such a write
+     * transaction; each re-reads (pinned by ApprovalWorkflowRegistryTest).
+     *
+     * @var array<class-string, array{capability: string, action: string, freshAuthority: true, freshMfa: false, writeMethods: list<string>, reason: string}>
+     */
+    public const FRESH_AUTHORITY_WRITES = [
+        'App\Domain\Leave\Application\Accrual\LeaveAccrualService' => [
+            'capability' => 'hr.leave.manage', 'action' => 'Monthly leave accrual: a run opened or resumed, and every batch that credits the ledger',
+            'freshAuthority' => true, 'freshMfa' => false, 'writeMethods' => ['start', 'processBatch'],
+            'reason' => 'D-C35-3 decided a fresh authority read for accrual, not a step-up; units are the assigned policy version\'s, nobody chooses an amount',
+        ],
+        'App\Domain\Leave\Application\LeaveYearCloseService' => [
+            'capability' => 'hr.leave.manage', 'action' => 'Leave year close (carry-forward and expiry movements)',
+            'freshAuthority' => true, 'freshMfa' => false, 'writeMethods' => ['execute'],
+            'reason' => 'D-C35-3 covers every ledger write entry point; no MFA decision exists for the close (D-4 named allocation and runs). A reconciliation inside a cancellation keeps that decision\'s authority',
         ],
     ];
 

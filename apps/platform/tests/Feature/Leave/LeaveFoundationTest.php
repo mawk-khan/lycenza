@@ -180,25 +180,25 @@ class LeaveFoundationTest extends TestCase
         $ledger = app(LeaveLedgerService::class);
 
         // A mid-year joiner: the administrator grants exactly the units chosen; nothing is prorated.
-        $entry = $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 9, $w['admin']);
+        $entry = $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 9, $w['admin'], $this->freshMfaProofFor($w['admin']));
         $this->assertSame(['allocation', 9, null], [$entry->kind, $entry->units, $entry->direction]);
         $this->assertSame(9, $this->balance($w));
-        $this->assertSame('LEAVE_ALREADY_ALLOCATED', $this->code(fn () => $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 9, $w['admin'])));
-        $this->assertSame('LEAVE_UNITS_INVALID', $this->code(fn () => $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 0, $w['admin'])));
+        $this->assertSame('LEAVE_ALREADY_ALLOCATED', $this->code(fn () => $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 9, $w['admin'], $this->freshMfaProofFor($w['admin']))));
+        $this->assertSame('LEAVE_UNITS_INVALID', $this->code(fn () => $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 0, $w['admin'], $this->freshMfaProofFor($w['admin']))));
 
         // The annual run grants the policy's units to everyone else and skips the explicit grant.
         $other = $this->currentEmployment($w['school']);
         app(LeavePolicyAssignmentService::class)->assign($w['school'], $other->id, $w['policy']->id, '2026-04-01', null, $w['admin']);
         $this->assertCount(1, $ledger->runCandidates($w['school'], $w['type']->id, $w['year']->id, $w['admin']));
-        $run = $ledger->executeRun($w['school'], $w['type']->id, $w['year']->id, $w['admin']);
+        $run = $ledger->executeRun($w['school'], $w['type']->id, $w['year']->id, $w['admin'], $this->freshMfaProofFor($w['admin']));
         $this->assertSame(1, $run->allocated_count);
         $this->assertSame(24, (int) $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->where('employment_record_id', $other->id)->value('units')));
         $this->assertSame(9, $this->balance($w), 'the explicit grant is never duplicated or replaced');
-        $this->assertSame('LEAVE_RUN_ALREADY_EXECUTED', $this->code(fn () => $ledger->executeRun($w['school'], $w['type']->id, $w['year']->id, $w['admin'])));
+        $this->assertSame('LEAVE_RUN_ALREADY_EXECUTED', $this->code(fn () => $ledger->executeRun($w['school'], $w['type']->id, $w['year']->id, $w['admin'], $this->freshMfaProofFor($w['admin']))));
 
         // No policy, no allocation.
         $bare = $this->currentEmployment($w['school']);
-        $this->assertSame('LEAVE_NO_POLICY_ASSIGNMENT', $this->code(fn () => $ledger->allocate($w['school'], $bare->id, $w['type']->id, $w['year']->id, 4, $w['admin'])));
+        $this->assertSame('LEAVE_NO_POLICY_ASSIGNMENT', $this->code(fn () => $ledger->allocate($w['school'], $bare->id, $w['type']->id, $w['year']->id, 4, $w['admin'], $this->freshMfaProofFor($w['admin']))));
     }
 
     #[Test]
@@ -206,15 +206,15 @@ class LeaveFoundationTest extends TestCase
     {
         $w = $this->leaveWorld();
         $ledger = app(LeaveLedgerService::class);
-        $this->assertSame('LEAVE_NOT_ALLOCATED', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 2, 'entitlement_change', $w['admin'])));
+        $this->assertSame('LEAVE_NOT_ALLOCATED', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 2, 'entitlement_change', $w['admin'], $this->freshMfaProofFor($w['admin']))));
 
-        $allocation = $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 10, $w['admin']);
-        $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 3, 'entitlement_change', $w['admin']);
-        $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 5, 'allocation_correction', $w['admin']);
+        $allocation = $ledger->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 10, $w['admin'], $this->freshMfaProofFor($w['admin']));
+        $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 3, 'entitlement_change', $w['admin'], $this->freshMfaProofFor($w['admin']));
+        $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 5, 'allocation_correction', $w['admin'], $this->freshMfaProofFor($w['admin']));
         $this->assertSame(8, $this->balance($w), '10 + 3 - 5');
 
-        $this->assertSame('LEAVE_BALANCE_INSUFFICIENT', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 9, 'allocation_correction', $w['admin'])));
-        $this->assertSame('LEAVE_ADJUSTMENT_REASON_INVALID', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 1, 'because', $w['admin'])));
+        $this->assertSame('LEAVE_BALANCE_INSUFFICIENT', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 9, 'allocation_correction', $w['admin'], $this->freshMfaProofFor($w['admin']))));
+        $this->assertSame('LEAVE_ADJUSTMENT_REASON_INVALID', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 1, 'because', $w['admin'], $this->freshMfaProofFor($w['admin']))));
         $this->assertSame(8, $this->balance($w));
 
         // The database holds the invariant itself, for any writer.
@@ -231,7 +231,7 @@ class LeaveFoundationTest extends TestCase
         // An untracked type can never hold ledger entries.
         $untracked = $this->leaveType($w['school'], $w['admin'], 'UL', paid: false, tracked: false);
         $this->assertStringContainsString('leave_ledger_entries_type_fk', $this->code(fn () => $raw(['kind' => 'allocation', 'units' => 2, 'leave_type_id' => $untracked->id])));
-        $this->assertSame('LEAVE_TYPE_UNTRACKED', $this->code(fn () => $ledger->allocate($w['school'], $w['employment']->id, $untracked->id, $w['year']->id, 2, $w['admin'])));
+        $this->assertSame('LEAVE_TYPE_UNTRACKED', $this->code(fn () => $ledger->allocate($w['school'], $w['employment']->id, $untracked->id, $w['year']->id, 2, $w['admin'], $this->freshMfaProofFor($w['admin']))));
 
         // The derived balance reconciles to its entries.
         $entries = app(LeaveReadService::class)->ledger($w['school'], $w['employment']->id, $w['year']->id, $w['admin']);
@@ -257,12 +257,12 @@ class LeaveFoundationTest extends TestCase
         $a = $this->leaveWorld();
         $b = $this->leaveWorld();
         $ledger = app(LeaveLedgerService::class);
-        $ledger->allocate($a['school'], $a['employment']->id, $a['type']->id, $a['year']->id, 6, $a['admin']);
+        $ledger->allocate($a['school'], $a['employment']->id, $a['type']->id, $a['year']->id, 6, $a['admin'], $this->freshMfaProofFor($a['admin']));
 
         // School B's administrator, in B's context, cannot see or touch A's rows.
         $this->assertSame([], app(LeaveReadService::class)->ledger($b['school'], $a['employment']->id, $a['year']->id, $b['admin']));
-        $this->assertNotSame('ok', $this->code(fn () => $ledger->allocate($b['school'], $a['employment']->id, $a['type']->id, $a['year']->id, 2, $b['admin'])));
-        $this->assertNotSame('ok', $this->code(fn () => $ledger->allocate($b['school'], $b['employment']->id, $a['type']->id, $b['year']->id, 2, $b['admin'])), 'another School\'s leave type');
+        $this->assertNotSame('ok', $this->code(fn () => $ledger->allocate($b['school'], $a['employment']->id, $a['type']->id, $a['year']->id, 2, $b['admin'], $this->freshMfaProofFor($b['admin']))));
+        $this->assertNotSame('ok', $this->code(fn () => $ledger->allocate($b['school'], $b['employment']->id, $a['type']->id, $b['year']->id, 2, $b['admin'], $this->freshMfaProofFor($b['admin']))), 'another School\'s leave type');
         $this->assertSame(0, $this->inSchool($b['school'], fn () => DB::table('leave_ledger_entries')->count()));
         $this->assertSame(1, $this->inSchool($a['school'], fn () => DB::table('leave_ledger_entries')->count()));
         $this->assertNotNull(School::query()->find($a['school']->id));

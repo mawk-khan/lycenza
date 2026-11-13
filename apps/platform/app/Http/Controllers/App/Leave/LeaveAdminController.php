@@ -316,12 +316,15 @@ class LeaveAdminController extends Controller
         return $this->command(fn () => $assignments->end($school, $leavePolicyAssignment, $validated['effective_to'], $request->user()), 'Policy assignment ended.');
     }
 
-    public function allocate(Request $request, TenantContext $context, LeaveLedgerService $ledger): RedirectResponse
+    /** HR.R1-C35 WO-19 (D-4): an allocation needs `hr.leave.manage`, then a fresh MFA code (outside the transaction). */
+    public function allocate(Request $request, TenantContext $context, LeaveLedgerService $ledger, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $validated = $request->validate(['employment_record_id' => ['required', 'uuid'], 'leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid'], 'units' => ['required', 'integer', 'min:1', 'max:1000']]);
+        $this->authorizeCapability(LeaveCapabilities::MANAGE, $school);
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        return $this->command(fn () => $ledger->allocate($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user()), 'Allocation recorded.');
+        return $this->command(fn () => $ledger->allocate($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user(), $proof), 'Allocation recorded.');
     }
 
     /** HR.10 (S-7): an adjustment needs `hr.leave.manage`, then a fresh MFA code (outside the transaction). */
@@ -334,9 +337,9 @@ class LeaveAdminController extends Controller
             'corrects_entry_id' => ['nullable', 'uuid'],
         ]);
         $this->authorizeCapability(LeaveCapabilities::MANAGE, $school);
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        return $this->command(fn () => $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user(),
+        return $this->command(fn () => $ledger->adjust($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], $validated['direction'], (int) $validated['units'], $validated['reason'], $request->user(), $proof,
             isset($validated['corrects_entry_id']) ? strtolower((string) $validated['corrects_entry_id']) : null), 'Adjustment recorded.');
     }
 
@@ -346,17 +349,20 @@ class LeaveAdminController extends Controller
         $school = $context->requireSchool();
         $validated = $request->validate(['employment_record_id' => ['required', 'uuid'], 'leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid'], 'units' => ['required', 'integer', 'min:1', 'max:1000']]);
         $this->authorizeCapability(LeaveCapabilities::MANAGE, $school);
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        return $this->command(fn () => $ledger->recordOpening($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user()), 'Opening balance recorded.');
+        return $this->command(fn () => $ledger->recordOpening($school, $validated['employment_record_id'], $validated['leave_type_id'], $validated['leave_year_id'], (int) $validated['units'], $request->user(), $proof), 'Opening balance recorded.');
     }
 
-    public function executeRun(Request $request, TenantContext $context, LeaveLedgerService $ledger): RedirectResponse
+    /** HR.R1-C35 WO-19 (D-4): the annual run needs `hr.leave.manage`, then a fresh MFA code (outside the transaction). */
+    public function executeRun(Request $request, TenantContext $context, LeaveLedgerService $ledger, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $validated = $request->validate(['leave_type_id' => ['required', 'uuid'], 'leave_year_id' => ['required', 'uuid']]);
+        $this->authorizeCapability(LeaveCapabilities::MANAGE, $school);
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        return $this->command(fn () => $ledger->executeRun($school, $validated['leave_type_id'], $validated['leave_year_id'], $request->user()), 'Annual allocation run executed.');
+        return $this->command(fn () => $ledger->executeRun($school, $validated['leave_type_id'], $validated['leave_year_id'], $request->user(), $proof), 'Annual allocation run executed.');
     }
 
     public function requests(Request $request, TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, LeaveRequestReadService $requests): Response

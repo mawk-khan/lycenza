@@ -63,15 +63,22 @@ class StaffCalendarUiTest extends TestCase
     #[Test]
     public function before_saving_the_page_shows_what_a_change_would_touch_and_only_to_a_configurer(): void
     {
+        // A full working day on or before the School's today: the fixture week has a half Saturday and no Sunday
+        // (HR.R1-C35 WO-19 found this failing whenever the School-local day was a weekend).
+        $day = CarbonImmutable::parse($this->plus(0));
+        while ($day->isoWeekday() > 5) {
+            $day = $day->subDay();
+        }
+        $day = $day->toDateString();
         $this->inSchool($this->w['school'], fn () => app(StaffAttendanceService::class)
-            ->record($this->w['school'], $this->w['employment']->id, $this->plus(0), 'present', 'present', $this->w['clerk']));
-        $url = '/app/leave/configuration?impact_from='.$this->plus(0).'&impact_to='.$this->plus(0);
+            ->record($this->w['school'], $this->w['employment']->id, $day, 'present', 'present', $this->w['clerk']));
+        $url = '/app/leave/configuration?impact_from='.$day.'&impact_to='.$day;
 
         $this->web()->get($url)->assertOk()->assertInertia(fn (Assert $p) => $p->missing('calendarImpact'));
 
         $partial = ['X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'App/Leave/Configuration', 'X-Inertia-Partial-Data' => 'calendarImpact', 'X-Inertia-Version' => (string) Inertia::getVersion()];
         $this->web()->withHeaders($partial)->get($url)->assertOk()
-            ->assertJsonPath('props.calendarImpact.from', $this->plus(0))
+            ->assertJsonPath('props.calendarImpact.from', $day)
             ->assertJsonPath('props.calendarImpact.touched', [['label' => 'leave requests awaiting a decision', 'count' => 0], ['label' => 'staff attendance days already recorded', 'count' => 1]]);
 
         $viewer = $this->createUserWithCapabilities($this->w['school'], ['hr.leave.view']);

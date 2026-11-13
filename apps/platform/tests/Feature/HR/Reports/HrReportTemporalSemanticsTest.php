@@ -132,12 +132,12 @@ class HrReportTemporalSemanticsTest extends TestCase
             $ledger = app(LeaveLedgerService::class);
 
             $this->travelTo($lastSecond); // 23:59:59 on 2026-10-01, School-local
-            $ledger->allocate($this->school, $e->id, $type->id, $year->id, 24, $this->hr);
+            $ledger->allocate($this->school, $e->id, $type->id, $year->id, 24, $this->hr, $this->freshMfaProofFor($this->hr));
             $this->travelTo($nextDay); // 00:00:00 on 2026-10-02, School-local
-            $ledger->adjust($this->school, $e->id, $type->id, $year->id, 'credit', 2, 'administrative_correction', $this->hr);
+            $ledger->adjust($this->school, $e->id, $type->id, $year->id, 'credit', 2, 'administrative_correction', $this->hr, $this->freshMfaProofFor($this->hr));
             // A correction meant for October, posted in November: as posted, it counts from November.
             $this->travelTo('2026-11-05 06:00:00');
-            $ledger->adjust($this->school, $e->id, $type->id, $year->id, 'credit', 4, 'entitlement_change', $this->hr);
+            $ledger->adjust($this->school, $e->id, $type->id, $year->id, 'credit', 4, 'entitlement_change', $this->hr, $this->freshMfaProofFor($this->hr));
 
             $balance = function (string $postedBy) use ($year): ?string {
                 $this->actingAs($this->hr)->post("/app/schools/{$this->school->id}/activate");

@@ -132,7 +132,7 @@ trait CreatesLeaveFixtures
 
     protected function allocate(array $w, int $units = 24, ?LeaveYear $year = null, ?EmploymentRecord $employment = null): void
     {
-        app(LeaveLedgerService::class)->allocate($w['school'], ($employment ?? $w['employment'])->id, $w['type']->id, ($year ?? $w['year'])->id, $units, $w['admin']);
+        app(LeaveLedgerService::class)->allocate($w['school'], ($employment ?? $w['employment'])->id, $w['type']->id, ($year ?? $w['year'])->id, $units, $w['admin'], $this->freshMfaProofFor($w['admin']));
     }
 
     /** @var array<string, User> School id => the on-behalf submitter (ORG.8D: a submitter never decides) */

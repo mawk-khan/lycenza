@@ -91,7 +91,7 @@ class LeaveConcurrencyTest extends TestCase
     public function two_concurrent_debits_can_never_take_the_balance_below_zero(): void
     {
         $w = $this->world();
-        app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 10, $w['admin']);
+        app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 10, $w['admin'], $this->freshMfaProofFor($w['admin']));
         $args = [$w['school']->id, $w['employment']->id, $w['type']->id, $w['year']->id];
 
         [$holder, $contender] = $this->raceWithHeldHolder(

@@ -74,7 +74,7 @@ class LeaveYearConfigurationTest extends TestCase
     {
         $w = $this->leaveWorld();
         $years = app(LeaveYearService::class);
-        $entry = app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 6, $w['admin']);
+        $entry = app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 6, $w['admin'], $this->freshMfaProofFor($w['admin']));
         $before = $this->storedYears($w['school']);
         $this->assertSame(['2026-04-01', '2027-03-31', 4, false], [$w['year']->starts_on->toDateString(), $w['year']->ends_on->toDateString(), $w['year']->start_month, $w['year']->is_transition]);
 

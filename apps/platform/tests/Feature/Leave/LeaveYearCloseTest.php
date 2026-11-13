@@ -103,7 +103,7 @@ class LeaveYearCloseTest extends TestCase
         $this->assertSame(3, $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->whereNotNull('year_close_id')->count()));
 
         // Sealed: nothing new lands in the closed year.
-        $this->assertSame('LEAVE_YEAR_CLOSED', $this->code(fn () => app(LeaveLedgerService::class)->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 2, 'administrative_correction', $w['admin'])));
+        $this->assertSame('LEAVE_YEAR_CLOSED', $this->code(fn () => app(LeaveLedgerService::class)->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 2, 'administrative_correction', $w['admin'], $this->freshMfaProofFor($w['admin']))));
         $this->assertSame('LEAVE_YEAR_CLOSED', $this->code(fn () => $this->submitLeave($w, '2027-03-22', '2027-03-22')));
 
         // The next year has not ended, and the year after it is not open.
@@ -174,7 +174,7 @@ class LeaveYearCloseTest extends TestCase
         $noCarry = $this->leaveType($w['school'], $w['admin'], 'NC');
         $policy = $this->leavePolicy($w['school'], $noCarry, $w['admin'], ['name' => 'No carry', 'carry_forward_allowed' => false, 'carry_forward_cap_units' => null, 'carry_forward_expiry_days' => null]);
         app(LeavePolicyAssignmentService::class)->assign($w['school'], $w['employment']->id, $policy->id, '2026-04-01', null, $w['admin']);
-        app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $noCarry->id, $w['year']->id, 10, $w['admin']);
+        app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $noCarry->id, $w['year']->id, 10, $w['admin'], $this->freshMfaProofFor($w['admin']));
         $next = app(LeaveYearService::class)->open($w['school'], '2027-04-01', $w['admin']);
         $request = $this->submitLeave($w, '2027-03-01', '2027-03-02', 'full', null, null, $noCarry);
         app(LeaveRequestService::class)->approve($w['school'], $request->id, $w['admin']);

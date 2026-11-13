@@ -129,6 +129,8 @@ class ApprovalWorkflowRegistryTest extends TestCase
 
         // ORG.8E: declared direct-assured actions reuse the fresh authority read only.
         $direct = array_map(fn (string $class) => substr((string) (new ReflectionClass($class))->getFileName(), strlen(app_path()) + 1), array_keys(ApprovalWorkflowRegistry::DIRECT_ASSURED));
+        // HR.R1-C35 WO-19 (D-C35-3): declared fresh-authority writes (no step-up) reuse it too.
+        $freshOnly = array_map(fn (string $class) => substr((string) (new ReflectionClass($class))->getFileName(), strlen(app_path()) + 1), array_keys(ApprovalWorkflowRegistry::FRESH_AUTHORITY_WRITES));
 
         foreach (['MakerCheckerPolicy', 'ApprovalDecisionAuthority', 'ApprovalProvenance', 'ApprovalParticipants'] as $part) {
             $users = [];
@@ -139,7 +141,7 @@ class ApprovalWorkflowRegistryTest extends TestCase
                 }
             }
             $this->assertNotEmpty($users, "{$part} is used");
-            $this->assertSame([], array_values(array_diff($users, $part === 'ApprovalDecisionAuthority' ? [...$allowed, ...$direct] : $allowed)), "only registered shared workflows use {$part}");
+            $this->assertSame([], array_values(array_diff($users, $part === 'ApprovalDecisionAuthority' ? [...$allowed, ...$direct, ...$freshOnly] : $allowed)), "only registered shared workflows use {$part}");
         }
     }
 
@@ -188,6 +190,24 @@ class ApprovalWorkflowRegistryTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('/DB::|::query\(\)|extends Model|Schema::/', $source, "{$file->getFilename()}: the shared toolkit never reads or writes business data");
         }
         $this->assertNull(DB::selectOne("select to_regclass('public.approval_requests') as t")->t, 'no generic approval table');
+    }
+
+    #[Test]
+    public function fresh_authority_writes_re_read_authority_take_no_step_up_and_are_not_workflows(): void
+    {
+        $this->assertNotSame([], ApprovalWorkflowRegistry::FRESH_AUTHORITY_WRITES);
+        foreach (ApprovalWorkflowRegistry::FRESH_AUTHORITY_WRITES as $class => $meta) {
+            $source = (string) file_get_contents((string) (new ReflectionClass($class))->getFileName());
+            $this->assertTrue($meta['freshAuthority'], $class);
+            $this->assertFalse($meta['freshMfa'], "{$class}: a step-up would be DIRECT_ASSURED");
+            $this->assertNotSame([], $meta['writeMethods']);
+            $this->assertSame(count($meta['writeMethods']), substr_count($source, "authority->requireCurrent(\$actor, '{$meta['capability']}', \$school)"), "{$class}: one fresh read per write method");
+            foreach (['MakerCheckerPolicy', 'ApprovalProvenance', 'ApprovalParticipants'] as $part) {
+                $this->assertStringNotContainsString($part, $source, "{$class} is direct, not a workflow");
+            }
+            $this->assertArrayNotHasKey($class, ApprovalWorkflowRegistry::DIRECT_ASSURED);
+            $this->assertNotContains($class, array_column(ApprovalWorkflowRegistry::WORKFLOWS, 'service'));
+        }
     }
 
     #[Test]

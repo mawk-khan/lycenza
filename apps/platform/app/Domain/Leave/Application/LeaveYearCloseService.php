@@ -13,6 +13,7 @@ use App\Domain\Leave\Infrastructure\LeaveYearCloseItem;
 use App\Domain\Leave\Infrastructure\LeaveYearCloseReconciliation;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\SchoolOperationalGuard;
@@ -44,6 +45,12 @@ use Illuminate\Support\Facades\DB;
  * the ORIGINAL item's policy terms, the reversed units split into extra
  * carried and extra lapsed units, written as new linked entries. The
  * original close is never rerun or rewritten.
+ *
+ * HR.R1-C35 WO-19 (D-C35-3, "every ledger write entry point"): the close
+ * re-reads the actor's CURRENT `hr.leave.manage` inside its transaction
+ * (`ApprovalDecisionAuthority::requireCurrent()`, held to commit), never the
+ * cached answer; no fresh MFA (not decided for the close). A reconciliation
+ * runs inside a cancellation and keeps that cancellation's authority.
  */
 class LeaveYearCloseService
 {
@@ -55,6 +62,7 @@ class LeaveYearCloseService
         private readonly SchoolOperationalGuard $guard,
         private readonly LeaveLedgerService $ledger,
         private readonly CarryForwardCalculator $calculator,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -80,6 +88,7 @@ class LeaveYearCloseService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveYearId, $actor) {
             $this->guard->requireOperational($school->id);
+            $this->authority->requireCurrent($actor, 'hr.leave.manage', $school);
             LeaveLocks::schedule($school, shared: true);
             $year = LeaveYear::query()->where('school_id', $school->id)->findOrFail($leaveYearId);
             // Exclusive: no approval, cancellation, adjustment or allocation of this year runs while it closes.

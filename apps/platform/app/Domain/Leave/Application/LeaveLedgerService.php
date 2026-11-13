@@ -15,7 +15,9 @@ use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
@@ -23,6 +25,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * HRX.1/HRX.2 (ADR 0065 §4.5, §23): the ONE writer of the append-only
@@ -41,7 +44,20 @@ use Illuminate\Support\Facades\DB;
  * - A debit can never take the balance below zero: the database trigger
  *   sums the key under its own lock and refuses.
  *
+ * HR.R1-C35 WO-19 (D-4, owner decision D-C35-3; ApprovalWorkflowRegistry::DIRECT_ASSURED):
+ * every write entry point here -- allocate, the annual run, adjust and the
+ * opening -- takes the actor's own FreshMfaProof (minted by
+ * FreshMfaRequirement after the capability check, outside this transaction,
+ * rule 95) and re-reads the actor's CURRENT `hr.leave.manage` inside its write
+ * transaction (`ApprovalDecisionAuthority::requireCurrent()`: the School FOR
+ * SHARE, the active membership and its grants FOR SHARE until commit, the
+ * module read fresh), never the 60 s cached answer the entry check uses. The
+ * `record*()` writers keep their caller's authority: accrual (its batch's
+ * own read), consumption and reversal (the leave decision's), and the close
+ * movements (the close's or the cancellation's).
+ *
  * Lock order, in one transaction: School FOR SHARE (operational guard),
+ * the acting membership and its grants (FOR SHARE, current authority),
  * the EmploymentRecord (HR, FOR SHARE), then the balance key
  * `leave.balance:{school}:{employment}:{type}:{year}` (advisory, the same
  * key the database trigger takes), then the insert.
@@ -56,14 +72,31 @@ class LeaveLedgerService
         private readonly SchoolOperationalGuard $guard,
         private readonly EmploymentCoverage $coverage,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
-    public function allocate(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, User $actor): LeaveLedgerEntry
+    /** WO-19: the proof is the actor's own (FreshMfaRequirement mints it for the request's User only). */
+    private function requireProof(User $actor, FreshMfaProof $mfa): void
+    {
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
+    }
+
+    /** WO-19: the actor's current `hr.leave.manage`, read fresh inside the write transaction (held until commit). */
+    private function requireCurrentAuthority(School $school, User $actor): void
+    {
+        $this->authority->requireCurrent($actor, 'hr.leave.manage', $school);
+    }
+
+    public function allocate(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, User $actor, FreshMfaProof $mfa): LeaveLedgerEntry
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
+        $this->requireProof($actor, $mfa);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $leaveYearId, $units, $actor) {
             $this->guard->requireOperational($school->id);
+            $this->requireCurrentAuthority($school, $actor);
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             $this->requireUnits($type, $units);
             // The employment first: another School's id is the same 404 as an unknown one.
@@ -82,7 +115,7 @@ class LeaveLedgerService
                 'leave_policy_assignment_id' => $assignment->id, 'kind' => 'allocation', 'units' => $units, 'actor_user_id' => $actor->id,
             ]);
             $this->audit->school($school, 'leave.allocation.granted', actor: $actor, subject: $entry, metadata: [
-                'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'units' => $units, 'source' => 'explicit',
+                'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'units' => $units, 'source' => 'explicit', 'freshMfa' => true,
             ]);
 
             return $entry;
@@ -109,12 +142,20 @@ class LeaveLedgerService
         });
     }
 
-    public function executeRun(School $school, string $leaveTypeId, string $leaveYearId, User $actor): LeaveAllocationRun
+    /**
+     * WO-19: one proof and one current-authority read for the whole run. The
+     * run is ONE transaction, so the membership and grants the read share-locks
+     * stay held until every grant of the run commits; a per-row re-read would
+     * add nothing but queries.
+     */
+    public function executeRun(School $school, string $leaveTypeId, string $leaveYearId, User $actor, FreshMfaProof $mfa): LeaveAllocationRun
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
+        $this->requireProof($actor, $mfa);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveTypeId, $leaveYearId, $actor) {
             $this->guard->requireOperational($school->id);
+            $this->requireCurrentAuthority($school, $actor);
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             if (LeaveAllocationRun::query()->where('school_id', $school->id)->where('leave_year_id', $year->id)->where('leave_type_id', $type->id)->exists()) {
                 throw LeaveException::conflict('LEAVE_RUN_ALREADY_EXECUTED', 'This leave type was already allocated for that leave year.');
@@ -157,7 +198,7 @@ class LeaveLedgerService
             }
 
             $this->audit->school($school, 'leave.allocation_run.executed', actor: $actor, subject: $run, metadata: [
-                'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'allocated' => count($plan), 'skipped' => $skipped,
+                'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'allocated' => count($plan), 'skipped' => $skipped, 'freshMfa' => true,
             ]);
 
             return $run;
@@ -168,12 +209,13 @@ class LeaveLedgerService
      * HR.10 (ADR 0065 §29.7): an adjustment is a NEW accounting event on a
      * funded account (allocation, accrual or opening). With $correctsEntryId
      * it names the entry of the same account it corrects (database-checked);
-     * the original is never edited. S-7: the HTTP layers require a fresh MFA
-     * code before calling it.
+     * the original is never edited. S-7: a fresh MFA proof (WO-19: required
+     * here, not only at the HTTP layers) and the current authority.
      */
-    public function adjust(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, string $direction, int $units, string $reason, User $actor, ?string $correctsEntryId = null): LeaveLedgerEntry
+    public function adjust(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, string $direction, int $units, string $reason, User $actor, FreshMfaProof $mfa, ?string $correctsEntryId = null): LeaveLedgerEntry
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
+        $this->requireProof($actor, $mfa);
         if (! in_array($direction, ['credit', 'debit'], true)) {
             throw LeaveException::invalid('LEAVE_ADJUSTMENT_DIRECTION_INVALID', 'An adjustment is a credit or a debit.');
         }
@@ -183,6 +225,7 @@ class LeaveLedgerService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $leaveYearId, $direction, $units, $reason, $actor, $correctsEntryId) {
             $this->guard->requireOperational($school->id);
+            $this->requireCurrentAuthority($school, $actor);
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             $this->requireUnits($type, $units);
             $this->requireEmployment($school, $employmentRecordId, $year);
@@ -199,7 +242,7 @@ class LeaveLedgerService
             ]);
             $this->audit->school($school, 'leave.adjustment.recorded', actor: $actor, subject: $entry, metadata: [
                 'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id,
-                'direction' => $direction, 'units' => $units, 'reason' => $reason,
+                'direction' => $direction, 'units' => $units, 'reason' => $reason, 'freshMfa' => true,
             ] + ($correctsEntryId === null ? [] : ['correctsEntryId' => $correctsEntryId]));
 
             return $entry;
@@ -211,14 +254,17 @@ class LeaveLedgerService
      * units an administrator specifies, once per account and only as its
      * first entry (database-enforced), never the actor's own (G-4). It is a
      * migration fact with its own provenance (actor, time, audit), never
-     * derived from a current-state field. S-7: fresh MFA at the HTTP layers.
+     * derived from a current-state field. S-7: a fresh MFA proof (WO-19:
+     * required here) and the current authority.
      */
-    public function recordOpening(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, User $actor): LeaveLedgerEntry
+    public function recordOpening(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, User $actor, FreshMfaProof $mfa): LeaveLedgerEntry
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
+        $this->requireProof($actor, $mfa);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $leaveYearId, $units, $actor) {
             $this->guard->requireOperational($school->id);
+            $this->requireCurrentAuthority($school, $actor);
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             $this->requireUnits($type, $units);
             $this->requireEmployment($school, $employmentRecordId, $year);
@@ -231,7 +277,7 @@ class LeaveLedgerService
                 'leave_policy_assignment_id' => $assignment?->id, 'kind' => 'opening', 'units' => $units, 'actor_user_id' => $actor->id,
             ]);
             $this->audit->school($school, 'leave.opening.recorded', actor: $actor, subject: $entry, metadata: [
-                'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'units' => $units,
+                'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'leaveYearId' => $year->id, 'units' => $units, 'freshMfa' => true,
             ]);
 
             return $entry;
@@ -241,7 +287,7 @@ class LeaveLedgerService
     /**
      * HR.10 (ADR 0065 §29.5): one month's accrual credit. No capability of its
      * own: only LeaveAccrualService calls it, inside its authorized, locked
-     * batch transaction (employment FOR SHARE, assignments FOR SHARE, year
+     * batch transaction (WO-19: whose current authority it read fresh) (employment FOR SHARE, assignments FOR SHARE, year
      * shared, balance key). The database re-checks the month, the assignment,
      * the version's units and funding exclusivity.
      */

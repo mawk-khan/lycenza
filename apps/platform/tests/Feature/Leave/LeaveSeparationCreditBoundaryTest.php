@@ -98,7 +98,7 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
     {
         $december = (string) app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')
             ->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->where('accrual_period', '2026-12-01')->value('id'));
-        app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $december);
+        app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $this->freshMfaProofFor($this->admin), $december);
 
         $this->assertSame(['attention', 1], $this->accrualFlag('2026-11-15'), 'November is still outstanding; December was corrected');
         $this->assertSame(3, app(TenantContext::class)->withSchool($this->school, fn () => DB::table('leave_ledger_entries')->where('employment_record_id', $this->employment->id)->where('kind', 'accrual')->count()), 'nothing reversed or deleted');
@@ -112,7 +112,7 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
 
     private function adjust(string $direction, int $units, ?string $corrects): string
     {
-        return (string) app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, $direction, $units, 'administrative_correction', $this->admin, $corrects)->id;
+        return (string) app(LeaveLedgerService::class)->adjust($this->school, $this->employment->id, $this->type->id, $this->year->id, $direction, $units, 'administrative_correction', $this->admin, $this->freshMfaProofFor($this->admin), $corrects)->id;
     }
 
     #[Test]
@@ -218,7 +218,7 @@ class LeaveSeparationCreditBoundaryTest extends TestCase
         app(LeaveAccrualService::class)->execute($this->school, $this->type->id, $this->year->id, '2026-12-01', $this->admin, 1000);
 
         try {
-            app(LeaveLedgerService::class)->adjust($this->school, $other->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $this->accrual('2026-12-01'));
+            app(LeaveLedgerService::class)->adjust($this->school, $other->id, $this->type->id, $this->year->id, 'debit', 3, 'administrative_correction', $this->admin, $this->freshMfaProofFor($this->admin), $this->accrual('2026-12-01'));
             $this->fail('A correction stays inside its account.');
         } catch (LeaveException $e) {
             $this->assertSame('LEAVE_ADJUSTMENT_SOURCE_INVALID', $e->errorCode());

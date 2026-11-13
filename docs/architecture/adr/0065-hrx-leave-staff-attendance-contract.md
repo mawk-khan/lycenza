@@ -2561,3 +2561,14 @@ The HR owner decided D-6: the staff calendar becomes effective-dated. It gets an
 - **Deviations from the §32 contract:** the fingerprint as above; the change notice counts pending leave and recorded attendance only (Payroll never depends on Leave, so its differences remain `checkDifferences`); runtime UPDATE is table-level, with immutability enforced by the guard triggers for every role; no API endpoint withdraws a scheduled week.
 
 **Status: built for development.** §23.10's calendar lock is unchanged.
+
+## 34. Amendment — HR.R1-C35 WO-19 Leave write assurance (D-4, 2026-11-13)
+
+Owner decision D-C35-3 (`docs/hr/HR-R1-C35-P3-DISPOSITIONS.md` §9) closes D-4 more strictly than the C12 docket recommended: fresh MFA on allocation and allocation runs, and a fresh authority read on every Leave ledger and accrual write entry point. Built by WO-19 (`docs/hr/HR-R1-C35-WO19-LEAVE-WRITE-ASSURANCE.md`).
+
+- **Fresh MFA:** allocation and the annual allocation run need `hr.leave.manage`, then a fresh MFA code checked after the capability and outside the transaction (rule 95), on web and API (§29.7 already required one for adjustment and opening). `LeaveLedgerService::allocate()`, `executeRun()`, `adjust()` and `recordOpening()` now take the actor's own `FreshMfaProof`, so a direct service call cannot skip it. Declared in `ApprovalWorkflowRegistry::DIRECT_ASSURED`.
+- **Fresh authority:** those four, `LeaveAccrualService::start()` and every `processBatch()`, and `LeaveYearCloseService::execute()` re-read current `hr.leave.manage` inside their write transaction (`ApprovalDecisionAuthority::requireCurrent()`), never the 60 s cached answer. One read per transaction: a run or a batch holds the membership and grants FOR SHARE until it commits, so there is no per-employment read. Accrual and the close take no MFA (not decided); they are declared in the new `ApprovalWorkflowRegistry::FRESH_AUTHORITY_WRITES`.
+- **Unchanged:** consumption and reversal keep the leave decision's authority, and a year-close reconciliation keeps the cancellation's. That authority is read fresh on the decision and administrative paths; on self-service cancellation it is the cached `hr.leave.self` plus a freshly locked ActingEmployee (residual WO19-N1, as the decision's wording allows). Also unchanged: amounts, formulas, the ledger, its database invariants, idempotency and history. An accrual batch refused mid-run leaves the run `failed` with `LEAVE_ACCRUAL_AUTHORITY_REFUSED`, resumable, never completed. No migration.
+- **Boundary:** the database knows nothing of MFA or of the acting User's current authority; both stay application boundaries (ADR 0076 §64). No database guard was added.
+
+**Status: built for development.** S-7 closes.

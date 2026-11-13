@@ -59,20 +59,20 @@ class LeaveOpeningAdjustmentTest extends TestCase
     {
         $w = $this->fresh();
         $ledger = app(LeaveLedgerService::class);
-        $opening = fn (int $units, ?User $actor = null) => fn () => $ledger->recordOpening($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, $units, $actor ?? $w['admin']);
+        $opening = fn (int $units, ?User $actor = null) => fn () => $ledger->recordOpening($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, $units, $actor ?? $w['admin'], $this->freshMfaProofFor($actor ?? $w['admin']));
 
         $this->assertSame('ok', $this->code($opening(7)));
         $this->assertSame('LEAVE_OPENING_NOT_FIRST', $this->code($opening(2)), 'once per account');
 
         $x = $this->fresh();
         $this->allocate($x, 10);
-        $this->assertSame('LEAVE_OPENING_NOT_FIRST', $this->code(fn () => $ledger->recordOpening($x['school'], $x['employment']->id, $x['type']->id, $x['year']->id, 4, $x['admin'])), 'only as the first entry');
+        $this->assertSame('LEAVE_OPENING_NOT_FIRST', $this->code(fn () => $ledger->recordOpening($x['school'], $x['employment']->id, $x['type']->id, $x['year']->id, 4, $x['admin'], $this->freshMfaProofFor($x['admin']))), 'only as the first entry');
 
         $viewer = $this->createUserWithCapabilities($w['school'], ['hr.leave.view']);
         $this->assertSame('forbidden', $this->code($opening(2, $viewer)));
         $own = $this->leaveAdmin($w['school']);
         $mine = $this->createEmploymentRecord($this->createEmployee($w['school'], ['user_id' => $own->id]), ['status' => 'active', 'starts_on' => '2024-01-01', 'ends_on' => null]);
-        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $ledger->recordOpening($w['school'], $mine->id, $w['type']->id, $w['year']->id, 4, $own)));
+        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $ledger->recordOpening($w['school'], $mine->id, $w['type']->id, $w['year']->id, 4, $own, $this->freshMfaProofFor($own))));
     }
 
     #[Test]
@@ -80,18 +80,18 @@ class LeaveOpeningAdjustmentTest extends TestCase
     {
         $w = $this->fresh();
         $ledger = app(LeaveLedgerService::class);
-        $this->assertSame('LEAVE_NOT_ALLOCATED', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 2, 'entitlement_change', $w['admin'])));
-        $opening = $ledger->recordOpening($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 6, $w['admin']);
-        $correction = $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 2, 'allocation_correction', $w['admin'], $opening->id);
+        $this->assertSame('LEAVE_NOT_ALLOCATED', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 2, 'entitlement_change', $w['admin'], $this->freshMfaProofFor($w['admin']))));
+        $opening = $ledger->recordOpening($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 6, $w['admin'], $this->freshMfaProofFor($w['admin']));
+        $correction = $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 2, 'allocation_correction', $w['admin'], $this->freshMfaProofFor($w['admin']), $opening->id);
         $this->assertSame(['leave_ledger_entry', $opening->id], [$correction->source_type, $correction->source_id]);
         $this->assertSame(6, $this->inSchool($w['school'], fn () => LeaveLedgerEntry::query()->findOrFail($opening->id)->units), 'the original is never edited');
 
         $otherEmployment = $this->currentEmployment($w['school']);
         app(LeavePolicyAssignmentService::class)->assign($w['school'], $otherEmployment->id, $w['policy']->id, '2026-04-01', null, $w['admin']);
-        $sibling = $ledger->recordOpening($w['school'], $otherEmployment->id, $w['type']->id, $w['year']->id, 4, $w['admin']);
-        $this->assertSame('LEAVE_ADJUSTMENT_SOURCE_INVALID', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 1, 'administrative_correction', $w['admin'], $sibling->id)), 'never another account\'s entry');
-        $this->assertSame('LEAVE_ADJUSTMENT_SOURCE_INVALID', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 1, 'administrative_correction', $w['admin'], (string) Str::uuid())));
-        $this->assertSame('LEAVE_BALANCE_INSUFFICIENT', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 9, 'allocation_correction', $w['admin'])));
+        $sibling = $ledger->recordOpening($w['school'], $otherEmployment->id, $w['type']->id, $w['year']->id, 4, $w['admin'], $this->freshMfaProofFor($w['admin']));
+        $this->assertSame('LEAVE_ADJUSTMENT_SOURCE_INVALID', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 1, 'administrative_correction', $w['admin'], $this->freshMfaProofFor($w['admin']), $sibling->id)), 'never another account\'s entry');
+        $this->assertSame('LEAVE_ADJUSTMENT_SOURCE_INVALID', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'credit', 1, 'administrative_correction', $w['admin'], $this->freshMfaProofFor($w['admin']), (string) Str::uuid())));
+        $this->assertSame('LEAVE_BALANCE_INSUFFICIENT', $this->code(fn () => $ledger->adjust($w['school'], $w['employment']->id, $w['type']->id, $w['year']->id, 'debit', 9, 'allocation_correction', $w['admin'], $this->freshMfaProofFor($w['admin']))));
     }
 
     #[Test]

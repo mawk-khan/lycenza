@@ -199,9 +199,9 @@ class LeaveApprovalAssuranceTest extends TestCase
 
         $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $policies->assign($t['school'], $mine, $t['policy']->id, '2026-04-01', null, $self['user'])));
         $policies->assign($t['school'], $mine, $t['policy']->id, '2026-04-01', null, $t['admin']);
-        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $ledger->allocate($t['school'], $mine, $t['type']->id, $t['year']->id, 24, $self['user'])));
-        $ledger->allocate($t['school'], $mine, $t['type']->id, $t['year']->id, 12, $t['admin']);
-        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $ledger->adjust($t['school'], $mine, $t['type']->id, $t['year']->id, 'credit', 10, 'allocation_correction', $self['user'])));
+        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $ledger->allocate($t['school'], $mine, $t['type']->id, $t['year']->id, 24, $self['user'], $this->freshMfaProofFor($self['user']))));
+        $ledger->allocate($t['school'], $mine, $t['type']->id, $t['year']->id, 12, $t['admin'], $this->freshMfaProofFor($t['admin']));
+        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $ledger->adjust($t['school'], $mine, $t['type']->id, $t['year']->id, 'credit', 10, 'allocation_correction', $self['user'], $this->freshMfaProofFor($self['user']))));
         $assignment = $this->inSchool($t['school'], fn () => LeavePolicyAssignment::query()->where('employment_record_id', $mine)->sole());
         $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $policies->end($t['school'], $assignment->id, '2026-12-31', $self['user'])));
         $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $this->requests()->submitOnBehalf($t['school'], $mine, $t['type']->id, '2026-10-12', 'full', '2026-10-12', 'full', null, $self['user'])));
@@ -217,7 +217,7 @@ class LeaveApprovalAssuranceTest extends TestCase
         $this->assertSame('cancelled', $this->requests()->cancelOwn($t['school'], $approved->id, 'plans_changed', $self['user'])->status, 'self-service, before it starts');
 
         // Another administrator writes the same balance freely.
-        $this->assertSame('ok', $this->code(fn () => $ledger->adjust($t['school'], $mine, $t['type']->id, $t['year']->id, 'credit', 2, 'allocation_correction', $t['admin'])));
+        $this->assertSame('ok', $this->code(fn () => $ledger->adjust($t['school'], $mine, $t['type']->id, $t['year']->id, 'credit', 2, 'allocation_correction', $t['admin'], $this->freshMfaProofFor($t['admin']))));
     }
 
     #[Test]

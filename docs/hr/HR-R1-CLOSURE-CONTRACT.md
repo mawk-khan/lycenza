@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-19, 2026-11-13): LVA-4 and S-7 closed for development on publication; D-4 built; no open MAJOR.**
+- **Built:** fresh MFA on Leave allocation and allocation runs (web, API and in the service; adjustment and opening now service-required too); a fresh authority read inside every Leave ledger and accrual write transaction (allocate, run, adjust, opening, accrual start and batch, year close), once per transaction.
+- **Proof:** reproduced at `5cbc6abd` (seven entry points wrote behind a revoked grant; allocation and run wrote without a code); allow and deny for each loss of authority; two-process races; six planted bypasses detected.
+- **Reviewed:** independent Security review, no HIGH or MEDIUM; LOWs WO19-N1 to N4 recorded.
+- **Still open:** WO-20 to WO-22 and the other P3/LOW dispositions before baseline selection. HR.R1 stays OPEN (`HR-R1-C35-WO19-LEAVE-WRITE-ASSURANCE.md`).
+
 **Evidence recorded (HR.R1-C35 WO17-N1, 2026-11-13): WO17-N1 and its author side closed for development on publication; no open MAJOR.**
 - **Built:** after a decision, an approver known to be the paid Employee (D-WO18-1) or the change's author (D-WO17N1-1) is treated like their own account: attestation before posting, an obligation once posted, never a discharge.
 - **Scale:** per approver, never per row: 414 ms at 10,000 entries against over 30 s per row.

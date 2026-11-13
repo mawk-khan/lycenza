@@ -67,7 +67,7 @@ class LeaveRlsIsolationTest extends TestCase
     {
         $a = $this->leaveWorld();
         $b = $this->leaveWorld();
-        app(LeaveLedgerService::class)->allocate($a['school'], $a['employment']->id, $a['type']->id, $a['year']->id, 4, $a['admin']);
+        app(LeaveLedgerService::class)->allocate($a['school'], $a['employment']->id, $a['type']->id, $a['year']->id, 4, $a['admin'], $this->freshMfaProofFor($a['admin']));
 
         $this->context(null);
         foreach (self::TABLES as $table) {

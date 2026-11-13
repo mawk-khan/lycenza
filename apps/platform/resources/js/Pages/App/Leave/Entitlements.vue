@@ -24,7 +24,8 @@ import { useLeaveError } from '../../../leave';
  * reason. The balance is always the sum of the ledger and never goes below zero.
  *
  * HR.10 (ADR 0065 §29): an adjustment or an opening balance needs a fresh
- * authentication code (S-7). Each type's statement shows every entry with its
+ * authentication code (S-7); HR.R1-C35 WO-19 (D-4): so do an explicit
+ * allocation and the annual allocation run. Each type's statement shows every entry with its
  * running balance and the identity opening + credits − debits = closing, as
  * the server computed it. A monthly policy is credited from the Accruals page.
  */
@@ -88,7 +89,7 @@ watch([employmentRecordId, leaveYearId], () => {
 });
 
 const assignForm = useForm({ leave_policy_id: '', effective_from: '', effective_to: '' });
-const allocateForm = useForm({ leave_type_id: '', units: 0 });
+const allocateForm = useForm({ leave_type_id: '', units: 0, mfa_code: '' });
 const adjustForm = useForm({
     leave_type_id: '',
     direction: 'credit',
@@ -111,7 +112,7 @@ function recordOpening(): void {
             onSuccess: () => openingForm.reset(),
         });
 }
-const runForm = useForm({ leave_type_id: '' });
+const runForm = useForm({ leave_type_id: '', mfa_code: '' });
 const runTypeId = ref(props.runPreview?.leaveTypeId ?? '');
 
 function assign(): void {
@@ -183,8 +184,15 @@ function previewRun(): void {
 
 function executeRun(): void {
     runForm
-        .transform(() => ({ leave_type_id: runTypeId.value, leave_year_id: leaveYearId.value }))
-        .post('/app/leave/allocation-runs', { preserveScroll: true });
+        .transform((d) => ({
+            leave_type_id: runTypeId.value,
+            leave_year_id: leaveYearId.value,
+            mfa_code: d.mfa_code,
+        }))
+        .post('/app/leave/allocation-runs', {
+            preserveScroll: true,
+            onSuccess: () => runForm.reset('mfa_code'),
+        });
 }
 
 function policyName(id: string): string {
@@ -393,6 +401,18 @@ const leaveError = useLeaveError();
                         aria-label="Units"
                         class="input mt-2"
                     />
+                    <label class="mt-2 block text-sm"
+                        >Authentication code
+                        <input
+                            v-model="allocateForm.mfa_code"
+                            autocomplete="one-time-code"
+                            inputmode="numeric"
+                            class="input mt-1"
+                        />
+                    </label>
+                    <p v-if="allocateForm.errors.mfa_code" role="alert" class="text-sm text-danger">
+                        {{ allocateForm.errors.mfa_code }}
+                    </p>
                     <button
                         type="submit"
                         class="mt-2 underline"
@@ -526,8 +546,8 @@ const leaveError = useLeaveError();
                 </form>
             </div>
             <p v-if="canManage && !mfaEnrolled" class="mt-2 text-sm text-ink">
-                Adjustments and opening balances need a current authentication code: enroll a factor
-                under Account security first.
+                Allocations, allocation runs, adjustments and opening balances need a current
+                authentication code: enroll a factor under Account security first.
             </p>
             <p class="mt-2 text-sm">
                 <a class="underline" href="/app/leave/accruals">Monthly accrual →</a>
@@ -560,16 +580,31 @@ const leaveError = useLeaveError();
                             : `${runPreview.candidateCount} employment(s) would be allocated`
                     }}
                 </span>
-                <button
+                <template
                     v-if="runPreview && !runPreview.error && runPreview.leaveTypeId === runTypeId"
-                    type="button"
-                    class="btn btn-primary"
-                    :disabled="runForm.processing"
-                    @click="executeRun"
                 >
-                    Execute run
-                </button>
+                    <label class="text-sm"
+                        >Authentication code
+                        <input
+                            v-model="runForm.mfa_code"
+                            autocomplete="one-time-code"
+                            inputmode="numeric"
+                            class="input ml-1 w-auto"
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        :disabled="runForm.processing"
+                        @click="executeRun"
+                    >
+                        Execute run
+                    </button>
+                </template>
             </div>
+            <p v-if="runForm.errors.mfa_code" role="alert" class="mt-2 text-sm text-danger">
+                {{ runForm.errors.mfa_code }}
+            </p>
         </section>
     </main>
 </template>

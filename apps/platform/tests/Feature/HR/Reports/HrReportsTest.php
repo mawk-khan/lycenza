@@ -349,11 +349,11 @@ class HrReportsTest extends TestCase
         app(LeavePolicyAssignmentService::class)->assign($this->school, $employment->id, $policy->id, '2026-04-01', null, $admin);
 
         $this->travelTo('2026-10-01 06:00:00');
-        app(LeaveLedgerService::class)->allocate($this->school, $employment->id, $type->id, $year->id, 24, $admin);
+        app(LeaveLedgerService::class)->allocate($this->school, $employment->id, $type->id, $year->id, 24, $admin, $this->freshMfaProofFor($admin));
         $this->travelTo('2026-10-05 06:00:00');
         $request = app(LeaveRequestService::class)->submitOnBehalf($this->school, $employment->id, $type->id, '2026-10-07', 'full', '2026-10-08', 'full', null, $this->leaveClerk($this->school));
         app(LeaveRequestService::class)->approve($this->school, $request->id, $admin);
-        app(LeaveLedgerService::class)->adjust($this->school, $employment->id, $type->id, $year->id, 'credit', 1, 'administrative_correction', $admin);
+        app(LeaveLedgerService::class)->adjust($this->school, $employment->id, $type->id, $year->id, 'credit', 1, 'administrative_correction', $admin, $this->freshMfaProofFor($admin));
 
         $row = $this->rows('hr.leave_balances', ['leave_year_id' => $year->id, 'posted_by' => '2026-10-05'])[0];
         $statement = app(LeaveStatementReader::class)->statement($this->school, $employment->id, $type->id, $year->id, $this->hr);
@@ -383,7 +383,7 @@ class HrReportsTest extends TestCase
         [$ben] = $this->staff('Ben Das', 'S-002', department: $this->office);
         [$carla] = $this->staff('Carla Pinto', 'S-003');
         app(LeavePolicyAssignmentService::class)->assign($this->school, $ben->id, $policy->id, '2026-04-01', null, $admin);
-        app(LeaveLedgerService::class)->allocate($this->school, $ben->id, $type->id, $year->id, 24, $admin);
+        app(LeaveLedgerService::class)->allocate($this->school, $ben->id, $type->id, $year->id, 24, $admin, $this->freshMfaProofFor($admin));
 
         $attendance = app(StaffAttendanceService::class);
         $attendance->record($this->school, $asha->id, '2026-10-01', 'absent', 'present', $this->hr);

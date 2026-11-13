@@ -235,14 +235,14 @@ class LeaveAccrualTest extends TestCase
         $monthly = $this->monthly(2);
         $e = $this->employment();
         $this->assign($e, $monthly);
-        $this->assertSame('LEAVE_POLICY_ACCRUES_MONTHLY', $this->code(fn () => app(LeaveLedgerService::class)->allocate($this->school, $e->id, $this->type->id, $this->year->id, 10, $this->admin)));
+        $this->assertSame('LEAVE_POLICY_ACCRUES_MONTHLY', $this->code(fn () => app(LeaveLedgerService::class)->allocate($this->school, $e->id, $this->type->id, $this->year->id, 10, $this->admin, $this->freshMfaProofFor($this->admin))));
 
         // An account already funded by an annual allocation is never also accrued (outcome + database).
         $annualPolicy = $this->leavePolicy($this->school, $this->type, $this->admin, ['name' => 'Annual']);
         $f = $this->employment();
         $this->assign($f, $annualPolicy, '2026-04-01', '2026-06-30');
         $this->assign($f, $monthly, '2026-07-01');
-        app(LeaveLedgerService::class)->executeRun($this->school, $this->type->id, $this->year->id, $this->admin);
+        app(LeaveLedgerService::class)->executeRun($this->school, $this->type->id, $this->year->id, $this->admin, $this->freshMfaProofFor($this->admin));
         $this->assertSame('annual_allocation_exists', $this->preview('2026-08-01')[$f->id]['outcome']);
         $this->accrue('2026-08-01');
         $this->assertSame([], $this->accruals($f));
@@ -346,7 +346,7 @@ class LeaveAccrualTest extends TestCase
         $this->accrue('2026-04-01');
 
         $this->assertCount(1, $this->accruals($own), 'policy-driven: the operator chooses no amount (the annual run precedent, ORG.8D)');
-        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => app(LeaveLedgerService::class)->recordOpening($this->school, $own->id, $this->type->id, $this->year->id, 4, $this->admin)));
+        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => app(LeaveLedgerService::class)->recordOpening($this->school, $own->id, $this->type->id, $this->year->id, 4, $this->admin, $this->freshMfaProofFor($this->admin))));
     }
 
     #[Test]

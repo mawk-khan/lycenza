@@ -73,7 +73,7 @@ class LeaveRequestConcurrencyTest extends TestCase
         $w['closing'] = app(LeaveYearService::class)->open($w['school'], '2024-06-01', $w['admin']);
         $w['following'] = app(LeaveYearService::class)->open($w['school'], '2025-06-01', $w['admin']);
         app(LeavePolicyAssignmentService::class)->assign($w['school'], $w['employment']->id, $w['policy']->id, '2024-04-01', '2026-03-31', $w['admin']);
-        app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['closing']->id, 24, $w['admin']);
+        app(LeaveLedgerService::class)->allocate($w['school'], $w['employment']->id, $w['type']->id, $w['closing']->id, 24, $w['admin'], $this->freshMfaProofFor($w['admin']));
 
         return $w;
     }

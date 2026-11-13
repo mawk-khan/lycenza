@@ -166,7 +166,7 @@ class HrSelfAdministrationTest extends TestCase
         $year = app(LeaveYearService::class)->open($school, '2026-06-01', $officer);
         StaffCalendarFixture::startHistory($school, [1 => 'full', 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off']);
         app(LeavePolicyAssignmentService::class)->assign($school, $mine->id, $policy->id, '2026-04-01', null, $peer);
-        app(LeaveLedgerService::class)->allocate($school, $mine->id, $type->id, $year->id, 24, $peer);
+        app(LeaveLedgerService::class)->allocate($school, $mine->id, $type->id, $year->id, 24, $peer, $this->freshMfaProofFor($peer));
 
         // ORG.8D (G-4): the officer cannot even enter their own leave administratively.
         $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->refusal(fn () => app(LeaveRequestService::class)

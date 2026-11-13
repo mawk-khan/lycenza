@@ -62,9 +62,9 @@ try {
     $years = $app->make(LeaveYearService::class);
     $requests = $app->make(LeaveRequestService::class);
     echo $app->make(TenantContext::class)->withSchool($school, fn () => HeldTransaction::run(fn (): string => match ($operation) {
-        'allocate' => 'ok:'.$ledger->allocate($school, $args[1], $args[2], $args[3], (int) $args[4], User::query()->findOrFail($args[5]))->units,
-        'debit' => 'ok:'.$ledger->adjust($school, $args[1], $args[2], $args[3], 'debit', (int) $args[4], 'allocation_correction', User::query()->findOrFail($args[5]))->units,
-        'run' => 'ok:'.$ledger->executeRun($school, $args[1], $args[2], User::query()->findOrFail($args[3]))->allocated_count,
+        'allocate' => 'ok:'.$ledger->allocate($school, $args[1], $args[2], $args[3], (int) $args[4], User::query()->findOrFail($args[5]), new FreshMfaProof($args[5], CarbonImmutable::now()))->units,
+        'debit' => 'ok:'.$ledger->adjust($school, $args[1], $args[2], $args[3], 'debit', (int) $args[4], 'allocation_correction', User::query()->findOrFail($args[5]), new FreshMfaProof($args[5], CarbonImmutable::now()))->units,
+        'run' => 'ok:'.$ledger->executeRun($school, $args[1], $args[2], User::query()->findOrFail($args[3]), new FreshMfaProof($args[3], CarbonImmutable::now()))->allocated_count,
         'open' => (fn ($y) => 'ok:'.$y->starts_on->toDateString().'..'.$y->ends_on->toDateString().($y->is_transition ? ':transition' : ''))($years->open($school, $args[1], User::query()->findOrFail($args[2]))),
         'schedule' => 'ok:'.$years->scheduleStartChange($school, (int) $args[1], $args[2], User::query()->findOrFail($args[3]))->effective_from->toDateString(),
         'submit' => 'ok:'.$requests->submitOnBehalf($school, $args[1], $args[2], $args[3], 'full', $args[4], 'full', null, User::query()->findOrFail($args[5]))->status,

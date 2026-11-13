@@ -162,7 +162,7 @@ Each needs its own authorization to start, and each follows the standard path:
 | §1 | C27-B readings adopted |
 | D-1 | Decided (C16); its four ACTIVE rows built by WO-5 and WO-6 |
 | D-2, D-3, D-6 | Decided and built |
-| D-4 | **Decided (D-C35-3)**; WO-19 not started |
+| D-4 | **Decided (D-C35-3); built by WO-19** (`HR-R1-C35-WO19-LEAVE-WRITE-ASSURANCE.md`) |
 | D-7, D-9, D-10 | Pending in the C12 docket: D-7 performance targets (Product); D-9 "employments examined" against ADR 0040 (Product); D-10 extend E47 (Legal, not sent) |
 | RG-ID-1 | Open release gate |
 | C33-H1 to H5 | Handoffs, unchanged |
