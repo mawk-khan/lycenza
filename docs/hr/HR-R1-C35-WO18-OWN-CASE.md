@@ -132,3 +132,17 @@ The development database stops at `2027_02_18_090000`. The owner authorized forw
 | WO18-N1, WO18-N2 | Open, INFO |
 | WO-19 to WO-22 | Not started |
 | Seven P3 decisions, other P3/LOW findings, RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
+
+## 8. Publication and the development database
+
+- **Candidate `3c292e2a`, CI run 43437520823: green on its first attempt, no reruns.**
+  - **11,845 tests (11,830 + the 15 new), 468,418 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards, coverage union proven equal to the canonical inventory;
+  - static and frontend, full-history secrets, supply chain, integrity and production images all green.
+- **Published** with `lycenza-ci publication-check --candidate 3c292e2a… --push` on 2026-11-13. E16 last valid day 2026-11-28, no problems. `origin/main` = `3c292e2a`.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database forward-migrated (D-WO18-2)** through `pgsql_admin` after publication:
+  - **Target verified first:** environment `local`, database `db`, exactly three pending: `2027_02_19_090000`, `2027_02_20_090000`, `2027_02_21_090000`. All three applied.
+  - **Data preserved:** migrations 393 → 396; every other count unchanged (employees 13, account links 1, separation cases 0, leave decisions 0, payroll runs 2, School audit events 869). The locked October 2026 Staff Attendance month row is byte-identical (md5 of the row before and after).
+  - **Verified:** `platform:verify-database` failed=0 (operator evidence 1: connection encryption outside production); `known_same_person_guards`, `hr_family_trigger_functions` and `hr_family_runtime_privileges` PASS.
+  - The development database is now current with the repository.
