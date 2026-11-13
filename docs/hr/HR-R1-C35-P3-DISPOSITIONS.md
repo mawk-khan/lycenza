@@ -198,6 +198,7 @@ Engineering and product direction only; not legal, privacy or DPO approval.
 | D-C35-9 | C34-N3 | Extend "never one's own" person-level to every separation write and administrative leave withdraw/cancel (amends OD-HR-25 for HR) | HR, Identity, Security owner | Finding stays INFO until WO-18 | None | WO-18 | Any change to OD-HR-25 |
 | D-WO18-1 | WO17-N1 | MEDIUM (MAJOR); Option A, the post-decision independence functions treat a known-same account of the paid Employee like the Employee's own | Payroll, Identity, Security owner | NOT CLOSED until that unit publishes | Real Payroll waits as before | A separate unit after WO-18 | Any change to OD-HR-24/25 |
 | D-WO18-2 | Development database | Forward-migrate it through `pgsql_admin` after WO-18 publishes, then verify | Owner | None | None | Done in WO-18 §8 | — |
+| D-WO17N1-1 | Author side of WO17-N1 (found by its review) | MEDIUM (MAJOR); fix in the same unit | Payroll, Identity, Security owner | Closed with that unit | Real Payroll waits as before | Built (`HR-R1-C35-WO17-N1-POST-APPROVAL-INDEPENDENCE.md`) | Any change to OD-HR-24/25 |
 | D-C35-10 | Other open P3/LOW findings | Disposition each individually before baseline selection | HR owner | Final PASS remains possible | None | Their dispositions | — |
 
 ## 10. Verdict and next checkpoint

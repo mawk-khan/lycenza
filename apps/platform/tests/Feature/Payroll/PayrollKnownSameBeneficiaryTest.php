@@ -9,6 +9,7 @@ use App\Domain\Finance\Domain\JournalSide;
 use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAccountLink;
+use App\Domain\Payroll\Application\Exceptions\PostingAttestationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\SelfBeneficiaryConflictException;
 use App\Domain\Payroll\Application\PayrollApprovalReviewService;
 use App\Domain\Payroll\Application\PayrollPostingIndependence;
@@ -165,7 +166,7 @@ class PayrollKnownSameBeneficiaryTest extends TestCase
     }
 
     #[Test]
-    public function a_completed_approval_is_never_reread_when_a_later_link_makes_the_approver_the_paid_employee(): void
+    public function a_completed_approval_is_never_rewritten_when_a_later_link_makes_the_approver_the_paid_employee(): void
     {
         $this->buildWorld();
         $a = $this->decider();
@@ -181,8 +182,14 @@ class PayrollKnownSameBeneficiaryTest extends TestCase
         $this->link($d, $dup);
 
         $this->assertSame($before, $this->runRow($run), 'decided on the history as it stood (C33: never retroactive)');
-        $this->postRun($run);
+
+        // WO17-N1 Option A (D-WO18-1): as for the Employee's own account (rules 144, 145: "a link change alone can create
+        // the exception"), the run now needs an independent attestation before posting; the approval itself is untouched.
+        $this->refusedAs(PostingAttestationRequiredException::class, fn () => $this->postRun($run));
+        $version = (string) $this->inSchool($this->school, fn () => app(PayrollPostingIndependence::class)->version($run->fresh()));
+        $this->inSchool($this->school, fn () => app(PayrollPostingService::class)->post($run->fresh(), $this->poster, $this->freshMfaProofFor($this->poster), null, new PostingAttestation($version, true)));
         $this->assertSame('posted', $this->runRow($run)['status']);
+        $this->assertSame([$before['approved_by_user_id'], $before['approved_at']], [$this->runRow($run)['approved_by_user_id'], $this->runRow($run)['approved_at']]);
     }
 
     #[Test]

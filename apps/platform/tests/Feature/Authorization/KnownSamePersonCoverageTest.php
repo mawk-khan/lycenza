@@ -170,4 +170,23 @@ class KnownSamePersonCoverageTest extends TestCase
         }
         $this->assertSame([], $context->withSchool($school, fn () => DB::select('select user_id from employee_account_link_same_person_accounts(?, ?)', [$school->id, $e->id])), 'never linked: unknown');
     }
+
+    /**
+     * WO17-N1 Option A: the post-decision independence functions apply the same relation -- asked ONCE per
+     * distinct approver in a materialized `known` set (review M-1), then matched per row against it.
+     */
+    #[Test]
+    public function the_post_decision_independence_functions_treat_a_known_same_approver_as_the_employee(): void
+    {
+        $sources = [
+            'payroll_run_first_paid_compensation' => [(string) DB::selectOne("select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'payroll_run_first_paid_compensation'")->prosrc, 2],
+            'payroll_run_independence_exception' => [(string) DB::selectOne("select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'payroll_run_independence_exception'")->prosrc, 2],
+            'payroll_reversal_affected_runs/3' => [(string) DB::selectOne("select prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname = 'payroll_reversal_affected_runs' and pronargs = 3")->prosrc, 4],
+        ];
+        foreach ($sources as $function => [$src, $matches]) {
+            $this->assertSame(1, substr_count($src, 'public.employee_account_link_same_person_accounts('), "{$function}: the relation, asked once");
+            $this->assertStringContainsString('known AS MATERIALIZED', $src, "{$function}: materialized per approver, never per row");
+            $this->assertSame($matches, substr_count($src, 'FROM known k WHERE k.approver ='), "{$function}: every Employee and author check reads it (D-WO18-1, D-WO17N1-1)");
+        }
+    }
 }

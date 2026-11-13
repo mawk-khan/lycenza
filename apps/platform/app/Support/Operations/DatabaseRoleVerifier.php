@@ -1274,6 +1274,13 @@ class DatabaseRoleVerifier
         // WO-17: its subject check also matches an account known to be the same person (was ae7a3cce...).
         'payroll_reversal_reconciliation_reviews_guard' => 'ad3751c777e3b97a875f679d89d871ee',
         'payroll_runs_self_beneficiary_guard' => '082cd4318c5c05b7bbc421d09c3897d6',
+        // WO17-N1 Option A (D-WO18-1) and the author side (D-WO17N1-1): after a decision, an approval by an account known
+        // to be the Employee, or the change's author, neither discharges it nor keeps the run independent; each asks the
+        // relation once per distinct approver (review M-1).
+        'payroll_run_first_paid_compensation' => '57d36242a89cb269135aa35c6be67cf9',
+        'payroll_run_independence_exception' => '2b7352ba011b11ca26e8698f9604e819',
+        // An overloaded name is pinned by its exact signature (WO17-N1 review L-1).
+        'payroll_reversal_affected_runs(uuid,uuid,uuid)' => 'a2632c248a365135bce05c875c24b061',
         'payroll_posting_attestations_self_beneficiary_guard' => '00fe114944f09eaeeef69f898c3b7e62',
         // WO-18: administrative withdraw/cancel of one's own leave (was 3823d9e8...).
         'leave_decisions_refuse_submitter' => '3e7a2304d3db03c105f25bb8b29c6008',
@@ -1316,8 +1323,11 @@ class DatabaseRoleVerifier
 
         foreach (self::KNOWN_SAME_PERSON_BODIES as $function => $hash) {
             // WO-17 review L-2: the body, and the mode and path `prosrc` does not carry (INVOKER, `pg_temp` last).
-            $bodies = DB::select("select md5(prosrc) as h, prosecdef, coalesce(array_to_string(proconfig, '|'), '') as config
-                from pg_proc where pronamespace = 'public'::regnamespace and proname = ?", [$function]);
+            $bodies = str_contains($function, '(')
+                ? DB::select("select md5(prosrc) as h, prosecdef, coalesce(array_to_string(proconfig, '|'), '') as config
+                    from pg_proc where oid = to_regprocedure(?)", ['public.'.$function])
+                : DB::select("select md5(prosrc) as h, prosecdef, coalesce(array_to_string(proconfig, '|'), '') as config
+                    from pg_proc where pronamespace = 'public'::regnamespace and proname = ?", [$function]);
             if (count($bodies) !== 1 || $bodies[0]->h !== $hash) {
                 $missing[] = $function.':body';
             } elseif ($bodies[0]->prosecdef || $bodies[0]->config !== 'search_path=pg_catalog, public, pg_temp') {
