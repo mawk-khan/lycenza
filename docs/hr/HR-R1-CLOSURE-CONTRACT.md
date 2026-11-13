@@ -316,6 +316,14 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Decisions recorded (HR.R1-C35, 2026-11-13): the seven P3s dispositioned; C34-N1 rated MAJOR. Nothing built.**
+- **Seven P3s:** HRC-4, HRC-8, LVA-4 (D-4) and TRR-6 approved for implementation (WO-20, WO-21, WO-19, WO-22); XRP-3 deferred to a TeachingAssignments checkpoint; XRP-4 and TRR-8 accepted (documented).
+- **C34-N1** reproduced (a known-same account of a paid Employee approves the run that pays that Employee's change first) and rated **MEDIUM by the owner: MAJOR under C27-C, so HR.R1 is NOT CLOSED** until WO-17 publishes.
+- **C34-N3:** extend "never one's own" person-level (WO-18, amends OD-HR-25 for HR).
+- **Other open P3/LOW findings:** each dispositioned before baseline selection.
+- **Independent review:** no HIGH; its MEDIUMs acted on before the decisions; new LOW C34-N4, C34-N5.
+- **Unchanged:** RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, every gate, 361 capability rows, 61 audit identifiers. No baseline selected (`HR-R1-C35-P3-DISPOSITIONS.md`).
+
 **Evidence recorded (HR.R1-C34, 2026-11-12): WO-16 built; the Identity MEDIUM's development part closes on publication.**
 - **Reproduced before the fix:** 14 of the 16 new tests failed because each prohibited decision was accepted, including a requester's own replaced account approving their own leave and separation.
 - **Built:** one relation (`HrSelfAdministrationGuard::knownSamePersonAccounts()` and the SQL `employee_account_link_same_person_accounts()`); refusals in service and database for Payroll approval, posting attestation and reconciliation review, Leave approve/reject and separation approve/reject; registry declarations; `known_same_person_guards` in `platform:verify-database` with whole-body hashes.

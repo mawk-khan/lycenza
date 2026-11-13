@@ -117,7 +117,7 @@ Each needs its domain owner's reader migration or a recorded exception (C12 §15
 | Id | Finding (`HR-R1-0-AUDIT-REGISTER.md`) | Owner | Needed |
 |---|---|---|---|
 | HRC-4 | Separation RETAINED is one timestamp, not bound to the grant set | HR, Identity | Bind at recording time or record a residual |
-| HRC-8 | Separation reason classification on the API | HR | Require it, or show "unclassified" |
+| HRC-8 | Separation reason classification on the API (**corrected by HR.R1-C35:** the finding concerns the unclassified staff type, not the reason) | HR | Require it, or show "unclassified" |
 | LVA-4 | Leave allocation and runs without step-up | Security (D-4) | Decide D-4, then step up |
 | XRP-3 | Teaching assignment candidate lists `limit(1000)` | TeachingAssignments + HR reader | Separate owner checkpoint |
 | XRP-4 | Timetable/Transport obligations key on the Employee, no employment column | Timetable, Transport | Document, or a date-scoped answer |

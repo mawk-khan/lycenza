@@ -119,7 +119,7 @@ A separate reviewer read the final code (no file changed, nothing run). **No HIG
 | **Identity MEDIUM** (development part) | **CLOSED for development on publication.** Its acceptance (C33 §6, "Done means"): WO-16 published with the tests above. The bypass is reproduced, and each of the five decisions refuses it in service and database |
 | RG-ID-1 | **Open, unchanged.** A release gate before real Payroll; nothing here records or satisfies it, and no School is enabled |
 | C33-H1 to H5 | Unchanged handoffs; Fees, Payments, Communications, Examinations and Erasure untouched |
-| C34-N1 (LOW), C34-N2 (INFO), C34-N3 (INFO) | Open, recorded |
+| C34-N1 (LOW), C34-N2 (INFO), C34-N3 (INFO) | Open, recorded. **HR.R1-C35:** C34-N1 reproduced and rated MEDIUM (MAJOR) by the owner, WO-17; C34-N3 extension decided, WO-18; new LOW C34-N4, C34-N5 from the final-delta review |
 | Seven P3 findings (HRC-4, HRC-8, LVA-4, XRP-3, XRP-4, TRR-6, TRR-8), R1-02 PARTIAL, C32-N1 to N4, C30-N1/N2, C29-N1/N2, C28-N1/N3/N4, C24-N1, C20-N1/N2, C18-A12 | Unchanged |
 | Legal, DPO and Security gates; capability map (361); 61 audit identifiers; five closure baselines | Unchanged; baselines unselected |
 

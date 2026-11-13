@@ -297,6 +297,12 @@ No new identifier: this amends OD-HR-25, whose record above stands as decided. *
 - **Unknown:** never treated as proven independence. The residual above stays recorded; release gate **RG-ID-1** (§1) applies before real Payroll.
 - **Never:** a biometric, a document check, inferred matching or a new personal identifier. `HR-R1-C33-IDENTITY-INDEPENDENCE-DECISION.md`
 
+### HR.R1-C35 decisions touching OD-HR-24 and OD-HR-25 (2026-11-13)
+
+Engineering direction by the owner, not legal, privacy or DPO approval. Nothing is built. `HR-R1-C35-P3-DISPOSITIONS.md` §4, §9.
+- **OD-HR-24 extended in purpose (D-C35-1).** A Payroll decider known to be the same person as an Employee whose change the run first pays is refused like that Employee's own account. C34-N1 rated MEDIUM; WO-17.
+- **OD-HR-25 amended for HR administration (D-C35-9).** "Never one's own" also refuses an uncorrected ended link and a known-same account, for every separation write and administrative leave withdraw/cancel; WO-18. Until WO-18 is built, rule 145's current-link answer stands for HR.
+
 ### OD-HR-22 decision record
 
 | Field | Record |
@@ -398,7 +404,7 @@ finding stands as recorded. HR.0A adds X-1–X-3.
 | S-4 | LOW (latent) | Statutory identifier reveal and the ECR/TDS exports carry no MFA or no-store header | latent | before any statutory grant |
 | S-5 | LOW | Fresh-MFA proof is optional at the Payroll service layer | **CLOSED for development (HR.R1-C1, 2026-11-05)**: approve, post, reverse and compensation assignment require the acting User's own `FreshMfaProof` in the service (`isFor`), not only at the route; the guarded local demo uses a labelled demo proof (`DemoModuleData::demoAssurance()`); application code mints proofs only in `FreshMfaRequirement` | — |
 | S-6 | LOW | Staff attendance correction: no window, MFA or second person; cached check | **DECIDED 2026-11-08 (HR.R1-C17); IMPLEMENTED for development 2026-11-08 (HR.R1-C18, `HR-R1-C18-WO6-MONTH-LOCK.md`).** HR owner: a School-local calendar month is locked by `hr.staff_attendance.lock` (school_admin, principal) and never reopened; a locked month changes only by an assured correction. Security with HR: fresh MFA to lock and to approve; a second lock-key holder approves, never the requester or the Employee; authority re-read under the lock; open-month corrections keep their controls with a fresh re-read. Control lands with WO-6 (`HR-R1-C17-S6-DECISION.md`). Before: no owner determination (HR.R1-C10: `APPROVAL-AUTHORITY-MATRIX.md:48` is an audit classification about approval only) | HR.7a, WO-6 |
-| S-7 | LOW | Leave adjustments and allocations need no fresh MFA; cached check | **Adjustments and openings FIXED (HR.10).** Allocation, runs and the cached check open: D-4 | HR.10 |
+| S-7 | LOW | Leave adjustments and allocations need no fresh MFA; cached check | **Adjustments and openings FIXED (HR.10).** Allocation, runs and the cached check open. **D-4 decided HR.R1-C35 (D-C35-3):** fresh MFA on allocation and runs, fresh authority read on every ledger and accrual write entry point; WO-19, not built | HR.10 |
 | S-8 | LOW | Employment create (API) accepts any status; `/end` accepts a future date | **FIXED (HR.1A)**: create accepts draft / pre_joining (future) / active only; web and API `/end` go through the separation command (no future date) | — |
 | S-9 | LOW | Department reparent checks for a cycle outside the transaction, without locks | **FIXED (HR.1A)**: the check runs inside the transaction under the per-School advisory lock, with database backstop `trg_hr_departments_no_cycle`; two-process test | — |
 | S-10 | LOW | "One current employment" and indirect reporting cycles are application-only | **FIXED (HR.1A + HR.3A)**: `trg_employment_records_no_overlap`, `trg_employee_assignments_primary_no_overlap` (HR.1A); reporting loops and overlap by `trg_reporting_relationships_guard`, date-aware, with two-process tests (HR.3A) | — |

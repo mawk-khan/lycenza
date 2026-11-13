@@ -60,7 +60,7 @@ hold the evidence with file and line.
 | D-2 | R1-02 | Architecture | No exception | P3 | None | Decide, §5 | Yes | Architecture |
 | R1-01 | One writer | Architecture | No definition | P3 | Definition | Adopt, or amend | Yes | Architecture |
 | D-3 | LVA-1 | HR owner | Choice | P2 | None | Decide, §5 | Yes | Architecture, operations |
-| D-4 | S-7 | Security | Choice | P3 | None | Decide, §5 | Yes | Architecture, production |
+| D-4 | S-7 | Security | Choice | P3 | **Decided HR.R1-C35** (fresh MFA on allocation and runs, fresh authority read) | Build WO-19 | Yes | Architecture, production |
 | D-6 | R1-03, S-16 | HR owner | Choice | P2 | None | Decide, §5 | Yes | Architecture, production |
 | Generic Employee upload | Whether that route should take Employee uploads at all: it has no category, and its tier is the caller's word | Security, HR owner | Choice | P3 | None | Decide, with D-4 | Yes | Architecture |
 | HRC-10, HRC-11, C10-N1 | Rules 86, 97; `is_paid` freeze | HR, Leave | **Closed by C11** | P3 | None | None | Yes | Architecture |
@@ -68,8 +68,8 @@ hold the evidence with file and line.
 | C10-N7, N8 | ECR delimiter, PAN format | Payroll | Code | P3 | Before any statutory grant | With S-4 | Yes | Production |
 | C10-N9 | No failed-code throttle | Security | Choice | P3 | None | Decide | Yes | Production |
 | C10-N2, N3, N6 | Composed move, `LeavePageSupport`, E21:490 | HR, Leave, E21 owner | Records | P3 | None | Next checkpoint; E21 by its owner | Yes | Architecture |
-| HRC-4, HRC-8, TRR-8, TRR-6 | Registers | HR, Tasks | Owner choices | P3 | Answers | Decide | Yes | Architecture |
-| XRP-3, XRP-4 | R1-02, R1-07 | Teaching, Timetable, Transport | Other owners | P3 | Their checkpoint | Authorize | Yes | Architecture |
+| HRC-4, HRC-8, TRR-8, TRR-6 | Registers | HR, Tasks | Owner choices | P3 | **Decided HR.R1-C35:** HRC-4, HRC-8, TRR-6 built by WO-20, WO-21, WO-22; TRR-8 accepted | Build the WOs | Yes | Architecture |
+| XRP-3, XRP-4 | R1-02, R1-07 | Teaching, Timetable, Transport | Other owners | P3 | **Decided HR.R1-C35:** XRP-3 deferred to its owner; XRP-4 accepted as a known limit | None in HR.R1 | Yes | Architecture |
 | S-4, S-6 record, S-16, X-1 | R1-12 | As §3 | Records and code | P3 | Decisions | As §3 | Yes | Architecture |
 | R1-09, §1, §4 | Verdict reading | Owner | Undefined | Admin | None | Decide, §6 | Yes | Architecture |
 | R-HR10-1 | Closed-year credit | Leave owner | No ledger path | P3 | Owner decision whether one is wanted | Keep flagged; never reopen a closed year | Yes | Production |
