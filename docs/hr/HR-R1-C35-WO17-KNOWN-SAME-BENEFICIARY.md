@@ -124,3 +124,14 @@ A separate reviewer read the final code (read-only). **No HIGH, no MEDIUM.** It 
 | C34-N3, C34-N5 | Unchanged, WO-18 |
 | WO-18 to WO-22 | Not started |
 | Seven P3 decisions, the other open P3/LOW findings, RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
+
+## 7. Publication
+
+- **Candidate `023c57f8`, CI run 43415630607: green on its first attempt, no reruns.**
+  - **11,830 tests (11,816 + the 14 new), 467,423 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards, coverage union proven equal to the canonical inventory;
+  - static and frontend, full-history secrets, supply chain, integrity and production images all green.
+  - The assertion total is 22 below C34's although 14 tests were added: some existing tests assert per data row, so their count varies between runs. Recorded, not explained away.
+- **Published** with `lycenza-ci publication-check --candidate 023c57f8… --push` on 2026-11-13. E16 last valid day 2026-11-28, no problems. `origin/main` = `023c57f8`.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database** unchanged: it lacks `2027_02_19_090000` and `2027_02_20_090000` until authorized.
