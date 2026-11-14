@@ -105,7 +105,21 @@
 | WO22-N2 (INFO) | The registry's `ownCaseGuards` lists the event guard, which is the return's backstop rather than an "own case" guard; `participants` names the event actor column, which also holds other timeline actors (the check reads the `submitted` events only) |
 | WO22-N3 (INFO) | Cancel and reassign keep the cached path and the current-account self check (not request/decide steps; rule 152 does not name them): an account known to be the assignee can still cancel or reassign its task |
 | WO22-N4 (INFO) | In a fresh process a revoked reviewer gets the private 404, not the 403 (its cache is empty); both refuse |
+| WO22-N5 (LOW, CI) | `IdempotencyServerErrorRealRouteTest::two_real_processes_racing_a_released_failure_never_write_twice` (C30, unrelated to WO-22) failed once on the first candidate run: two real HTTP processes did not answer within its 25 s barrier under CI load. It passed locally and on the rerun. A timing-sensitive test; it needs its own disposition |
 | Seven original P3 findings | HRC-4 (WO-20), HRC-8 (WO-21), LVA-4 (WO-19) closed; **TRR-6 closed on publication**; XRP-3 deferred (TeachingAssignments checkpoint; staging or above 1,000 staff); XRP-4 and TRR-8 accepted as documented |
 | Development MAJOR inventory | None open |
 | Other findings (WO21-N1..N5, WO20-N1..N7, WO19-N1..N6, WO18-N1/N2, WO17-N2, C32, C30, C29, C28, C10/C14/C19/C26), RG-ID-1, C33-H1..H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
 | Development database | 398 migrations; WO-21's `2027_02_24` and WO-22's `2027_02_25` not applied there (the owner's word needed) |
+
+## 6. Publication
+
+- **Candidate `5b78154c`, CI run 43581045054:**
+  - **Attempt 1:** shards 1, 2 and 4, static and frontend checks, images, secrets, supply chain and integrity were green. Shard 3 failed one unrelated test (WO22-N5, a C30 two-process HTTP race that missed its 25 s barrier); the coverage union was skipped as a consequence.
+  - **Attempt 2:** the failed jobs only were rerun on the same SHA, and shard 3, the coverage union and `CI gate` were green. This was a rerun of a timing-sensitive test, not a code correction and not an infrastructure retry.
+- **Totals: 11,943 tests (11,923 + the 20 new), 466,988 assertions, 0 failures, 1 skip (ESI-12)**; four shards (2,985 / 2,986 / 2,986 / 2,986), coverage union proven equal to the canonical inventory.
+- **Assertions:** 2,029 below WO-21's (469,017) although 20 tests were added. Data-dependent counts vary between runs; not traced test by test, a recorded limitation.
+- Committed-range gitleaks (`cb57c399..5b78154c`): no leaks.
+- **Published** with `lycenza-ci publication-check --candidate 5b78154c… --push` on 2026-11-14. E16 last valid day 2026-11-28, no problems. `origin/main` = `5b78154c`.
+- **`main` CI for the code, run 43583794330: green.** This evidence commit was pushed after it finished.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database:** 398 migrations; WO-21's and WO-22's migrations are not applied there (the owner's word needed).
