@@ -193,7 +193,9 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
     private function asNewRow(string $table, array $row): array
     {
         if ($table === 'employment_separation_cases') {
-            $row = ['status' => 'requested', 'version' => 1, 'decided_by_user_id' => null, 'decided_at' => null] + $row;
+            // HR.R1-C35 WO-21: and without the clearance basis an approval records.
+            $row = ['status' => 'requested', 'version' => 1, 'decided_by_user_id' => null, 'decided_at' => null,
+                'clearance_staff_type' => null, 'clearance_skipped_requirement_ids' => null] + $row;
         }
 
         return ['id' => (string) Str::uuid7()] + $row;

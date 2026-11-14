@@ -39,6 +39,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $access_retained_by_user_id
  * @property Carbon|null $access_retained_at
  * @property string|null $access_retained_grant_ids PostgreSQL uuid[] text (HR.R1-C35 WO-20); read it through retainedGrantIds()
+ * @property string|null $clearance_staff_type HR.R1-C35 WO-21: the staff type the approval's checklist used (NULL: unclassified, or not recorded)
+ * @property string|null $clearance_skipped_requirement_ids PostgreSQL uuid[] text (WO-21); read it through clearanceSkippedRequirementIds()
  * @property string|null $completed_by_user_id
  * @property Carbon|null $completed_at
  */
@@ -83,20 +85,44 @@ class EmploymentSeparationCase extends Model
      */
     public function retainedGrantIds(): ?array
     {
-        $raw = $this->access_retained_grant_ids;
-        if ($raw === null) {
-            return null;
-        }
-        $ids = array_values(array_filter(explode(',', trim((string) $raw, '{}')), fn (string $id) => $id !== ''));
-        sort($ids, SORT_STRING);
+        return self::parseUuidArray($this->access_retained_grant_ids);
+    }
 
-        return $ids;
+    /**
+     * HR.R1-C35 WO-21 (HRC-8): the staff-type requirements the approval's checklist did NOT apply because the
+     * employment was unclassified, as sorted ids; empty when none (or when it was classified); null when the
+     * case was approved before WO-21 recorded it, or is not approved yet. Frozen at approval
+     * (trg_employment_separation_cases_staff_type_basis).
+     *
+     * @return list<string>|null
+     */
+    public function clearanceSkippedRequirementIds(): ?array
+    {
+        return self::parseUuidArray($this->clearance_skipped_requirement_ids);
     }
 
     /** @param  list<string>  $ids  sorted grant ids */
     public static function grantIdArray(array $ids): string
     {
+        return self::uuidArray($ids);
+    }
+
+    /** @param  list<string>  $ids  sorted uuids */
+    public static function uuidArray(array $ids): string
+    {
         return '{'.implode(',', $ids).'}';
+    }
+
+    /** @return list<string>|null */
+    private static function parseUuidArray(?string $raw): ?array
+    {
+        if ($raw === null) {
+            return null;
+        }
+        $ids = array_values(array_filter(explode(',', trim($raw, '{}')), fn (string $id) => $id !== ''));
+        sort($ids, SORT_STRING);
+
+        return $ids;
     }
 
     /** @return BelongsTo<EmploymentRecord, $this> */

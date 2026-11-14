@@ -32,6 +32,20 @@ interface CaseDetail {
     finalEndsOn: string | null;
     cancelReason: string | null;
     accessRetained: boolean;
+    clearanceBasis: {
+        state: 'preview' | 'recorded' | 'not_recorded' | 'none';
+        staffType?: string | null;
+        staffTypeLabel?: string | null;
+        unclassified?: boolean;
+        skipped?: {
+            id: string;
+            code: string;
+            label: string;
+            staffTypeLabel: string | null;
+            mandatory: boolean;
+            retired: boolean;
+        }[];
+    };
     accessRetention: {
         recordedAt: string | null;
         recordedBy: string | null;
@@ -48,6 +62,7 @@ interface CaseDetail {
         endsOn: string | null;
         status: string;
         staffType: string | null;
+        staffTypeLabel: string | null;
     };
     people: { requestedBy: string | null; decidedBy: string | null; finalizedBy: string | null };
     timeline: {
@@ -490,6 +505,70 @@ const outstanding = computed(() =>
                 Taken from the School's clearance requirements when the separation was approved.
                 Each item is cleared by the person responsible for it; there are no waivers.
             </p>
+            <!-- HR.R1-C35 WO-21 (HRC-8): the staff type the checklist used, and the requirements it did not apply. -->
+            <div class="mt-2 text-sm" data-test="clearance-basis">
+                <p
+                    v-if="
+                        c.clearanceBasis.state === 'recorded' ||
+                        c.clearanceBasis.state === 'preview'
+                    "
+                >
+                    <span class="font-medium">{{
+                        c.clearanceBasis.state === 'recorded'
+                            ? 'Staff type used for this checklist:'
+                            : 'Staff type now (the checklist is taken at approval):'
+                    }}</span>
+                    {{
+                        c.clearanceBasis.unclassified
+                            ? 'Unclassified'
+                            : c.clearanceBasis.staffTypeLabel
+                    }}
+                </p>
+                <p v-else-if="c.clearanceBasis.state === 'not_recorded'">
+                    <span class="font-medium">Staff type used for this checklist:</span> not
+                    recorded. This case was approved before it was recorded.
+                </p>
+                <p
+                    v-if="
+                        c.clearanceBasis.state === 'not_recorded' ||
+                        (c.clearanceBasis.state !== 'none' &&
+                            c.employment.staffTypeLabel !==
+                                (c.clearanceBasis.staffTypeLabel ?? null))
+                    "
+                    class="text-ink-muted"
+                >
+                    Staff type now: {{ c.employment.staffTypeLabel ?? 'Unclassified' }}.
+                </p>
+                <template
+                    v-if="
+                        c.clearanceBasis.unclassified && (c.clearanceBasis.skipped ?? []).length > 0
+                    "
+                >
+                    <p id="clearance-skipped-heading" class="mt-2 font-medium">
+                        <span aria-hidden="true">⚠</span>
+                        {{
+                            c.clearanceBasis.state === 'recorded'
+                                ? 'Not applied because the employment was unclassified'
+                                : 'Approving now would not apply these, because the employment is unclassified'
+                        }}
+                        ({{ (c.clearanceBasis.skipped ?? []).length }}):
+                    </p>
+                    <ul aria-labelledby="clearance-skipped-heading" class="mt-1 list-disc pl-5">
+                        <li v-for="r in c.clearanceBasis.skipped" :key="r.id">
+                            {{ r.label }} — {{ r.staffTypeLabel }} staff,
+                            {{ r.mandatory ? 'mandatory' : 'optional' }}. Not evaluated, not
+                            cleared.<span v-if="r.retired" class="text-ink-muted">
+                                (Since retired.)</span
+                            >
+                        </li>
+                    </ul>
+                </template>
+                <p v-else-if="c.clearanceBasis.unclassified" class="mt-2 text-ink-muted">
+                    No staff-type requirement
+                    {{ c.clearanceBasis.state === 'recorded' ? 'was' : 'would be' }}
+                    left out.
+                </p>
+            </div>
             <EmptyState
                 v-if="c.clearance.length === 0"
                 class="mt-3"

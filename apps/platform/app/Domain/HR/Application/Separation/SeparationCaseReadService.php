@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Application\Separation;
 
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\EmploymentSeparationCase;
 use App\Domain\HR\Infrastructure\EmploymentSeparationEvent;
@@ -150,7 +151,9 @@ final class SeparationCaseReadService
                     'endsOn' => $employment->ends_on?->toDateString(),
                     'status' => $employment->status,
                     'staffType' => $employment->staff_type,
+                    'staffTypeLabel' => $employment->staff_type === null ? null : StaffType::from($employment->staff_type)->label(),
                 ],
+                'clearanceBasis' => $this->clearanceBasis($school, $case, $employment),
                 'people' => [
                     'requestedBy' => $names[$case->requested_by_user_id] ?? null,
                     'decidedBy' => $case->decided_by_user_id === null ? null : ($names[$case->decided_by_user_id] ?? null),
@@ -197,6 +200,57 @@ final class SeparationCaseReadService
                 'cancelReasons' => SeparationCancelReason::options(),
             ];
         });
+    }
+
+    /**
+     * HR.R1-C35 WO-21 (HRC-8, D-C35-4, D-WO21-1): which staff type the clearance checklist used, and which
+     * staff-type requirements an unclassified employment did not get -- from the case's frozen record once
+     * approved ('recorded'), or, before approval, a preview of what approving now would do ('preview', from the
+     * School's active requirements and today's classification); a case approved before WO-21 says so
+     * ('not_recorded'), never reconstructed. Each skipped requirement is named, with whether it has since been
+     * retired. Nothing here changes a clearance state or blocks completion.
+     *
+     * @return array<string, mixed>
+     */
+    private function clearanceBasis(School $school, EmploymentSeparationCase $case, EmploymentRecord $employment): array
+    {
+        $label = fn (?string $type) => $type === null ? null : StaffType::from($type)->label();
+        if ($case->status === 'requested') {
+            $skipped = $employment->staff_type !== null ? [] : SeparationClearanceRequirement::query()->where('school_id', $school->id)
+                ->where('status', 'active')->whereNotNull('staff_type')->pluck('id')->map(fn ($id) => (string) $id)->all();
+
+            return ['state' => 'preview', 'staffType' => $employment->staff_type, 'staffTypeLabel' => $label($employment->staff_type),
+                'unclassified' => $employment->staff_type === null, 'skipped' => $this->requirementsNamed($school, $skipped)];
+        }
+        // Approved at some point: approved, finalized, completed, or cancelled after approval (review LOW 4).
+        if (! in_array($case->status, ['approved', 'finalized', 'completed', 'cancelled'], true)) {
+            return ['state' => 'none'];
+        }
+        $recorded = $case->clearanceSkippedRequirementIds();
+        if ($recorded === null) {
+            return ['state' => 'not_recorded'];
+        }
+
+        return ['state' => 'recorded', 'staffType' => $case->clearance_staff_type, 'staffTypeLabel' => $label($case->clearance_staff_type),
+            'unclassified' => $case->clearance_staff_type === null, 'skipped' => $this->requirementsNamed($school, $recorded)];
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return list<array{id: string, code: string, label: string, staffTypeLabel: ?string, mandatory: bool, retired: bool}>
+     */
+    private function requirementsNamed(School $school, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return SeparationClearanceRequirement::query()->where('school_id', $school->id)->whereIn('id', $ids)->orderBy('sequence')->orderBy('code')->get()
+            ->map(fn (SeparationClearanceRequirement $r) => [
+                'id' => (string) $r->id, 'code' => $r->code, 'label' => $r->label,
+                'staffTypeLabel' => $r->staff_type === null ? null : StaffType::from($r->staff_type)->label(),
+                'mandatory' => (bool) $r->is_mandatory, 'retired' => $r->status === 'retired',
+            ])->values()->all();
     }
 
     /** The employment a new case would be recorded for, or "not found" when it cannot have one. */

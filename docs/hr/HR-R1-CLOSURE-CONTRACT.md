@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-21, 2026-11-14): HRC-8 closed for development on publication; no open MAJOR.**
+- **Built:** the separation approval records the staff type its checklist used and, for an unclassified employment, the staff-type requirements it did not apply (D-WO21-1), database-required and frozen, with clearance items bound to it; the case shows "Unclassified" and names each one as not evaluated and not cleared; nothing new blocks completion (D-C35-4).
+- **Proof:** reproduced at `0a867e21`; classified positive controls for every staff type; raw runtime role; two-process races; the legacy case on committed data; six planted bypasses detected (the School filter behind forced RLS is not, by design).
+- **Reviewed:** independent review (no HIGH or MEDIUM; its LOWs fixed) and a final-state recheck (its LOW fixed).
+- **Still open:** WO-22 and the other P3/LOW dispositions before baseline selection. HR.R1 stays OPEN (`HR-R1-C35-WO21-UNCLASSIFIED-STAFF-TYPE.md`).
+
 **Evidence recorded (HR.R1-C35 WO-20, 2026-11-14): HRC-4 closed for development on publication; no open MAJOR.**
 - **Built:** "kept School access" binds the exact set of the account's live School role grants at recording (server-read under Identity's access lock, database-required); RETAINED only while every live grant is in it; immutable and never re-recorded (D-WO20-1); a pre-WO-20 record is never RETAINED (D-WO20-2).
 - **Proof:** reproduced at `31a14420`; allow and deny, raw runtime role, two-process races, the legacy record on committed data; eight planted bypasses detected (the School filter behind forced RLS is not, by design).

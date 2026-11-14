@@ -202,6 +202,7 @@ Engineering and product direction only; not legal, privacy or DPO approval.
 | D-WO20-1 | HRC-4: an OPEN case after kept access was recorded | Off-board only: the kept record stays immutable and is never recorded again | Owner (2026-11-13, WO-20 dialog) | Built by WO-20 | None | — | Off-boarding or certification changes |
 | D-WO20-2 | HRC-4: a kept record from before WO-20 (no set) | Fail closed: OPEN, shown as recorded before the kept roles were stored; never back-filled | Owner (2026-11-13) | Built by WO-20 | None | — | — |
 | D-WO20-3 | Development database | Forward-migrate after WO-20 publishes (`2027_02_22` and `2027_02_23`), through `pgsql_admin`, then verify | Owner (2026-11-13) | WO-20 record §8 | None | — | — |
+| D-WO21-1 | HRC-8: record the skipped requirements at approval, or compute them at read time? | Record at approval (frozen columns); cases approved before WO-21 say "not recorded" | Owner (2026-11-14, WO-21 dialog) | Built by WO-21 | None | — | A staff-type requirement made mandatory |
 | D-C35-10 | Other open P3/LOW findings | Disposition each individually before baseline selection | HR owner | Final PASS remains possible | None | Their dispositions | — |
 
 ## 10. Verdict and next checkpoint

@@ -91,6 +91,8 @@ class OperatorVerificationCommandsTest extends TestCase
             'known_same_person_guards',
             // HR.R1-C35 WO-20 (HRC-4)
             'hr_separation_retained_access_binding',
+            // HR.R1-C35 WO-21 (HRC-8)
+            'hr_separation_clearance_basis',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

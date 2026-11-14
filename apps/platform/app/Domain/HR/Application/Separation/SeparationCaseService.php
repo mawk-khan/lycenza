@@ -25,6 +25,7 @@ use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -138,14 +139,24 @@ final class SeparationCaseService
                 throw SeparationException::conflict('SEPARATION_EMPLOYMENT_NOT_ACTIVE', 'This employment is no longer active, so the separation cannot be approved.');
             }
 
-            $this->transition($case, 'approved', ['decided_by_user_id' => $actor->id, 'decided_at' => now()]);
+            // HR.R1-C35 WO-21 (HRC-8): one read of the School's active requirements decides both the checklist and
+            // its recorded basis -- the staff type used, and the staff-type requirements an unclassified employment
+            // does not get. The database re-derives and freezes the basis (trg_employment_separation_cases_staff_type_basis).
+            $requirements = $this->activeRequirements($school);
+            $skipped = self::skippedForUnclassified($requirements, $employment);
+            $this->transition($case, 'approved', [
+                'decided_by_user_id' => $actor->id, 'decided_at' => now(),
+                'clearance_staff_type' => $employment->staff_type,
+                'clearance_skipped_requirement_ids' => EmploymentSeparationCase::uuidArray($skipped),
+            ]);
             $this->employments->startNoticePeriod($school, $employment, $case->id, $actor);
-            $items = $this->snapshotClearance($school, $case, $employment);
+            $items = $this->snapshotClearance($case, $employment, $requirements);
 
             $this->event($case, 'approved', $actor);
             $this->audit->school($school, 'hr.separation.approved', actor: $actor, subject: $case, metadata: [
                 'employmentRecordId' => $employment->id,
                 'clearanceItemCount' => $items,
+                'clearanceStaffType' => $employment->staff_type, 'skippedRequirementIds' => $skipped,
                 ...ApprovalProvenance::metadata(self::participants($case), ApprovalProvenance::APPROVED, $actor, null, $mfa),
             ]);
 
@@ -475,6 +486,10 @@ final class SeparationCaseService
             if (str_contains($e->getMessage(), 'hr_employment_separation_own_case')) {
                 throw self::ownCase();
             }
+            // HR.R1-C35 WO-21: the clearance requirements changed between the service's read and the approval.
+            if (str_contains($e->getMessage(), 'hr_separation_clearance_basis_guard')) {
+                throw SeparationException::conflict('SEPARATION_REQUIREMENTS_CHANGED', 'The clearance requirements changed while this was approved. Reload and try again.');
+            }
             // HR.R1-C35 WO-20: the database's own re-read of the kept grant set disagreed.
             if (str_contains($e->getMessage(), 'hr_separation_retained_grants_guard')) {
                 throw SeparationException::conflict('SEPARATION_ACCESS_CHANGED', 'The account\'s School roles changed while this was recorded. Reload and try again.');
@@ -493,12 +508,39 @@ final class SeparationCaseService
         }
     }
 
-    /** The applicable active requirements at approval, by staff type (NULL = every staff type). */
-    private function snapshotClearance(School $school, EmploymentSeparationCase $case, EmploymentRecord $employment): int
+    /** @return Collection<int, SeparationClearanceRequirement> the School's active requirements, in checklist order */
+    private function activeRequirements(School $school): Collection
     {
-        $requirements = SeparationClearanceRequirement::query()->where('school_id', $school->id)->where('status', 'active')
-            ->where(fn ($q) => $q->whereNull('staff_type')->orWhere('staff_type', $employment->staff_type))
+        return SeparationClearanceRequirement::query()->where('school_id', $school->id)->where('status', 'active')
             ->orderBy('sequence')->orderBy('code')->get();
+    }
+
+    /**
+     * HR.R1-C35 WO-21 (HRC-8): the staff-type requirements an UNCLASSIFIED employment does not get, as sorted ids;
+     * none for a classified one (another type's requirement does not apply to it, it is not skipped).
+     *
+     * @param  Collection<int, SeparationClearanceRequirement>  $requirements
+     * @return list<string>
+     */
+    private static function skippedForUnclassified(Collection $requirements, EmploymentRecord $employment): array
+    {
+        if ($employment->staff_type !== null) {
+            return [];
+        }
+        $ids = $requirements->filter(fn (SeparationClearanceRequirement $r) => $r->staff_type !== null)->map(fn ($r) => (string) $r->id)->values()->all();
+        sort($ids, SORT_STRING);
+
+        return $ids;
+    }
+
+    /**
+     * The applicable active requirements at approval, by staff type (NULL = every staff type).
+     *
+     * @param  Collection<int, SeparationClearanceRequirement>  $active
+     */
+    private function snapshotClearance(EmploymentSeparationCase $case, EmploymentRecord $employment, Collection $active): int
+    {
+        $requirements = $active->filter(fn (SeparationClearanceRequirement $r) => $r->staff_type === null || $r->staff_type === $employment->staff_type)->values();
 
         foreach ($requirements as $requirement) {
             SeparationClearanceItem::query()->forceCreate([

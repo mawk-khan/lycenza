@@ -118,6 +118,8 @@ class DatabaseRoleVerifier
             'trg_employment_separation_cases_guard' => ['hr_employment_separation_cases_guard', 'ffd7a3dd40a02c10c40427566d1821e8'],
             // HR.R1-C35 WO-20 (HRC-4): kept access binds exactly the live School grant set, immutable, never back-filled.
             'trg_employment_separation_cases_retained_grants' => ['hr_separation_retained_grants_guard', 'f6bcae75b805af8bc10f58b9c22ddc9f'],
+            // HR.R1-C35 WO-21 (HRC-8): the approval records its checklist's staff type and the requirements it did not apply.
+            'trg_employment_separation_cases_staff_type_basis' => ['hr_separation_clearance_basis_guard', '15f067ddee77fdf1499568ec83dd1397'],
         ],
         'employment_terms' => ['trg_employment_terms_append_guard' => ['hr_employment_terms_append_guard', '9a11a1bca26e5540a63a4f62300a4864'], 'trg_employment_terms_immutable' => ['hr_history_row_immutable', 'c12c92b4e208b4a9904ec096b1b5234e'], 'trg_employment_terms_project' => ['hr_employment_terms_project', 'bf3d9dbf6a507ea1c7dd66b60679d454']],
         'hr_departments' => ['trg_hr_departments_no_cycle' => ['hr_departments_no_cycle', 'd4b31242d9290f08f32c92f8df989ca5']],
@@ -138,7 +140,11 @@ class DatabaseRoleVerifier
         'leave_year_start_changes' => ['trg_leave_year_start_changes_guard' => ['leave_year_start_changes_guard', '04c75ba2e4d62433986e7319ed0aa605']],
         'leave_years' => ['trg_leave_years_guard' => ['leave_years_guard', '7d4d630eeae2cd45cbab4f47dee4963a']],
         'reporting_relationships' => ['trg_reporting_relationships_guard' => ['hr_reporting_relationships_guard', '8647badeab0f5c7d9299bb938b1612c6']],
-        'separation_clearance_items' => ['trg_separation_clearance_items_guard' => ['hr_separation_clearance_items_guard', 'cc68ae994237e4ba8bb07a58f2ca9352']],
+        'separation_clearance_items' => [
+            'trg_separation_clearance_items_guard' => ['hr_separation_clearance_items_guard', 'cc68ae994237e4ba8bb07a58f2ca9352'],
+            // HR.R1-C35 WO-21 (HRC-8, review LOW 3): an item belongs to the staff type its checklist recorded.
+            'trg_separation_clearance_items_staff_type_basis' => ['hr_separation_clearance_item_basis_guard', '04aa9a4e01a6f461b753dd4deac58ade'],
+        ],
         'separation_clearance_requirements' => ['trg_separation_clearance_requirements_guard' => ['hr_separation_clearance_requirements_guard', 'c3685ff63658c8e7f00522c111302b08']],
         'staff_attendance_corrections' => ['trg_retention_guard_staff_attendance_corrections' => ['retention_guard_retention_delete', '598f49e04e741a18e26224ffefe86993'], 'trg_staff_attendance_corrections_applied' => ['staff_attendance_corrections_applied', '481da3ea852419b2f4e17afee9d20969'], 'trg_staff_attendance_corrections_guard' => ['staff_attendance_corrections_guard', 'c55cc865210e86f6514ef6ace252839e'], 'trg_staff_attendance_corrections_month_guard' => ['staff_attendance_corrections_month_guard', '4f484fa568d9014d4b34db43542ca84c'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'f5a3752ad0aa7339113b3823a1312a81']],
         'staff_attendance_locked_corrections' => ['trg_retention_guard_staff_attendance_locked_corrections' => ['retention_guard_retention_delete', 'a06244edd1d6dedd72553f33fd0797e9'], 'trg_staff_attendance_locked_corrections_apply' => ['staff_attendance_locked_corrections_apply', 'a77fdb5753f1c08a7f4ec612723b5a45'], 'trg_staff_attendance_locked_corrections_guard' => ['staff_attendance_locked_corrections_guard', 'a5286fbc424f1805f5b27e9c775514f5'], 'zzz_retention_anchor' => ['retention_stamp_anchor', '20bc7aea6456832c67245ba3de83c163']],
@@ -397,6 +403,8 @@ class DatabaseRoleVerifier
     public const HR_SEPARATION_GUARDS = [
         'trg_employment_separation_cases_guard' => 'employment_separation_cases',
         'trg_employment_separation_cases_retained_grants' => 'employment_separation_cases',
+        'trg_employment_separation_cases_staff_type_basis' => 'employment_separation_cases',
+        'trg_separation_clearance_items_staff_type_basis' => 'separation_clearance_items',
         'trg_separation_clearance_items_guard' => 'separation_clearance_items',
         'trg_separation_clearance_requirements_guard' => 'separation_clearance_requirements',
         'trg_employment_records_separation_notice' => 'employment_records',
@@ -795,6 +803,7 @@ class DatabaseRoleVerifier
         $results[] = $this->credentialVerificationCheck();
         $results[] = $this->knownSamePersonGuardsCheck();
         $results[] = $this->separationRetainedAccessCheck();
+        $results[] = $this->separationClearanceBasisCheck();
 
         return $results;
     }
@@ -1334,6 +1343,45 @@ class DatabaseRoleVerifier
         }
 
         return CheckResult::of('hr_separation_retained_access_binding', $missing === [], $missing === [] ? '' : implode(', ', $missing));
+    }
+
+    /** HR.R1-C35 WO-21 (HRC-8): md5 of the guard's `prosrc` and of its CHECK's definition. */
+    public const SEPARATION_CLEARANCE_BASIS_GUARD_BODY = '5f83023da127506b419b7d814750e648';
+
+    public const SEPARATION_CLEARANCE_BASIS_CHECK = '7b3e291ec5780770dc59290e439c9be4';
+
+    public const SEPARATION_CLEARANCE_ITEM_BASIS_GUARD_BODY = '2cc0f7a63172da71988b749d08a8341d';
+
+    /**
+     * HR.R1-C35 WO-21 (HRC-8): the clearance basis backstop -- both columns, the shape CHECK by table and whole
+     * definition, and the guard's whole body, INVOKER mode and pinned path. The trigger's binding and definition
+     * are `hr_family_trigger_functions`'s. A deliberate change updates the pins.
+     */
+    private function separationClearanceBasisCheck(): CheckResult
+    {
+        $missing = [];
+        foreach (['clearance_staff_type' => 'character varying(20)', 'clearance_skipped_requirement_ids' => 'uuid[]'] as $column => $type) {
+            $row = DB::selectOne("select format_type(a.atttypid, a.atttypmod) as t from pg_attribute a
+                where a.attrelid = 'public.employment_separation_cases'::regclass and a.attname = ? and not a.attisdropped", [$column]);
+            if ($row === null || $row->t !== $type) {
+                $missing[] = $column;
+            }
+        }
+        if (! DB::selectOne("select exists (select 1 from pg_constraint where conname = 'employment_separation_cases_clearance_basis_shape' and convalidated
+            and conrelid = 'public.employment_separation_cases'::regclass and md5(pg_get_constraintdef(oid)) = ?) as x", [self::SEPARATION_CLEARANCE_BASIS_CHECK])->x) {
+            $missing[] = 'employment_separation_cases_clearance_basis_shape';
+        }
+        foreach (['hr_separation_clearance_basis_guard' => self::SEPARATION_CLEARANCE_BASIS_GUARD_BODY, 'hr_separation_clearance_item_basis_guard' => self::SEPARATION_CLEARANCE_ITEM_BASIS_GUARD_BODY] as $function => $body) {
+            $fn = DB::select("select md5(prosrc) as h, prosecdef, coalesce(array_to_string(proconfig, '|'), '') as config
+                from pg_proc where pronamespace = 'public'::regnamespace and proname = ?", [$function]);
+            if (count($fn) !== 1 || $fn[0]->h !== $body) {
+                $missing[] = "{$function}:body";
+            } elseif ($fn[0]->prosecdef || $fn[0]->config !== 'search_path=pg_catalog, public, pg_temp') {
+                $missing[] = "{$function}:mode";
+            }
+        }
+
+        return CheckResult::of('hr_separation_clearance_basis', $missing === [], $missing === [] ? '' : implode(', ', $missing));
     }
 
     private function knownSamePersonGuardsCheck(): CheckResult

@@ -5016,6 +5016,7 @@ amendment; ADR 0071 §31; CLAUDE.md rule 137):
 | Notice period | Approval moves the employment `active` → `notice_period` and fixes a planned last working day (a recorded fact; no notice-length rule is calculated). HR finalizes **on or after** that day; there is no scheduler. |
 | Clearance | School-configured administrative items with a closed responsibility. Mandatory items block **completion**, never the employment end. No waivers. |
 | School access | Flagged from Identity, never changed: off-boarding stays under Staff accounts (rule 92), or an access administrator records that the access is kept. Since HR.R1-C35 WO-20 (HRC-4) the record binds the exact set of the account's School role grants at that moment; a grant outside it reopens the obligation, and a record made before WO-20 never counts as kept. |
+| Clearance basis (WO-21, HRC-8) | The approval records the staff type its checklist used and, for an unclassified employment, the staff-type requirements it did not apply; the case names them as not evaluated and not cleared. Shown, never a completion blocker. |
 | Direct end | Only `deceased`, with fresh MFA, a fresh authority read and a confirmation. `terminated` is not recordable until OD-HR-8. |
 | Reasons | Closed: resignation, retirement, fixed-term contract end, mutual agreement. No dismissal (OD-HR-8) and no health reason (HRX-L1). |
 
