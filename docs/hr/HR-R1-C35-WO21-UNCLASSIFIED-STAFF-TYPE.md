@@ -118,3 +118,16 @@
 | WO-22 | Not started |
 | Seven P3 decisions, WO20-N1..N7 and other P3/LOW findings, RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
 | Development database | 398 migrations; WO-21's `2027_02_24_090000` is not applied there (D-WO20-3 covered only the earlier two). Forward-migrating it needs the owner's word |
+
+## 7. Publication
+
+- **Candidate `f03aa6aa`, CI run 43569068523:**
+  - **Attempt 1:** the four test shards, the coverage union, static and frontend checks, secrets, supply chain and integrity were all green. The production-image build failed to download an upstream source archive (`curl: (35) TLS connect error ... unexpected eof`), a network failure unrelated to the change.
+  - **Attempt 2:** the failed jobs only were rerun on the same SHA, and the image build and `CI gate` were green.
+- **Totals: 11,923 tests (11,906 + the 17 new), 469,017 assertions, 0 failures, 1 skip (ESI-12)**; four shards (2,981 / 2,980 / 2,981 / 2,981), coverage union proven equal to the canonical inventory.
+- **Assertions:** 341 above WO-20's (468,676). Data-dependent counts vary between runs; not traced test by test, a recorded limitation.
+- Committed-range gitleaks (`0a867e21..f03aa6aa`): no leaks.
+- **Published** with `lycenza-ci publication-check --candidate f03aa6aa… --push` on 2026-11-14. E16 last valid day 2026-11-28, no problems. `origin/main` = `f03aa6aa`.
+- **`main` CI for the code, run 43571824668: green.** This evidence commit was pushed only after it finished, so it did not cancel the run as WO-20's did.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database:** 398 migrations; WO-21's `2027_02_24_090000` is not applied there (needs the owner's word).
