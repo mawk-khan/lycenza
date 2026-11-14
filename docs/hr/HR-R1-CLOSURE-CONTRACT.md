@@ -316,6 +316,13 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35-RF1, 2026-11-14): residual findings reconciled; corrective work required (`HR-R1-C35-RF1-RESIDUAL-FINDINGS.md`).**
+- **Inventory:** 104 `C`/`WO` identifiers, the 61 audit identifiers and the gate register's residual rows, each with a proposed individual disposition (D-C35-10). 81 open items await the owner; none was closed without evidence and no owner decision was assumed.
+- **WO22-N1 reproduced** as the runtime role (a task `returned`, and `submitted`, with no event). Recorded LOW; ADR 0076 §64 rated the same gap MEDIUM (MAJOR under C27-C). The rating is the owner's; RF1 requires the correction unless a LOW is recorded with a rule 15 deviation.
+- **Also found:** WO20-N1 lets an unlink end R-HR12-3's access block (owner decision); RF1-N2, the unlink self-check is current-link only; WO20-N6 is not reachable.
+- **Reviewed:** an independent review (three MEDIUM and two LOW on the first draft, all corrected) and a final-state recheck.
+- **Unchanged:** no HIGH; R1-02 PARTIAL; RG-ID-1, C33-H1..H5 and every Legal, DPO and Security gate; 361 capability rows; 61 audit identifiers. The development database is at 398 of 400 migrations (2027_02_24 and 2027_02_25 unapplied, no authorization). No baseline is selected. HR.R1 stays OPEN.
+
 **Evidence recorded (HR.R1-C35 WO-22, 2026-11-14): TRR-6 closed for development on publication; the four approved P3 work orders are built; no open MAJOR.**
 - **Built:** staff-task review is a registered domain workflow (`workforce_task_reviews`); the reviewer's authority is read fresh under the task lock; a reviewer known to be the assignee, or the submitter, is refused (rule 152) in the service and the database.
 - **Proof:** reproduced at `cb57c399`; allow and deny; corrected and unknown links; two-process races; raw runtime role; six planted bypasses detected.

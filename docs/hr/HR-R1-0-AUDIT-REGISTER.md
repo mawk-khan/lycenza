@@ -3,6 +3,8 @@
 **Recovered by HR.R1-C9, 2026-11-07. Rebuilt and re-verified by HR.R1-C10 against
 `82e70a8a`. Updated by HR.R1-C11, HR.R1-C12, HR.R1-C13 and HR.R1-C14; the seven P3 rows carry their HR.R1-C35 decisions (`HR-R1-C35-P3-DISPOSITIONS.md`).**
 
+**HR.R1-C35-RF1 (2026-11-14):** every residual finding, including those raised after this register's rows (C-series, WO-series and gate-register residuals), has a proposed individual disposition in `HR-R1-C35-RF1-RESIDUAL-FINDINGS.md`. That record notes this file's stale lines (the "17 named findings" totals, backlog rows R0-07, R0-17 and R0-21) without changing them; the rows below are unchanged.
+
 **Why this file exists.** The HR.R1-0 audit of 2026-11-05 (verdict: PARTIALLY READY,
 REMEDIATION REQUIRED) was delivered as a session report and never committed. Only a
 summary reached `HR-R1-CLOSURE-CONTRACT.md`, which then named findings by range with no
