@@ -63,6 +63,20 @@ class HrSelfAdministrationGuard
     }
 
     /**
+     * HR.R1-C35 WO-20 (delta review M-A): every account with a link, current or
+     * ended and not corrected as erroneous, to this Employee -- the accounts
+     * still believed to be that person (rules 145, 152). A link corrected as
+     * erroneous says the account was never theirs.
+     *
+     * @return list<string>
+     */
+    public function uncorrectedLinkedAccounts(string $schoolId, string $employeeId): array
+    {
+        return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('employee_id', $employeeId)
+            ->whereNull('voided_at')->distinct()->orderBy('user_id')->pluck('user_id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    /**
      * HR.R1-C8, shared since HR.R1-C18: two accounts with uncorrected links to one Employee are one
      * person, as far as anything here can know. Never proof that two accounts are two people.
      */

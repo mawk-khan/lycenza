@@ -38,6 +38,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $final_ends_on
  * @property string|null $access_retained_by_user_id
  * @property Carbon|null $access_retained_at
+ * @property string|null $access_retained_grant_ids PostgreSQL uuid[] text (HR.R1-C35 WO-20); read it through retainedGrantIds()
  * @property string|null $completed_by_user_id
  * @property Carbon|null $completed_at
  */
@@ -69,6 +70,33 @@ class EmploymentSeparationCase extends Model
             'access_retained_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * HR.R1-C35 WO-20 (HRC-4): the School role grants bound when access was
+     * recorded as kept, as a sorted list of ids; null when nothing is bound
+     * (never recorded, or a legacy record from before WO-20 -- tell them apart
+     * by `access_retained_at`). Written only by the recording, never rewritten
+     * (trg_employment_separation_cases_retained_grants).
+     *
+     * @return list<string>|null
+     */
+    public function retainedGrantIds(): ?array
+    {
+        $raw = $this->access_retained_grant_ids;
+        if ($raw === null) {
+            return null;
+        }
+        $ids = array_values(array_filter(explode(',', trim((string) $raw, '{}')), fn (string $id) => $id !== ''));
+        sort($ids, SORT_STRING);
+
+        return $ids;
+    }
+
+    /** @param  list<string>  $ids  sorted grant ids */
+    public static function grantIdArray(array $ids): string
+    {
+        return '{'.implode(',', $ids).'}';
     }
 
     /** @return BelongsTo<EmploymentRecord, $this> */

@@ -28,7 +28,7 @@ class HrFamilyTriggerFunctionsVerifierTest extends TestCase
     {
         $this->assertSame(CheckResult::PASS, $this->check('hr_family_trigger_functions')->status, $this->check('hr_family_trigger_functions')->note);
         $this->assertSame(CheckResult::PASS, $this->check('runtime_role_memberships_none')->status);
-        $this->assertSame(108, array_sum(array_map('count', DatabaseRoleVerifier::HR_FAMILY_TRIGGERS)), 'the 103 triggers of the HR family as of HR.R1-C28, and the 5 of HR.R1-C29 (C14-N5)');
+        $this->assertSame(109, array_sum(array_map('count', DatabaseRoleVerifier::HR_FAMILY_TRIGGERS)), 'the 103 triggers of the HR family as of HR.R1-C28, the 5 of HR.R1-C29 (C14-N5) and the 1 of HR.R1-C35 WO-20 (HRC-4)');
         $this->assertSame([], array_values(array_diff(array_keys(DatabaseRoleVerifier::HR_FAMILY_TRIGGERS), array_keys(DatabaseRoleVerifier::HR_FAMILY_RUNTIME_PRIVILEGES))), 'triggers are pinned on family tables only');
     }
 

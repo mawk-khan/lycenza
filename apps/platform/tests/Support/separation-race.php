@@ -16,7 +16,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 // SeparationConcurrencyTest can race real PostgreSQL transactions.
 //
 // Usage: php separation-race.php <op> <schoolId> <actorId> <caseId> <version> [itemId]
-//   op: approve | finalize | cancel | clear
+//   op: approve | finalize | cancel | clear | retain | complete
+//   (retain prints the bound grant ids after the status: "ok:finalized:<id,id>"; HR.R1-C35 WO-20)
 // Prints "ok:<case status>" on success, "refused:<machine code>" for a domain
 // refusal, or "error:<class>" otherwise.
 
@@ -40,6 +41,8 @@ try {
         'finalize' => $cases->finalize($school, $caseId, (int) $version, $actor, $proof)->status,
         'cancel' => $cases->cancel($school, $caseId, (int) $version, SeparationCancelReason::RECORDED_IN_ERROR, $actor, $proof)->status,
         'clear' => $cases->clearItem($school, $caseId, (string) $itemId, $actor)->status,
+        'retain' => (fn ($case) => $case->status.':'.implode(',', $case->retainedGrantIds() ?? []))($cases->recordAccessRetained($school, $caseId, (int) $version, $actor)),
+        'complete' => $cases->complete($school, $caseId, (int) $version, $actor)->status,
         default => throw new InvalidArgumentException("unknown op {$op}"),
     });
     echo 'ok:'.$result;

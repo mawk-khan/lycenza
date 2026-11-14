@@ -114,7 +114,11 @@ class DatabaseRoleVerifier
         'employee_reference_codes' => ['trg_employee_reference_codes_guard' => ['hr_employee_reference_codes_guard', '0b7ab1eb7d86f23c9eded153220b598b']],
         'employees' => ['trg_employees_identity_guard' => ['hr_employees_identity_guard', 'f5642bb32d72676e5d42426b4516d320'], 'trg_employees_not_minimized' => ['users_guard_principal_column', '4faf68edf809c425f443299f009392cc'], 'trg_employees_record_account_link_insert' => ['employees_record_account_link', '6bbe0f32a9c1704a7e993f7ae5e2e1a3'], 'trg_employees_record_account_link_update' => ['employees_record_account_link', 'aff1effce0fa7ba3860353ce2406af27'], 'trg_employees_user_link_payroll_lock' => ['employees_user_link_payroll_lock', 'cf1a0d346147b02d4dd45353f27df815'], 'trg_retention_guard_employees' => ['retention_guard_retention_delete', 'c071ab3f981d06fa2b0f63948707bd62'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'eb0280bc1a8f394efcfdcf52bbb846d9']],
         'employment_records' => ['trg_employment_records_after_death' => ['hr_employment_records_after_death', '2fb7bab266e160e323492b7cf842c802'], 'trg_employment_records_archived_identity' => ['hr_employment_records_archived_identity', '158d87b2b217a1b2ffd66c55298deba8'], 'trg_employment_records_eligibility_guard' => ['retention_guard_end_record', 'bcae3e03439b160b6577916aa07fd514'], 'trg_employment_records_initial_terms' => ['hr_employment_records_initial_terms', '45ea7bbe6be0f56ae3d49aabf8418761'], 'trg_employment_records_no_overlap' => ['hr_employment_records_no_overlap', 'a392e50be9187b953a4cdea7e1389d2a'], 'trg_employment_records_reporting_bounds' => ['hr_employment_records_reporting_bounds', 'd514b90a50e45c732cddad5446050d26'], 'trg_employment_records_separation_notice' => ['hr_employment_records_separation_notice', '4a662a357cceebd720ec0b5af865fefb'], 'trg_employment_records_terms_projection_guard' => ['hr_employment_records_terms_projection_guard', '2ff452333404c3bf147071baaef34869'], 'trg_retention_guard_employment_records' => ['retention_guard_retention_delete', '729dad82a8f562daee589288ce8ec1e4'], 'zzz_retention_anchor' => ['retention_stamp_anchor', 'ec6d4769d0a303bb874fa0e854020758']],
-        'employment_separation_cases' => ['trg_employment_separation_cases_guard' => ['hr_employment_separation_cases_guard', 'ffd7a3dd40a02c10c40427566d1821e8']],
+        'employment_separation_cases' => [
+            'trg_employment_separation_cases_guard' => ['hr_employment_separation_cases_guard', 'ffd7a3dd40a02c10c40427566d1821e8'],
+            // HR.R1-C35 WO-20 (HRC-4): kept access binds exactly the live School grant set, immutable, never back-filled.
+            'trg_employment_separation_cases_retained_grants' => ['hr_separation_retained_grants_guard', 'f6bcae75b805af8bc10f58b9c22ddc9f'],
+        ],
         'employment_terms' => ['trg_employment_terms_append_guard' => ['hr_employment_terms_append_guard', '9a11a1bca26e5540a63a4f62300a4864'], 'trg_employment_terms_immutable' => ['hr_history_row_immutable', 'c12c92b4e208b4a9904ec096b1b5234e'], 'trg_employment_terms_project' => ['hr_employment_terms_project', 'bf3d9dbf6a507ea1c7dd66b60679d454']],
         'hr_departments' => ['trg_hr_departments_no_cycle' => ['hr_departments_no_cycle', 'd4b31242d9290f08f32c92f8df989ca5']],
         'leave_accrual_run_items' => ['trg_leave_accrual_run_items_guard' => ['leave_accrual_run_items_guard', '94eafef88296a178a41e2dbe9bb509ef']],
@@ -392,6 +396,7 @@ class DatabaseRoleVerifier
      */
     public const HR_SEPARATION_GUARDS = [
         'trg_employment_separation_cases_guard' => 'employment_separation_cases',
+        'trg_employment_separation_cases_retained_grants' => 'employment_separation_cases',
         'trg_separation_clearance_items_guard' => 'separation_clearance_items',
         'trg_separation_clearance_requirements_guard' => 'separation_clearance_requirements',
         'trg_employment_records_separation_notice' => 'employment_records',
@@ -789,6 +794,7 @@ class DatabaseRoleVerifier
         $results[] = $this->staffCalendarHistoryCheck();
         $results[] = $this->credentialVerificationCheck();
         $results[] = $this->knownSamePersonGuardsCheck();
+        $results[] = $this->separationRetainedAccessCheck();
 
         return $results;
     }
@@ -1290,6 +1296,45 @@ class DatabaseRoleVerifier
         'employee_account_link_corrections_guard' => 'db128a19cb8591f854679f691a507234',
         'staff_attendance_locked_corrections_guard' => 'e4e5c7af3e955ef0c31875efe62b87f4',
     ];
+
+    /**
+     * HR.R1-C35 WO-20 (HRC-4): the kept-access grant set's backstop -- its column, shape and pair CHECKs, and the guard
+     * function's whole body (md5 of `prosrc`), INVOKER mode and pinned path. The trigger's binding and definition
+     * are `hr_family_trigger_functions`'s (HR_FAMILY_TRIGGERS). A deliberate change updates the pin.
+     */
+    public const SEPARATION_RETAINED_GRANTS_GUARD_BODY = 'de19aa79178a939cb5c01d0f7416201c';
+
+    /** constraint => md5(pg_get_constraintdef) */
+    public const SEPARATION_RETAINED_GRANTS_CHECKS = [
+        'employment_separation_cases_retained_grants_shape' => 'a0226983057006227c98ba6284950f98',
+        'employment_separation_cases_retained_pair' => 'f803a530f4444d11b148c3e9aec17bcb',
+    ];
+
+    private function separationRetainedAccessCheck(): CheckResult
+    {
+        $missing = [];
+        $column = DB::selectOne("select format_type(a.atttypid, a.atttypmod) as t from pg_attribute a
+            where a.attrelid = 'public.employment_separation_cases'::regclass and a.attname = 'access_retained_grant_ids' and not a.attisdropped");
+        if ($column === null || $column->t !== 'uuid[]') {
+            $missing[] = 'access_retained_grant_ids';
+        }
+        // The CHECKs by table and whole definition, not only by name (delta review L-B).
+        foreach (self::SEPARATION_RETAINED_GRANTS_CHECKS as $constraint => $definition) {
+            if (! DB::selectOne("select exists (select 1 from pg_constraint where conname = ? and convalidated
+                and conrelid = 'public.employment_separation_cases'::regclass and md5(pg_get_constraintdef(oid)) = ?) as x", [$constraint, $definition])->x) {
+                $missing[] = $constraint;
+            }
+        }
+        $fn = DB::select("select md5(prosrc) as h, prosecdef, coalesce(array_to_string(proconfig, '|'), '') as config
+            from pg_proc where pronamespace = 'public'::regnamespace and proname = 'hr_separation_retained_grants_guard'");
+        if (count($fn) !== 1 || $fn[0]->h !== self::SEPARATION_RETAINED_GRANTS_GUARD_BODY) {
+            $missing[] = 'hr_separation_retained_grants_guard:body';
+        } elseif ($fn[0]->prosecdef || $fn[0]->config !== 'search_path=pg_catalog, public, pg_temp') {
+            $missing[] = 'hr_separation_retained_grants_guard:mode';
+        }
+
+        return CheckResult::of('hr_separation_retained_access_binding', $missing === [], $missing === [] ? '' : implode(', ', $missing));
+    }
 
     private function knownSamePersonGuardsCheck(): CheckResult
     {

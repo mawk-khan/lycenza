@@ -634,3 +634,15 @@ decision was taken or needed.
 - **Legacy (C29-C).** A status recorded before C29 names no revision and is shown so; nothing is fabricated.
 - **Supersedes** the 8A.6 note that verification has no version and the HR.R1-C14 note that C14-N5 is open; the 8A.6 rule that every edit is material stands.
 - **Not changed.** Who may verify, MFA, independence, consumers (there are none), Documents, the shared runtime role.
+
+## HR.R1-C35 WO-20 amendment (2026-11-14): kept School access is bound to the grant set
+
+HRC-4, owner decision D-C35-2, with D-WO20-1 and D-WO20-2 (`docs/hr/HR-R1-C35-WO20-RETAINED-ACCESS-ROLE-SET.md`). Amends the HR.12 and HR.15 records of "kept School access".
+
+- **What is bound.** Recording that a finalized separation's School access is kept stores the SET of the separating person's linked account's live `school`-scope role grants in this School (`membership_role_assignments.id`, sorted), in `employment_separation_cases.access_retained_grant_ids`. Roles, not capabilities; grants, not a count. A grant is never deleted and a re-grant is a new row (rule 92), so an id names one grant of one role for good.
+- **When.** Inside the recording's transaction, under Identity's School access lock, taken first (rule 141): no grant, revocation or off-boarding interleaves between the read and the write. The set is read by the server from Identity (`StaffAccessState::activeSchoolGrantIds()`), never supplied by a client.
+- **RETAINED.** Only while every live grant is in the bound set. A grant outside it (a new role, a revoke-then-grant, another account linked to the Employee) makes the obligation ATTENTION, or OPEN once finalized, and completion waits. A kept grant since revoked leaves the rest kept.
+- **Immutable, never re-recorded (D-WO20-1).** An OPEN case is resolved by off-boarding the extra role under Staff accounts.
+- **Legacy (D-WO20-2).** A record from before this amendment binds nothing and is never RETAINED. It is shown as recorded before the kept roles were stored, never back-filled with today's roles.
+- **Database.** `trg_employment_separation_cases_retained_grants` (INVOKER, pinned path) requires the stored set to equal the account's live grants at recording. It refuses a set at insert, a rewrite or erasure, and a back-fill of a legacy record; a shape CHECK requires a non-empty set only with a recording. `platform:verify-database` pins it (`hr_family_trigger_functions`, `hr_separation_retained_access_binding`). Who recorded it stays an application boundary (ADR 0076 §64).
+- **Not changed.** Who may record (`school.members.manage`), the case graph and its other evidence, WO-18's own-case refusals, off-boarding (rule 92), and the C27-A treatment of NOT_INTEGRATED owners. A kept record grants nothing.

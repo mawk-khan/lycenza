@@ -199,6 +199,9 @@ Engineering and product direction only; not legal, privacy or DPO approval.
 | D-WO18-1 | WO17-N1 | MEDIUM (MAJOR); Option A, the post-decision independence functions treat a known-same account of the paid Employee like the Employee's own | Payroll, Identity, Security owner | NOT CLOSED until that unit publishes | Real Payroll waits as before | A separate unit after WO-18 | Any change to OD-HR-24/25 |
 | D-WO18-2 | Development database | Forward-migrate it through `pgsql_admin` after WO-18 publishes, then verify | Owner | None | None | Done in WO-18 §8 | — |
 | D-WO17N1-1 | Author side of WO17-N1 (found by its review) | MEDIUM (MAJOR); fix in the same unit | Payroll, Identity, Security owner | Closed with that unit | Real Payroll waits as before | Built (`HR-R1-C35-WO17-N1-POST-APPROVAL-INDEPENDENCE.md`) | Any change to OD-HR-24/25 |
+| D-WO20-1 | HRC-4: an OPEN case after kept access was recorded | Off-board only: the kept record stays immutable and is never recorded again | Owner (2026-11-13, WO-20 dialog) | Built by WO-20 | None | — | Off-boarding or certification changes |
+| D-WO20-2 | HRC-4: a kept record from before WO-20 (no set) | Fail closed: OPEN, shown as recorded before the kept roles were stored; never back-filled | Owner (2026-11-13) | Built by WO-20 | None | — | — |
+| D-WO20-3 | Development database | Forward-migrate after WO-20 publishes (`2027_02_22` and `2027_02_23`), through `pgsql_admin`, then verify | Owner (2026-11-13) | WO-20 record §8 | None | — | — |
 | D-C35-10 | Other open P3/LOW findings | Disposition each individually before baseline selection | HR owner | Final PASS remains possible | None | Their dispositions | — |
 
 ## 10. Verdict and next checkpoint

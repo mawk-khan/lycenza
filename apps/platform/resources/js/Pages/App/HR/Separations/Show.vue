@@ -32,6 +32,14 @@ interface CaseDetail {
     finalEndsOn: string | null;
     cancelReason: string | null;
     accessRetained: boolean;
+    accessRetention: {
+        recordedAt: string | null;
+        recordedBy: string | null;
+        bound: boolean;
+        grantCount: number;
+        roles:
+            { grantId: string; roleName: string; campus: string | null; revoked: boolean }[] | null;
+    } | null;
     today: string;
     employee: { id: string; name: string | null; number: string | null };
     employment: {
@@ -580,6 +588,31 @@ const outstanding = computed(() =>
                     </tr>
                 </tbody>
             </table>
+        </section>
+
+        <!-- HR.R1-C35 WO-20 (HRC-4): what was recorded as kept, never today's roles in its place. -->
+        <section v-if="c.accessRetention" class="mt-10" aria-labelledby="separation-kept-access">
+            <h2 id="separation-kept-access" class="text-base font-semibold">School access kept</h2>
+            <p class="mt-1 text-sm text-ink-muted">
+                Recorded {{ c.accessRetention.recordedAt ?? '—' }} (School time) ·
+                {{ c.accessRetention.recordedBy ?? '—' }}. A role granted later is not covered.
+            </p>
+            <template v-if="c.accessRetention.bound">
+                <ul v-if="c.accessRetention.roles" class="mt-2 list-disc pl-5 text-sm">
+                    <li v-for="r in c.accessRetention.roles" :key="r.grantId">
+                        {{ r.roleName }}<span v-if="r.campus"> ({{ r.campus }} only)</span
+                        ><span v-if="r.revoked" class="text-ink-muted"> (since revoked)</span>
+                    </li>
+                </ul>
+                <p v-else class="mt-2 text-sm">
+                    {{ c.accessRetention.grantCount }} role grant(s) were recorded as kept. Which
+                    roles they are is shown to people who may see staff role assignments.
+                </p>
+            </template>
+            <p v-else class="mt-2 text-sm">
+                This record was made before the kept roles were stored, so it cannot show which
+                roles were kept, and it does not count as kept access.
+            </p>
         </section>
 
         <!-- Timeline -->

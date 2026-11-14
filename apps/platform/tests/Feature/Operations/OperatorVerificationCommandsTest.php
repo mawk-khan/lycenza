@@ -89,6 +89,8 @@ class OperatorVerificationCommandsTest extends TestCase
             'hr_credential_verification_invariants',
             // HR.R1-C34 (WO-16)
             'known_same_person_guards',
+            // HR.R1-C35 WO-20 (HRC-4)
+            'hr_separation_retained_access_binding',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

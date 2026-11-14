@@ -8,6 +8,7 @@ use App\Domain\HR\Infrastructure\EmploymentSeparationCase;
 use App\Domain\HR\Infrastructure\EmploymentSeparationEvent;
 use App\Domain\HR\Infrastructure\SeparationClearanceItem;
 use App\Domain\HR\Infrastructure\SeparationClearanceRequirement;
+use App\Domain\Identity\Application\Staff\StaffAccessState;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
@@ -33,6 +34,7 @@ final class SeparationCaseReadService
         private readonly HrEmployeeAccess $access,
         private readonly CapabilityResolver $capabilities,
         private readonly SeparationObligations $obligations,
+        private readonly StaffAccessState $staffAccess,
     ) {}
 
     /**
@@ -122,6 +124,20 @@ final class SeparationCaseReadService
                 'finalEndsOn' => $case->final_ends_on?->toDateString(),
                 'cancelReason' => $case->cancel_reason === null ? null : SeparationCancelReason::from($case->cancel_reason)->label(),
                 'accessRetained' => $case->access_retained_at !== null,
+                // HR.R1-C35 WO-20 (HRC-4): what was recorded as kept -- the bound grants, or a legacy record that bound
+                // none. Never today's roles presented as the kept ones. Which roles they are is someone's role
+                // assignments, so only a viewer who may see those (`school.roles.view`, or the access administrator's
+                // `school.members.manage`) gets the roles (review M1); everyone else gets the number of grants.
+                'accessRetention' => $case->access_retained_by_user_id === null ? null : [
+                    'recordedAt' => $case->access_retained_at?->setTimezone(SchoolTimezone::resolve($school))->format('Y-m-d H:i'),
+                    'recordedBy' => $names[$case->access_retained_by_user_id] ?? null,
+                    'bound' => $case->retainedGrantIds() !== null,
+                    'grantCount' => count($case->retainedGrantIds() ?? []),
+                    'roles' => $case->retainedGrantIds() === null || ! ($can('school.roles.view') || $can('school.members.manage')) ? null : array_map(
+                        fn (array $r) => ['grantId' => $r['grantId'], 'roleName' => $r['roleName'], 'campus' => $r['campus'], 'revoked' => $r['revoked']],
+                        $this->staffAccess->grantRoles($school, $case->retainedGrantIds()),
+                    ),
+                ],
                 'today' => $today,
                 'employee' => [
                     'id' => $employment->employee_id,

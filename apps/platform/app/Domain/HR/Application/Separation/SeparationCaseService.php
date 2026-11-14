@@ -6,6 +6,7 @@ use App\Domain\HR\Application\EmployeePlacementLock;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Application\HrSelfAdministrationGuard;
+use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\EmploymentSeparationCase;
 use App\Domain\HR\Infrastructure\EmploymentSeparationEvent;
@@ -320,14 +321,23 @@ final class SeparationCaseService
      * an access administrator records that the access is KEPT deliberately
      * (e.g. a continuing non-employee role). Off-boarding itself stays under
      * Staff accounts (rule 92); this never suspends or keeps anything.
+     *
+     * HR.R1-C35 WO-20 (HRC-4, D-C35-2): the recording binds the SET of the
+     * account's live School grants, read from Identity under its School access
+     * lock (taken first, rule 141), so no grant, revocation or off-boarding
+     * interleaves between the read and the write. The set is server-read,
+     * never supplied; the database re-reads and refuses any other set
+     * (trg_employment_separation_cases_retained_grants). Once recorded it is
+     * never re-recorded (D-WO20-1): a grant outside the set is resolved by
+     * off-boarding.
      */
     public function recordAccessRetained(School $school, string $caseId, int $expectedVersion, User $actor): EmploymentSeparationCase
     {
         $this->access->requireWholeSchool($actor, 'school.members.manage', $school);
 
         return $this->inSchool($school, function () use ($school, $caseId, $expectedVersion, $actor): EmploymentSeparationCase {
-            [$case] = $this->lockCase($school, $caseId, $expectedVersion, $actor, 'separation.access_retained', ['finalized']);
-            if ($case->access_retained_at !== null) {
+            [$case, $employment] = $this->lockCase($school, $caseId, $expectedVersion, $actor, 'separation.access_retained', ['finalized']);
+            if ($case->access_retained_by_user_id !== null) {
                 throw SeparationException::conflict('SEPARATION_ACCESS_ALREADY_RECORDED', 'Kept School access was already recorded.');
             }
             $access = $this->obligations->forCase($school, $case);
@@ -335,13 +345,23 @@ final class SeparationCaseService
             if ($open === []) {
                 throw SeparationException::conflict('SEPARATION_NO_ACTIVE_ACCESS', 'This account holds no School staff access to keep.');
             }
+            $userId = Employee::query()->where('school_id', $school->id)->whereKey($employment->employee_id)->value('user_id');
+            $grants = $userId === null ? [] : $this->staffAccess->activeSchoolGrantIds($school, (string) $userId);
+            if ($grants === []) {
+                throw SeparationException::conflict('SEPARATION_NO_ACTIVE_ACCESS', 'This account holds no School staff access to keep.');
+            }
 
-            $this->transition($case, 'finalized', ['access_retained_by_user_id' => $actor->id, 'access_retained_at' => now()]);
+            $this->transition($case, 'finalized', [
+                'access_retained_by_user_id' => $actor->id, 'access_retained_at' => now(),
+                'access_retained_grant_ids' => EmploymentSeparationCase::grantIdArray($grants),
+            ]);
             $this->event($case, 'access_retained', $actor);
-            $this->audit->school($school, 'hr.separation.access_retained', actor: $actor, subject: $case, metadata: ['employmentRecordId' => $case->employment_record_id]);
+            $this->audit->school($school, 'hr.separation.access_retained', actor: $actor, subject: $case, metadata: [
+                'employmentRecordId' => $case->employment_record_id, 'roleAssignmentIds' => $grants,
+            ]);
 
             return $case->refresh();
-        });
+        }, certifiesAccess: true);
     }
 
     /** Offboarding is complete: every mandatory clearance item cleared and no owner reports open work. */
@@ -454,6 +474,10 @@ final class SeparationCaseService
             }
             if (str_contains($e->getMessage(), 'hr_employment_separation_own_case')) {
                 throw self::ownCase();
+            }
+            // HR.R1-C35 WO-20: the database's own re-read of the kept grant set disagreed.
+            if (str_contains($e->getMessage(), 'hr_separation_retained_grants_guard')) {
+                throw SeparationException::conflict('SEPARATION_ACCESS_CHANGED', 'The account\'s School roles changed while this was recorded. Reload and try again.');
             }
             throw $e;
         }

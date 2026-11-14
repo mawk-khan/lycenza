@@ -2,6 +2,7 @@
 
 namespace App\Domain\HR\Application\Separation;
 
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\EmploymentSeparationCase;
 use App\Domain\Identity\Application\Staff\StaffAccessState;
 use App\Models\School;
@@ -40,6 +41,7 @@ final class SeparationObligations
     public function __construct(
         private readonly TenantContext $context,
         private readonly StaffAccessState $access,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
         #[Tag(SeparationObligationSource::TAG)] private readonly iterable $sources = [],
     ) {}
 
@@ -65,7 +67,7 @@ final class SeparationObligations
 
             $obligations = [
                 ...$this->asked('HR', 'direct_reports', 'Direct reports', fn () => [$this->directReports($school, $subject)]),
-                ...$this->asked('Identity', self::SCHOOL_ACCESS, 'School staff access', fn () => [$this->schoolAccess($school, $subject, $case->access_retained_at !== null)]),
+                ...$this->asked('Identity', self::SCHOOL_ACCESS, 'School staff access', fn () => [$this->schoolAccess($school, $subject, $case->access_retained_by_user_id !== null, $case->retainedGrantIds())]),
             ];
             foreach ($this->sources as $source) {
                 array_push($obligations, ...$this->asked($source->owner(), strtolower($source->owner()).'_obligations', $source->owner().' obligations', fn () => $source->obligations($school, $subject)));
@@ -115,23 +117,54 @@ final class SeparationObligations
      * only under Staff accounts (owner decision 2026-11-04). Ending the
      * employment already ends teacher and line-manager authority
      * (ActingEmployee needs a current employment).
+     *
+     * HR.R1-C35 WO-20 (HRC-4, D-C35-2): "kept" is bound to the SET of grants
+     * recorded with it ($boundGrantIds). It reads RETAINED only while every
+     * live grant is one of them (a grant since revoked leaves the rest kept);
+     * a grant outside the set -- a new role, or a revoke-then-grant, whatever
+     * the count -- is OPEN again (ATTENTION before finalization). A record
+     * from before WO-20 binds nothing and is never RETAINED (D-WO20-2), and is
+     * resolved by off-boarding, never by recording again (D-WO20-1).
+     *
+     * A bound set is checked against its holders too (review M2): the live
+     * grants of the memberships holding the kept grants, whatever account
+     * the Employee is linked to now, so unlinking or relinking the Employee
+     * never turns kept access with an extra role into CLEAR -- but only for
+     * accounts still believed to be the person (an uncorrected link, rules
+     * 145 and 152): an account corrected as someone else is never asked to be
+     * off-boarded (delta review M-A).
+     *
+     * @param  list<string>|null  $boundGrantIds
      */
-    public function schoolAccess(School $school, SeparationSubject $subject, bool $retained): SeparationObligation
+    public function schoolAccess(School $school, SeparationSubject $subject, bool $retained, ?array $boundGrantIds = null): SeparationObligation
     {
-        $grants = $subject->userId === null ? 0 : $this->access->activeSchoolGrantCount($school, $subject->userId);
+        $live = $subject->userId === null ? [] : $this->access->activeSchoolGrantIds($school, $subject->userId);
+        if ($retained && $boundGrantIds !== null) {
+            $person = $this->selfAdministration->uncorrectedLinkedAccounts($school->id, $subject->employeeId);
+            $live = array_values(array_unique([...$live, ...$this->access->activeSchoolGrantIdsOfHolders($school, $boundGrantIds, $person)]));
+        }
+        $grants = count($live);
 
         if ($grants === 0) {
             return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', SeparationObligation::CLEAR, 0,
-                $subject->userId === null ? 'No user account is linked to this employee.' : null);
+                $subject->userId === null && ! $retained ? 'No user account is linked to this employee.' : null);
+        }
+        $unresolved = $subject->finalized ? SeparationObligation::OPEN : SeparationObligation::ATTENTION;
+        if ($retained && $boundGrantIds === null) {
+            return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', $unresolved, $grants,
+                'Kept access was recorded before the kept roles were stored, so this record cannot show which roles were kept. Off-board the account under Settings → Staff accounts.');
+        }
+        if ($retained && array_diff($live, $boundGrantIds) !== []) {
+            return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', $unresolved, $grants,
+                'The account holds a School role that was not among the roles recorded as kept. Off-board it under Settings → Staff accounts.');
         }
         if ($retained) {
             // HR.15E: kept is not revoked -- the roles are still active.
             return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', SeparationObligation::RETAINED, $grants,
-                'Kept on purpose: an authorized person recorded that this access stays. The roles are still active.');
+                'Kept on purpose: an authorized person recorded that these roles stay. They are still active.');
         }
 
-        return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access',
-            $subject->finalized ? SeparationObligation::OPEN : SeparationObligation::ATTENTION, $grants,
+        return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', $unresolved, $grants,
             'The account still holds School roles. Off-board it under Settings → Staff accounts, or record that the access is kept.');
     }
 
