@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-22, 2026-11-14): TRR-6 closed for development on publication; the four approved P3 work orders are built; no open MAJOR.**
+- **Built:** staff-task review is a registered domain workflow (`workforce_task_reviews`); the reviewer's authority is read fresh under the task lock; a reviewer known to be the assignee, or the submitter, is refused (rule 152) in the service and the database.
+- **Proof:** reproduced at `cb57c399`; allow and deny; corrected and unknown links; two-process races; raw runtime role; six planted bypasses detected.
+- **Reviewed:** independent review (no HIGH or MEDIUM; LOWs fixed, L2 recorded as WO22-N1) and a final-state recheck.
+- **Still open:** the other P3/LOW dispositions, operational evidence, then baseline selection. HR.R1 stays OPEN (`HR-R1-C35-WO22-TASK-REVIEW-GOVERNANCE.md`).
+
 **Evidence recorded (HR.R1-C35 WO-21, 2026-11-14): HRC-8 closed for development on publication; no open MAJOR.**
 - **Built:** the separation approval records the staff type its checklist used and, for an unclassified employment, the staff-type requirements it did not apply (D-WO21-1), database-required and frozen, with clearance items bound to it; the case shows "Unclassified" and names each one as not evaluated and not cleared; nothing new blocks completion (D-C35-4).
 - **Proof:** reproduced at `0a867e21`; classified positive controls for every staff type; raw runtime role; two-process races; the legacy case on committed data; six planted bypasses detected (the School filter behind forced RLS is not, by design).

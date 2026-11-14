@@ -34,7 +34,7 @@ class KnownSamePersonCoverageTest extends TestCase
 {
     use CreatesTenancyFixtures;
 
-    private const ENFORCED_DOMAINS = ['HR', 'Leave', 'StaffAttendance', 'Payroll'];
+    private const ENFORCED_DOMAINS = ['HR', 'Leave', 'StaffAttendance', 'Payroll', 'WorkforceTasks'];
 
     private const HANDOFFS = [
         'fee_concessions' => 'C33-H1',

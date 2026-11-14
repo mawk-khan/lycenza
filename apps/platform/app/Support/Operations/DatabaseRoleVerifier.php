@@ -1260,6 +1260,9 @@ class DatabaseRoleVerifier
      * @var array<string, array{0: string, 1: string, 2: string, 3: string}>
      */
     public const KNOWN_SAME_PERSON_GUARDS = [
+        // HR.R1-C35 WO-22 (TRR-6): a task review (completion on the task row, a return on its timeline event).
+        'trg_workforce_tasks_guard' => ['workforce_tasks', 'hr_workforce_tasks_guard', 'employee_account_link_same_person_accounts', 'af7cd30948efee3d8c0146bc8b5efaec'],
+        'trg_workforce_task_events_guard' => ['workforce_task_events', 'hr_workforce_task_events_guard', 'employee_account_link_same_person_accounts', '487a2ddbec8a2fff22cc7e8d5e5f5bab'],
         'payroll_runs_participant_approval_guard' => ['payroll_runs', 'payroll_runs_refuse_participant_approval', 'employee_account_link_same_person_accounts', '381845c0503adeb90c1f4776346b6e50'],
         'trg_payroll_posting_attestations_guard' => ['payroll_posting_attestations', 'payroll_posting_attestations_guard', 'employee_account_link_same_person_accounts', '8864479ca38e3c3945b8947c79b0eb35'],
         'trg_payroll_reversal_reconciliation_reviews_guard' => ['payroll_reversal_reconciliation_reviews', 'payroll_reversal_reconciliation_reviews_guard', 'employee_account_link_same_person_accounts', '4e1e2fbd387f097e41785401886c83f5'],
@@ -1282,6 +1285,9 @@ class DatabaseRoleVerifier
      * @var array<string, string>
      */
     public const KNOWN_SAME_PERSON_BODIES = [
+        // HR.R1-C35 WO-22 (TRR-6).
+        'hr_workforce_tasks_guard' => '8523e3ddbc4e0deb9fba3ff0850d3b47',
+        'hr_workforce_task_events_guard' => '9d645114f375336fcc61bcc7c74e0cee',
         'employee_account_link_same_person_accounts' => '852951d0ba4932c3f839aea54b1a7ff7',
         'employee_account_link_correction_same_person' => '6af30c7d4b3f86e757f22467159c9647',
         'payroll_runs_refuse_participant_approval' => '3eb3d5d5495a4b21dc21daca99b97b28',

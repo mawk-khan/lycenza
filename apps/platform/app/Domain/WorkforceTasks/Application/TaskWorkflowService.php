@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -76,7 +78,7 @@ final class TaskWorkflowService
         }
 
         return $this->inSchool($school, function () use ($school, $taskId, $expectedVersion, $decision, $feedback, $actor): WorkforceTask {
-            $task = $this->lockActable($school, $taskId, $actor, 'review');
+            $task = $this->lockReviewable($school, $taskId, $actor);
             $this->assertVersion($task, $expectedVersion);
             if ($task->status !== 'submitted') {
                 throw TaskException::conflict('TASK_NOT_SUBMITTED', 'Only a submitted task is reviewed.');
@@ -85,10 +87,19 @@ final class TaskWorkflowService
                 throw TaskException::conflict('TASK_ALREADY_RETURNED', 'This task was already returned once; complete or cancel it.');
             }
 
-            $task->forceFill($decision === 'complete'
-                ? ['status' => 'completed', 'completed_by_user_id' => $actor->id, 'completed_at' => now(), 'version' => $task->version + 1]
-                : ['status' => 'returned', 'return_count' => $task->return_count + 1, 'version' => $task->version + 1])->save();
-            TaskEvent::query()->create(['task_id' => $task->id, 'kind' => $decision === 'complete' ? 'completed' : 'returned', 'actor_user_id' => $actor->id, 'note' => $feedback, 'occurred_at' => now()]);
+            try {
+                $task->forceFill($decision === 'complete'
+                    ? ['status' => 'completed', 'completed_by_user_id' => $actor->id, 'completed_at' => now(), 'version' => $task->version + 1]
+                    : ['status' => 'returned', 'return_count' => $task->return_count + 1, 'version' => $task->version + 1])->save();
+                TaskEvent::query()->create(['task_id' => $task->id, 'kind' => $decision === 'complete' ? 'completed' : 'returned', 'actor_user_id' => $actor->id, 'note' => $feedback, 'occurred_at' => now()]);
+            } catch (QueryException $e) {
+                // WO-22: the database's own refusal of a reviewer known to be the assignee (a link that changed after the read).
+                // The database's own message (review L4: never Laravel's, which carries the bound feedback text).
+                if ($e->getCode() === '23514' && str_contains((string) ($e->errorInfo[2] ?? ''), 'hr_workforce_task_review_same_person')) {
+                    throw self::samePerson();
+                }
+                throw $e;
+            }
             $this->audit->school($school, $decision === 'complete' ? 'hr.task.completed' : 'hr.task.returned', actor: $actor, subject: $task, metadata: ['hasFeedback' => $feedback !== null]);
 
             return $task->refresh();
@@ -131,6 +142,42 @@ final class TaskWorkflowService
         }
 
         return $task;
+    }
+
+    /**
+     * HR.R1-C35 WO-22 (TRR-6, D-C35-5; ApprovalWorkflowRegistry `workforce_task_reviews`): a review is a second
+     * person's decision. Under the task lock it takes the reviewer's CURRENT authority (TaskAuthority::currentPathFor,
+     * fresh, held to commit) -- not the cached answer -- and refuses one's own task (the current link, as before),
+     * a reviewer KNOWN to be the assignee (rule 152: an uncorrected link of the reviewer or of an account known to
+     * be the same person) and the account that submitted it or one known to be the same person (review L1); the
+     * database backs both (`hr_workforce_task_review_same_person`).
+     */
+    private function lockReviewable(School $school, string $taskId, User $actor): WorkforceTask
+    {
+        $task = $this->lock($school, $taskId);
+        if ($this->authority->currentPathFor($actor, $school, $task->employment_record_id) === null) {
+            // Never on any path: the private "not found", as before. On one only by the cached answer: the
+            // authority is gone (revoked, suspended, disabled, module off) -- refused.
+            if ($this->authority->pathFor($actor, $school, $task->employment_record_id) === null) {
+                throw TaskException::notFound();
+            }
+            throw new AuthorizationException('This action is unauthorized.');
+        }
+        if ($this->authority->ownsEmployment($actor, $school, $task->employment_record_id)) {
+            throw TaskException::forbidden('TASK_SELF_ADMINISTRATION', 'You cannot review your own task.');
+        }
+        $submitters = TaskEvent::query()->where('task_id', $task->id)->where('kind', 'submitted')->distinct()->pluck('actor_user_id')->filter()->map(fn ($id) => (string) $id)->values()->all();
+        if ($this->authority->isKnownToBeAssignee($actor, $school, $task->employment_record_id)
+            || $this->authority->isKnownToBeSubmitter($actor, $school, $submitters)) {
+            throw self::samePerson();
+        }
+
+        return $task;
+    }
+
+    private static function samePerson(): TaskException
+    {
+        return TaskException::forbidden('TASK_SAME_PERSON_REVIEW', 'One of your accounts is known to belong to the person this task is assigned to; another person must review it.');
     }
 
     private function assertVersion(WorkforceTask $task, int $expected): void

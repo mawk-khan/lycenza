@@ -238,6 +238,32 @@ final class ApprovalWorkflowRegistry
                 'beneficiaryCheck' => 'App\Domain\Payroll\Application\PayrollSelfBeneficiaries::of', 'beneficiaryGuard' => 'trg_payroll_runs_self_beneficiary'],
             'note' => 'Approve freezes the results (calculated -> approved); posting is a separate step the approver may also take (OD-8.4); stale results (an adjustment after the last recorded calculation) are refused.',
         ],
+        // HR.R1-C35 WO-22 (TRR-6, D-C35-5): a reviewed staff task's review is a second person's decision -- a
+        // domain-owned workflow (HR.13's own path rules: hr.tasks.manage, or hr.tasks.team with the CURRENT HR.3A
+        // line), never exempt. The reviewer's authority is read fresh under the task lock (TaskAuthority::currentPathFor);
+        // never the assignee, by account (service + trg_workforce_tasks_guard) or as a known same person (rule 152).
+        'workforce_task_reviews' => [
+            'domain' => 'WorkforceTasks',
+            'tables' => ['workforce_tasks', 'workforce_task_events'],
+            'request' => ['hr.tasks.self'],
+            'decide' => ['hr.tasks.manage', 'hr.tasks.team'],
+            // The assignee submits (the `submitted` event's actor); their employment is the task's.
+            'participants' => ['workforce_task_events.actor_user_id'],
+            'decider' => 'workforce_tasks.completed_by_user_id',
+            'dbBackstop' => 'trg_workforce_tasks_guard',
+            'makerChecker' => 'domain',
+            'service' => 'App\Domain\WorkforceTasks\Application\TaskWorkflowService',
+            'decisions' => ['review'],
+            'execution' => 'immediate',
+            'drift' => 'immutable_terms',
+            'freshMfa' => [],
+            'compatibility' => 'as_is',
+            // A return is recorded only on the timeline (`returned` event): its guard backs the same rule. The service
+            // also refuses the account that submitted the task or one known to be it (TaskAuthority::isKnownToBeSubmitter).
+            'knownSamePerson' => ['check' => 'App\Domain\WorkforceTasks\Application\TaskAuthority::isKnownToBeAssignee', 'dbGuard' => 'trg_workforce_tasks_guard',
+                'ownCaseGuards' => ['trg_workforce_task_events_guard']],
+            'note' => 'completed_by_user_id also records a self-completion (completion_mode self: the assignee completes their own task, no review). Only a submitted -> completed | returned transition is a review. No fresh MFA (not decided).',
+        ],
         'erasure_cases' => [
             'domain' => 'Compliance',
             'tables' => ['erasure_cases'],
@@ -393,6 +419,8 @@ final class ApprovalWorkflowRegistry
      * with the reason. Anything else decision-shaped must be a workflow.
      */
     public const NOT_WORKFLOWS = [
+        // HR.R1-C35 WO-22: the registry now detects `completed_by` columns (TRR-6).
+        'employment_separation_cases.completed_by_user_id' => 'who completed the offboarding of an APPROVED separation case: execution of the decided case (clearance certified), never a request decided by a second person; the decision is decided_by_user_id',
         // HR.R1-C29 (C14-N5): one person verifies or rejects one revision directly; no request, no second decider (C29-N1).
         'employee_credential_verifications.decided_by_user_id' => 'who verified or rejected a revision of a qualification or certification: a direct HR attestation under hr.employees.qualifications.manage, never a request decided by a second person',
         // HR.R1-C6 (OD-HR-23): declared in DIRECT_ASSURED. Nothing is requested, and nothing executes because of it.

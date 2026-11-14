@@ -21,7 +21,7 @@ use Tests\TestCase;
 class ApprovalWorkflowRegistryTest extends TestCase
 {
     /** Decision-shaped column names (structural evidence of an approval workflow). */
-    private const DECISION_COLUMNS = '(decided|approved|requested|reviewed|rejected|prepared|previewed|submitted|verified|authori[sz]ed|published|signed_off)_by_(user|employee)_id$|^(decider|approver|requester|reviewer)_(user|employee)_id$';
+    private const DECISION_COLUMNS = '(decided|approved|completed|requested|reviewed|rejected|prepared|previewed|submitted|verified|authori[sz]ed|published|signed_off)_by_(user|employee)_id$|^(decider|approver|requester|reviewer)_(user|employee)_id$';
 
     /** @return list<string> every declared table.column (workflow participants/deciders and NOT_WORKFLOWS) */
     private function declaredColumns(): array

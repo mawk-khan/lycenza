@@ -142,6 +142,25 @@ class HrSelfAdministrationGuard
         return EmployeeAccountLink::query()->where('school_id', $schoolId)->where('employee_id', $employeeId)->where('user_id', $actor->id)->exists();
     }
 
+    /**
+     * HR.R1-C35 WO-22 (TRR-6, rule 152): isKnownToBeEmployee() for the Employee of an employment -- for another
+     * HR-family module's decision (a task review). The Employee row is held FOR SHARE first, so a concurrent link
+     * of THAT Employee commits before (and is seen) or waits; a link of another Employee is read as committed,
+     * like every rule 152 decision. Call it inside the decision transaction.
+     */
+    public function isKnownToBeEmployeeOfEmployment(User $actor, School $school, string $employmentRecordId): bool
+    {
+        return app(TenantContext::class)->withSchool($school, function () use ($actor, $school, $employmentRecordId): bool {
+            $employeeId = EmploymentRecord::query()->whereKey($employmentRecordId)->value('employee_id');
+            if ($employeeId === null) {
+                return false;
+            }
+            Employee::query()->whereKey($employeeId)->sharedLock()->value('id');
+
+            return $this->isKnownToBeEmployee($actor, $school->id, $employeeId);
+        });
+    }
+
     /** HR.R1-C7 (OD-HR-25): the same for a Payroll write, by employment. A plain read, as ownsEmployment(). */
     public function isEmployeeOf(User $actor, School $school, string $employmentRecordId): bool
     {
