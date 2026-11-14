@@ -115,5 +115,22 @@ The development database held no separation cases, so D-WO20-2 changes no local 
 | WO20-E1 (test defect, fixed) | `TeachingAssignmentArchitectureGuardTest` compared a grep's file list in filesystem order, which differs between runs; the first WO-20 candidate (`338785ba`, CI 43531875656, shard 4) failed on it. Now sorted. Test-only, not a WO-20 regression |
 | Development MAJOR inventory | None open |
 | WO-21, WO-22 | Not started |
-| Development database | Forward-migrated after publication (D-WO20-3): §8 |
+| Development database | Forward-migrated after publication (D-WO20-3): §7 |
 | Seven P3 decisions, other P3/LOW findings (WO17-N2, WO18-N1/N2, WO19-N1 to N6, ...), RG-ID-1, C33-H1 to H5, R1-02 PARTIAL, Legal/DPO gates, 361 capability rows, 61 audit identifiers | Unchanged; no baseline selected |
+
+## 7. Publication and the development database
+
+- **First candidate `338785ba`, CI 43531875656: failed** on one unrelated test in shard 4 (WO20-E1, a filesystem-order comparison); shards 1-3, static, secrets, supply chain, integrity and images green. Not rerun: fixed and replaced.
+- **Candidate `2c66460c`, CI run 43534600597: green, no reruns.**
+  - **11,906 tests (11,887 + the 19 new), 468,676 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards (2,976 / 2,977 / 2,977 / 2,976), coverage union proven equal to the canonical inventory;
+  - static and frontend, full-history secrets, supply chain, integrity and production images all green.
+- **The assertion total is 1,056 below WO-19's** although 19 tests were added: data-dependent counts vary between runs (+1,907 at WO-19). Not traced test by test: a recorded limitation.
+- Committed-range gitleaks (`31a14420..338785ba`): no leaks.
+- **Published** with `lycenza-ci publication-check --candidate 2c66460c… --push` on 2026-11-14. E16 last valid day 2026-11-28, no problems. `origin/main` = `2c66460c`.
+- **Regression counter 0/5:** this exact-SHA full suite is the canonical regression.
+- **Development database forward-migrated (D-WO20-3)** through `pgsql_admin` after publication:
+  - **Target verified first:** environment `local`, database `db`, exactly two pending: `2027_02_22_090000` (WO17-N1) and `2027_02_23_090000`. Both applied.
+  - **Data preserved:** migrations 396 → 398; every other count unchanged (employees 13, account links 1, separation cases 0, leave decisions 0, payroll runs 2, School audit events 869). The locked October 2026 Staff Attendance month row is byte-identical (md5 before and after).
+  - **Verified:** `platform:verify-database` failed=0 (operator evidence 1: connection encryption outside production); `hr_separation_retained_access_binding`, `hr_family_trigger_functions`, `hr_family_runtime_privileges` and `known_same_person_guards` PASS.
+  - The development database is now current with the repository.
