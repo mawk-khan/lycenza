@@ -112,6 +112,7 @@ The development database held no separation cases, so D-WO20-2 changes no local 
 | WO20-N5 (LOW, recheck) | After a rehire (the same Employee), a COMPLETED case whose kept account gains a role for the new job reads OPEN with "Off-board it" on that old case. Display only, nothing is blocked (completion is done), and completed non-kept cases already behaved so; following it would off-board a current employee |
 | WO20-N6 (LOW, recheck) | Completion does not take the lock that link changes take (the compensation lock and the Employee row), so a relink committing during completion can be missed; the current-link read already had the gap. A concurrent correction can only remove holders, so seeing OPEN first is the safe direction |
 | WO20-N7 (INFO, recheck) | An older, ended, uncorrected account of the person whose membership holds none of the kept grants is not checked (as for non-kept cases); closing it is WO20-N1's person-level decision |
+| WO20-E1 (test defect, fixed) | `TeachingAssignmentArchitectureGuardTest` compared a grep's file list in filesystem order, which differs between runs; the first WO-20 candidate (`338785ba`, CI 43531875656, shard 4) failed on it. Now sorted. Test-only, not a WO-20 regression |
 | Development MAJOR inventory | None open |
 | WO-21, WO-22 | Not started |
 | Development database | Forward-migrated after publication (D-WO20-3): §8 |

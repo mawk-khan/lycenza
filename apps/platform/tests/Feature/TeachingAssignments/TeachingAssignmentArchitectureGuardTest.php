@@ -104,8 +104,11 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
             $this->assertSame([], $this->grep($forbidden, 'app/Domain/Students'));
         }
         $consumers = array_map(fn (string $line) => explode(':', $line)[0], array_merge($this->grep('TeachingOwnership', 'app/Domain/Examinations')));
+        // Sorted: grep returns files in filesystem order, which differs between runs (found by HR.R1-C35 WO-20's CI).
+        $files = array_values(array_unique(array_map(fn (string $f) => str_replace(base_path().'/', '', $f), $consumers)));
+        sort($files, SORT_STRING);
         $this->assertSame(['app/Domain/Examinations/Application/Marks/TeacherStudentMarkAccess.php', 'app/Domain/Examinations/Application/Marks/TeacherStudentMarkGuard.php'],
-            array_values(array_unique(array_map(fn (string $f) => str_replace(base_path().'/', '', $f), $consumers))), 'Examinations consumes ownership in the teacher marks path only');
+            $files, 'Examinations consumes ownership in the teacher marks path only');
         $this->assertSame(1, count($this->grep('holdOffering(', 'app/Domain/Examinations')), 'the teacher write decides ownership through holdOffering() only');
         foreach (['CurriculumDelivery', 'Attendance', 'LMS'] as $module) {
             $this->assertSame([], $this->grep('OwnedElectivePeriod', "app/Domain/{$module}"), "{$module} adopted required ownership only; electives are a new decision per consumer.");
