@@ -26,6 +26,9 @@ $context = $app->make(TenantContext::class);
 try {
     $school = School::query()->findOrFail($schoolId);
     $actor = User::query()->findOrFail($actorId);
+    // As the School request middleware does (HR.R1-C35 WO-23): the context outlives the service's own
+    // transaction, so a held outer transaction still commits under it and the commit-time check sees the task.
+    $context->set($school);
     echo 'ok:'.HeldTransaction::run(fn (): string => $app->make(TaskWorkflowService::class)
         ->review($school, $taskId, (int) $version, $decision, $decision === 'return' ? 'Add the dates.' : null, $actor)->status);
 } catch (TaskException $e) {

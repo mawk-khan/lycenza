@@ -664,3 +664,18 @@ TRR-6, owner decision D-C35-5 (`docs/hr/HR-R1-C35-WO22-TASK-REVIEW-GOVERNANCE.md
 - **Fresh authority.** `TaskWorkflowService::review()` decides under the task lock through `TaskAuthority::currentPathFor()`: `hr.tasks.manage`, or `hr.tasks.team` with the CURRENT HR.3A line, read fresh (`holdsInSchoolNow()`, held to commit). The cached path only chooses the refusal: someone never on a path keeps the private "not found", and authority lost behind the cache is a 403.
 - **Never the assignee, person-level (rule 152).** As before, never the assignee's current account; now also never an account KNOWN to be the assignee (an uncorrected link, current or ended, of the reviewer or of an account known to be the same person), refused with `TASK_SAME_PERSON_REVIEW`. The assignee's Employee row is held FOR SHARE, which orders a link of that Employee. The database backs it: the completion on the task row (`hr_workforce_tasks_guard`) and the return on its `returned` event (`hr_workforce_task_events_guard`). Corrected links do not count, and an unknown relationship is not refused (C33).
 - **Not changed.** Submission, self-completion, assignment, reassignment, cancellation, generation, capabilities, task terms and history. No fresh MFA (not decided).
+
+## HR.R1-C35 WO-23 amendment (2026-11-20): a submission or return needs its versioned event
+
+WO22-N1 and RF1-N1, owner decisions D-RF2-1 and D-RF2-1a (`docs/hr/HR-R1-C35-RF2-RESIDUAL-DECISIONS.md` §4, `docs/hr/HR-R1-C35-WO23-TASK-TRANSITION-EVIDENCE.md`). Amends the HR.13 task lifecycle and the WO-22 amendment above, under rule 102 (ADR 0076 §64).
+
+- **Evidence.** `submitted` and `returned` record their actor only on the timeline event. Each such event now names the task version it documents (`workforce_task_events.task_version`). The version appears only on those two kinds (CHECK), and there is one event per version (unique index). Earlier events keep NULL; nothing is back-filled.
+- **Bound in the database, without knowing who acted.**
+  - The event guard refuses a `submitted` or `returned` event unless the task, in the same School, is in that state at that version.
+  - `trg_workforce_tasks_transition_evidence`, a DEFERRABLE INITIALLY DEFERRED constraint trigger, refuses at commit a change to either state that has no such event. Each transition is checked against its own version.
+  - A commit that cannot see the task under RLS is refused (PAY-15).
+  - Writers keep their order: the task first, then the event, inside `withSchool()`.
+- **Found by the review, fixed here (owner's choice, 2026-11-20):**
+  - **WO23-N1 (MEDIUM).** The task guard's branch for the reassignment FK's SET NULL action returned before its immutability and finality checks. One raw UPDATE could therefore rewrite a reassigned task's assignee, terms or dates, even on a finished task. That branch now requires every other column unchanged.
+  - **A version is a transition.** A version advance with no status change is refused.
+- **Not changed.** The task state graph, authority, the known-same-person refusals (their refusal still comes first), completion and cancellation (their actor is on the task row), generation, assignment and reassignment. The recorded actor stays the writer's claim (rule 102).

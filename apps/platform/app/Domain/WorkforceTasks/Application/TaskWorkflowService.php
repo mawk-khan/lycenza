@@ -25,7 +25,13 @@ use Illuminate\Support\Facades\DB;
  * Only the assignee submits (hr.tasks.self + acting employee = the task's
  * employment). Review and cancel need the administrative path or the current
  * manager path (TaskAuthority) and never one's own task; the database backs
- * the graph and "never the assignee" (trg_workforce_tasks_guard). Remarks and
+ * the graph and "never the assignee" (trg_workforce_tasks_guard). A submission
+ * or return is evidenced only by its timeline event, which names the task
+ * version it documents; the database refuses, at commit, a `submitted` or
+ * `returned` task without it (HR.R1-C35 WO-23). Each method commits inside
+ * withSchool(), with the School context still set: a caller wrapping it in an
+ * outer transaction that commits after the context is restored fails closed
+ * (the commit cannot see the task), never open. Remarks and
  * feedback are bounded plain text kept on the timeline, never a rating
  * (OD-HR-7) and never a health, disciplinary or student record.
  */
@@ -59,7 +65,9 @@ final class TaskWorkflowService
             $task->forceFill($self
                 ? ['status' => 'completed', 'completed_by_user_id' => $actor->id, 'completed_at' => now(), 'version' => $task->version + 1]
                 : ['status' => 'submitted', 'version' => $task->version + 1])->save();
-            TaskEvent::query()->create(['task_id' => $task->id, 'kind' => $self ? 'completed' : 'submitted', 'actor_user_id' => $actor->id, 'note' => $remarks, 'occurred_at' => now()]);
+            // WO-23: a submission event names the task version it documents (the database requires it, at commit).
+            TaskEvent::query()->create(['task_id' => $task->id, 'kind' => $self ? 'completed' : 'submitted', 'task_version' => $self ? null : $task->version,
+                'actor_user_id' => $actor->id, 'note' => $remarks, 'occurred_at' => now()]);
             $this->audit->school($school, $self ? 'hr.task.completed' : 'hr.task.submitted', actor: $actor, subject: $task, metadata: ['hasRemarks' => $remarks !== null]);
 
             return $task->refresh();
@@ -91,7 +99,9 @@ final class TaskWorkflowService
                 $task->forceFill($decision === 'complete'
                     ? ['status' => 'completed', 'completed_by_user_id' => $actor->id, 'completed_at' => now(), 'version' => $task->version + 1]
                     : ['status' => 'returned', 'return_count' => $task->return_count + 1, 'version' => $task->version + 1])->save();
-                TaskEvent::query()->create(['task_id' => $task->id, 'kind' => $decision === 'complete' ? 'completed' : 'returned', 'actor_user_id' => $actor->id, 'note' => $feedback, 'occurred_at' => now()]);
+                // WO-23: a return event names the task version it documents (the database requires it, at commit).
+                TaskEvent::query()->create(['task_id' => $task->id, 'kind' => $decision === 'complete' ? 'completed' : 'returned',
+                    'task_version' => $decision === 'complete' ? null : $task->version, 'actor_user_id' => $actor->id, 'note' => $feedback, 'occurred_at' => now()]);
             } catch (QueryException $e) {
                 // WO-22: the database's own refusal of a reviewer known to be the assignee (a link that changed after the read).
                 // The database's own message (review L4: never Laravel's, which carries the bound feedback text).

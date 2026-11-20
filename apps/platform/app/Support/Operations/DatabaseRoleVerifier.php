@@ -153,7 +153,9 @@ class DatabaseRoleVerifier
         'staff_holidays' => ['trg_staff_attendance_holiday_month_guard' => ['staff_attendance_calendar_month_guard', '8b965ccf99d1621e1ba412d0d21dd8a7'], 'trg_staff_holidays_history_guard' => ['staff_holidays_history_guard', '816645bc2eb5e6fb8b0aa0844be12589']],
         'staff_working_week_versions' => ['trg_staff_attendance_calendar_month_guard' => ['staff_attendance_calendar_month_guard', 'd65201ced651b50e7f35a8de4d7e4c7a'], 'trg_staff_working_week_versions_guard' => ['staff_working_week_versions_guard', 'bf387aea8c71ff42886059f97b1558ac']],
         'workforce_task_events' => ['trg_workforce_task_events_guard' => ['hr_workforce_task_events_guard', '487a2ddbec8a2fff22cc7e8d5e5f5bab']],
-        'workforce_tasks' => ['trg_workforce_tasks_guard' => ['hr_workforce_tasks_guard', 'af7cd30948efee3d8c0146bc8b5efaec']],
+        'workforce_tasks' => ['trg_workforce_tasks_guard' => ['hr_workforce_tasks_guard', 'af7cd30948efee3d8c0146bc8b5efaec'],
+            // HR.R1-C35 WO-23 (WO22-N1, RF1-N1): a submission or return needs its versioned event at commit.
+            'trg_workforce_tasks_transition_evidence' => ['hr_workforce_task_transition_evidence', '8a8a6fcdd76d69f423dc4df080592781']],
     ];
 
     /**
@@ -171,6 +173,17 @@ class DatabaseRoleVerifier
 
     /** HR.R1-C28 (C28-N2): an INVOKER guard's path names only these schemas and puts the temporary schema last. */
     public const HR_FAMILY_INVOKER_SEARCH_PATHS = ['pg_catalog, pg_temp', 'pg_catalog, public, pg_temp'];
+
+    /**
+     * HR.R1-C35 WO-23 (WO22-N1, RF1-N1): md5 of `hr_workforce_task_transition_evidence`'s whole body (`prosrc`), so
+     * a redefinition that keeps the trigger but weakens the version or kind comparison fails `hr_task_invariants`.
+     */
+    public const TASK_TRANSITION_EVIDENCE_BODY = '26bc0ba80cb01a520adbd455cb7e290a';
+
+    /** HR.R1-C35 WO-23 (review L3): md5 of the definitions, so a non-unique index or a weaker CHECK under the same name fails. */
+    public const TASK_EVENT_VERSION_INDEX_DEF = 'c49b31d66d06fcb9aa0a2619f3831e76';
+
+    public const TASK_EVENT_VERSION_CHECK_DEF = '0cd791e320b424d69fb9778f7c5037a6';
 
     /** Tables whose history the runtime role must never delete. */
     public const NO_RUNTIME_DELETE = [
@@ -688,12 +701,24 @@ class DatabaseRoleVerifier
         if (! DB::selectOne("select exists (select 1 from pg_trigger where tgrelid = 'public.workforce_task_events'::regclass and tgname = 'trg_workforce_task_events_guard' and tgenabled = 'O') as x")->x) {
             $missingTasks[] = 'trg_workforce_task_events_guard';
         }
-        foreach (['workforce_tasks_one_occurrence'] as $index) {
+        // HR.R1-C35 WO-23: the evidence check is enabled, DEFERRABLE INITIALLY DEFERRED (a non-deferred one would refuse
+        // the writers' task-first order), with its pinned body; one event per version; the version only on the two kinds.
+        $evidence = DB::selectOne("select t.tgenabled = 'O' and t.tgdeferrable and t.tginitdeferred as ok, md5(p.prosrc) as body
+            from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+            where t.tgrelid = 'public.workforce_tasks'::regclass and t.tgname = 'trg_workforce_tasks_transition_evidence'");
+        if ($evidence === null || ! $evidence->ok || $evidence->body !== self::TASK_TRANSITION_EVIDENCE_BODY) {
+            $missingTasks[] = 'trg_workforce_tasks_transition_evidence';
+        }
+        if (DB::selectOne("select md5(pg_get_indexdef(to_regclass('public.workforce_task_events_one_per_version'))) as d")->d !== self::TASK_EVENT_VERSION_INDEX_DEF
+            || DB::selectOne("select md5(pg_get_constraintdef(oid)) as d from pg_constraint where conrelid = 'public.workforce_task_events'::regclass and conname = 'workforce_task_events_task_version_check'")?->d !== self::TASK_EVENT_VERSION_CHECK_DEF) {
+            $missingTasks[] = 'workforce_task_events task_version definitions';
+        }
+        foreach (['workforce_tasks_one_occurrence', 'workforce_task_events_one_per_version'] as $index) {
             if (! DB::selectOne("select exists (select 1 from pg_indexes where schemaname = 'public' and indexname = ?) as x", [$index])->x) {
                 $missingTasks[] = $index;
             }
         }
-        foreach (['workforce_tasks_path_check', 'workforce_tasks_outcome_check', 'workforce_task_template_versions_schedule_check'] as $constraint) {
+        foreach (['workforce_tasks_path_check', 'workforce_tasks_outcome_check', 'workforce_task_template_versions_schedule_check', 'workforce_task_events_task_version_check'] as $constraint) {
             if (! DB::selectOne('select exists (select 1 from pg_constraint where conname = ?) as x', [$constraint])->x) {
                 $missingTasks[] = $constraint;
             }
@@ -1286,8 +1311,10 @@ class DatabaseRoleVerifier
      */
     public const KNOWN_SAME_PERSON_BODIES = [
         // HR.R1-C35 WO-22 (TRR-6).
-        'hr_workforce_tasks_guard' => '8523e3ddbc4e0deb9fba3ff0850d3b47',
-        'hr_workforce_task_events_guard' => '9d645114f375336fcc61bcc7c74e0cee',
+        // WO-23 (WO23-N1, review L2): the link-clearing branch changes nothing else; a version advances only with a transition (was 8523e3dd...).
+        'hr_workforce_tasks_guard' => '2a55e962047ea10b39edd4f8cc26f841',
+        // WO-23: a submission or return event documents the task version that transition made (was 9d645114...).
+        'hr_workforce_task_events_guard' => '7c56cdb8286a9f9df008dda82a2b3d31',
         'employee_account_link_same_person_accounts' => '852951d0ba4932c3f839aea54b1a7ff7',
         'employee_account_link_correction_same_person' => '6af30c7d4b3f86e757f22467159c9647',
         'payroll_runs_refuse_participant_approval' => '3eb3d5d5495a4b21dc21daca99b97b28',

@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-23, 2026-11-20): WO22-N1, RF1-N1 and WO23-N1 closed for development on publication (`HR-R1-C35-WO23-TASK-TRANSITION-EVIDENCE.md`).**
+- **Built:** a `submitted` or `returned` staff task commits only with its event naming that task version. The event guard binds the event to the task's current state and version; a DEFERRABLE INITIALLY DEFERRED constraint trigger refuses the commit without it.
+- **Found by the review, fixed here by the owner's choice:** WO23-N1 (MEDIUM). The reassignment link clearing could carry a rewrite of a task's assignee or terms. Also, a version now advances only with a transition.
+- **Proof:** reproduced first; raw runtime role, real commits and two-process races; 14 planted schema probes and 4 service probes detected; populated-state migration; rollback IDENTICAL; independent review and a final-state review.
+- **Still open (MAJOR):** WO20-N1 and RF1-N2 (WO-24). WO-25 is pending before the closure regression. HR.R1 stays OPEN; no baseline is selected.
+
 **Evidence recorded (HR.R1-C35-RF2, 2026-11-20): every residual finding decided; multiple corrections required (`HR-R1-C35-RF2-RESIDUAL-DECISIONS.md`).**
 - **Decided:** all 81 of RF1's open items, individually, by the owner. 0 remain pending. D-7 (targets deferred to staging), D-9 (accepted as operational) and D-10 (draft extended later, never sent) are decided.
 - **Open MAJOR (C27-C):**

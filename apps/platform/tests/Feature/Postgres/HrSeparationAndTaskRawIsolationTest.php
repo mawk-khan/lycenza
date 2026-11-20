@@ -317,8 +317,11 @@ class HrSeparationAndTaskRawIsolationTest extends TestCase
     #[DataProvider('references')]
     public function a_row_of_this_school_cannot_point_at_another_schools_parent(string $table, string $column): void
     {
-        $theirs = $this->firstRow($table, $this->a);
-        $row = $this->asNewRow($table, $this->firstRow($table, $this->b));
+        // HR.R1-C35 WO-23 (WO23-E1): a row that HAS the parent, in a fixed order. An unordered first() could return
+        // School A's manual task, whose template is NULL, so nothing foreign was referenced and the insert passed.
+        $theirs = (array) $this->as($this->a, fn () => DB::connection('pgsql')->table($table)->whereNotNull($column)->orderBy('id')->first());
+        $this->assertNotSame([], $theirs, "{$table}.{$column}: the fixture has a School A row with that parent");
+        $row = $this->asNewRow($table, (array) $this->as($this->b, fn () => DB::connection('pgsql')->table($table)->whereNotNull($column)->orderBy('id')->first()));
         $row[$column] = $theirs[$column];
         if ($table === 'employment_separation_cases') {
             // An employment of School A with no case yet, so `one_live` is not what answers.

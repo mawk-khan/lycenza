@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $task_id
  * @property string $kind
+ * @property int|null $task_version the task version a `submitted` or `returned` event documents (HR.R1-C35 WO-23); NULL otherwise and on events before it
  * @property string|null $actor_user_id
  * @property string|null $note
  * @property Carbon $occurred_at
@@ -27,10 +28,10 @@ class TaskEvent extends Model
 
     protected $table = 'workforce_task_events';
 
-    protected $fillable = ['task_id', 'kind', 'actor_user_id', 'note', 'occurred_at'];
+    protected $fillable = ['task_id', 'kind', 'task_version', 'actor_user_id', 'note', 'occurred_at'];
 
     protected function casts(): array
     {
-        return ['occurred_at' => 'datetime'];
+        return ['occurred_at' => 'datetime', 'task_version' => 'integer'];
     }
 }

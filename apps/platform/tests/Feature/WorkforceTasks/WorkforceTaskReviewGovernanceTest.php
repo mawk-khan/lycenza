@@ -339,7 +339,10 @@ class WorkforceTaskReviewGovernanceTest extends TestCase
         $task = $this->submitted($record, $assignee);
         $this->assertSame('refused', $raw($complete($task, $former)));
         $this->assertSame('refused', $raw($returnEvent($task, $former)));
-        $this->assertSame('ok', $raw($returnEvent($task, $independent)), 'an independent return event is the positive control');
+        // HR.R1-C35 WO-23 (contract change, RF2 §4.6 item 14): a bare return event with no return of the task was the
+        // positive control here and is now refused itself; the WO-22 refusal above still comes first. The positive
+        // control for a return (task and versioned event together) is WorkforceTaskTransitionEvidenceTest.
+        $this->assertStringContainsString('(hr_workforce_task_event_transition)', $raw($returnEvent($task, $independent)));
         $this->assertSame('ok', $raw($complete($task, $independent)), 'an independent completion is the positive control');
     }
 
