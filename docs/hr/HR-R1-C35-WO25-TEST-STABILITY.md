@@ -144,7 +144,18 @@ An independent reviewer read the change, read only, without running anything. It
 
 ## 7. Publication
 
-Pending at the candidate commit: the exact-SHA `CI gate` (the canonical full regression, ADR 0072 §28.8, §31) and protected-`main` publication through `lycenza-ci publication-check` (rule 96) are recorded here after publication. E16: `OWNER-0O-E16-2026-11-01`, 119 exceptions, valid through 2026-11-28. Regression counter before this unit: 0/5 (WO-24, `e7d7ee02`).
+- **Candidate `5dcc35ef`, CI run 44781452652: green on attempt 1, no reruns.**
+  - **11,998 tests, 468,263 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards (3,000 / 3,000 / 2,999 / 2,999);
+  - the coverage union equal to the canonical inventory (1,419 files). Its selection sha256 `0d8fd41c…` is **identical to WO-24's**: no test was added, removed, renamed or excluded.
+  - Static and frontend, full-history secrets, supply chain, repository integrity and production images all green.
+- **Assertions:** 484 above WO-24's 467,779: polling-dependent counts (RF2 §8) and the added assertions; the test count is unchanged.
+- **Committed-range gitleaks** (`2efe705c..5dcc35ef`): no leaks.
+- **Published** with `lycenza-ci publication-check --candidate 5dcc35ef… --push` on 2026-11-20: fast-forward, gate check run 136457760905, no problems. `origin/main` = `5dcc35ef`. E16 (`OWNER-0O-E16-2026-11-01`) valid through 2026-11-28.
+- **Main CI** on `5dcc35ef`: run 44785398885, green on attempt 1.
+- **Regression counter:** a remote checkpoint at `5dcc35ef` (the exact-SHA full suite of a code-lane candidate); **counter 0/5.** This is a publication regression under rule 96, not the selected-baseline closure run (D-RF2-3).
+
+**Verdict: WO-25 IMPLEMENTED — TEST STABILITY DEVELOPMENT VERIFIED.** C26-N2 is root-caused and removed. WO22-N5's coordination is deterministic and diagnosable, but its stall was not reproduced, so a recurrence is reported, never rerun. No product file changed and no development MAJOR is open. HR.R1 stays **OPEN**.
 
 ## 8. Sequencing kept
 
