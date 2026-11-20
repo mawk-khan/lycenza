@@ -316,6 +316,11 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35-UAT0, 2026-11-20, D-RF2-23): the synthetic HR UAT School is ready; UAT is not run (`HR-R1-C35-UAT0-SYNTHETIC-SCHOOL.md`).**
+- One School (`UAT-HR-SYN`) through `SchoolLifecycleService`, 15 synthetic accounts, 13 Employees, eight separation cases, Leave accrual states, tasks and link scenarios, all through canonical services with real fresh-MFA codes. A scenario manifest marks each RF2 §10.1 row Ready or Not configured.
+- 0 pre-existing rows changed; 0 rows in any other School; the October 2026 lock, forced RLS and runtime grants unchanged; 402/402; verifier failed=0.
+- UAT sign-off still needs the browser walkthroughs, axe, keyboard paths and the manual screen-reader pass (C18-A12). Not a C36 prerequisite (D-RF2-23). HR.R1 stays OPEN.
+
 **Evidence recorded (HR.R1-C35 DDEV forward migration, 2026-11-20, D-RF2-22): the development database is current, 402/402 (`HR-R1-C35-DDEV-MIGRATION-402.md`).**
 - Exactly the four pending migrations (`2027_02_24` to `2027_02_27`) applied through `pgsql_admin`; before and after snapshots of 35 tables identical; the October 2026 month lock byte-identical; `platform:verify-database` failed=0.
 - The database dimension is eligible for consideration at C36, not selected. Next: the synthetic UAT School (D-RF2-23), on its own authorization. HR.R1 stays OPEN.
