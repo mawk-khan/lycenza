@@ -3,7 +3,7 @@
 **Recovered by HR.R1-C9, 2026-11-07. Rebuilt and re-verified by HR.R1-C10 against
 `82e70a8a`. Updated by HR.R1-C11, HR.R1-C12, HR.R1-C13 and HR.R1-C14; the seven P3 rows carry their HR.R1-C35 decisions (`HR-R1-C35-P3-DISPOSITIONS.md`).**
 
-**HR.R1-C35-RF1 (2026-11-14):** every residual finding, including those raised after this register's rows (C-series, WO-series and gate-register residuals), has a proposed individual disposition in `HR-R1-C35-RF1-RESIDUAL-FINDINGS.md`. That record notes this file's stale lines (the "17 named findings" totals, backlog rows R0-07, R0-17 and R0-21) without changing them; the rows below are unchanged.
+**HR.R1-C35-RF1 (2026-11-14):** every residual finding, including those raised after this register's rows (C-series, WO-series and gate-register residuals), has a proposed individual disposition in `HR-R1-C35-RF1-RESIDUAL-FINDINGS.md`. That record notes this file's stale lines (the "17 named findings" totals, backlog rows R0-07, R0-17 and R0-21) without changing them; the rows below are unchanged. **HR.R1-C35-RF2 (2026-11-20):** the owner decided every one of RF1's 81 open items individually (`HR-R1-C35-RF2-RESIDUAL-DECISIONS.md` §2, §3); LVA-7, PAY-12 (D-7), TRR-5 (D-9), GOV-7 (D-10), HRC-7, GOV-6, GOV-10 and the operational and gate rows carry their dispositions there, and the row text is unchanged.
 
 **Why this file exists.** The HR.R1-0 audit of 2026-11-05 (verdict: PARTIALLY READY,
 REMEDIATION REQUIRED) was delivered as a session report and never committed. Only a

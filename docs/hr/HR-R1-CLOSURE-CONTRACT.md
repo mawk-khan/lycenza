@@ -316,6 +316,17 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35-RF2, 2026-11-20): every residual finding decided; multiple corrections required (`HR-R1-C35-RF2-RESIDUAL-DECISIONS.md`).**
+- **Decided:** all 81 of RF1's open items, individually, by the owner. 0 remain pending. D-7 (targets deferred to staging), D-9 (accepted as operational) and D-10 (draft extended later, never sent) are decided.
+- **Open MAJOR (C27-C):**
+  - WO22-N1 with RF1-N1: task state without its event; MEDIUM by the ADR 0076 §64 precedent. Closes with **WO-23** (version-bound, deferred evidence check).
+  - WO20-N1 with RF1-N2: an unlink clears R-HR12-3's access block; reproduced on the supported path, MEDIUM. Closes with **WO-24**.
+  - **HR.R1 is NOT CLOSED** until both publish.
+- **Also required before the closure regression:** WO-25 (test-only, WO22-N5 and C26-N2).
+- **Closure regression rule (D-RF2-3):** a clean complete run on the baseline SHA; after any failure, every job runs again.
+- **Approved for later:** the DDEV migration (after WO-24), and the synthetic UAT plan (after WO-24 and that migration). Operational evidence is a prerequisite for UAT sign-off, not for baseline selection.
+- **Unchanged:** R1-02 PARTIAL; RG-ID-1, C33-H1..H5 and every Legal, DPO and Security gate; 361 capability rows; 61 audit identifiers. No baseline is selected. HR.R1 stays OPEN.
+
 **Evidence recorded (HR.R1-C35-RF1, 2026-11-14): residual findings reconciled; corrective work required (`HR-R1-C35-RF1-RESIDUAL-FINDINGS.md`).**
 - **Inventory:** 104 `C`/`WO` identifiers, the 61 audit identifiers and the gate register's residual rows, each with a proposed individual disposition (D-C35-10). 81 open items await the owner; none was closed without evidence and no owner decision was assumed.
 - **WO22-N1 reproduced** as the runtime role (a task `returned`, and `submitted`, with no event). Recorded LOW; ADR 0076 §64 rated the same gap MEDIUM (MAJOR under C27-C). The rating is the owner's; RF1 requires the correction unless a LOW is recorded with a rule 15 deviation.

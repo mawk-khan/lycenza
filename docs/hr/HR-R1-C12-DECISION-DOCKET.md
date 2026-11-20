@@ -329,9 +329,9 @@ Pending unless the row says otherwise, and this checkpoint records no approval. 
 
 | Id | Question | Recommendation | Owner | Effect | Status |
 |---|---|---|---|---|---|
-| D-7 | Performance targets | Set a School size first, then measure on staging | Product | None until a target fails | Pending |
-| D-9 | "Employments examined" against ADR 0040 | Accept as operational with a reason, or "reconciled yes/no" | Product, ADR 0040 owner | **Dropping the column does not reliably erase the number.** The report's own docblock says `examined × occurring templates = created + existing + not matched`. With one template and one pass the three sum to it. The template count is not shown, and repeat passes accumulate, so it is not always exact. Column removal is not erasure | Pending |
-| D-10 | Extend E47 | Names plus a leave and task data set | Legal | Docs only. Preparing is not sending | Pending; **not sent** |
+| D-7 | Performance targets | Set a School size first, then measure on staging | Product | None until a target fails | **Decided 2026-11-20 (HR.R1-C35-RF2, D-RF2-4):** targets deferred to staging |
+| D-9 | "Employments examined" against ADR 0040 | Accept as operational with a reason, or "reconciled yes/no" | Product, ADR 0040 owner | **Dropping the column does not reliably erase the number.** The report's own docblock says `examined × occurring templates = created + existing + not matched`. With one template and one pass the three sum to it. The template count is not shown, and repeat passes accumulate, so it is not always exact. Column removal is not erasure | **Decided 2026-11-20 (HR.R1-C35-RF2, D-RF2-5):** accepted as operational reconciliation |
+| D-10 | Extend E47 | Names plus a leave and task data set | Legal | Docs only. Preparing is not sending | **Decided 2026-11-20 (HR.R1-C35-RF2, D-RF2-6):** extend the draft later; **not sent** |
 | HRC-4 | RETAINED is a one-off boolean (`SeparationObligations.php:127`) | Bind it to the grant set at recording | HR, Identity | Small change | Pending |
 | HRC-8 | `staff_type` NULL skips staff-type clearance (`SeparationCaseService.php:426`) | Show "unclassified" on the case | HR | Small change | Pending |
 | TRR-6 | Task review outside the approval registry | Declare it in `ApprovalWorkflowRegistry::NOT_WORKFLOWS` with a reason, or register it | Architecture | One entry | Pending |
@@ -340,7 +340,7 @@ Pending unless the row says otherwise, and this checkpoint records no approval. 
 | S-6 | Staff attendance correction: no window, MFA or second person | A real determination. Candidate: record today's controls as deliberate for development, with re-review at HRX-L4 activation. **No authority exists today.** ADR 0076 §64.25 is a handoff list, and `functions.csv` HR-010's `KEEP_EXISTING` concerns approval only | HR owner, Security | D8-13 | **Decided 2026-11-08 (HR.R1-C17)**, `HR-R1-C17-S6-DECISION.md`; control not built |
 | Generic upload | `HR-R1-C11-HARDENING.md` §5 | Refuse Employee uploads there | Security, HR | API change | Pending |
 | Same-person | Two accounts are not two people | §11 | Identity, Security | Real-Payroll blocker | Pending, MEDIUM |
-| C11-N4 | §10 | Preserve the broad freeze | HR owner | None if kept | Pending |
+| C11-N4 | §10 | Preserve the broad freeze | HR owner | None if kept | **Decided 2026-11-20 (HR.R1-C35-RF2, D-RF2-8):** broad freeze preserved |
 | §2 remainder | §3: is a partial slice "published", and nine ungated rows | The proposed reading, then decide the nine rows | HR owner | Map records, no code | Pending |
 | Fingerprint | §12 | Owner recomputes | Owner | §2 | Pending |
 | Baselines | §12 | Select after the next checkpoint | Owner | §2 | Pending |
