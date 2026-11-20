@@ -186,4 +186,15 @@ An independent reviewer read the working tree, read only (no tests, database or 
 
 ## 8. Publication
 
-Pending at the candidate commit: the exact-SHA `CI gate` (the canonical full regression, ADR 0072 §28.8, §31, a code-lane candidate) and protected-`main` publication through `lycenza-ci publication-check` (rule 96) are recorded here after publication. E16: `OWNER-0O-E16-2026-11-01`, 119 exceptions, valid through 2026-11-28. Regression counter before this unit: 0/5 (WO-23, `8ce263c5`).
+- **Candidate `e7d7ee02`, CI run 44766606712: green on attempt 1, no reruns, no code correction after push.**
+  - **11,998 tests (11,968 + the 30 new), 467,779 assertions, 0 failures, 1 skip (ESI-12)**;
+  - four shards (3,000 / 3,000 / 2,999 / 2,999), the coverage union proven equal to the canonical inventory (1,419 files; selection sha256 `0d8fd41c…`);
+  - static and frontend, full-history secrets, supply chain, repository integrity and production images all green.
+- **Assertions:** 241 below WO-23's 468,020 although 30 tests were added. Data-dependent counts vary between runs (RF2 §8: no monotonic assertion total is required). The test count rose by exactly the 30 new tests, and no test was removed.
+- **Committed-range gitleaks** (`5b1cf382..e7d7ee02`, the pinned image and repository allowlist): no leaks.
+- **Published** with `lycenza-ci publication-check --candidate e7d7ee02… --push` on 2026-11-20: fast-forward, gate check run 136403490618, no problems. `origin/main` = `e7d7ee02`. E16 (`OWNER-0O-E16-2026-11-01`) valid through 2026-11-28.
+- **Main CI** on `e7d7ee02`: run 44770047131, green on attempt 1.
+- **Regression counter:** the exact-SHA full suite of a code-lane candidate is the canonical regression (ADR 0072 §28.8), so this is a **remote checkpoint at `e7d7ee02`; counter 0/5.**
+- The integration branch was deleted after the merge; `integration/e16-r2` and the historical stash are preserved.
+
+**Verdict: WO-24 IMPLEMENTED — PERSON-LEVEL RETAINED ACCESS DEVELOPMENT VERIFIED.** No development MAJOR is open. HR.R1 stays **OPEN**: WO-25, the DDEV migration (D-RF2-22, which must name `2027_02_24` to `2027_02_27`), the synthetic UAT (D-RF2-23) and HR.R1-C36 remain, none started.
