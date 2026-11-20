@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
@@ -57,8 +58,7 @@ class IdempotencyServerErrorRealRouteTest extends TestCase
     {
         DB::connection('pgsql_admin')->select('select pg_advisory_unlock_all()');
         $this->server?->stop();
-        // Delta review M-T1: never leave a worker serving this port to a later run.
-        (new Process(['pkill', '-f', "php -S 127.0.0.1:{$this->port}"]))->run();
+        $this->killStrayServers();
         $this->dropTriggers();
         $this->purgeSchoolsAsAdmin([$this->school->id]);
         parent::tearDown();
@@ -237,25 +237,56 @@ class IdempotencyServerErrorRealRouteTest extends TestCase
      * injected trigger waits on it, so the second is answered (409, in flight) while the first is still running.
      * Only then is the lock released and the first one finishes.
      *
+     * HR.R1-C35 WO-25 (WO22-N5): the two requests used to start together, so a stall anywhere before the trigger
+     * (the server, either request's boot) and a real overlap failure both surfaced as one message. Now each phase
+     * is proven by PostgreSQL, never by elapsed time, and fails with its own message and a diagnostic snapshot:
+     * 1. request A starts, and is HELD only once a backend of this database waits on advisory lock 3030 (pg_locks);
+     * 2. request B, a second real process and PostgreSQL session, starts only then and must be answered while A is
+     *    still held. A held request is inside its worker's dispatch, so B is served by another worker.
+     * The overall budget is unchanged: 25 s from A's start, under the 30 s in-flight timeout past which B could
+     * reclaim A's claim. B now always meets A's committed claim through the lookup; the simultaneous-claim race (two
+     * INSERTs on the unique key) may still be exercised, never forced, by the unheld retry race below and by
+     * IdempotencyRealConcurrencyTest (it was only probabilistic before too; WO25-N1).
+     *
      * @return list<int> both status codes, sorted
      */
     private function raceUnderBarrier(string $url, string $token, string $key, string $body): array
     {
         $admin = DB::connection('pgsql_admin');
+        // Recheck N1: heldAtBarrier() reads another session's statement, which PostgreSQL shows only to a superuser or a
+        // pg_read_all_stats member. Every environment's admin connection is superuser today; say so if that changes.
+        if (! $admin->selectOne("select (select rolsuper from pg_roles where rolname = current_user) or pg_has_role('pg_read_all_stats', 'member') as sees")->sees) {
+            $this->fail('The admin test connection cannot read other sessions\' statements (needs superuser or pg_read_all_stats); the barrier cannot be observed.');
+        }
         $admin->select('select pg_advisory_lock(3030)');
+        $start = microtime(true);
+        $deadline = $start + 25;
+        $a = $b = null;
         try {
             $a = $this->curl($url, $token, $key, $body);
-            $b = $this->curl($url, $token, $key, $body);
-            // Under the 30 s in-flight timeout, past which the second request could reclaim the held claim.
-            $deadline = microtime(true) + 25;
-            while ($a->isRunning() && $b->isRunning()) {
+            while (! $this->heldAtBarrier($admin)) {
+                if (! $a->isRunning()) {
+                    $this->fail($this->raceDiagnostics('request A returned before reaching the injected failure', $start, $admin, $a, $b));
+                }
                 if (microtime(true) > $deadline) {
-                    $this->fail('neither request returned while the other was held');
+                    $this->fail($this->raceDiagnostics('request A never reached the injected failure (harness: server or boot)', $start, $admin, $a, $b));
                 }
                 usleep(10_000);
             }
-            $first = $a->isRunning() ? $b : $a;
-            $this->assertSame(409, (int) $first->getOutput(), 'the request that returned first found the other in flight');
+            $b = $this->curl($url, $token, $key, $body);
+            while ($b->isRunning()) {
+                if (microtime(true) > $deadline) {
+                    $this->fail($this->raceDiagnostics('request B was not answered while A was held', $start, $admin, $a, $b));
+                }
+                usleep(10_000);
+            }
+            if (! $a->isRunning()) {
+                $this->fail($this->raceDiagnostics('request A was no longer held when B was answered', $start, $admin, $a, $b));
+            }
+            if ((int) $b->getOutput() === 0) {
+                $this->fail($this->raceDiagnostics('request B got no HTTP answer (harness: curl or server)', $start, $admin, $a, $b));
+            }
+            $this->assertSame(409, (int) $b->getOutput(), 'the request that returned first found the other in flight');
         } finally {
             $admin->select('select pg_advisory_unlock(3030)');
         }
@@ -267,21 +298,83 @@ class IdempotencyServerErrorRealRouteTest extends TestCase
         return $codes;
     }
 
+    /**
+     * Whether a request is held at the injected failure: another client backend of this database waits on exactly the
+     * single-key advisory lock 3030 (classid 0, objid 3030, objsubid 1) while running the INSERT the trigger guards.
+     * Review R1: never another run's own pg_advisory_lock(3030), nor a 64-bit key whose low half happens to be 3030.
+     */
+    private function heldAtBarrier(Connection $admin): bool
+    {
+        return (bool) $admin->selectOne("select exists (
+                select 1 from pg_locks l join pg_stat_activity a on a.pid = l.pid
+                 where l.locktype = 'advisory' and l.classid = 0 and l.objid = 3030 and l.objsubid = 1 and not l.granted
+                   and l.database = (select oid from pg_database where datname = current_database())
+                   and a.backend_type = 'client backend' and a.pid <> pg_backend_pid() and a.query ilike 'insert into%'
+            ) as held")->held;
+    }
+
+    /**
+     * WO-25: what a stalled race was doing -- the phase, each request's state, every client backend of this database
+     * (state, wait event, seconds in its statement, the statement's first 60 characters: the application's statements
+     * are bound, so only a test fixture's literal could appear) and the server's last access-log lines (the requests
+     * it accepted and answered, by client port).
+     */
+    private function raceDiagnostics(string $phase, float $start, Connection $admin, ?Process $a, ?Process $b): string
+    {
+        $state = fn (?Process $p) => $p === null ? 'not started' : ($p->isRunning() ? 'running' : 'returned '.$p->getOutput());
+        $backends = $admin->select("select state, wait_event_type, wait_event, round(extract(epoch from now() - query_start)::numeric, 1) as seconds,
+                left(regexp_replace(query, '\\s+', ' ', 'g'), 60) as query
+            from pg_stat_activity where datname = current_database() and backend_type = 'client backend' and pid <> pg_backend_pid()");
+        $log = array_slice(explode("\n", trim((string) $this->server?->getErrorOutput())), -12);
+
+        return sprintf("%s after %.1f s; A %s; B %s.\nBackends: %s\nServer: %s", $phase, microtime(true) - $start, $state($a), $state($b),
+            json_encode($backends), implode("\n", $log));
+    }
+
     private function startServer(): void
     {
         // Review LOW-4: `php -S` serves one request at a time unless it has workers. The triggers wait on an advisory
         // lock the test holds (raceUnderBarrier), so the second request certainly arrives while the first is in flight.
+        $this->killStrayServers(); // recheck N2: a stray server from a killed run never answers in this one's place
         $this->server = new Process(['php', '-S', "127.0.0.1:{$this->port}", '-t', base_path('public')], null, ['PHP_CLI_SERVER_WORKERS' => '4']);
         $this->server->setWorkingDirectory(base_path());
         $this->server->start();
         $deadline = microtime(true) + 5;
         while (microtime(true) < $deadline) {
             if (@fsockopen('127.0.0.1', $this->port)) {
+                // WO-25: ready only once it has served a real application request (liveness), not merely accepted a socket.
+                $live = new Process(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '20', "http://127.0.0.1:{$this->port}/api/health/live"]);
+                $live->run();
+                if ((int) $live->getOutput() !== 200) {
+                    $this->fail('Local PHP server accepted a connection but did not serve liveness ('.$live->getOutput().'). stderr: '.$this->server->getErrorOutput());
+                }
+                // Review R3: and it is THIS server answering, not a stray one still bound to the port.
+                if (! $this->server->isRunning()) {
+                    $this->fail('Another process answers on port '.$this->port.'; this test\'s server exited. stderr: '.$this->server->getErrorOutput());
+                }
+
                 return;
             }
             usleep(50_000);
         }
         $this->fail('Local PHP server did not start in time. stderr: '.$this->server->getErrorOutput());
+    }
+
+    /**
+     * Delta review M-T1: never leave a worker serving this port to a later run. WO-25: `pkill` does not exist in the
+     * platform image, so that cleanup silently did nothing; this one reads /proc and needs no binary.
+     */
+    private function killStrayServers(): void
+    {
+        if (! function_exists('posix_kill')) {
+            return; // the server's own stop() above remains the cleanup
+        }
+        foreach (glob('/proc/[0-9]*/cmdline') ?: [] as $file) {
+            $cmd = str_replace("\0", ' ', (string) @file_get_contents($file));
+            if (str_contains($cmd, "php -S 127.0.0.1:{$this->port} ")) {
+                @posix_kill((int) basename(dirname($file)), 9);
+            }
+        }
     }
 
     private function curl(string $url, string $token, string $key, string $body): Process

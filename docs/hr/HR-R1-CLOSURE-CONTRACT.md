@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-25, 2026-11-20): WO22-N5 and C26-N2 closed for development on publication; test-only (`HR-R1-C35-WO25-TEST-STABILITY.md`).**
+- **C26-N2:** root cause reproduced with a controlled clock (a whole-second `timestamp(0)` lease against a later `travel()` start) and removed with `freezeSecond()`; the exact assertion kept.
+- **WO22-N5:** the stall itself was not reproduced (claim-path wait excluded by construction; CPU starvation and a shared-worker probe negative). The race is now phased and proven by PostgreSQL (A held at the barrier, then B), within the unchanged 25 s budget, and every failure names its phase with a snapshot. The broken `pkill` cleanup is replaced.
+- **Proof:** 5 planted regressions detected (3 business, 2 synchronization); 20x repetitions unloaded and under 0.3 CPU; independent review and recheck (no HIGH or MEDIUM). Empty `app/` diff.
+- **Still open:** no development MAJOR. Next: the DDEV migration (D-RF2-22), the synthetic UAT (D-RF2-23), then HR.R1-C36, whose selected baseline needs one clean complete CI execution (D-RF2-3). HR.R1 stays OPEN; no baseline is selected.
+
 **Evidence recorded (HR.R1-C35 WO-24, 2026-11-20): WO20-N1 and RF1-N2 (MAJOR), with WO20-N7 and WO18-N1, closed for development on publication (`HR-R1-C35-WO24-PERSON-LEVEL-ACCESS.md`).**
 - **Built:** a separation's School-access obligation and its kept-access record read every account with an uncorrected link, current or ended, in every case state. An unlink never clears it; a genuine correction still releases. The database refuses a completion while such an account holds a School role outside the kept set. Unlink and the direct death record refuse an actor known to be the Employee (`HR_KNOWN_SAME_PERSON`). R-HR12-3 is not amended.
 - **Proof:** reproduced first through the services; raw runtime role; two-process races in both orders; planted service and schema probes detected; rollback IDENTICAL; independent review (no HIGH or MEDIUM).

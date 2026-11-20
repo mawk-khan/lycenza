@@ -144,6 +144,11 @@ class BacklogSignalsTest extends TestCase
     #[Test]
     public function an_automation_execution_waiting_for_its_backoff_is_not_overdue(): void
     {
+        // HR.R1-C35 WO-25 (C26-N2): the exact age below needs a clock frozen on a whole second BEFORE the fixtures are
+        // written. `lease_expires_at` is `timestamp(0)` and is bound as `Y-m-d H:i:s`, so the insert keeps whole seconds
+        // only, while travel() used to start from a later real instant; a second boundary falling between the insert
+        // and the first travel() read 231 (reproduced with a controlled clock: insert at .990 and 15 ms elapsed).
+        $this->freezeSecond();
         DB::table('operational_work_backlog')->insert([
             ['source' => 'automation', 'item_id' => (string) Str::uuid(), 'state' => 'pending', 'state_since' => now(), 'next_attempt_at' => now()->addSeconds(300), 'lease_expires_at' => null],
             ['source' => 'automation', 'item_id' => (string) Str::uuid(), 'state' => 'running', 'state_since' => now(), 'next_attempt_at' => null, 'lease_expires_at' => now()->addSeconds(120)],
