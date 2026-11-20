@@ -316,6 +316,15 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C36, 2026-11-20): the five closure baselines are selected; HR.R1 stays OPEN (`HR-R1-C36-BASELINE-SELECTION.md`).** The HR owner selected, after an independent review:
+- **source** `5dcc35ef` (CI 44781452652 accepted as D-RF2-3's clean complete run);
+- **database** DDEV `db` at 402/402 with its schema fingerprint and verifier failed=0;
+- **reference pack** C16 `40ed6a83…1ac3`;
+- **Legal/Security** the gate and decision set at `eb3d6dde` plus the C36 dispositions of WO24-N1..N3 and WO25-N1/N2 (accepted);
+- **local environment** snapshot `lycenza-c36-environment-baseline`, its frontend rebuilt from the source after the review found a stale bundle.
+
+§2's third precondition is met: a green full regression exists on the baseline SHA. Next: the C27 §9 closure regression and the R1-04/05/07/08 re-runs, then the HR.R1 assessment. UAT sign-off, staging and production stay separate and open.
+
 **Evidence recorded (HR.R1-C35-UAT0, 2026-11-20, D-RF2-23): the synthetic HR UAT School is ready; UAT is not run (`HR-R1-C35-UAT0-SYNTHETIC-SCHOOL.md`).**
 - One School (`UAT-HR-SYN`) through `SchoolLifecycleService`, 15 synthetic accounts, 13 Employees, eight separation cases, Leave accrual states, tasks and link scenarios, all through canonical services with real fresh-MFA codes. A scenario manifest marks each RF2 §10.1 row Ready or Not configured.
 - 0 pre-existing rows changed; 0 rows in any other School; the October 2026 lock, forced RLS and runtime grants unchanged; 402/402; verifier failed=0.
