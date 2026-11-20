@@ -196,4 +196,17 @@ An independent reviewer read the working tree, read only. It is not an owner or 
 
 ## 8. Publication
 
-Recorded after the exact-SHA `CI gate`, in a documentation commit on top of the code.
+- **First candidate `d11a4537`, CI run 44732948062: failed (attempt 1, not rerun).**
+  - Shards 2, 3 and 4, the image build, the static checks and the secrets scan were green.
+  - Shard 1 failed one test: `StaffSelfServiceConcurrencyTest::my_cancellation_racing_an_administrative_cancellation_reverses_once`, "The holder process never reached its held write. Output: rejected:LEAVE_SELF_CANCEL_STARTED".
+  - This was WO23-E2 (§6): a fixed-date test that went stale on 2026-11-16, unrelated to WO-23. It was replaced by a corrected candidate, never rerun.
+- **Corrected candidate `8ce263c5`** (`d11a4537` plus the test-only WO23-E2 fix), **CI run 44736698951, green on attempt 1:**
+  - 4 shards x 2,992 = **11,968 tests**, **468,020 assertions**, **0 failures**, **1 skip** (ESI-12);
+  - the coverage union proves the shards cover the canonical inventory exactly once (1,417 files);
+  - static checks, the image build, supply chain and the full-history secrets scan are green.
+  - **Compared with WO-22:** 11,943 → 11,968. That is +25: the 21 and 4 new WO-23 tests. No test was removed.
+- **Published** with `lycenza-ci publication-check --candidate 8ce263c5… --push`: fast-forward from `33166cd3`, no problems. `integration/hr-r1-c35-wo23` was deleted after its ancestry was verified.
+- **E16:** `OWNER-0O-E16-2026-11-01`, 119 exceptions, valid through 2026-11-28; published 2026-11-20.
+- **Main CI:** run 44740126357 on `8ce263c5`, green on attempt 1.
+- **Regression counter:** 0/5 (the exact-SHA full suite is the canonical regression, ADR 0072 §28.8).
+- **Closure-run policy (D-RF2-3):** applies only to the later HR.R1 baseline; this unit followed rule 96. The first candidate's failure is recorded here, not erased.
