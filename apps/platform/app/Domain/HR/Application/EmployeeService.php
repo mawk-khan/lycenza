@@ -338,6 +338,9 @@ class EmployeeService
 
                 // SR.4 (ADR 0071 §26.2): never unlink yourself.
                 $this->selfAdministration->refuseSelfLink($actor, $locked->user_id, 'unlink');
+                // HR.R1-C35 WO-24 (RF1-N2, rule 152): nor through an older (ended, uncorrected) or known-same account of
+                // the person, read after the Employee row lock. An unlink is never a correction (rule 145).
+                $this->selfAdministration->refuseKnownToBeEmployee($actor, $school->id, $locked->id, 'unlink');
 
                 $previousUserId = $locked->user_id;
                 DB::select("SELECT set_config('app.link_actor_user_id', ?, true)", [$actor->id]); // who ended it, in the history

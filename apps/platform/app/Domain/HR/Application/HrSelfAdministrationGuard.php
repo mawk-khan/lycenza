@@ -2,6 +2,7 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Exceptions\HrKnownSamePersonException;
 use App\Domain\HR\Application\Exceptions\HrSelfAdministrationException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAccountLink;
@@ -48,6 +49,22 @@ class HrSelfAdministrationGuard
 
         if ($linkedUserId !== null && $linkedUserId === $actor->id) {
             throw new HrSelfAdministrationException($operation);
+        }
+    }
+
+    /**
+     * HR.R1-C35 WO-24 (RF1-N2, WO18-N1, rule 152): never one's own Employee, person-level -- the current-link refusal
+     * (refuseOwnEmployee()/refuseSelfLink(), HR_SELF_ADMINISTRATION) stays first; then an actor who, or whose
+     * known-same account, holds an uncorrected link (current or ended) to the Employee is refused with its own code.
+     * Call it inside the caller's transaction, after the Employee row lock, so a concurrent link change of THAT
+     * Employee either committed first (and is seen) or waits.
+     *
+     * @throws HrKnownSamePersonException
+     */
+    public function refuseKnownToBeEmployee(User $actor, string $schoolId, string $employeeId, string $operation): void
+    {
+        if ($this->isKnownToBeEmployee($actor, $schoolId, $employeeId)) {
+            throw new HrKnownSamePersonException($operation);
         }
     }
 

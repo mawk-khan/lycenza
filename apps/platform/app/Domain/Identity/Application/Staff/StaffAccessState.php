@@ -27,50 +27,42 @@ final class StaffAccessState
     }
 
     /**
-     * HR.R1-C35 WO-20 (HRC-4): the same answer as a SET -- the ids of those
-     * grants (`membership_role_assignments.id`), sorted as PostgreSQL sorts
-     * uuids, so a caller can bind exactly what it saw. A grant row is never
-     * deleted and a re-grant is a new row (rule 92), so an id names one grant
-     * of one role for good. Empty means none (an unknown answer throws).
+     * HR.R1-C35 WO-20 (HRC-4), person-level since WO-24 (WO20-N1, WO20-N7; RF2 §5.3 items 1 and 1a): the same
+     * answer as a SET, for SEVERAL accounts at once -- the live School grants (`membership_role_assignments.id`)
+     * of every one of them, so a caller can bind exactly what it saw. A grant row is never deleted and a re-grant
+     * is a new row (rule 92), so an id names one grant of one role for good. Returned as a map grant id => holder account
+     * (`school_memberships.user_id` of the grant's membership; a grant never changes membership, rule 92),
+     * sorted by grant id as PostgreSQL sorts uuids. One query, never one per account or grant. The caller
+     * names the accounts (HR: those still believed to be one person, rules 145, 152); an account holding
+     * nothing is simply absent. Empty means none; an unknown answer throws.
      *
-     * @return list<string>
-     */
-    public function activeSchoolGrantIds(School $school, string $userId): array
-    {
-        return DB::table('school_memberships as m')
-            ->join('membership_role_assignments as a', 'a.school_membership_id', '=', 'm.id')
-            ->join('roles as r', 'r.id', '=', 'a.role_id')
-            ->where('m.school_id', $school->id)->where('m.user_id', $userId)->where('m.status', 'active')
-            ->whereNull('a.revoked_at')->where('r.scope', 'school')
-            ->orderBy('a.id')->pluck('a.id')->map(fn ($id) => (string) $id)->all();
-    }
-
-    /**
-     * HR.R1-C35 WO-20 (review M2, delta M-A): the live School grants of whoever
-     * holds the given grants -- the ACTIVE memberships in this School those
-     * grants belong to, limited to the accounts the caller names ($userIds:
-     * HR's accounts still believed to be the person). So access kept for one
-     * account is still checked after the Employee is unlinked or linked to
-     * another, but never an account since corrected as someone else. Same
-     * filters as activeSchoolGrantIds(); sorted.
-     *
-     * @param  list<string>  $grantIds
      * @param  list<string>  $userIds
-     * @return list<string>
+     * @return array<string, string>
      */
-    public function activeSchoolGrantIdsOfHolders(School $school, array $grantIds, array $userIds): array
+    public function activeSchoolGrantHolders(School $school, array $userIds): array
     {
-        if ($grantIds === [] || $userIds === []) {
+        if ($userIds === []) {
             return [];
         }
 
         return DB::table('school_memberships as m')
             ->join('membership_role_assignments as a', 'a.school_membership_id', '=', 'm.id')
             ->join('roles as r', 'r.id', '=', 'a.role_id')
-            ->where('m.school_id', $school->id)->where('m.status', 'active')->whereIn('m.user_id', $userIds)
-            ->whereIn('m.id', DB::table('membership_role_assignments')->where('school_id', $school->id)->whereIn('id', $grantIds)->select('school_membership_id'))
+            ->where('m.school_id', $school->id)->whereIn('m.user_id', array_values(array_unique($userIds)))->where('m.status', 'active')
             ->whereNull('a.revoked_at')->where('r.scope', 'school')
-            ->orderBy('a.id')->pluck('a.id')->map(fn ($id) => (string) $id)->all();
+            ->orderBy('a.id')->get(['a.id', 'm.user_id'])
+            ->mapWithKeys(fn ($row) => [(string) $row->id => (string) $row->user_id])->all();
+    }
+
+    /**
+     * HR.R1-C35 WO-24: activeSchoolGrantHolders()'s grant ids alone, sorted.
+     *
+     * @param  list<string>  $userIds
+     * @return list<string>
+     */
+    public function activeSchoolGrantIdsOfAccounts(School $school, array $userIds): array
+    {
+        return array_map('strval', array_keys($this->activeSchoolGrantHolders($school, $userIds)));
     }
 
     /**

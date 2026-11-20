@@ -4116,7 +4116,12 @@ HRX.5 mechanism closed / legal activation gated** (HRX-L1–L4 open).
 
 These are all refused (`HrSelfAdministrationGuard`, 403
 `HR_SELF_ADMINISTRATION`) for every actor, School Admin included, and another
-HR holder does it.
+HR holder does it. Since HR.R1-C35 WO-24, unlinking an Employee and ending an
+employment (the direct record of a death included) also refuse an actor known to
+be that Employee through an older (ended, uncorrected) or known-same account
+(rule 152, 403 `HR_KNOWN_SAME_PERSON`), and a separation's School-access
+obligation reads every such account, so an unlink never clears it
+(`docs/hr/HR-R1-C35-WO24-PERSON-LEVEL-ACCESS.md`).
 
 **Why.** It closes:
 - inheriting a teacher's classes by relinking their Employee;

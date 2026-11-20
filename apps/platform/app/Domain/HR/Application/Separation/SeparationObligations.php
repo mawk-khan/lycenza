@@ -113,41 +113,57 @@ final class SeparationObligations
     }
 
     /**
+     * HR.R1-C35 WO-24 (RF2 §5.3 items 1, 1a and 2): the accounts still believed to be the separating person --
+     * every account with an uncorrected link, current or ended, to the Employee (rules 145, 152), plus the
+     * current link (always in the history; added so a missing history row can only widen the answer). A link
+     * corrected as another person's says the account was never theirs, so it leaves; an unlink does not.
+     * Sorted. The database guard (`hr_separation_retained_grants_guard`) reads the same set.
+     *
+     * @return list<string>
+     */
+    public function personAccounts(School $school, string $employeeId, ?string $currentUserId): array
+    {
+        $accounts = $this->selfAdministration->uncorrectedLinkedAccounts($school->id, $employeeId);
+        if ($currentUserId !== null && ! in_array($currentUserId, $accounts, true)) {
+            $accounts[] = $currentUserId;
+            sort($accounts, SORT_STRING);
+        }
+
+        return $accounts;
+    }
+
+    /**
      * Identity's answer (StaffAccessState), never a write: flagged, off-boarded
      * only under Staff accounts (owner decision 2026-11-04). Ending the
      * employment already ends teacher and line-manager authority
      * (ActingEmployee needs a current employment).
      *
-     * HR.R1-C35 WO-20 (HRC-4, D-C35-2): "kept" is bound to the SET of grants
-     * recorded with it ($boundGrantIds). It reads RETAINED only while every
-     * live grant is one of them (a grant since revoked leaves the rest kept);
-     * a grant outside the set -- a new role, or a revoke-then-grant, whatever
-     * the count -- is OPEN again (ATTENTION before finalization). A record
-     * from before WO-20 binds nothing and is never RETAINED (D-WO20-2), and is
-     * resolved by off-boarding, never by recording again (D-WO20-1).
+     * HR.R1-C35 WO-24 (WO20-N1, WO20-N7, D-RF2-2): the live grants read are those of EVERY account still believed
+     * to be the person (personAccounts(): uncorrected links, current or ended), in every case state -- so
+     * unlinking, relinking or replacing the Employee's account never turns OPEN into CLEAR while an account of
+     * the person keeps a School role (R-HR12-3, not amended). Until WO-24 an unrecorded case and a legacy record
+     * read only the CURRENT link, and a bound record only the holders of its kept grants.
      *
-     * A bound set is checked against its holders too (review M2): the live
-     * grants of the memberships holding the kept grants, whatever account
-     * the Employee is linked to now, so unlinking or relinking the Employee
-     * never turns kept access with an extra role into CLEAR -- but only for
-     * accounts still believed to be the person (an uncorrected link, rules
-     * 145 and 152): an account corrected as someone else is never asked to be
-     * off-boarded (delta review M-A).
+     * HR.R1-C35 WO-20 (HRC-4, D-C35-2): "kept" is bound to the SET of grants recorded with it ($boundGrantIds).
+     * It reads RETAINED only while every live grant of every one of those accounts is one of them (a grant since
+     * revoked leaves the rest kept); a grant outside the set -- a new role, a revoke-then-grant whatever the
+     * count, or a role of another account of the person -- is OPEN again (ATTENTION before finalization). A
+     * record from before WO-20 binds nothing and is never RETAINED (D-WO20-2); a bound record from before WO-24
+     * holds the then-current account's set only, so an older account's role reads OPEN until off-boarded. Both
+     * are resolved by off-boarding, never by recording again (D-WO20-1). An account corrected as someone else's
+     * is never asked to be off-boarded (delta review M-A).
      *
      * @param  list<string>|null  $boundGrantIds
      */
     public function schoolAccess(School $school, SeparationSubject $subject, bool $retained, ?array $boundGrantIds = null): SeparationObligation
     {
-        $live = $subject->userId === null ? [] : $this->access->activeSchoolGrantIds($school, $subject->userId);
-        if ($retained && $boundGrantIds !== null) {
-            $person = $this->selfAdministration->uncorrectedLinkedAccounts($school->id, $subject->employeeId);
-            $live = array_values(array_unique([...$live, ...$this->access->activeSchoolGrantIdsOfHolders($school, $boundGrantIds, $person)]));
-        }
+        $accounts = $this->personAccounts($school, $subject->employeeId, $subject->userId);
+        $live = $this->access->activeSchoolGrantIdsOfAccounts($school, $accounts);
         $grants = count($live);
 
         if ($grants === 0) {
             return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', SeparationObligation::CLEAR, 0,
-                $subject->userId === null && ! $retained ? 'No user account is linked to this employee.' : null);
+                $accounts === [] && ! $retained ? 'No user account is linked to this employee.' : null);
         }
         $unresolved = $subject->finalized ? SeparationObligation::OPEN : SeparationObligation::ATTENTION;
         if ($retained && $boundGrantIds === null) {
@@ -156,7 +172,7 @@ final class SeparationObligations
         }
         if ($retained && array_diff($live, $boundGrantIds) !== []) {
             return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', $unresolved, $grants,
-                'The account holds a School role that was not among the roles recorded as kept. Off-board it under Settings → Staff accounts.');
+                'An account of this person holds a School role that was not among the roles recorded as kept. Off-board it under Settings → Staff accounts.');
         }
         if ($retained) {
             // HR.15E: kept is not revoked -- the roles are still active.
@@ -165,7 +181,7 @@ final class SeparationObligations
         }
 
         return new SeparationObligation(self::SCHOOL_ACCESS, 'Identity', 'School staff access', $unresolved, $grants,
-            'The account still holds School roles. Off-board it under Settings → Staff accounts, or record that the access is kept.');
+            'An account of this person still holds School roles. Off-board it under Settings → Staff accounts, or record that the access is kept.');
     }
 
     /**

@@ -334,7 +334,7 @@ final class SeparationCaseService
      * Staff accounts (rule 92); this never suspends or keeps anything.
      *
      * HR.R1-C35 WO-20 (HRC-4, D-C35-2): the recording binds the SET of the
-     * account's live School grants, read from Identity under its School access
+     * live School grants of every account of the person (WO-24, uncorrected links), read from Identity under its School access
      * lock (taken first, rule 141), so no grant, revocation or off-boarding
      * interleaves between the read and the write. The set is server-read,
      * never supplied; the database re-reads and refuses any other set
@@ -356,8 +356,13 @@ final class SeparationCaseService
             if ($open === []) {
                 throw SeparationException::conflict('SEPARATION_NO_ACTIVE_ACCESS', 'This account holds no School staff access to keep.');
             }
+            // HR.R1-C35 WO-24 (RF2 §5.3 item 1a): the set is that of EVERY account still believed to be the person
+            // (uncorrected links, current or ended), so kept access can be recorded after an unlink, and an older
+            // account's roles are bound rather than left OPEN for good. Read under Identity's lock and the Employee
+            // FOR SHARE (lockCase()), so neither a grant nor a link change interleaves.
             $userId = Employee::query()->where('school_id', $school->id)->whereKey($employment->employee_id)->value('user_id');
-            $grants = $userId === null ? [] : $this->staffAccess->activeSchoolGrantIds($school, (string) $userId);
+            $holders = $this->staffAccess->activeSchoolGrantHolders($school, $this->obligations->personAccounts($school, $employment->employee_id, $userId === null ? null : (string) $userId));
+            $grants = array_map('strval', array_keys($holders));
             if ($grants === []) {
                 throw SeparationException::conflict('SEPARATION_NO_ACTIVE_ACCESS', 'This account holds no School staff access to keep.');
             }
@@ -369,6 +374,8 @@ final class SeparationCaseService
             $this->event($case, 'access_retained', $actor);
             $this->audit->school($school, 'hr.separation.access_retained', actor: $actor, subject: $case, metadata: [
                 'employmentRecordId' => $case->employment_record_id, 'roleAssignmentIds' => $grants,
+                // WO-24: which account held each kept grant when it was recorded (ids only), the holder provenance.
+                'holderUserIds' => array_values(array_unique(array_values($holders))),
             ]);
 
             return $case->refresh();
@@ -489,6 +496,11 @@ final class SeparationCaseService
             // HR.R1-C35 WO-21: the clearance requirements changed between the service's read and the approval.
             if (str_contains($e->getMessage(), 'hr_separation_clearance_basis_guard')) {
                 throw SeparationException::conflict('SEPARATION_REQUIREMENTS_CHANGED', 'The clearance requirements changed while this was approved. Reload and try again.');
+            }
+            // HR.R1-C35 WO-24: the database's own completion backstop -- an account of the person holds a School role
+            // outside the kept set (a grant or link change the service did not see, or a write that skipped it).
+            if (str_contains($e->getMessage(), 'hr_separation_completion_access')) {
+                throw SeparationException::conflict('SEPARATION_OBLIGATIONS_OPEN', 'Outstanding work remains: School staff access.');
             }
             // HR.R1-C35 WO-20: the database's own re-read of the kept grant set disagreed.
             if (str_contains($e->getMessage(), 'hr_separation_retained_grants_guard')) {

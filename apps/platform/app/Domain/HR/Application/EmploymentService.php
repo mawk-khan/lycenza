@@ -313,6 +313,11 @@ class EmploymentService
                 $this->placement->forPlacementChange($school, $employment->employee_id);
                 // SR.4 (ADR 0071 §26.2): Employee FOR SHARE before the record, the ActingEmployee lock order.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.end');
+                // HR.R1-C35 WO-24 (WO18-N1, rule 152): nor through an older (ended, uncorrected) or known-same account
+                // of the person -- the direct record of a death included. A separation finalization already refused it
+                // (SeparationCaseService::lockEmployment(), SEPARATION_OWN_CASE). No database half: an employment row
+                // records no actor, so PostgreSQL has no recorded actor to judge (the end's actor is the audit's).
+                $this->selfAdministration->refuseKnownToBeEmployee($actor, $school->id, $employment->employee_id, 'employment.end');
 
                 $locked = EmploymentRecord::query()->where('id', $employment->id)->lockForUpdate()->firstOrFail();
 

@@ -1506,7 +1506,11 @@ No new capability.
   of the Employee linked to them (`HrSelfAdministrationGuard`, 403
   `HR_SELF_ADMINISTRATION`). ActingEmployee authority (teaching ownership,
   self-service, leave decisions, payslips) therefore cannot be manufactured
-  through HR mutations.
+  through HR mutations. Since HR.R1-C35 WO-24 an unlink and an employment end
+  (a death recorded directly included) also refuse an actor known to be that
+  Employee through an older (ended, uncorrected) or known-same account
+  (rule 152; 403 `HR_KNOWN_SAME_PERSON`, checked after the current-link
+  refusal).
 - **Pay.** Nobody assigns, overrides or corrects their own pay (403
   `PAYROLL_SELF_ADMINISTRATION`).
 

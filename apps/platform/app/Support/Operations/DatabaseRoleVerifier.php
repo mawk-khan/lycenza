@@ -1343,8 +1343,12 @@ class DatabaseRoleVerifier
      * HR.R1-C35 WO-20 (HRC-4): the kept-access grant set's backstop -- its column, shape and pair CHECKs, and the guard
      * function's whole body (md5 of `prosrc`), INVOKER mode and pinned path. The trigger's binding and definition
      * are `hr_family_trigger_functions`'s (HR_FAMILY_TRIGGERS). A deliberate change updates the pin.
+     *
+     * HR.R1-C35 WO-24 (WO20-N1, RF2 §5.3 items 1a and 5): the recorded set is that of every account still believed
+     * to be the person (uncorrected links plus the current one), and completion is refused while any of them holds
+     * a live School role outside the kept set (`hr_separation_completion_access`). Was de19aa79... (WO-20).
      */
-    public const SEPARATION_RETAINED_GRANTS_GUARD_BODY = 'de19aa79178a939cb5c01d0f7416201c';
+    public const SEPARATION_RETAINED_GRANTS_GUARD_BODY = '0dd9ef000408a03d677f5c1a91e1deed';
 
     /** constraint => md5(pg_get_constraintdef) */
     public const SEPARATION_RETAINED_GRANTS_CHECKS = [

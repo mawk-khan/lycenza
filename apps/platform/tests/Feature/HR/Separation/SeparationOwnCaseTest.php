@@ -160,6 +160,10 @@ class SeparationOwnCaseTest extends TestCase
         $this->assertSame('SEPARATION_OWN_CASE', $this->code(fn () => $this->cases()->complete($this->school, $case->id, $case->version, $this->old)));
         $this->assertSame('finalized', $this->fresh($case)->status);
 
+        // HR.R1-C35 WO-24 (contract change, D-RF2-2): OLD is the separating person AND holds School roles, so the access
+        // obligation is OPEN until that access is kept on purpose or off-boarded; before WO-24 only NEW (no roles) was read.
+        $this->assertSame('SEPARATION_OBLIGATIONS_OPEN', $this->code(fn () => $this->cases()->complete($this->school, $case->id, $case->version, $this->hr)));
+        $case = $this->cases()->recordAccessRetained($this->school, $case->id, $case->version, $this->hr);
         $this->assertSame('completed', $this->cases()->complete($this->school, $case->id, $case->version, $this->hr)->status, 'an independent officer completes it');
     }
 
@@ -258,6 +262,11 @@ class SeparationOwnCaseTest extends TestCase
         $this->assertStringContainsString('hr_employment_separation_own_case', $retain($this->old));
         $this->assertStringContainsString('hr_employment_separation_own_case', $complete($this->old));
         $this->assertSame('finalized', $this->fresh($case)->status);
+        // HR.R1-C35 WO-24 (contract change): OLD, the separating person, holds School roles, so a completion is refused by the
+        // database's completion backstop until that access is kept (or off-boarded); the independent officer keeps it first.
+        $this->assertStringContainsString('hr_separation_completion_access', $complete($this->hr));
+        $case = $this->cases()->recordAccessRetained($this->school, $case->id, $this->fresh($case)->version, $this->hr);
+        $this->assertStringContainsString('hr_employment_separation_own_case', $complete($this->old), 'the own-case guard still judges OLD first');
         $this->assertSame('ok', $complete($this->hr), 'the positive control');
     }
 }

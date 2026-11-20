@@ -316,6 +316,11 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C35 WO-24, 2026-11-20): WO20-N1 and RF1-N2 (MAJOR), with WO20-N7 and WO18-N1, closed for development on publication (`HR-R1-C35-WO24-PERSON-LEVEL-ACCESS.md`).**
+- **Built:** a separation's School-access obligation and its kept-access record read every account with an uncorrected link, current or ended, in every case state. An unlink never clears it; a genuine correction still releases. The database refuses a completion while such an account holds a School role outside the kept set. Unlink and the direct death record refuse an actor known to be the Employee (`HR_KNOWN_SAME_PERSON`). R-HR12-3 is not amended.
+- **Proof:** reproduced first through the services; raw runtime role; two-process races in both orders; planted service and schema probes detected; rollback IDENTICAL; independent review (no HIGH or MEDIUM).
+- **Still open:** no development MAJOR. WO-25 is pending before the closure regression; then the DDEV migration (D-RF2-22) and the synthetic UAT (D-RF2-23). HR.R1 stays OPEN; no baseline is selected.
+
 **Evidence recorded (HR.R1-C35 WO-23, 2026-11-20): WO22-N1, RF1-N1 and WO23-N1 closed for development on publication (`HR-R1-C35-WO23-TASK-TRANSITION-EVIDENCE.md`).**
 - **Built:** a `submitted` or `returned` staff task commits only with its event naming that task version. The event guard binds the event to the task's current state and version; a DEFERRABLE INITIALLY DEFERRED constraint trigger refuses the commit without it.
 - **Found by the review, fixed here by the owner's choice:** WO23-N1 (MEDIUM). The reassignment link clearing could carry a rewrite of a task's assignee or terms. Also, a version now advances only with a transition.

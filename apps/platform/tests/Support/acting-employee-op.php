@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\HR\Application\ActingEmployeeResolver;
+use App\Domain\HR\Application\EmployeeLifecycleService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
@@ -9,7 +10,9 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\Concurrency\HeldTransaction;
@@ -29,6 +32,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php acting-employee-op.php unlink  <schoolId> <actorId> <employeeId>
 //   php acting-employee-op.php archive <schoolId> <actorId> <employeeId>
 //   php acting-employee-op.php end-employment <schoolId> <actorId> <employmentId> <endsOn>
+//   php acting-employee-op.php deceased <schoolId> <actorId> <employmentId> <endsOn>   (HR.R1-C35 WO-24: the direct record of a death)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -78,6 +82,14 @@ try {
                 $app->make(EmploymentService::class)->end($record, $endsOn, $user($actorId));
 
                 return 'ended';
+            case 'deceased':
+                [$schoolId, $actorId, $employmentId, $endsOn] = $args;
+                $s = $school($schoolId);
+                $record = $context->withSchool($s, fn () => EmploymentRecord::query()->findOrFail($employmentId));
+                $actor = $user($actorId);
+                $app->make(EmployeeLifecycleService::class)->separate($record, $endsOn, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
+
+                return 'deceased';
         }
 
         return 'unknown';

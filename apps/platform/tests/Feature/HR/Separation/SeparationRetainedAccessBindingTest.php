@@ -250,7 +250,12 @@ class SeparationRetainedAccessBindingTest extends TestCase
 
         $employeeId = DB::table('employment_records')->where('id', $this->case->employment_record_id)->value('employee_id');
         Employee::query()->whereKey($employeeId)->update(['user_id' => null]);
-        $this->assertSame('SEPARATION_NO_ACTIVE_ACCESS', $this->refusal(fn () => $this->keep()), 'no linked account, nothing to keep');
+        // HR.R1-C35 WO-24 (contract change, RF2 §5.3 item 1a): an unlinked account is still the person (an ended,
+        // uncorrected link), so its role is still access to keep or off-board -- no longer "nothing to keep".
+        $this->assertSame(SeparationObligation::OPEN, $this->access()->state);
+        DB::table('membership_role_assignments')->where('school_membership_id', $this->membership->id)
+            ->update(['revoked_at' => now(), 'revoked_by_user_id' => $this->hr->id, 'revocation_reason' => 'revoked']);
+        $this->assertSame('SEPARATION_NO_ACTIVE_ACCESS', $this->refusal(fn () => $this->keep()), 'no account of the person holds a role: nothing to keep');
         $this->assertNull($this->case->refresh()->access_retained_at);
     }
 
