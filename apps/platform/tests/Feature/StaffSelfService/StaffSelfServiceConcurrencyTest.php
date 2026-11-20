@@ -4,6 +4,8 @@ namespace Tests\Feature\StaffSelfService;
 
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Models\School;
+use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -18,8 +20,10 @@ use Tests\TestCase;
  * lifecycle outcome. Genuine two-process races: the contender is observed
  * BLOCKED on a lock before the holder commits.
  *
- * Child processes use the real clock, so the leave dates are in the future
- * (November 2026), which also lets the requester cancel before the start.
+ * Child processes use the real clock, so the leave dates are in the future,
+ * which also lets the requester cancel before the start. They are taken from
+ * the School's own today (rule 141): fixed November 2026 dates went stale on
+ * 2026-11-16 and refused the self-cancellation (HR.R1-C35 WO-23, WO23-E2).
  */
 class StaffSelfServiceConcurrencyTest extends TestCase
 {
@@ -63,6 +67,24 @@ class StaffSelfServiceConcurrencyTest extends TestCase
         return $w;
     }
 
+    /**
+     * The School's next full working week (Monday to Friday), at least a week after its today, inside the fixture's
+     * leave year.
+     *
+     * @return list<string>
+     */
+    private function week(array $w): array
+    {
+        $monday = CarbonImmutable::createFromFormat('!Y-m-d', SchoolTimezone::today($w['school']))->addDays(7);
+        while (! $monday->isMonday()) {
+            $monday = $monday->addDay();
+        }
+        $days = array_map(fn (int $n) => $monday->addDays($n)->toDateString(), range(0, 4));
+        $this->assertLessThanOrEqual($w['year']->ends_on->toDateString(), $days[4], 'the fixture opens one leave year; move it forward with the clock');
+
+        return $days;
+    }
+
     private function requestStatus(string $id): string
     {
         return (string) DB::connection('pgsql_admin')->table('leave_requests')->where('id', $id)->value('status');
@@ -77,14 +99,15 @@ class StaffSelfServiceConcurrencyTest extends TestCase
     public function my_withdrawal_racing_a_manager_or_administrative_approval_has_exactly_one_outcome(): void
     {
         $w = $this->world();
+        $d = $this->week($w);
         $manager = $this->staffMember($w['school'], ['hr.leave.approve']);
         $this->reportTo($w['me']['assignment'], $manager['assignment']);
 
-        $first = $this->submitLeave($w, '2026-11-16', '2026-11-16', employment: $w['me']['employment'])->id;
+        $first = $this->submitLeave($w, $d[0], $d[0], employment: $w['me']['employment'])->id;
         [$holder, $contender] = $this->raceWithHeldHolder($this->op('withdraw-own', $w['school']->id, $first, $w['me']['user']->id), $this->op('manager-approve', $w['school']->id, $first, $manager['user']->id));
         $this->assertSame(['ok:withdrawn', 'rejected:LEAVE_REQUEST_NOT_SUBMITTED'], [$holder, $contender]);
 
-        $second = $this->submitLeave($w, '2026-11-17', '2026-11-17', employment: $w['me']['employment'])->id;
+        $second = $this->submitLeave($w, $d[1], $d[1], employment: $w['me']['employment'])->id;
         [$holder, $contender] = $this->raceWithHeldHolder($this->op('approve', $w['school']->id, $second, $w['admin']->id), $this->op('withdraw-own', $w['school']->id, $second, $w['me']['user']->id));
         $this->assertSame(['ok:approved', 'rejected:LEAVE_REQUEST_NOT_SUBMITTED'], [$holder, $contender]);
 
@@ -96,7 +119,8 @@ class StaffSelfServiceConcurrencyTest extends TestCase
     public function my_cancellation_racing_an_administrative_cancellation_reverses_once(): void
     {
         $w = $this->world();
-        $id = $this->submitLeave($w, '2026-11-16', '2026-11-17', employment: $w['me']['employment'])->id;
+        $d = $this->week($w);
+        $id = $this->submitLeave($w, $d[0], $d[1], employment: $w['me']['employment'])->id;
         app(LeaveRequestService::class)->approve($w['school'], $id, $w['admin']);
 
         [$holder, $contender] = $this->raceWithHeldHolder($this->op('cancel-own', $w['school']->id, $id, $w['me']['user']->id), $this->op('cancel', $w['school']->id, $id, $w['admin']->id));
@@ -111,10 +135,11 @@ class StaffSelfServiceConcurrencyTest extends TestCase
     public function my_submission_racing_an_overlapping_administrative_submission_cannot_both_succeed(): void
     {
         $w = $this->world();
+        $d = $this->week($w);
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->op('submit-own', $w['school']->id, $w['type']->id, '2026-11-16', '2026-11-18', $w['me']['user']->id),
-            $this->op('submit', $w['school']->id, $w['me']['employment']->id, $w['type']->id, '2026-11-18', '2026-11-20', $w['admin']->id),
+            $this->op('submit-own', $w['school']->id, $w['type']->id, $d[0], $d[2], $w['me']['user']->id),
+            $this->op('submit', $w['school']->id, $w['me']['employment']->id, $w['type']->id, $d[2], $d[4], $w['admin']->id),
         );
 
         $this->assertSame(['ok:submitted', 'rejected:LEAVE_REQUEST_OVERLAP'], [$holder, $contender]);

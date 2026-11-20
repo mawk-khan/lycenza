@@ -182,6 +182,7 @@ An independent reviewer read the working tree, read only. It is not an owner or 
 | **WO23-N1** (MEDIUM, MAJOR, found and fixed here) | **CLOSED for development on publication** |
 | WO23-N3 (LOW) | **ACCEPTED** by the owner (2026-11-20): a link-only clearing is the FK shape; provenance is kept in the original's event, reason and audit |
 | WO23-E1 (test defect) | Fixed: a deterministic row choice in `HrSeparationAndTaskRawIsolationTest` |
+| WO23-E2 (test defect, pre-existing, date-triggered) | Fixed: `StaffSelfServiceConcurrencyTest` used fixed leave dates (2026-11-16 to 20) in child processes on the real clock. Its docblock relied on them being future dates. From 2026-11-16 they were past, so the self-cancellation was correctly refused (`LEAVE_SELF_CANCEL_STARTED`), and the first candidate's shard 1 failed (§8). The dates are now the School's next full working week at least seven days ahead (rule 141, `SchoolTimezone::today()`), with an assertion that the week falls inside the fixture's leave year (to 2027-03-31). Test-only; unrelated to WO-23; the test would have failed on any candidate from 2026-11-16 |
 | WO23-N2 (INFO) | Recorded: `AFTER UPDATE OF status` relies on no BEFORE trigger setting status (none exists; definitions pinned). Re-review if a trigger on `workforce_tasks` ever writes `status` |
 | Development MAJOR inventory after publication | WO20-N1 and RF1-N2 (WO-24). HR.R1 is NOT CLOSED |
 | WO-25 (WO22-N5, C26-N2) | Pending, before the final closure regression |
