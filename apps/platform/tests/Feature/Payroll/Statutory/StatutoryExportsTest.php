@@ -52,7 +52,7 @@ class StatutoryExportsTest extends TestCase
     /**
      * @return array{run: PayrollRun, employmentRecordId: string, actor: User}
      */
-    private function buildCalculatedAndStatutoryCalculatedRun(School $school, Carbon $periodMonth = new Carbon('2026-09-01')): array
+    private function buildCalculatedAndStatutoryCalculatedRun(School $school, Carbon $periodMonth = new Carbon('2026-09-01'), string $name = 'Asha Rao'): array
     {
         $preparer = $this->createUser();
         $structureService = app(SalaryStructureService::class);
@@ -77,7 +77,7 @@ class StatutoryExportsTest extends TestCase
         $hraSc = $structureService->addComponent($structure, new AddStructureComponentData($hra->id, 'fixed_amount', null, null, 2), $preparer);
         $structure = $structureService->activate($structure, $preparer);
 
-        $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school, ['full_name' => 'Asha Rao']), ['starts_on' => '2025-01-01']);
+        $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school, ['full_name' => $name]), ['starts_on' => '2025-01-01']);
 
         EmployeePfStatus::query()->create([
             'school_id' => $school->id,
@@ -115,6 +115,61 @@ class StatutoryExportsTest extends TestCase
         app(StatutoryPayrollCalculationService::class)->calculateForRun($run, $preparer);
 
         return ['run' => $run->fresh(), 'employmentRecordId' => $employmentRecord->id, 'actor' => $preparer];
+    }
+
+    /**
+     * HR.R1-C35 WO-26 (R1-06, C38-N1): the statutory exports are the one export family HR.R1 has, so their School
+     * boundary is proven rather than taken as vacuous. Each School's run is calculated for real; a School B exporter
+     * naming School A's run is the same 404 on all seven routes (the web exports page, three web and three API
+     * downloads), and each School's worksheet lists only its own staff.
+     */
+    #[Test]
+    public function wo26_every_statutory_export_answers_only_its_own_schools_run_on_web_and_api(): void
+    {
+        $a = $this->createSchool();
+        $b = $this->createSchool();
+        $runA = $this->context()->withSchool($a, fn () => $this->buildCalculatedAndStatutoryCalculatedRun($a, name: 'Alpha Exported Person'))['run'];
+        $runB = $this->context()->withSchool($b, fn () => $this->buildCalculatedAndStatutoryCalculatedRun($b, name: 'Beta Exported Person'))['run'];
+        $capabilities = ['payroll.statutory.exports.generate', 'payroll.statutory.view', 'payroll.statutory.identifiers.view'];
+        $exporterA = $this->createUserWithCapabilities($a, $capabilities);
+        $exporterB = $this->createUserWithCapabilities($b, $capabilities);
+
+        // Positive controls: each School's own worksheet, over the API and the web session, holds its own person only.
+        foreach ([[$a, $runA, $exporterA, 'Alpha', 'Beta'], [$b, $runB, $exporterB, 'Beta', 'Alpha']] as [$school, $run, $exporter, $own, $foreign]) {
+            $this->app['auth']->forgetGuards(); // a web session's user must not answer for the bearer token
+            $api = $this->withHeader('Authorization', 'Bearer '.$exporter->createToken('wo26')->plainTextToken)
+                ->get("/api/v1/schools/{$school->id}/payroll-runs/{$run->id}/statutory-exports/esi-worksheet")->assertOk()->getContent();
+            $this->flushHeaders();
+            $this->actingAs($exporter)->post("/app/schools/{$school->id}/activate");
+            $web = $this->get("/app/payroll/statutory/runs/{$run->id}/exports/esi-worksheet")->assertOk()->getContent();
+            $this->get("/app/payroll/statutory/runs/{$run->id}/exports")->assertOk(); // the exports page of its own run
+            foreach (['api' => $api, 'web' => $web] as $channel => $content) {
+                $this->assertStringContainsString("{$own} Exported Person", (string) $content, "{$channel}: the School's own staff are exported");
+                $this->assertStringNotContainsString("{$foreign} Exported Person", (string) $content, "{$channel}: another School's staff never are");
+            }
+        }
+
+        // School B, fully authorized in School B, names School A's run: the same 404 on every route, nothing leaks.
+        $this->actingAs($exporterB)->post("/app/schools/{$b->id}/activate");
+        $this->assertSame(404, $this->get("/app/payroll/statutory/runs/{$runA->id}/exports")->status(), 'web exports page: another School\'s run is not found');
+        $tokenB = $exporterB->createToken('wo26-foreign')->plainTextToken;
+        foreach (['ecr', 'esi-worksheet', 'tds-draft-statement'] as $export) {
+            $this->app['auth']->forgetGuards();
+            $api = $this->withHeader('Authorization', 'Bearer '.$tokenB)->get("/api/v1/schools/{$b->id}/payroll-runs/{$runA->id}/statutory-exports/{$export}");
+            $this->flushHeaders();
+            $this->assertSame(404, $api->status(), "api {$export}: another School's run is not found");
+            $this->assertStringNotContainsString('Alpha Exported Person', (string) $api->getContent());
+            $this->actingAs($exporterB)->post("/app/schools/{$b->id}/activate");
+            $web = $this->get("/app/payroll/statutory/runs/{$runA->id}/exports/{$export}");
+            $this->assertSame(404, $web->status(), "web {$export}: another School's run is not found");
+            $this->assertStringNotContainsString('Alpha Exported Person', (string) $web->getContent());
+            // And School B's exporter naming School A in the URL is not a member there: the same private 404, nothing leaks.
+            $this->app['auth']->forgetGuards();
+            $direct = $this->withHeader('Authorization', 'Bearer '.$tokenB)->get("/api/v1/schools/{$a->id}/payroll-runs/{$runA->id}/statutory-exports/{$export}");
+            $this->assertSame(404, $direct->status(), "api {$export}: no membership in School A");
+            $this->assertStringNotContainsString('Alpha Exported Person', (string) $direct->getContent());
+            $this->flushHeaders();
+        }
     }
 
     #[Test]
