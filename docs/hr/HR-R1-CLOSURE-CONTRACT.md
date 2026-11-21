@@ -316,6 +316,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
 
+**Evidence recorded (HR.R1-C37, 2026-11-21): the closure regression passed on the selected baselines (`HR-R1-C37-CLOSURE-REGRESSION.md`).**
+- The canonical suite ran on `5dcc35ef` from a clean snapshot with `SAFE_TEST_ISOLATED=1` (C27 §9), in four plan-verified shards: 11,998 tests, 0 failures, 1 skip (ESI-12). The union sha256 `0d8fd41c…` is identical to CI 44781452652.
+- R1-04, R1-05, R1-07 and R1-08 (docket §12) all PASS under their own criteria.
+- DDEV and every selected baseline are unchanged. One INFO: local tooling (C37-N1).
+- §2's green-regression precondition is evidenced. §2's first precondition and §1's timing are for the formal HR.R1 assessment, which is not started. UAT, staging and production stay separate and open. HR.R1 stays OPEN.
+
 **Evidence recorded (HR.R1-C36, 2026-11-20): the five closure baselines are selected; HR.R1 stays OPEN (`HR-R1-C36-BASELINE-SELECTION.md`).** The HR owner selected, after an independent review:
 - **source** `5dcc35ef` (CI 44781452652 accepted as D-RF2-3's clean complete run);
 - **database** DDEV `db` at 402/402 with its schema fingerprint and verifier failed=0;
