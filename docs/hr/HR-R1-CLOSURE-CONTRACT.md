@@ -3,7 +3,9 @@
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment ran as
 **HR.R1-C38** (2026-11-21, `HR-R1-C38-FORMAL-ASSESSMENT.md`): **PASS WITH
 CORRECTION — development scope; production not addressed**. HR.R1 stays
-**OPEN** until the bounded re-run records PASS (WO-26 published `e33a1e1e`, 2026-11-21). **Never
+**OPEN** until the bounded re-run records PASS (WO-26 published `e33a1e1e`, 2026-11-21; the
+bounded re-run **HR.R1-C39** recorded RE-RUN INCOMPLETE on 2026-11-21: R1-06 PASS, the clean
+local regression not yet obtained, `HR-R1-C39-BOUNDED-RERUN.md`). **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -317,6 +319,13 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Register:** writer categories, rules 76 and 86 as the only cross-domain writers, triggers and retention definers by name.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
+
+**Evidence recorded (HR.R1-C39, 2026-11-21): the bounded re-run (C38-D4); verdict RE-RUN INCOMPLETE — REQUIRED EVIDENCE MISSING (`HR-R1-C39-BOUNDED-RERUN.md`).**
+- **Source:** the owner confirmed the narrow substitution `5dcc35ef` → `e33a1e1e` (C39-D1); the change is test-only. The other four C36 baselines were re-verified read-only and are intact; the capability map carries C38-D1's approved annotations (blob `a9d4c0fc`, not C36's `c4f33615`).
+- **R1-06: PASS.** All 57 tables (168 refused legs: RLS 50, guard under RLS 12, evidence guard 3, immutability 25, no privilege 78), all 10 rendered reports, the 7 Payroll statutory exports and the HR document download; the generic Documents content route is covered by Documents' own tests (WO26-N1, LOW). C38's "no export exists" is clarified, not rewritten.
+- **Affected verification:** the import register, boundary guards, verifier tests and R1-04 passed in every run. Independent review: no HIGH or MEDIUM; LOWs C39-N1..N6 from the review, C39-N7..N9 from the record.
+- **Regression:** CI 44902029782 is the clean leg. Three complete isolated local runs each had one intermittent failure in a different test outside WO-26 (two from host clock steps, one undetermined and consistent with one), so no clean complete local run exists yet (RF2 §8.3). C38-D4 is not yet satisfied.
+- **Status:** HR.R1 stays OPEN at C38's PASS WITH CORRECTION. One clean complete local run on `e33a1e1e` completes it. UAT, RG-ID-1, C33-H1..H5, the Legal/DPO gates, staging and production are unchanged.
 
 **Evidence recorded (HR.R1-C35 WO-26, 2026-11-21): C38-N1 closed for development on publication; test-only (`HR-R1-C35-WO26-RLS-ISOLATION.md`).**
 - **Tables and reports:** every HR-family table (57, tied to the verifier's list) has a raw cross-School test as `school_os_app`. Real rows sit in two Schools; the legs are positive control, foreign read by count and key, no context, foreign insert, update, move and delete. Each refusal class is pinned, and the canonical forced policy is asserted. All 10 rendered reports are checked both ways with real foreign records.

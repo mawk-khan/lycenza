@@ -176,6 +176,8 @@ C36 selected source `5dcc35ef`. WO-26 is a different commit, so the source dimen
 
 **Recommended:** select `e33a1e1e` as the closure source, with its own exact-SHA green CI (§9), keeping the other four dimensions. This is applied under the owner's standing instruction of 2026-11-21 and recorded as such; the owner may override it. C36's record is not rewritten: `5dcc35ef` stays the historical selection.
 
+**Owner confirmation (HR.R1-C39, 2026-11-21, C39-D1):** the HR owner explicitly approved this narrow substitution in the C39 dispatch. It is recorded on that date, not backdated (`HR-R1-C39-BOUNDED-RERUN.md` §2).
+
 ## 9. CI and publication
 
 - **Candidate CI** 44902029782 on `e33a1e1e`: green on the **first attempt**, every required job (supply chain, gitleaks full history, static checks incl. Pint and Larastan, four shards, images, repository integrity, coverage, CI gate). No rerun.
