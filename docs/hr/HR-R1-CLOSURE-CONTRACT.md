@@ -1,7 +1,9 @@
 # HR.R1 — Final Cross-ERP Reconciliation & Closure Audit (reserved)
 
-Status: **RESERVED by HR.0A** (2026-11-03). The final assessment has not
-started; the HR.R1-0 audit and checkpoints C1 to C27 have. **Never
+Status: **RESERVED by HR.0A** (2026-11-03). The final assessment ran as
+**HR.R1-C38** (2026-11-21, `HR-R1-C38-FORMAL-ASSESSMENT.md`): **PASS WITH
+CORRECTION — development scope; production not addressed**. HR.R1 stays
+**OPEN** until WO-26 publishes and the bounded re-run records PASS. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -315,6 +317,13 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Register:** writer categories, rules 76 and 86 as the only cross-domain writers, triggers and retention definers by name.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
+
+**Evidence recorded (HR.R1-C38, 2026-11-21): the formal assessment; verdict PASS WITH CORRECTION — development scope; production not addressed (`HR-R1-C38-FORMAL-ASSESSMENT.md`).**
+- The five C36 baselines re-verified read-only, no drift. C37's regression and R1-04/05/07/08 accepted.
+- §1 met (C27-B). §2 met after the owner's **C38-D1**, which deferred D18-21, HR.2's Staff 360 and the XDOM rows D20-18, D20-29, D20-31, D20-37 and D1-34, each with a trigger.
+- R1-01, 03, 04, 05, 07, 08, 09, 10, 11 PASS. R1-02 and R1-12 PASS with the owner-approved Architecture exception **C38-D3** (read-only `HR\Infrastructure` imports in Timetable, Transport, Visitor, Attendance and TeachingAssignments). **R1-06 FINDING C38-N1** (LOW, C38-D2): 10 of the 57 family tables lack a meaningful raw cross-School test (14 more miss a leg); 6 of the 10 rendered reports lack any meaningful cross-School test, and none is tested with RLS alone. All 57 tables carry the canonical forced policy, so nothing is exposed. Correction: WO-26, test-only.
+- No development HIGH or MEDIUM is open. Independent review: 4 MEDIUM and 4 LOW, all resolved in the record.
+- HR.R1 stays OPEN: development-closed only after WO-26 and the bounded re-run (C38-D4). UAT, RG-ID-1, C33-H1..H5, the Legal/DPO gates, staging and production are separate and unchanged.
 
 **Evidence recorded (HR.R1-C37, 2026-11-21): the closure regression passed on the selected baselines (`HR-R1-C37-CLOSURE-REGRESSION.md`).**
 - The canonical suite ran on `5dcc35ef` from a clean snapshot with `SAFE_TEST_ISOLATED=1` (C27 §9), in four plan-verified shards: 11,998 tests, 0 failures, 1 skip (ESI-12). The union sha256 `0d8fd41c…` is identical to CI 44781452652.

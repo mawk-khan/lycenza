@@ -155,7 +155,7 @@ both mean HRX-L2.
 | D1-31 | Health, blood group, identification marks | none (guards) | GATE | H099, H108, H247 | — | — | — | H | HRX-L1 |
 | D1-32 | Religion, caste, divorcee flag, marriage anniversary | none | NR | H243, H247 | special-category data with no product purpose (D-15 discipline) | — | — | H | — |
 | D1-33 | Joining details (recruitment type, advertisement, appointment / regularisation dates) | `starts_on`, `probation_ends_on` | DEF | H117, H322–H325 | recruitment fields wait for OD-HR-6; appointment and confirmation dates go to HR.12 | HR | HR.12 | L | HR-L9 |
-| D1-34 | Staff joining security deposit | none | XDOM | H247 | money record (Finance) | Finance | — | M | — |
+| D1-34 | Staff joining security deposit | none | XDOM | H247 | money record (Finance) | Finance | — | M | DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21); re-review with a Finance staff-obligation contract (HR.15C) |
 | D1-35 | Investment declaration (Form 12C), nominees | none (Payroll statutory) | GATE | H332–H335 | — | Payroll | HR.15 | H | ADR 0036, HR-L6 |
 
 ### D2 — Effective-dated workforce assignments
@@ -502,7 +502,7 @@ both mean HRX-L2.
 | D18-18 | Rehire | new employment, same Employee and number ; HR.R1-C2: refused for an Employee recorded deceased; HR.R1-C9: an archived Employee is restored first (HRC-12, owner decision 2026-11-07) | IMP | H129 (reactivate) | — | HR | — | — | — |
 | D18-19 | Deactivation preserves history | no runtime DELETE; append-only evidence | IMP | — | — | HR | — | H | — |
 | D18-20 | Contract staff register | `employment_type` + `ends_on` | ALT | H124, H246 | contract amounts are Payroll; documents via HR documents | HR | HR.12 | L | — |
-| D18-21 | Superannuation / retirement date | none | DEF | H125–H126 | owner decision HR-084 (derived from DOB, no new field) | HR | HR.12 | L | — |
+| D18-21 | Superannuation / retirement date | none | DEF | H125–H126 | owner decision HR-084 (derived from DOB, no new field) | HR | HR.12 | L | DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21); re-review when HR-084 is answered |
 
 ### D19 — Staff task management (Workforce Operations)
 
@@ -556,7 +556,7 @@ both mean HRX-L2.
 | D20-15 | Absent | register | IMP | H309 | — | StaffAttendance | — | — | — |
 | D20-16 | Leave (on leave on a date) | read model | IMP | H402 | — | StaffAttendance + Leave | — | — | — |
 | D20-17 | Week-off | read model | IMP | H307 | — | StaffAttendance | — | — | — |
-| D20-18 | Timetable substitution | none | XDOM | H042, H315, H411, H529 | Timetable-owned (HR-054); HR exposes availability only through Leave / attendance readers | Timetable | HR.15 | M | — |
+| D20-18 | Timetable substitution | none | XDOM | H042, H315, H411, H529 | Timetable-owned (HR-054); HR exposes availability only through Leave / attendance readers | Timetable | HR.15 | M | DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21); re-review with a Timetable substitution contract (HR-054) |
 | D20-19 | Biometric reports | none | GATE | H599 | — | StaffAttendance | HR.8 | H | L2b |
 | D20-20 | Late / early reports | none | GATE | H392–H397 | — | StaffAttendance | HR.8 | M | L2a |
 | D20-21 | Staff leave details | Leave requests list (HR-043) | IMP | H591 | — | Leave | — | — | — |
@@ -567,15 +567,15 @@ both mean HRX-L2.
 | D20-26 | Staff task reports | the HR.14 task reports (D19-25) | PART | H510–H513 | rates and percentages (ADR 0040; owner decision 2026-11-05 keeps them gated) | WorkforceTasks | — | L | ADR 0040 |
 | D20-27 | Roaming staff | none (a punch at another branch's device) | GATE | H408, H542 | — | StaffAttendance | HR.8 | M | L2b |
 | D20-28 | GPS / self check-in report | none | GATE | H545 | — | StaffAttendance | HR.8 | H | L2b |
-| D20-29 | Staff-child report | none (the reference matches by mobile number) | XDOM | H518–H520, H541 | an explicit HR ↔ SIS contract (owner decision HR-050); **never PII matching** | SIS + HR | HR.15 | H | M-1, E47 |
+| D20-29 | Staff-child report | none (the reference matches by mobile number) | XDOM | H518–H520, H541 | an explicit HR ↔ SIS contract (owner decision HR-050); **never PII matching** | SIS + HR | HR.15 | H | M-1, E47; DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21); re-review when HR-050 is decided and an HR ↔ SIS contract exists |
 | D20-30 | Inventory issued to staff | none (Inventory issues to Departments) | XDOM | H581–H586 | a new Inventory custody contract | Inventory | HR.15 | M | rule 105 |
-| D20-31 | Staff replacement | none | XDOM | H582 | Timetable substitution record | Timetable | HR.15 | L | — |
+| D20-31 | Staff replacement | none | XDOM | H582 | Timetable substitution record | Timetable | HR.15 | L | DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21); re-review with a Timetable substitution contract (HR-054) |
 | D20-32 | Sessions attended | none (no screen captured; training) | DEF | H602 (menu only) | training register is outside the D-map | — | — | L | HR-L11 |
 | D20-33 | Attendance modification log | `hr.attendance_corrections` (HR.14): every correction dated in a range, before/after halves, closed reason, corrector display name only (owner decision 2026-11-05) | IMP | H587–H590 | — | StaffAttendance | HR.14 | M | — |
 | D20-34 | Salary / compensation modification log | effective-dated immutable compensation rows + audit (Payroll) | XDOM | H587–H590 | Payroll-owned, compensation-sensitive tier | Payroll | HR.15 | H | OD-HR-1/2 |
 | D20-35 | MIS (existing + new − inactive) | none | GATE | H550–H559 | — | Analytics | — | M | ADR 0040 |
 | D20-36 | Staff profile cards | none | DEF | H531–H537 | printable minimal card later (HR-053); never DOB, blood group, ids or bank | HR | post-HR.16 | M | — |
-| D20-37 | Staff student fee details | none | XDOM | H361–H368 | Fees-owned; owner decision HR-055 | Fees | HR.15 | H | E47 |
+| D20-37 | Staff student fee details | none | XDOM | H361–H368 | Fees-owned; owner decision HR-055 | Fees | HR.15 | H | E47; DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21); re-review when HR-055 is decided and a Fees contract exists |
 | D20-38 | FR attendance report | none | GATE | H521 | — | StaffAttendance | HR.8 | H | L2b |
 | D20-39 | Praise / feedback / complaints report | none | DEF | H544 | outside the D-map (XF) | — | — | H | HR-L10 |
 
@@ -596,6 +596,8 @@ come from the status column of §4, read mechanically: one row per
 | BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 | 87 |87 |
 | NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 | 6 |6 |
 | **Total** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** | **361** |**361** |
+
+HR.R1-C38 (2026-11-21, C38-D1, HR owner) changed no row's status: it recorded an owner deferral, with a re-review trigger, in the Gate column of D18-21 (DEF since HR.0A, HR-084 still open) and of the XDOM rows D20-18, D20-29, D20-31, D20-37 and D1-34 (`HR-R1-C38-FORMAL-ASSESSMENT.md` §13). Totals unchanged.
 
 HR.R1-C22 (2026-11-09, WO-5) changed the last two ACTIVE rows on evidence: D14-08 MISS → ALT (effective-dated publication with no drafts, D6-4: schedulable week versions and holidays, withdrawable until effective, a counts-only notice before saving, nothing recalculated) and D14-09 PART → IMP (append-only week versions and a holiday lifecycle, runtime DELETE revoked, S-16 closed). No row is ACTIVE or MISSING. `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 

@@ -151,6 +151,8 @@ reservation.
 > - Staff 360 summaries from Leave, StaffAttendance and Payroll;
 > - every gated family.
 >
+> **Staff 360 DEFERRED by owner (HR.R1-C38, C38-D1, 2026-11-21):** the summaries from Leave, StaffAttendance and Payroll stay unbuilt; re-review with a Staff 360 contract under rule 118's pattern (each owner's summary under its own capability). Nothing is built.
+>
 > Record: `docs/modules/HR.md` "Staff profile foundation (HR.2A)"; ADR 0028
 > and ADR 0029 HR.2A amendments; CLAUDE.md rule 132.
 
@@ -584,6 +586,8 @@ reservation.
 > Inventory custody, HR.15C Finance staff dues and HR.15D Library staff
 > borrowing are **deferred by owner decision** (NOT_INTEGRATED, never clear).
 > The other HR.15 items listed below are unchanged.
+>
+> **HR.R1-C38 (2026-11-21):** the XDOM rows D20-18, D20-31 (Timetable substitution), D20-29 (staff children, HR-050), D20-37 (staff fee details, HR-055) and D1-34 (joining deposit) are DEFERRED by owner (C38-D1), each with its trigger in the map. The X-1 consumer rewiring is recorded as an Architecture exception (C38-D3, `HR-R1-C38-FORMAL-ASSESSMENT.md` §13): the read-only imports stay as listed there, re-reviewed on any new importer, any write through them, or the owning domain's next checkpoint.
 
 1. **Prerequisites:** OD-HR-1 / OD-HR-2 (Payroll integrity); HR-050 /
    HR-055 (staff-child / fee) owner decisions; an Inventory custody
@@ -675,5 +679,5 @@ Reserved: `HR-R1-CLOSURE-CONTRACT.md`.
 | HR-050 / HR-055 | Staff-child and staff-ward fee reports | HR.15 |
 | HR-061 | Separation approval — **DECIDED 2026-11-04**: HR records, another person approves (`hr.separations.approve`) | HR.12 |
 | HR-083 | Named Campus transfer | HR.1 (proposed as HR-AD-02) |
-| HR-084 | Retirement date (still open; D18-21 DEF) | HR.12 → later |
+| HR-084 | Retirement date (still open; D18-21 DEFERRED by owner, HR.R1-C38 C38-D1, 2026-11-21) | HR.12 → later |
 | M-1 | Unlinked staff parent | HR.15 |
