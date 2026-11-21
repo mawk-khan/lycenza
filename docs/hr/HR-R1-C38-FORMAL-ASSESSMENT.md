@@ -153,8 +153,8 @@ Schools record an administrative clearance item instead (R-HR12-2). **None of th
 
 | Id | Proposed | Finding | Proposed treatment |
 |---|---|---|---|
-| C38-N1 | **LOW (owner, C38-D2)** | R1-06 evidence incomplete (§5) | **WO-26, test-only (the correction)** |
-| C38-N2 | LOW | R1-02 remainder: read-only imports of HR Infrastructure without a migration or recorded exception (§5) | **Recorded Architecture exception (owner, C38-D3)** |
+| C38-N1 | **LOW (owner, C38-D2)** | R1-06 evidence incomplete (§5) | **WO-26, test-only (the correction).** **CLOSED for development by WO-26 (`e33a1e1e`, 2026-11-21, `HR-R1-C35-WO26-RLS-ISOLATION.md`)**: all 57 tables, the 10 rendered reports and the export routes proven; the bounded re-run is still due |
+| C38-N2 | LOW | R1-02 remainder: read-only imports of HR Infrastructure without a migration or recorded exception (§5) | **Recorded Architecture exception (owner, C38-D3)**; machine-pinned by WO-26 (`HrCrossDomainImportRegisterTest`) |
 | C38-N3 | INFO | RF1 and RF2 did not carry C12's "R1-06 not re-audited" note forward, so it reached the final assessment undecided | Recorded here |
 | C38-N4 | LOW (tooling; C37-N1 was INFO, raised here because it will recur on every snapshot run) | `/full-regression`'s hard-link snapshot fails on root-owned vendor files (C37-N1) | Platform tooling; not a product defect |
 

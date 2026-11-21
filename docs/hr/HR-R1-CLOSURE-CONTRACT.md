@@ -3,7 +3,7 @@
 Status: **RESERVED by HR.0A** (2026-11-03). The final assessment ran as
 **HR.R1-C38** (2026-11-21, `HR-R1-C38-FORMAL-ASSESSMENT.md`): **PASS WITH
 CORRECTION — development scope; production not addressed**. HR.R1 stays
-**OPEN** until WO-26 publishes and the bounded re-run records PASS. **Never
+**OPEN** until the bounded re-run records PASS (WO-26 published `e33a1e1e`, 2026-11-21). **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -317,6 +317,14 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Register:** writer categories, rules 76 and 86 as the only cross-domain writers, triggers and retention definers by name.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
+
+**Evidence recorded (HR.R1-C35 WO-26, 2026-11-21): C38-N1 closed for development on publication; test-only (`HR-R1-C35-WO26-RLS-ISOLATION.md`).**
+- **Tables and reports:** every HR-family table (57, tied to the verifier's list) has a raw cross-School test as `school_os_app`. Real rows sit in two Schools; the legs are positive control, foreign read by count and key, no context, foreign insert, update, move and delete. Each refusal class is pinned, and the canonical forced policy is asserted. All 10 rendered reports are checked both ways with real foreign records.
+- **Exports:** the Payroll statutory exports (7 routes) and the HR document download have two-School cases, and an export-route pin covers the rest.
+- **Failure capability:** a committing self-test proves the checker fails on each planted break, and planted breaks on real tables were all reported. C38-D3's 19 importers are machine-pinned.
+- **Publication:** code `e33a1e1e`, candidate CI 44902029782 green on the first attempt. The full suite on the exact SHA ran 12,015 cases, 0 failures, 1 skip (ESI-12), union `ef26bd17…`.
+- **Source baseline:** the swap from `5dcc35ef` to `e33a1e1e` was applied as the recommended option under the owner's standing instruction of 2026-11-21. The other four baselines are unchanged.
+- **Status:** HR.R1 stays OPEN until the bounded re-run (C38-D4), a separate checkpoint.
 
 **Evidence recorded (HR.R1-C38, 2026-11-21): the formal assessment; verdict PASS WITH CORRECTION — development scope; production not addressed (`HR-R1-C38-FORMAL-ASSESSMENT.md`).**
 - The five C36 baselines re-verified read-only, no drift. C37's regression and R1-04/05/07/08 accepted.
