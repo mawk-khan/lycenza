@@ -5,7 +5,10 @@ Status: **RESERVED by HR.0A** (2026-11-03). The final assessment ran as
 CORRECTION — development scope; production not addressed**. HR.R1 stays
 **OPEN** until the bounded re-run records PASS (WO-26 published `e33a1e1e`, 2026-11-21; the
 bounded re-run **HR.R1-C39** recorded RE-RUN INCOMPLETE on 2026-11-21: R1-06 PASS, the clean
-local regression not yet obtained, `HR-R1-C39-BOUNDED-RERUN.md`). **Never
+local regression not yet obtained, `HR-R1-C39-BOUNDED-RERUN.md`). **Addendum C39-EQ1 (owner
+decision dated 2026-11-23; `HR-R1-C39-BOUNDED-RERUN.md` §10): HR.R1 DEVELOPMENT-SCOPE PASS —
+PRODUCTION NOT ADDRESSED**, through a one-checkpoint hosted-execution exception; UAT, RG-ID-1,
+C33-H1..H5, the Legal/DPO gates, staging and production stay open. **Never
 auto-start.** The audit's own findings are in `HR-R1-0-AUDIT-REGISTER.md`,
 recovered by C9.
 
@@ -319,6 +322,12 @@ Record: `HR-R1-C22-WO5-CALENDAR-HISTORY.md`.
 - **Register:** writer categories, rules 76 and 86 as the only cross-domain writers, triggers and retention definers by name.
 - **Delta review:** the C24 post-review fixes were independently reviewed. No HIGH or MEDIUM; new LOW C25-N1 (guard blind spots).
 - **R1-01 enforcement is PARTIAL** until WO-11 and WO-12 ship. R1-02 stays PARTIAL. R1-09, §1, §4, every Legal, DPO and Security gate, the capability map (361 rows) and the 61 audit identifiers are unchanged. No baseline is selected. HR.R1 stays OPEN.
+
+**Evidence recorded (HR.R1-C39 addendum C39-EQ1, owner decision dated 2026-11-23; executed 2026-11-22 UTC): equivalent hosted execution; verdict HR.R1 DEVELOPMENT-SCOPE PASS — PRODUCTION NOT ADDRESSED (`HR-R1-C39-BOUNDED-RERUN.md` §10).**
+- **Decision:** C39-EQ1-B lets one complete "Re-run all jobs" attempt of CI run 44902029782 on `e33a1e1e` stand in for the clean `SAFE_TEST_ISOLATED=1` local run (RF2 §8.7, C27 §9) that the WSL clock steps prevented. It is for C39 only, and RF2 and C27 are not amended. Attempt 1 stays the CI leg.
+- **Evidence:** attempt-1 artifacts and logs were archived before the trigger, digest-verified (the hosted copies became inaccessible on re-run, as accepted). Attempt 2 had all 16 jobs green under strict classification: 1,424 files, 12,015 cases, 3004/3004/3004/3003, 0 failures, ESI-12 the only skip, union `ef26bd17…`, identical to attempt 1. Its artifacts are new and attempt-bound, and assertion drift is confined to 13 concurrency classes.
+- **Review:** independent, no HIGH or MEDIUM; LOWs EQ1-N1..N3 accepted. R1-06 and the WO-26 verification stand; the baselines are compatible. C38-D4 is satisfied.
+- **Status:** HR.R1 development-scope PASS; production not addressed. UAT (C18-A12 included), RG-ID-1, C33-H1..H5, the Legal/DPO gates, staging (PAUSED) and production (NO-GO) are unchanged. No permanent release closure.
 
 **Evidence recorded (HR.R1-C39, 2026-11-21): the bounded re-run (C38-D4); verdict RE-RUN INCOMPLETE — REQUIRED EVIDENCE MISSING (`HR-R1-C39-BOUNDED-RERUN.md`).**
 - **Source:** the owner confirmed the narrow substitution `5dcc35ef` → `e33a1e1e` (C39-D1); the change is test-only. The other four C36 baselines were re-verified read-only and are intact; the capability map carries C38-D1's approved annotations (blob `a9d4c0fc`, not C36's `c4f33615`).

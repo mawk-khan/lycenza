@@ -7,6 +7,7 @@
 | Contract | `HR-R1-CLOSURE-CONTRACT.md` §3 R1-06 ("No cross-tenant leakage. Raw-SQL / RLS tests for every HR table, report and export", `RawIsolationTest` pattern) and §4; C27-C (P1/HIGH = BLOCKER, P2/MEDIUM = MAJOR); RF2 §8 (D-RF2-3, clean complete run); rule 28 |
 | Source | **`e33a1e1e427c16ee64883acbf7bb471896e59474`** (WO-26 code), selected by the owner for this re-run (C39-D1, §2) |
 | Verdict | **HR.R1 RE-RUN INCOMPLETE — REQUIRED EVIDENCE MISSING. R1-06 and every WO-26-affected check pass; the clean complete local regression (RF2 §8.7, C27 §9; no composite under §8.3) was not obtained: three complete runs each had one intermittent failure outside WO-26 (§5). No development HIGH or MEDIUM. HR.R1 stays OPEN** |
+| Addendum (C39-EQ1, owner decision dated 2026-11-23) | **C39-EQ1 EQUIVALENT EXECUTION — PASS. HR.R1 DEVELOPMENT-SCOPE PASS — PRODUCTION NOT ADDRESSED** (§10). The verdict above is kept as recorded on 2026-11-21 |
 
 ## 1. Preflight
 
@@ -207,3 +208,130 @@ Documentation only: this record, dated annotations in C38 (§5 export clarificat
 **Regression counter:** unchanged at REMOTE CHECKPOINT `e33a1e1e` (0/5); this checkpoint adds no code unit.
 
 **Next recommended checkpoint (never started automatically):** one clean complete isolated local regression on `e33a1e1e` on a host whose clock is not being stepped, then an addendum to this record issuing the development-scope verdict. Then UAT execution (C18-A12 included) under its own authorization.
+
+## 10. Addendum: C39-EQ1 equivalent hosted execution (owner decision dated 2026-11-23; executed 2026-11-22 UTC)
+
+**Nothing above is rewritten.** §5's three failed local runs, §8's verdict and §9's publication stand as recorded on 2026-11-21. This section adds the missing leg under a narrow owner exception.
+
+### 10.1 Decisions (HR owner, acting within the Architecture authority established by C27)
+
+| Id | Decision |
+|---|---|
+| **C39-EQ1-A** | Preserve every available attempt-1 artifact and job log of run 44902029782 before anything else (read-only retrieval). |
+| **C39-EQ1-B** | **APPROVED — GITHUB-HOSTED EQUIVALENT EXECUTION.** One new complete "Re-run all jobs" attempt of run 44902029782 on `e33a1e1e`, on GitHub-hosted Ubuntu 24.04 runners, stands in for the clean `SAFE_TEST_ISOLATED=1` local snapshot run that RF2 §8.7 and C27 §9 require. It is an exception for HR.R1-C39 only: RF2, C27 and future checkpoints are not amended. Attempt 1 stays the accepted CI leg and cannot satisfy both legs. Budget: one attempt, with no retry and no failed-jobs rerun; stop on any failure. |
+| **C39-EQ1-B (final confirmation)** | The owner accepted that the re-run makes attempt 1's GitHub-hosted artifacts inaccessible. The digest-verified local archive (§10.3) is the authoritative retained evidence for attempt 1. No manual deletion, overwrite or edit of that evidence is authorized. |
+
+**Accepted differences, and only these:**
+- four independent hosted runners instead of one WSL host;
+- a fresh Compose stack and test database per shard (an ephemeral VM, `-p school-os`) instead of a deterministically named isolated project;
+- versitygw instead of MinIO (the declared CI substitution, TEST-ENVIRONMENT §"S3 server substitution");
+- the CI runtime stack (PHP 8.3.37, PostgreSQL 16.16) instead of the C36 DDEV stack (PHP 8.3.33, PostgreSQL 16.14);
+- the extra lanes from strict classification on re-run.
+
+**Why the exception was needed.** §5: the WSL host clock was stepped about every 35 seconds, and three complete local runs each had one intermittent failure outside WO-26. That cannot be corrected inside the checkpoint, and no local WSL or Docker change was authorized.
+
+### 10.2 Execution
+
+| Item | Value |
+|---|---|
+| Trigger | `POST /repos/mawk-khan/lycenza/actions/runs/44902029782/rerun` (Re-run all jobs), 2026-11-22T21:59:16Z, HTTP 201; sent exactly once |
+| Preflight (immediately before) | `origin/main` `d1538d99`, clean; `e33a1e1e` an ancestor, with only `docs/hr/` changed since; workflow active; no other run in progress; ruleset 24909660 active with 0 bypass actors; default token read-only; E16 `OWNER-0O-E16-2026-11-01` valid through 2026-11-28; attempt-1 archive hashes re-verified |
+| Run | 44902029782, **attempt 2**, event `push`, ref `integration/hr-r1-c35-wo26` (deleted; the pinned `actions/checkout@11d5960a` fetched the commit by SHA, `src/ref-helper.ts` `getRefSpec`), SHA **`e33a1e1e427c16ee64883acbf7bb471896e59474`**, 21:59:18–22:14:12Z, **success** |
+| Classifier | merge base = head, so empty diff, STRICT: secrets, supply_chain, integrity, images, platform, gateway, shared_types, mobile (attempt 1: base `2ae991f9`, without gateway, shared_types, mobile). A superset |
+| Jobs (16, all attempt 2, all on `e33a1e1e`) | success: Classify, Secrets scan, Supply chain (audits evaluated on the run date), Integrity, Production images, Platform static, shards 1–4, Platform coverage, AI Gateway, shared-types, Flutter, **CI gate: PASS**. Skipped: Documentation guards (excluded by STRICT, `classify.py:38`). Job and runner ids are disjoint from attempt 1's |
+| Runtime identity (all four shards) | PHP 8.3.37, tz=UTC, PostgreSQL 16.16, Valkey 8.1.12, `versity/versitygw:v1.8.0@sha256:30292fc2…`, image ubuntu-24.04 build 20261116.133.1; identical notices to attempt 1 |
+| Isolation | One ephemeral VM per shard; inert `.env.example`; `bin/safe-test --reset-db` (`platform:env-diagnostic`, all three connections on `school_os_test`, `TestDatabaseGuard`, full seed set); the shard ran through `bin/safe-test --shard N/4`. No route to DDEV, `UAT-HR-SYN` or any real service |
+| Timing | Log timestamps monotonic in all 15 logs; no clock, retry or timeout line. Shard durations 11:42, 10:03, 12:37, 11:27 |
+
+### 10.3 Evidence (git-ignored, `.claude/regression/c39-evidence/`; never committed)
+
+**Attempt 1 (`ci-44902029782-a1/`, retrieved 2026-11-22T21:53Z, before the trigger).** Four artifact archives, each local SHA-256 equal to GitHub's recorded digest. The 12 executed jobs' logs plus the attempt's log bundle. The union recomputed with `lycenza-ci shard coverage`. `MANIFEST.md` holds 35 file hashes, and its own hash is recorded. After the trigger the four ids return 404 (the expected consequence, accepted in §10.1). GitHub's own "Expected Digest" lines in the archived attempt-1 coverage log corroborate the archive hashes.
+
+| Artifact (attempt 1) | Id | SHA-256 (= GitHub digest) |
+|---|---|---|
+| phpunit-shard-1 | 14707081739 | `26a1b7e75e19e8a989a85b3e00ec5bb43fed4e75ef1410d8228b4451f104e950` |
+| phpunit-shard-2 | 14706811997 | `8e150fc5fbe9c07ac8a6e002afdb6fcbf3c4983f060553911bf3b459839492d4` |
+| phpunit-shard-3 | 14706584602 | `90e5fa591d1f7e9db9bb858a14b4225edc3aec76b5b0823aee6fb6cca99a07c8` |
+| phpunit-shard-4 | 14706758766 | `f7d40062823bc9cfae1b0d6d94a6853ef8d6acc9da4b9ec70aff52677d7a206d` |
+
+**Attempt 2 (`ci-44902029782-a2/`).** Same layout, `MANIFEST.md` with 38 file hashes. Each artifact was created inside attempt 2's window, seconds before its own shard finished. The coverage job downloaded exactly these four ids after the last upload.
+
+| Artifact (attempt 2) | Id | Created (UTC) | SHA-256 (= GitHub digest) |
+|---|---|---|---|
+| phpunit-shard-1 | 14775332376 | 22:12:44 | `71ac5933431fdcec823fa67d62495aec419f7a8f01c8c92624e240c581a6919e` |
+| phpunit-shard-2 | 14775337001 | 22:11:15 | `8e472860ce477e9a6b13d1edb9350b67a3d344cdc76d93a4cb5b3ad464843170` |
+| phpunit-shard-3 | 14775800482 | 22:13:45 | `e9b8f841af9348cd232634ab03cb17174140e46e21a1a1610fac470974d6a009` |
+| phpunit-shard-4 | 14775068000 | 22:12:43 | `9e3164d69e75705f68044ce9cf7303fd8f3220455cb35305b4d076ac8f51bcc9` |
+
+Both archives were scanned for secrets: no token, key or credential pattern, and masked values only. The only email-shaped strings are public PHP and curl release-key uids from the image build. §5's 144 run files are byte-identical to before this addendum.
+
+### 10.4 Results
+
+| | Attempt 1 (CI leg) | Attempt 2 (substitute leg) |
+|---|---|---|
+| Files / cases | 1,424 / 12,015 | 1,424 / 12,015 |
+| Per shard | 3004 / 3004 / 3004 / 3003 | 3004 / 3004 / 3004 / 3003 |
+| Outcomes | 12,014 passed, 1 skipped, 0 failures, 0 errors | 12,014 passed, 1 skipped, 0 failures, 0 errors |
+| Skip | ESI-12 (`EsiCalculationServiceTest::esi_12_disability_special_threshold_is_legally_deferred`, shard 3) | the same, and only that |
+| Union selection SHA-256 | `ef26bd17c386c4ba0d55f98f8209924eba6ce7bb49846405130da576108b7ad9` | **identical** (the CI coverage job and two independent recomputations) |
+| Assertions | 469,345 | 467,315 |
+
+**Independence.** The four JUnit reports differ from attempt 1's, and only 1 of 12,015 case times coincides. Every shard report names the same plan (`cdc3c7e5…`) and inventory (`10b49ea5…`). Nothing from attempt 1 was consumed.
+
+**Assertion drift (RF2 §8, explained).** −2,030, all in 13 multi-process classes. The largest are ServiceAssertionReplayConcurrency −1,116, CrossHostHandoffConcurrency −279, FinanceRetentionConcurrency −202 and ReportingLineEmploymentEndConcurrency −127. Eleven of the 13 poll; two (ElectiveGroupConfigurationConcurrency −4, CanteenOrderConcurrency −1) branch on which side wins a real race. The test count and the union are unchanged.
+
+### 10.5 What stands from §1–§9
+
+- **R1-06: PASS** (§3), unchanged. Attempt 2 re-ran every R1-06 test as part of the full inventory, all passing.
+- **WO-26-affected verification: PASS** (§4), unchanged, likewise inside the inventory.
+- **Baselines:**
+  - **Source:** `e33a1e1e` (C39-D1).
+  - **Legal/Security blobs:** identical at `e33a1e1e` and `d1538d99`: gate register `8f8d227fc03b`, exceptions `23688c539c3c`, RF2 `c6a3cb41a804`, audit register `adc64b547fa8`, capability map `a9d4c0fc39e5`.
+  - **Local environment:** snapshot `bc4e0855…a50d` and frontend manifest `7b9e6f1b…0fce` re-hashed, identical.
+  - **Database:** not re-observed. DDEV was stopped, starting it lets its scheduler write (§2), and nothing in this addendum touched it. Its §2 state stands.
+  - **Reference pack:** owner-held, untouched.
+- **The three failed local runs** (§5) stay recorded as failures. Their LOWs C39-N7..N9 are unchanged, and nothing here re-judges them.
+
+### 10.6 Independent review
+
+A separate read-only reviewer (no edits, tests, Docker or triggers) re-derived from the raw files and live GET calls:
+- source identity in every job and in checkout;
+- attempt 2's separateness (fresh job and runner ids on all 16 jobs);
+- artifact provenance and digests, including the 404 of the attempt-1 ids;
+- the coverage, computed two ways;
+- the per-class assertion drift;
+- the gate's lane table;
+- runtime parity;
+- monotonic log time;
+- both archives' manifests;
+- the failed local runs' files.
+
+**No HIGH or MEDIUM.** Its opinion: attempt 2 meets RF2 §8.1–8.6 on its own, independent of attempt 1, and whether it may stand in for §8.7 / C27 §9 is the owner's C39-EQ1 decision, not a technical finding. It grants no owner, Architecture, Legal, DPO or production approval.
+
+Its LOWs, recorded under the owner's standing instruction (recommended disposition):
+
+| Id | Finding | Disposition |
+|---|---|---|
+| EQ1-N1 | Literal C27 §9 / rule 81 isolation (`SAFE_TEST_ISOLATED=1` on a local snapshot) and the C36 local stack are not what ran. The essential guarantees hold on the ephemeral runners | Accepted by C39-EQ1-B for C39 only (§10.1); not a precedent |
+| EQ1-N2 | Attempt 2's lane set differs from attempt 1's because `e33a1e1e` was already on `main` (strict on an empty diff) | Accepted: a superset, so it adds proof |
+| EQ1-N3 | Two of the 13 drifting classes are race-branch rather than polling tests | Accepted: explained concurrency drift; RF2 §8's wording is not amended |
+
+The fourth review note recorded only that the manifests' figures matched the recomputation; it is not a finding.
+
+### 10.7 Verdict
+
+**C39-EQ1 EQUIVALENT EXECUTION — PASS.** Within C39-EQ1-B's scope, attempt 2 is the clean, complete substitute leg on exactly `e33a1e1e`. Attempt 1 remains the CI leg.
+
+**C38-D4 is satisfied:** R1-06 PASS (§3), the WO-26-affected verification PASS (§4), and the complete canonical regression on the corrected source PASS in two independent executions (§10.4). The source and baselines are compatible (§10.5). No development HIGH or MEDIUM is open.
+
+**HR.R1 DEVELOPMENT-SCOPE PASS — PRODUCTION NOT ADDRESSED.** This verdict exists only through C39-EQ1's exception and is limited to development scope.
+
+**Not claimed and unchanged:**
+- **Operational UAT:** not signed off. Browser walkthroughs, keyboard and axe acceptance, named-human screen-reader acceptance (C18-A12) and the `UAT-HR-SYN` administrator's MFA enrolment remain.
+- **Gates:** RG-ID-1 OPEN; C33-H1..H5 open; every Legal/DPO gate (E21, E45/ESI-12, E47, HRX-L1..L4, S-4) unchanged.
+- **Integrations:** Inventory, Library and Finance stay NOT_INTEGRATED.
+- **Release:** staging stays PAUSED, production stays NO-GO, and there is no permanent HR.R1 release closure. No Jurimatter checkpoint is affected.
+
+**Regression counter:** unchanged at REMOTE CHECKPOINT `e33a1e1e` (0/5); this addendum adds no code unit.
+
+**Next recommended checkpoint (never started automatically):** operational UAT on `UAT-HR-SYN` under its own authorization, beginning with the School Administrator's MFA enrolment, then C18-A12. Any publication on or after 2026-11-29 needs an E16 successor first.
