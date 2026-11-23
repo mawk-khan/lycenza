@@ -20,12 +20,12 @@ build-time toolchain here.
 
 | Component | Version | Source | SHA-256 | Signature |
 |---|---|---|---|---|
-| PHP | 8.3.36 | `https://www.php.net/distributions/php-8.3.36.tar.xz` | `dd54693aa334c5c4d72e9aee96b082c2473750a18a6c1d105789c93a3b1692fd` | detached `.asc`; `VALIDSIG` must be one of the PHP 8.3 release managers `1198C0117593497A5EC5C199286AF1F9897469DC`, `C28D937575603EB4ABB725861C0779DC5C0A9DE4`, `AFD8691FDAEDF03BDF6E460563F15A9B715376CA` (keys from php.net's published keyring) |
+| PHP | 8.3.37 | `https://www.php.net/distributions/php-8.3.37.tar.xz` | `0237af84478b7a7649d3964153f1b8653d622550b846f56d63062de683fb86bb` | detached `.asc`; `VALIDSIG` must be one of the PHP 8.3 release managers `1198C0117593497A5EC5C199286AF1F9897469DC`, `C28D937575603EB4ABB725861C0779DC5C0A9DE4`, `AFD8691FDAEDF03BDF6E460563F15A9B715376CA` (keys from php.net's published keyring) |
 | curl / libcurl | 8.23.0 (`libcurl.so.4`) | `https://curl.se/download/curl-8.23.0.tar.xz` | `8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5` | detached `.asc`; `VALIDSIG` must be `27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2` (Daniel Stenberg) |
 | libxml2 | 2.15.4 (`libxml2.so.16`) | `https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz` | `98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821` | none published by GNOME. The pinned SHA-256, equal to GNOME's `.sha256sum`, is the integrity mechanism. |
 
 Build-only images, all digest-pinned in the Dockerfile:
-- `php:8.3.36-fpm-trixie`: the official image, used for its recipe environment, `PHPIZE_DEPS` and `docker-php-*` scripts;
+- `php:8.3.37-fpm-trixie`: the official image, used for its recipe environment, `PHPIZE_DEPS` and `docker-php-*` scripts;
 - `node:22.23.3-bookworm-slim` and `composer:2.10.2`.
 
 Runtime base: `debian:13.7-slim`, the official PHP image's own base.
@@ -38,6 +38,8 @@ Runtime base: `debian:13.7-slim`, the official PHP image's own base.
 - **SBOM identity:** each library carries a standard ELF `.note.package` (FDO packaging metadata) so Syft can identify it.
 
 **ORG.11-R1 (2026-10-26):** PHP 8.3.35 → 8.3.36 (CVE-2026-109618, CVE-2026-109619) and curl 8.22.0 → 8.23.0 (CVE-2026-92392); PHP signature `VALIDSIG AFD8691FDAEDF03BDF6E460563F15A9B715376CA` and SHA-256 equal to php.net's release metadata; curl signature `VALIDSIG 27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2`; build-only base `php:8.3.36-fpm-trixie@sha256:56e2cf05…`. Record: `docs/security/release-remediation/ORG-11-R1-PHP-CURL-REMEDIATION.md`.
+
+**E16-R6 (2026-11-23):** PHP 8.3.36 → 8.3.37 (Critical CVE-2026-115560, CVE-2026-126714, CVE-2026-129289, CVE-2026-129481, CVE-2026-129496; High CVE-2026-127960, CVE-2026-128064, CVE-2026-128090, CVE-2026-129291); PHP signature `VALIDSIG C28D937575603EB4ABB725861C0779DC5C0A9DE4` and SHA-256 equal to php.net's release metadata; build-only base `php:8.3.37-fpm-trixie@sha256:e8d97ebb…`; runtime base `debian:13.7-slim@sha256:a72b4433…` (apt 3.0.4), with glibc upgraded in place to `2.41-12+deb13u5`. curl and libxml2 unchanged. Record: `docs/security/release-remediation/E16-R6-CRITICAL-HIGH-REMEDIATION-2026-11-23.md`.
 
 ## When a rebuild is due
 

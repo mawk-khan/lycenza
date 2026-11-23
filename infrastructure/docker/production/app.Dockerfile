@@ -13,7 +13,7 @@
 #
 # Phase 0O.6A (ADR 0052 section 3.2): every base image is pinned BY DIGEST
 # (`image:exact-version@sha256:...`); the tag is a readable alias only and
-# the toolchain (PHP 8.3.36, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
+# the toolchain (PHP 8.3.37, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
 # whatever these digests contain. Phase 0O.6B: the PHP base (extension build,
 # Composer install and runtime stages) is Debian 13 "trixie"; the Node and
 # Composer images are build-only and unchanged, so npm/Composer output is
@@ -26,7 +26,7 @@
 # runtime PHP is REPOSITORY-BUILT. Debian 13 ships libcurl 8.14.1 and libxml2
 # 2.9.14 with unfixed CRITICAL/HIGH advisories; the fixed upstream releases
 # are curl 8.23.0 (libcurl.so.4) and libxml2 2.15.4 (libxml2.so.16, a new
-# ABI the official PHP binary cannot load). So PHP 8.3.36 is compiled from
+# ABI the official PHP binary cannot load). So PHP 8.3.37 is compiled from
 # the official, signature-verified release source with the official
 # docker-library recipe (same configure flags, minus PEAR -- dev tooling
 # whose install downloads an unverified phar) against curl and libxml2 built
@@ -36,8 +36,8 @@
 # this runtime for every PHP 8.3 / curl / libxml2 / base security release.
 # Tests\Feature\Configuration\CustomPhpRuntimeGuardTest guards this file.
 
-ARG PHP_IMAGE=php:8.3.36-fpm-trixie@sha256:56e2cf0558ddfbe36e90030f763b72be2f763bcd9075890e9c68420e0dfa827e
-ARG RUNTIME_IMAGE=debian:13.7-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+ARG PHP_IMAGE=php:8.3.37-fpm-trixie@sha256:e8d97ebb4e9c47c71993ed9367a96374c2d033facf16ff2e930e4e4a7c06ca6f
+ARG RUNTIME_IMAGE=debian:13.7-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 ARG NODE_IMAGE=node:22.23.3-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
 ARG COMPOSER_IMAGE=composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040
 
@@ -55,9 +55,9 @@ FROM ${COMPOSER_IMAGE} AS composer-bin
 FROM ${PHP_IMAGE} AS sources
 # (The LYCENZA_*_URL / *_SHA256 pairs are also read by the release
 # provenance generator as the image's source materials.)
-ENV LYCENZA_PHP_VERSION=8.3.36 \
-    LYCENZA_PHP_URL=https://www.php.net/distributions/php-8.3.36.tar.xz \
-    LYCENZA_PHP_SHA256=dd54693aa334c5c4d72e9aee96b082c2473750a18a6c1d105789c93a3b1692fd \
+ENV LYCENZA_PHP_VERSION=8.3.37 \
+    LYCENZA_PHP_URL=https://www.php.net/distributions/php-8.3.37.tar.xz \
+    LYCENZA_PHP_SHA256=0237af84478b7a7649d3964153f1b8653d622550b846f56d63062de683fb86bb \
     LYCENZA_PHP_SIGNER_FINGERPRINTS="1198C0117593497A5EC5C199286AF1F9897469DC C28D937575603EB4ABB725861C0779DC5C0A9DE4 AFD8691FDAEDF03BDF6E460563F15A9B715376CA" \
     LYCENZA_CURL_VERSION=8.23.0 \
     LYCENZA_CURL_URL=https://curl.se/download/curl-8.23.0.tar.xz \
@@ -208,7 +208,12 @@ RUN npm run build
 # and the FPM configuration layout reproduce the official image.
 FROM ${RUNTIME_IMAGE} AS runtime
 ENV PHP_INI_DIR=/usr/local/etc/php
+# E16-R6 (2026-11-23): glibc 2.41-12+deb13u5 (CVE-2026-19499, CVE-2026-5435) is in
+# trixie-security but not yet in any debian:13.7-slim digest, so the two glibc
+# packages are upgraded in place (--only-upgrade: nothing new is installed).
+# Drop this line once the pinned base carries the fix.
 RUN apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade libc6 libc-bin \
  && apt-get install -y --no-install-recommends \
         ca-certificates nginx \
         libargon2-1 libonig5 libreadline8t64 libsodium23 libsqlite3-0 libssl3t64 zlib1g \

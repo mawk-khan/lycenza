@@ -14,7 +14,7 @@
 #     -t lycenza-ai-gateway:<version> services/ai
 #
 # Phase 0O.6A (ADR 0052 sections 3.2, 3.5): the base is pinned BY DIGEST
-# (Python 3.14 on Debian 13 "trixie" since Phase 0O.6C -- 3.14.8 since E16-R1, 2026-10-11, for CVE-2026-19445/-19553; 3.14.10 since E16-R3, 2026-11-01, for CVE-2026-115557; owner decision
+# (Python 3.14 on Debian 13 "trixie" since Phase 0O.6C -- 3.14.8 since E16-R1, 2026-10-11, for CVE-2026-19445/-19553; 3.14.10 since E16-R3, 2026-11-01, for CVE-2026-115557; base digest refreshed in E16-R6, 2026-11-23, for apt 3.0.4; owner decision
 # R12: CVE-2026-82049 is fixed only in CPython 3.14; pip from that digest is
 # never upgraded) and
 # dependencies come from the fully resolved, hash-locked requirements.lock:
@@ -22,7 +22,7 @@
 # build hook runs). Tests\Feature\Configuration\SupplyChainGuardTest
 # guards both.
 
-ARG PYTHON_IMAGE=python:3.14.10-slim-trixie@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999
+ARG PYTHON_IMAGE=python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 FROM ${PYTHON_IMAGE} AS deps
 RUN python -m venv /opt/venv
@@ -30,6 +30,14 @@ COPY requirements.lock /tmp/requirements.lock
 RUN /opt/venv/bin/pip install --no-cache-dir --require-hashes --no-deps --only-binary=:all: -r /tmp/requirements.lock
 
 FROM ${PYTHON_IMAGE} AS runtime
+# E16-R6 (2026-11-23): glibc 2.41-12+deb13u5 (CVE-2026-19499, CVE-2026-5435) and
+# zlib1g 1:1.3.dfsg+really1.3.1-1+deb13u1 (CVE-2026-85091) are in Debian 13 but not
+# yet in any python:3.14.10-slim-trixie digest, so exactly these packages are
+# upgraded in place (--only-upgrade: nothing new is installed). Drop this once
+# the pinned base carries the fixes.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade libc6 libc-bin zlib1g \
+ && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 --home-dir /srv/ai --shell /usr/sbin/nologin gateway \
  # Phase 0O.6F (runtime security contract): nothing mounts filesystems, so
  # mount/umount lose their setuid bit via Debian's dpkg-statoverride.

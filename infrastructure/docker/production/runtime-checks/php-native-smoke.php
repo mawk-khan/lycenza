@@ -2,7 +2,7 @@
 
 /**
  * Phase 0O.6D: native-runtime smoke test for the REPOSITORY-BUILT PHP
- * (8.3.36 against curl 8.23.0 / libxml2 2.15.4), run INSIDE the production
+ * (8.3.37 against curl 8.23.0 / libxml2 2.15.4), run INSIDE the production
  * application image by verify-images.sh. It exercises the application's own
  * HTTP client stack (Laravel HTTP client -> Guzzle -> libcurl, with the
  * webhook delivery options: CURLOPT_RESOLVE pinning, no redirects, connect and
