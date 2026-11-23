@@ -4,6 +4,7 @@ namespace App\Domain\Payroll\Statutory\Application;
 
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryPayrollUnavailableException;
 use App\Support\Configuration\EnvironmentPolicy;
+use Illuminate\Support\Env;
 
 /**
  * HR-PG1/PG2 (ADR 0036 amendment, rule 153): statutory Payroll -- PF, ESI, PT,
@@ -18,8 +19,24 @@ use App\Support\Configuration\EnvironmentPolicy;
  * Fail closed by construction: this is an ALLOWLIST
  * (`EnvironmentPolicy::isDevelopment()`), never "not hardened", so an unset,
  * unknown or malformed environment is unavailable (and boot already refuses an
- * unsupported one, `EnvironmentPolicy::assertSupported()`). It reads no
- * request, School, user, flag, database row or other environment variable.
+ * unsupported one, `EnvironmentPolicy::assertSupported()`).
+ *
+ * TWO environments must both be development (HR-PG1/PG2-Q1-C, finding F1):
+ *   - the application environment (`app()->environment()`), and
+ *   - the deployment's real `APP_ENV` (`Env::get('APP_ENV')`).
+ * On a console command Laravel takes `--env=<value>` straight into
+ * `$app['env']` (`EnvironmentDetector::detectConsoleEnvironment()`), so
+ * `artisan <command> --env=local` on a production host would satisfy the first
+ * alone. `--env` never changes the real `APP_ENV`: the hardened images set it
+ * as a process variable (`app.Dockerfile` `ENV APP_ENV=production`, staging's
+ * `APP_ENV=staging`) and Laravel's environment repository is immutable, so no
+ * `.env.<name>` file can replace it. This is the precedent
+ * `AppServiceProvider::boot()` already uses for destructive database commands.
+ * An unset `APP_ENV` (for example a cached configuration with no process
+ * variable) is unavailable: fail closed, never a default.
+ *
+ * It reads no request, School, user, flag, database row, or any environment
+ * variable other than `APP_ENV`.
  *
  * Independent boundaries use it: the `statutory-payroll-development-only`
  * route middleware, on every statutory route and declared by every statutory
@@ -35,7 +52,20 @@ final class StatutoryPayrollAvailability
 
     public static function isAvailable(): bool
     {
-        return EnvironmentPolicy::isDevelopment();
+        return self::isAvailableFor(EnvironmentPolicy::current(), Env::get('APP_ENV'));
+    }
+
+    /**
+     * The decision itself, over both environments: available only when the
+     * application environment AND the deployment's real `APP_ENV` are each a
+     * development environment. Anything else -- a hardened, unset, unknown,
+     * non-string or differently-cased value on either side -- is unavailable.
+     */
+    public static function isAvailableFor(string $applicationEnvironment, mixed $deploymentEnvironment): bool
+    {
+        return EnvironmentPolicy::isDevelopment($applicationEnvironment)
+            && is_string($deploymentEnvironment)
+            && EnvironmentPolicy::isDevelopment($deploymentEnvironment);
     }
 
     /** @throws StatutoryPayrollUnavailableException */
