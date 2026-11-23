@@ -27,10 +27,13 @@ use Illuminate\Support\Env;
  * On a console command Laravel takes `--env=<value>` straight into
  * `$app['env']` (`EnvironmentDetector::detectConsoleEnvironment()`), so
  * `artisan <command> --env=local` on a production host would satisfy the first
- * alone. `--env` never changes the real `APP_ENV`: the hardened images set it
- * as a process variable (`app.Dockerfile` `ENV APP_ENV=production`, staging's
- * `APP_ENV=staging`) and Laravel's environment repository is immutable, so no
- * `.env.<name>` file can replace it. This is the precedent
+ * alone. `--env` never changes the real `APP_ENV` WHEN `APP_ENV` is a process
+ * variable, as the hardened images set it (`app.Dockerfile`
+ * `ENV APP_ENV=production`, staging's `APP_ENV=staging`): Laravel's environment
+ * repository is immutable, so no `.env.<name>` file can replace it. A host
+ * that takes `APP_ENV` from a `.env` file instead is not protected this way
+ * (`--env=local` would load a `.env.local` if one existed), so production and
+ * staging must set `APP_ENV` in the process environment. This is the precedent
  * `AppServiceProvider::boot()` already uses for destructive database commands.
  * An unset `APP_ENV` (for example a cached configuration with no process
  * variable) is unavailable: fail closed, never a default.

@@ -14,9 +14,10 @@ use Illuminate\Support\Facades\DB;
 // separate OS process, exactly as `php artisan <command> --env=<value>` does,
 // with the deployment's APP_ENV set as a real process variable by the caller.
 // It reports both environments and what the statutory gate decided, and tries
-// one statutory service operation directly when the gate is closed. It writes
-// nothing and needs no database: the gate refuses before any query, and the
-// query count proves it.
+// one statutory service operation directly when the gate is closed. It changes
+// no data and needs no database: the gate refuses before any query, and the
+// query count proves it. (Like any boot, it may create Laravel's git-ignored
+// package-discovery cache files if they are missing.)
 //
 // Usage: php statutory-availability-probe.php [--env=<value> | --env <value>]
 
