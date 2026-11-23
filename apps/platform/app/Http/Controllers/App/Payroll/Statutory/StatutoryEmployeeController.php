@@ -9,6 +9,8 @@ use App\Domain\Payroll\Statutory\Application\Admin\EmployeePfStatusAdminService;
 use App\Domain\Payroll\Statutory\Application\Admin\EmployeeTaxProfileAdminService;
 use App\Domain\Payroll\Statutory\Application\Admin\StatutoryIdentifierAdminService;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryPayrollException;
+use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryPayrollUnavailableException;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -17,6 +19,8 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,12 +41,21 @@ use Inertia\Response;
  * embedded in the initial page load" pattern exactly (Section 5's own
  * requirement).
  */
-class StatutoryEmployeeController extends Controller
+class StatutoryEmployeeController extends Controller implements HasMiddleware
 {
     use AuthorizesCapability;
 
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
+
     public function search(Request $request, TenantContext $context): JsonResponse
     {
+        // HR-PG1/PG2 (rule 153): these actions read statutory and Employee rows directly.
+        abort_unless(StatutoryPayrollAvailability::isAvailable(), 403, StatutoryPayrollUnavailableException::MESSAGE, ['Cache-Control' => 'private, no-store']);
+
         $school = $context->requireSchool();
         $this->authorizeCapability('payroll.statutory.view', $school);
 
@@ -78,6 +91,9 @@ class StatutoryEmployeeController extends Controller
         StatutoryIdentifierAdminService $identifierService,
         string $employmentRecord,
     ): Response {
+        // HR-PG1/PG2 (rule 153): these actions read statutory and Employee rows directly.
+        abort_unless(StatutoryPayrollAvailability::isAvailable(), 403, StatutoryPayrollUnavailableException::MESSAGE, ['Cache-Control' => 'private, no-store']);
+
         $school = $context->requireSchool();
         $actor = $context->actor();
         // HR.R1-C14 (C12-N3): the capability first. Sibling actions still look up first: C14-N1.

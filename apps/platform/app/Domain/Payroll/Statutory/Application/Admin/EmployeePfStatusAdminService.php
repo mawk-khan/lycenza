@@ -4,6 +4,7 @@ namespace App\Domain\Payroll\Statutory\Application\Admin;
 
 use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmploymentRecordNotFoundException;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeePfStatus;
 use App\Models\School;
 use App\Models\User;
@@ -43,6 +44,8 @@ class EmployeePfStatusAdminService
 
     public function view(School $school, string $employmentRecordId, User $actor): ?EmployeePfStatus
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
@@ -59,6 +62,8 @@ class EmployeePfStatusAdminService
      */
     public function configure(School $school, string $employmentRecordId, array $data, User $actor): EmployeePfStatus
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $data, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.manage', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);

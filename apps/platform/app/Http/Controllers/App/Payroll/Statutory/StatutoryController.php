@@ -6,6 +6,8 @@ use App\Domain\Payroll\Statutory\Application\Admin\StatutoryRuleStatusReadServic
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,8 +17,14 @@ use Inertia\Response;
  * established hub-page pattern: capability map is UX-only, every
  * linked destination re-checks authorization server-side.
  */
-class StatutoryController extends Controller
+class StatutoryController extends Controller implements HasMiddleware
 {
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
+
     public function index(TenantContext $context, CapabilityResolver $capabilities, StatutoryRuleStatusReadService $ruleStatus): Response
     {
         $school = $context->requireSchool();

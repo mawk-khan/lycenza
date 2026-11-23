@@ -42,6 +42,8 @@ final class RouteUniverse
         'marks-development-only',
         'teacher-marks-development-only',
         'teacher-attendance-api',
+        // HR-PG1/PG2 (rule 153): statutory Payroll.
+        'statutory-payroll-development-only',
     ];
 
     /**

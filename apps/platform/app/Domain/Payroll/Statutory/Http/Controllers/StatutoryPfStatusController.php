@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
 /**
  * Checkpoint 9.6I (Section 2 "Employee PF status") -- thin HTTP
@@ -16,9 +18,15 @@ use Illuminate\Http\Request;
  * returns a raw Eloquent model -- `present()` is the single place
  * every field name crosses this boundary.
  */
-class StatutoryPfStatusController extends Controller
+class StatutoryPfStatusController extends Controller implements HasMiddleware
 {
     use RequiresSchoolEmployment;
+
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
 
     public function show(Request $request, School $school, string $employmentRecord, EmployeePfStatusAdminService $service): JsonResponse
     {

@@ -4,6 +4,7 @@ namespace App\Domain\Payroll\Statutory\Application\Admin;
 
 use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmploymentRecordNotFoundException;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeTaxProfile;
 use App\Models\School;
 use App\Models\User;
@@ -40,6 +41,8 @@ class EmployeeTaxProfileAdminService
      */
     public function history(School $school, string $employmentRecordId, User $actor): Collection
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
@@ -57,6 +60,8 @@ class EmployeeTaxProfileAdminService
      */
     public function configure(School $school, string $employmentRecordId, string $fiscalYearStart, array $data, User $actor): EmployeeTaxProfile
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $fiscalYearStart, $data, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.manage', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);

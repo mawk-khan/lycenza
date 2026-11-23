@@ -10,6 +10,8 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,9 +21,15 @@ use Inertia\Response;
  * `App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController`'s
  * exact shape.
  */
-class StatutoryAccountingConfigurationController extends Controller
+class StatutoryAccountingConfigurationController extends Controller implements HasMiddleware
 {
     use AuthorizesCapability;
+
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
 
     private const ACCOUNT_FIELDS = [
         'employee_pf_payable_ledger_account_id',

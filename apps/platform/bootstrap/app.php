@@ -17,6 +17,7 @@ use App\Http\Middleware\EnforceCredentialVersion;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
 use App\Http\Middleware\EnsurePortalDevelopmentOnly;
+use App\Http\Middleware\EnsureStatutoryPayrollDevelopmentOnly;
 use App\Http\Middleware\EnsureStudentMarksDevelopmentOnly;
 use App\Http\Middleware\EnsureTeacherAttendanceApiDevelopmentOnly;
 use App\Http\Middleware\EnsureTeacherStudentMarksDevelopmentOnly;
@@ -131,6 +132,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'marks-development-only' => EnsureStudentMarksDevelopmentOnly::class,
             // POR (ADR 0070 §18.2): the Guardian portal is development only until POR-L1 (E46).
             'portal-development-only' => EnsurePortalDevelopmentOnly::class,
+            // HR-PG1/PG2 (ADR 0036 amendment, rule 153): statutory Payroll is development only.
+            'statutory-payroll-development-only' => EnsureStatutoryPayrollDevelopmentOnly::class,
             // Phase 0N.1: the School-context prerequisite for every
             // School-scoped web route (routes/web.php's School group) --
             // see App\Http\Middleware\RequireSchoolContext.
@@ -225,6 +228,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToPriorityList(
             after: [AuthenticatesRequests::class, ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, ResolvePlatformElevation::class],
             append: RequireSchoolContext::class,
+        );
+        // HR-PG1/PG2 (rule 153): the statutory Payroll availability gate reads
+        // only the environment, so it is pinned with ONE anchor immediately
+        // before `school-context` -- which already precedes ThrottleRequests,
+        // SubstituteBindings, `capability:`, `mfa` and `idempotent` -- so a
+        // refusal happens before RequireSchoolContext and any School-scoped
+        // binding, authorization, MFA or replay work (only identity, session
+        // and School resolution run first; asserted by
+        // Tests\Feature\Payroll\Statutory\StatutoryPayrollAvailabilityArchitectureTest).
+        $middleware->prependToPriorityList(
+            before: RequireSchoolContext::class,
+            prepend: EnsureStatutoryPayrollDevelopmentOnly::class,
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {

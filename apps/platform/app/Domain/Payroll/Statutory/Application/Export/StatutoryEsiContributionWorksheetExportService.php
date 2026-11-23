@@ -5,6 +5,7 @@ namespace App\Domain\Payroll\Statutory\Application\Export;
 use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRunResultsExpiredException;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeEsiCoverage;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
 use App\Models\School;
@@ -49,6 +50,8 @@ class StatutoryEsiContributionWorksheetExportService
 
     public function generate(PayrollRun $run, User $actor): string
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $school = $run->school;
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor) {

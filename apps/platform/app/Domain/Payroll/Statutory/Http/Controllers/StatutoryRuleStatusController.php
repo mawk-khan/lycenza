@@ -12,6 +12,8 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
 /**
  * Checkpoint 9.6I (Section 2 "Statutory rule status") -- READ-ONLY.
@@ -20,8 +22,14 @@ use Illuminate\Http\Request;
  * tenant-editable "rules engine" (see `StatutoryRuleStatusReadService`'s
  * own docblock).
  */
-class StatutoryRuleStatusController extends Controller
+class StatutoryRuleStatusController extends Controller implements HasMiddleware
 {
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
+
     public function show(Request $request, School $school, StatutoryRuleStatusReadService $service): JsonResponse
     {
         $versions = $service->activeRuleVersions($school, $request->user());

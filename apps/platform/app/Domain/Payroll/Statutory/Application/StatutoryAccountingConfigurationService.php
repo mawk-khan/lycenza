@@ -53,6 +53,8 @@ class StatutoryAccountingConfigurationService
      */
     public function configure(School $school, array $accountIds, User $actor): PayrollStatutoryAccountingConfiguration
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $accountIds, $actor) {
             return DB::transaction(function () use ($school, $accountIds, $actor) {
                 // HR.R1-C15 (C14-N6, rule 86): the School first, before any Payroll row or the compensation lock.
@@ -73,6 +75,8 @@ class StatutoryAccountingConfigurationService
 
     public function resolveValidated(School $school): PayrollStatutoryAccountingConfiguration
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school) {
             $config = PayrollStatutoryAccountingConfiguration::query()->where('school_id', $school->id)->first();
 

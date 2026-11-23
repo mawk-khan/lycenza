@@ -81,6 +81,8 @@ class StatutoryPayrollPostingService
 
     public function post(PayrollRun $run, User $actor): PayrollStatutoryRunPosting
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $school = $run->school;
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor) {
@@ -148,6 +150,8 @@ class StatutoryPayrollPostingService
 
     public function reverse(PayrollRun $run, User $actor, ?string $reason = null): PayrollStatutoryRunPosting
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $school = $run->school;
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor, $reason) {

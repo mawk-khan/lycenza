@@ -10,6 +10,8 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
 /**
  * Checkpoint 9.6I (Section 2 "Exports") -- streams the already-built
@@ -23,8 +25,14 @@ use Illuminate\Http\Response;
  * `capability:` middleware on these routes for the double-check
  * convention every other Payroll route already follows.
  */
-class StatutoryExportController extends Controller
+class StatutoryExportController extends Controller implements HasMiddleware
 {
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
+
     public function ecr(Request $request, School $school, string $payrollRun, StatutoryEcrExportService $service): Response
     {
         $run = PayrollRun::query()->where('school_id', $school->id)->findOrFail($payrollRun);

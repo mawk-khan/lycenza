@@ -2456,7 +2456,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // capability-checks-live-inside-each-controller convention as
         // the rest of this file (no route-level `capability:`
         // middleware here either).
-        Route::prefix('statutory')->name('statutory.')->group(function (): void {
+        // HR-PG1/PG2 (rule 153): every statutory route is development only, refused
+        // before RequireSchoolContext, binding, authorization and MFA in staging/production.
+        Route::prefix('statutory')->name('statutory.')->middleware('statutory-payroll-development-only')->group(function (): void {
             Route::get('/', [StatutoryPayrollController::class, 'index'])->name('index');
 
             Route::get('/employees/search', [StatutoryEmployeeController::class, 'search'])->name('employees.search');

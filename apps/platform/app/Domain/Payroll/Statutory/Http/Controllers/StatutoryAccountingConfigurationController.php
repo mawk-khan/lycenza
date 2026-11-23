@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
 /**
  * Checkpoint 9.6I (Section 2 "Statutory accounting configuration") --
@@ -17,8 +19,14 @@ use Illuminate\Http\Request;
  * status validation happens inside `StatutoryAccountingConfigurationService::validateAccounts()`
  * (Checkpoint 9.6F) -- never a second, divergent check here.
  */
-class StatutoryAccountingConfigurationController extends Controller
+class StatutoryAccountingConfigurationController extends Controller implements HasMiddleware
 {
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
+
     private const ACCOUNT_FIELDS = [
         'employee_pf_payable_ledger_account_id',
         'employer_eps_payable_ledger_account_id',

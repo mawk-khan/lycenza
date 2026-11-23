@@ -259,3 +259,23 @@ closure all pass. If a golden fixture ever conflicts with newly
 supplied qualified legal advice, the correct response is to stop that
 rule area and report the conflict — never to silently weaken the
 fixture to make code pass.
+
+## Amendment — HR-PG1/PG2 (2026-11-23): environment availability boundary
+
+**What it is.** An additional engineering and release restriction, decided as HR-PG0 (owner Architecture direction, independent design review with amendments) and implemented as HR-PG1/PG2. It is **not** a new legal finding. It does not revoke or reinterpret the legal source above (the signed Telangana policy and its correction addendum), which stays as recorded. Nothing in this ADR's calculation, posting, identifier or export contracts changes.
+
+**The boundary.** Statutory Payroll is available only in the development environments `local` and `testing`, for synthetic development and automated tests. Staging and production refuse it.
+- **One closed gate:** `App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability`, an allowlist (`EnvironmentPolicy::isDevelopment()`). An unset, unknown or malformed environment is unavailable, and boot already refuses an unsupported one.
+- **What the gate reads:** no role, capability, School, feature flag, database row or other environment variable. Capability grants, School entitlements and configuration cannot override it.
+- **Independent enforcement points:**
+  - the route middleware `statutory-payroll-development-only`, on all 29 statutory routes (14 web, 15 API, found by controller namespace), and also declared by each of the 11 statutory controllers itself (`HasMiddleware`), so a route that forgets it is still gated. It is pinned in the middleware priority list immediately before `RequireSchoolContext`: only identity, session and School-resolution middleware run first; it refuses before School-scoped binding, membership, `capability:`, MFA, idempotency, throttling and the controller;
+  - `StatutoryPayrollAvailability::assertAvailable()` as the first statement of every public operation of the 12 statutory application services (20 operations). A command, worker, console or direct invocation is refused before any query. `StatutoryEmployeeController`'s two direct-read actions also refuse with a direct 403.
+- **The refusal:** a fixed 403 with `Cache-Control: private, no-store`. On `/api` it is the standard JSON envelope with code `STATUTORY_PAYROLL_UNAVAILABLE`; on every other request (a browser page, an Inertia visit, or a web route called as JSON) it is an HTTP 403 with the same message. It is identical for a valid, unknown or another School's identifier.
+
+**Unchanged:**
+- **Other protections:** capability, MFA, `SchoolOperationalGuard`, RLS, composite keys, ledger, idempotency and retention contracts all still apply in `local`/`testing`.
+- **Retention** (`PayrollLedgerRetentionParticipant`, the prune commands) is governed by E21 and retention holds, never by availability.
+- **Payslips:** the statutory section's unavailable behaviour is HR-PG3's open decision; it is not changed here.
+- **Other environments:** ADR 0074's staging differences are not amended.
+
+**Lifting it** needs a new Architecture decision, the applicable legal and security release decisions, a code change to the gate, tests and protected-main publication. The guards are `StatutoryPayrollAvailabilityArchitectureTest` and `StatutoryPayrollAvailabilityEnforcementTest`.

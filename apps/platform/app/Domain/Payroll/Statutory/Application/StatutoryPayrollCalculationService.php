@@ -109,6 +109,8 @@ class StatutoryPayrollCalculationService
      */
     public function calculateForRun(PayrollRun $run, User $actor): int
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $school = $run->school;
 
         try {

@@ -11,6 +11,8 @@ use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
 
 /**
@@ -23,9 +25,15 @@ use Inertia\Inertia;
  * exception renderer does not cover this `/app/*` Inertia transport,
  * matching `PayslipController`'s established pattern exactly.
  */
-class StatutoryExportController extends Controller
+class StatutoryExportController extends Controller implements HasMiddleware
 {
     use AuthorizesCapability;
+
+    /** HR-PG1/PG2 (rule 153): every route to this controller is development only, whatever its route file says. */
+    public static function middleware(): array
+    {
+        return [new Middleware('statutory-payroll-development-only')];
+    }
 
     public function show(TenantContext $context, string $payrollRun): \Inertia\Response
     {

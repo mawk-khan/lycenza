@@ -5,6 +5,7 @@ namespace App\Domain\Payroll\Statutory\Application\Admin;
 use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmploymentRecordNotFoundException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEsiCoverageLockedException;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeEsiCoverage;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
 use App\Models\School;
@@ -49,6 +50,8 @@ class EmployeeEsiCoverageAdminService
      */
     public function history(School $school, string $employmentRecordId, User $actor): Collection
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
@@ -75,6 +78,8 @@ class EmployeeEsiCoverageAdminService
 
     public function correct(School $school, string $employmentRecordId, string $periodStart, string $periodEnd, string $entryWage, bool $isCovered, User $actor): EmployeeEsiCoverage
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $periodStart, $periodEnd, $entryWage, $isCovered, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.manage', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);

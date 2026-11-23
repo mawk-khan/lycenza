@@ -5,6 +5,7 @@ namespace App\Domain\Payroll\Statutory\Application\Admin;
 use App\Domain\HR\Application\EmploymentRoster;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmploymentRecordNotFoundException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryIdentifierInvalidException;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeStatutoryIdentifier;
 use App\Models\School;
 use App\Models\User;
@@ -51,6 +52,8 @@ class StatutoryIdentifierAdminService
      */
     public function list(School $school, string $employmentRecordId, User $actor): Collection
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
@@ -69,6 +72,8 @@ class StatutoryIdentifierAdminService
 
     public function reveal(School $school, string $employmentRecordId, string $identifierType, User $actor): ?string
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $identifierType, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.identifiers.view', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);
@@ -90,6 +95,8 @@ class StatutoryIdentifierAdminService
 
     public function set(School $school, string $employmentRecordId, string $identifierType, string $value, User $actor): EmployeeStatutoryIdentifier
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $identifierType, $value, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.identifiers.manage', $school);
             $this->assertEmploymentRecordExists($school, $employmentRecordId);

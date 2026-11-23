@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payroll\Statutory\Application\Admin;
 
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollEsiRuleVersion;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollIncomeTaxRuleVersion;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollLwfRuleVersion;
@@ -30,6 +31,8 @@ class StatutoryRuleStatusReadService
      */
     public function activeRuleVersions(School $school, User $actor): array
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
 
         $asOf = now()->toDateString();

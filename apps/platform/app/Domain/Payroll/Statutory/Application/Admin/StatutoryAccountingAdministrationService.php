@@ -3,6 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Application\Admin;
 
 use App\Domain\Payroll\Statutory\Application\StatutoryAccountingConfigurationService;
+use App\Domain\Payroll\Statutory\Application\StatutoryPayrollAvailability;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryAccountingConfiguration;
 use App\Models\School;
 use App\Models\User;
@@ -33,6 +34,8 @@ class StatutoryAccountingAdministrationService
      */
     public function configure(School $school, array $accountIds, User $actor): PayrollStatutoryAccountingConfiguration
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $this->authorizeCapabilityFor($actor, 'payroll.statutory.manage', $school);
 
         return $this->config->configure($school, $accountIds, $actor);
@@ -40,6 +43,8 @@ class StatutoryAccountingAdministrationService
 
     public function view(School $school, User $actor): ?PayrollStatutoryAccountingConfiguration
     {
+        StatutoryPayrollAvailability::assertAvailable();
+
         $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
 
         return $this->context->withSchool($school, fn () => PayrollStatutoryAccountingConfiguration::query()->where('school_id', $school->id)->first());
